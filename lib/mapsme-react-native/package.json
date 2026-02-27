@@ -1,0 +1,27 @@
+{
+  "name": "mapsme-react-native",
+  "version": "1.0.0",
+  "description": "MAPS.ME React Native integration for offline maps",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "maps",
+    "offline",
+    "react-native",
+    "mapsme"
+  ],
+  "author": "TrashRoute Mobile Team",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-native": "^0.72.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-native": ">=0.72.0"
+  },
+  "devDependencies": {}
+}

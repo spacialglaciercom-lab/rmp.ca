@@ -1,0 +1,29 @@
+{
+  "cli": { "version": ">= 18.0.0", "promptToConfigurePushNotifications": false },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://api.routemasterpro.ca" },
+      "ios": { "buildConfiguration": "Debug" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://api.routemasterpro.ca" },
+      "ios": { "buildConfiguration": "Release" }
+    },
+    "production": {
+      "distribution": "store",
+      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://api.routemasterpro.ca" },
+      "ios": { "buildConfiguration": "Release", "image": "latest" }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

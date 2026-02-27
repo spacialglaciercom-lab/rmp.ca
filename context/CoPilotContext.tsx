@@ -1,0 +1,342 @@
+/**
+ * CoPilotContext — State management for the AI driving companion.
+ *
+ * Manages conversation history, recording state, and co-pilot lifecycle.
+ * Works both during active navigation (route-aware) and when stationary
+ * (general companion mode).
+ */
+import React, { createContext, useContext, useReducer, useCallback, useRef } from "react";
+import { Platform } from "react-native";
+import type { NavContext, ChatMessage } from "@/server/genkit/coPilot";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("CoPilot");
+
+// ── Web Speech Recognition (Chrome, Edge, Safari) ───────────────────────────
+
+/**
+ * Web Speech Recognition — starts listening when user holds the mic button,
+ * resolves with transcribed text when stopped.
+ */
+let _webRecognition: any = null;
+let _webRecognitionResolve: ((text: string | null) => void) | null = null;
+let _webRecognitionResult: string | null = null;
+
+function startWebSpeechRecognition(): boolean {
+  if (Platform.OS !== "web") return false;
+
+  const SpeechRecognition =
+    (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+  if (!SpeechRecognition) return false;
+
+  _webRecognitionResult = null;
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+  recognition.continuous = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (event: any) => {
+    // Concatenate all final results
+    let text = "";
+    for (let i = 0; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        text += event.results[i][0].transcript + " ";
+      }
+    }
+    _webRecognitionResult = text.trim() || null;
+  };
+
+  recognition.onerror = (e: any) => {
+    log.warn("Web Speech error", { error: e.error });
+    if (_webRecognitionResolve) {
+      _webRecognitionResolve(null);
+      _webRecognitionResolve = null;
+    }
+  };
+
+  recognition.onend = () => {
+    if (_webRecognitionResolve) {
+      _webRecognitionResolve(_webRecognitionResult);
+      _webRecognitionResolve = null;
+    }
+  };
+
+  recognition.start();
+  _webRecognition = recognition;
+  return true;
+}
+
+function stopWebSpeechRecognition(): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!_webRecognition) {
+      resolve(null);
+      return;
+    }
+    _webRecognitionResolve = resolve;
+    _webRecognition.stop();
+    _webRecognition = null;
+
+    // Timeout in case onend doesn't fire
+    setTimeout(() => {
+      if (_webRecognitionResolve) {
+        _webRecognitionResolve(_webRecognitionResult);
+        _webRecognitionResolve = null;
+      }
+    }, 3000);
+  });
+}
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+export type CoPilotStatus = "idle" | "recording" | "processing" | "speaking";
+
+interface CoPilotState {
+  /** Current co-pilot status for UI display. */
+  status: CoPilotStatus;
+  /** Conversation messages (driver + co-pilot). */
+  messages: ChatMessage[];
+  /** Whether the chat overlay is visible. */
+  isOverlayOpen: boolean;
+  /** Last error message, if any. */
+  error: string | null;
+}
+
+type CoPilotAction =
+  | { type: "SET_STATUS"; status: CoPilotStatus }
+  | { type: "ADD_MESSAGE"; message: ChatMessage }
+  | { type: "SET_ERROR"; error: string | null }
+  | { type: "TOGGLE_OVERLAY"; open?: boolean }
+  | { type: "CLEAR_MESSAGES" };
+
+interface CoPilotContextType {
+  state: CoPilotState;
+  /** Send a text message to the co-pilot (from keyboard or transcribed speech). */
+  sendMessage: (text: string) => Promise<void>;
+  /** Start push-to-talk recording. */
+  startRecording: () => Promise<void>;
+  /** Stop recording and send to co-pilot. */
+  stopRecording: () => Promise<void>;
+  /** Toggle the chat overlay. */
+  toggleOverlay: (open?: boolean) => void;
+  /** Clear conversation history. */
+  clearMessages: () => void;
+  /** Stop any ongoing TTS speech. */
+  stopSpeaking: () => Promise<void>;
+  /** Update navigation context (called from NavigationEngine). */
+  setNavContext: (ctx: NavContext | null) => void;
+}
+
+// ── Reducer ─────────────────────────────────────────────────────────────────
+
+const initialState: CoPilotState = {
+  status: "idle",
+  messages: [],
+  isOverlayOpen: false,
+  error: null,
+};
+
+function reducer(state: CoPilotState, action: CoPilotAction): CoPilotState {
+  switch (action.type) {
+    case "SET_STATUS":
+      return { ...state, status: action.status, error: null };
+    case "ADD_MESSAGE":
+      // Keep last 30 messages in UI (send last 20 to server)
+      const msgs = [...state.messages, action.message].slice(-30);
+      return { ...state, messages: msgs };
+    case "SET_ERROR":
+      return { ...state, error: action.error, status: "idle" };
+    case "TOGGLE_OVERLAY":
+      return { ...state, isOverlayOpen: action.open ?? !state.isOverlayOpen };
+    case "CLEAR_MESSAGES":
+      return { ...state, messages: [] };
+    default:
+      return state;
+  }
+}
+
+// ── Context ─────────────────────────────────────────────────────────────────
+
+const CoPilotCtx = createContext<CoPilotContextType | undefined>(undefined);
+
+export const CoPilotProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const navContextRef = useRef<NavContext | null>(null);
+
+  const setNavContext = useCallback((ctx: NavContext | null) => {
+    navContextRef.current = ctx;
+  }, []);
+
+  // ── Send message (text) ─────────────────────────────────────────────────
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+
+    // Add user message immediately for instant UI feedback
+    dispatch({ type: "ADD_MESSAGE", message: { role: "user", content: text.trim() } });
+    dispatch({ type: "SET_STATUS", status: "processing" });
+
+    try {
+      const { sendCoPilotMessage } = await import("@/services/coPilotService");
+      const history = state.messages.slice(-20);
+
+      // Single-tier: AI Gateway via server proxy
+      const { reply, tier } = await sendCoPilotMessage(
+        text.trim(),
+        history,
+        navContextRef.current,
+      );
+
+      dispatch({ type: "ADD_MESSAGE", message: { role: "assistant", content: reply } });
+
+      if (tier === "fallback") {
+        // All tiers failed — don't speak, just show the error message
+        dispatch({ type: "SET_STATUS", status: "idle" });
+      } else {
+        dispatch({ type: "SET_STATUS", status: "speaking" });
+        const audio = await import("@/services/coPilotAudioService");
+        await audio.speakResponse(reply);
+        dispatch({ type: "SET_STATUS", status: "idle" });
+      }
+    } catch (error) {
+      log.error("sendMessage error", error instanceof Error ? error : new Error(String(error)));
+      dispatch({ type: "SET_ERROR", error: "Something went wrong. Try again." });
+    }
+  }, [state.messages]);
+
+  // ── Voice recording ───────────────────────────────────────────────────────
+  const startRec = useCallback(async () => {
+    try {
+      if (Platform.OS === "web") {
+        // Web: use browser Speech Recognition directly (no MediaRecorder needed)
+        const started = startWebSpeechRecognition();
+        if (!started) {
+          dispatch({ type: "SET_ERROR", error: "Speech recognition not supported in this browser. Use text input." });
+          return;
+        }
+        dispatch({ type: "SET_STATUS", status: "recording" });
+      } else {
+        // Native: record audio for Whisper transcription
+        const audio = await import("@/services/coPilotAudioService");
+        const permitted = await audio.requestMicPermission();
+        if (!permitted) {
+          dispatch({ type: "SET_ERROR", error: "Microphone permission denied." });
+          return;
+        }
+        await audio.startRecording();
+        const { trackEvent } = await import("@/lib/analytics");
+        trackEvent("voice_recording_started");
+        dispatch({ type: "SET_STATUS", status: "recording" });
+      }
+    } catch (error) {
+      log.error("startRecording error", error instanceof Error ? error : new Error(String(error)));
+      const msg = error instanceof Error ? error.message : "Could not start recording.";
+      dispatch({ type: "SET_ERROR", error: msg });
+    }
+  }, []);
+
+  const stopRec = useCallback(async () => {
+    try {
+      dispatch({ type: "SET_STATUS", status: "processing" });
+
+      let transcribedText: string | null = null;
+
+      if (Platform.OS === "web") {
+        // Web: stop Speech Recognition and get transcribed text
+        transcribedText = await stopWebSpeechRecognition();
+      } else {
+        // Native: stop recording, then transcribe via server Whisper
+        const audio = await import("@/services/coPilotAudioService");
+        const result = await audio.stopRecording();
+
+        if (!result) {
+          dispatch({ type: "SET_ERROR", error: "Recording produced no audio. Try again." });
+          return;
+        }
+
+        try {
+          const { getApiBaseUrl } = await import("@/shared/oauth");
+          const { getSessionToken } = await import("@/lib/_core/auth");
+          const token = await getSessionToken();
+          if (!token) throw new Error("Voice input sends your recording to the app server to turn speech into text. That only works when you’re signed in to your RouteMasterPro account. You can type your message instead.");
+
+          // Read the recorded audio file as base64 (file:// URIs can't be fetched by the server)
+          const FileSystem = await import("expo-file-system");
+          const base64Audio = await FileSystem.readAsStringAsync(result.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          const resp = await fetch(`${getApiBaseUrl()}/api/trpc/voice.transcribe`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              json: { audioBase64: base64Audio, mimeType: "audio/m4a" },
+            }),
+          });
+
+          if (!resp.ok) throw new Error(`Transcription failed: ${resp.status}`);
+          const data = await resp.json();
+          transcribedText = data?.result?.data?.json?.text ?? data?.result?.data?.text;
+        } catch (err) {
+          log.warn("Server transcription failed", { error: err instanceof Error ? err.message : String(err) });
+          const errMsg = err instanceof Error ? err.message : "Transcription failed.";
+          dispatch({ type: "SET_ERROR", error: errMsg });
+          return;
+        }
+      }
+
+      if (!transcribedText || transcribedText.trim().length === 0) {
+        dispatch({ type: "SET_ERROR", error: "Couldn't understand that. Try again or type your message." });
+        return;
+      }
+
+      // Send transcribed text to co-pilot
+      await sendMessage(transcribedText.trim());
+    } catch (error) {
+      log.error("stopRecording error", error instanceof Error ? error : new Error(String(error)));
+      const msg = error instanceof Error ? error.message : "Recording failed.";
+      dispatch({ type: "SET_ERROR", error: msg });
+    }
+  }, [sendMessage]);
+
+  const toggleOverlay = useCallback((open?: boolean) => {
+    dispatch({ type: "TOGGLE_OVERLAY", open });
+  }, []);
+
+  const clearMessages = useCallback(() => {
+    dispatch({ type: "CLEAR_MESSAGES" });
+  }, []);
+
+  const stopSpk = useCallback(async () => {
+    try {
+      const audio = await import("@/services/coPilotAudioService");
+      await audio.stopSpeaking();
+      dispatch({ type: "SET_STATUS", status: "idle" });
+    } catch {}
+  }, []);
+
+  return (
+    <CoPilotCtx.Provider
+      value={{
+        state,
+        sendMessage,
+        startRecording: startRec,
+        stopRecording: stopRec,
+        toggleOverlay,
+        clearMessages,
+        stopSpeaking: stopSpk,
+        setNavContext,
+      }}
+    >
+      {children}
+    </CoPilotCtx.Provider>
+  );
+};
+
+export const useCoPilot = () => {
+  const context = useContext(CoPilotCtx);
+  if (!context) throw new Error("useCoPilot must be used within CoPilotProvider");
+  return context;
+};
