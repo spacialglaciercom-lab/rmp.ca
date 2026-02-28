@@ -40,7 +40,6 @@ const env = {
 const config = {
   name: env.appName,
   slug: env.appSlug,
-  owner: "777x114",
   platforms: ["ios", "android", "web"],
   version: APP_VERSION,
   runtimeVersion: { policy: "appVersion" as const },
@@ -146,7 +145,7 @@ const config = {
       },
     },
     edgeToEdgeEnabled: true,
-    predictiveBackGestureEnabled: false,
+    predictiveBackGestureEnabled: true,
     package: env.androidPackage,
     permissions: ["POST_NOTIFICATIONS", "ACCESS_BACKGROUND_LOCATION"],
     intentFilters: [
@@ -245,7 +244,7 @@ const config = {
   // Set after creating a new Expo project (expo.dev or `eas init`). Required for EAS Build/Submit and OTA updates.
   extra: {
     eas: {
-      projectId: "022269f8-7930-4350-a1e9-a94e580cca50",
+      projectId: "8477234b-7a0e-4437-8efb-4325e13d0e08",
     },
     // Baked-in at build time so iOS has a default Google Maps key (EAS sets EXPO_PUBLIC_GOOGLE_MAPS_API_KEY).
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",

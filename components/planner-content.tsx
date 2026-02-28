@@ -12,7 +12,6 @@ import { StartPointConfig } from "@/components/start-point-config";
 import { StatisticsPanel } from "@/components/statistics-panel";
 import { ProcessingLog } from "@/components/processing-log";
 import { RouteReport } from "@/components/route-report";
-import { WeatherRouteCard } from "@/components/WeatherRouteCard";
 import { GPXExport } from "@/components/gpx-export";
 import { GpxTrainingLibrary } from "@/components/gpx-training-library";
 import { TurnPenaltiesConfig } from "@/components/turn-penalties-config";
@@ -42,13 +41,6 @@ import { debug } from "@/lib/route-optimizer-v2/debug";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { isMockCollectionPoints } from "@/lib/is-mock-route";
-import {
-  analyzeRouteWeather,
-  buildSegmentsFromPoints,
-  type WeatherAnalysisResult,
-} from "@/services/weatherAnalysis";
-import { getWeatherForRoutePoints, invalidateWeatherCache, isWeatherConfigured } from "@/services/weatherService";
-import { analyzeRouteWithWeather } from "@/services/weatherAiRouteAnalysis";
 import type { CollectionPoint, Route } from "@/types";
 import { ConstraintParser } from "@/components/constraint-parser";
 import type { ParsedConstraint } from "@/types/routeMasterConstraint";
@@ -69,8 +61,6 @@ export default function PlannerContent() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [routePoints, setRoutePoints] = useState<Array<{ lat: number; lon: number }>>([]);
   const [showMap, setShowMap] = useState(true);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
-  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const customStartPoint = useCustomStartPoint();
   const { optimizeRoute: optimizeRouteTurnAware } = useRouteOptimization();
   const { isExperimentalRoute, features } = useBetaFeatures();
@@ -220,10 +210,8 @@ export default function PlannerContent() {
 
     dispatch({ type: "CLEAR_LOG" });
     dispatch({ type: "SET_PROCESSING", payload: true });
-    dispatch({ type: "SET_WEATHER_ANALYSIS", payload: null });
 
       let optimizerDistanceKm: number | undefined;
-      let weatherAttachedFromOptimizer = false;
       let gpxWasSet = false;
       let optResult: any = undefined;
     try {
@@ -263,15 +251,6 @@ export default function PlannerContent() {
             });
         if (optResult.route.length > 0) {
           optimizerDistanceKm = optResult.totalDistance;
-          const withWeather = optResult as { weatherAnalysis?: WeatherAnalysisResult };
-          if (withWeather.weatherAnalysis) {
-            weatherAttachedFromOptimizer = true;
-          }
-          dispatch({
-            type: "SET_WEATHER_ANALYSIS",
-            payload: withWeather.weatherAnalysis ?? null,
-          });
-          setWeatherError(null);
           optimizedPoints = optResult.route.map((p, i) => ({
             // Use index-based suffix to ensure uniqueness even if visiting the same node twice (loops/returns)
             id: (p as { nodeId?: string }).nodeId 
@@ -387,30 +366,6 @@ export default function PlannerContent() {
         console.warn("Planner: could not save route for Map tab", saveErr);
       }
 
-      // Weather analysis: run when Weather-Optimized Routing is on and we didn't already get it from the optimizer (e.g. standard path or optimizer failed to attach).
-      if (features.weatherOptimizedRouting && gpxPoints.length >= 2 && !weatherAttachedFromOptimizer) {
-        try {
-          if (!isWeatherConfigured()) {
-            setWeatherError("Weather routing is on but OpenWeatherMap API key is not set. Add EXPO_PUBLIC_OPENWEATHERMAP_API_KEY in EAS Secrets or .env.");
-            dispatch({ type: "SET_WEATHER_ANALYSIS", payload: null });
-          } else {
-            const weatherMap = await getWeatherForRoutePoints(gpxPoints);
-            const totalKm = optimizerDistanceKm ?? sanitized?.totalDistance ?? gpxPoints.length * 0.02;
-            const estimatedMinutes = totalKm * 3;
-            const segments = buildSegmentsFromPoints(gpxPoints, estimatedMinutes);
-            const analysis = await analyzeRouteWeather(segments, weatherMap, {
-              useLeap: features.weatherOptimizedRouting && Platform.OS === "ios",
-            });
-            dispatch({ type: "SET_WEATHER_ANALYSIS", payload: analysis });
-            setWeatherError(null);
-          }
-        } catch (weatherErr) {
-          const msg = weatherErr instanceof Error ? weatherErr.message : "Weather analysis failed.";
-          setWeatherError(msg);
-          dispatch({ type: "SET_WEATHER_ANALYSIS", payload: null });
-        }
-      }
-
       // Cosmetic log animation (non-blocking — doesn't delay GPX availability)
       const logMessages = [
         { msg: "Starting route generation...", type: "info" as const },
@@ -471,55 +426,6 @@ export default function PlannerContent() {
     setOutputFileName(text);
     dispatch({ type: "SET_OUTPUT_FILENAME", payload: text });
   };
-
-  const handleRefreshWeather = useCallback(async () => {
-    if (routePoints.length < 2) return;
-    setWeatherError(null);
-    setAiAnalysisLoading(true);
-    try {
-      invalidateWeatherCache();
-      const weatherMap = await getWeatherForRoutePoints(routePoints);
-      const totalKm = state.statistics?.totalDistance ?? routePoints.length * 0.02;
-      const estimatedMinutes = totalKm * 3;
-      const segments = buildSegmentsFromPoints(routePoints, estimatedMinutes);
-      const analysis = await analyzeRouteWeather(segments, weatherMap, {
-        useLeap: features.weatherOptimizedRouting && Platform.OS === "ios",
-      });
-      dispatch({ type: "SET_WEATHER_ANALYSIS", payload: analysis });
-
-      // AI route analysis with weather - only if we have statistics and weather data
-      if (state.statistics && weatherMap.size > 0) {
-        // Get representative weather data (first available weather point)
-        const representativeWeather = Array.from(weatherMap.values()).find(w => w !== null);
-        
-        if (representativeWeather) {
-          // Convert route statistics to AI analysis format
-          const routeStats = {
-            totalDistanceMiles: state.statistics.totalDistance * 0.621371, // Convert km to miles
-            segmentCount: state.statistics.segmentsRouted,
-            turnBreakdown: {
-              left: state.statistics.turns.leftTurns,
-              right: state.statistics.turns.rightTurns,
-              uTurn: state.statistics.turns.uTurns
-            },
-            vehicleType: "municipal waste collection truck",
-            estimatedStops: Math.max(1, Math.floor(state.statistics.totalDistance * 0.5)) // Rough estimate: 1 stop per 2km
-          };
-
-          // Call AI analysis (this will use cache if available)
-          const aiAnalysis = await analyzeRouteWithWeather(representativeWeather, routeStats);
-          
-          if (aiAnalysis) {
-            dispatch({ type: "SET_AI_ROUTE_ANALYSIS", payload: aiAnalysis });
-          }
-        }
-      }
-    } catch {
-      setWeatherError("Weather could not be updated. Check your connection or try again.");
-    } finally {
-      setAiAnalysisLoading(false);
-    }
-  }, [routePoints, state.statistics, features.weatherOptimizedRouting, dispatch]);
 
   const handleOSMImport = useCallback(
     async (
@@ -781,51 +687,6 @@ export default function PlannerContent() {
               </View>
             )}
           </View>
-        )}
-
-        {/* Weather: show when routing is on. If analysis succeeded, show card; if error, show error + retry. */}
-        {features.weatherOptimizedRouting && (
-          state.weatherAnalysis ? (
-            <WeatherRouteCard
-              analysis={state.weatherAnalysis}
-              onRefreshWeather={handleRefreshWeather}
-              errorMessage={weatherError}
-            />
-          ) : (
-            <View
-              className="rounded-2xl p-4 mb-4"
-              style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-            >
-              <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: "700", marginBottom: 8 }}>
-                Weather along route
-              </Text>
-              {weatherError ? (
-                <>
-                  <Text style={{ color: colors.muted, fontSize: 13, marginBottom: 12 }}>{weatherError}</Text>
-                  {routePoints.length >= 2 && (
-                    <TouchableOpacity
-                      onPress={handleRefreshWeather}
-                      style={{
-                        alignSelf: "flex-start",
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        backgroundColor: colors.primary + "20",
-                        borderColor: colors.primary,
-                      }}
-                    >
-                      <Text style={{ color: colors.primary, fontWeight: "600" }}>Retry weather</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <Text style={{ color: colors.muted, fontSize: 13 }}>
-                  Generate a route to load weather data.
-                </Text>
-              )}
-            </View>
-          )
         )}
 
         {/* Route Report */}

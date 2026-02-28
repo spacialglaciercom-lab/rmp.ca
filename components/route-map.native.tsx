@@ -486,13 +486,21 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
         onMapReady={handleMapReady}
         onPress={handlePress}
         onLongPress={handleLongPress}
-        mapType={activeBaseLayer === "apple-maps" ? "standard" : "none"}
+        mapType={
+          activeBaseLayer === "google-maps" ? "standard" :
+          activeBaseLayer === "google-satellite" ? "satellite" :
+          activeBaseLayer === "google-hybrid" ? "hybrid" :
+          activeBaseLayer === "google-terrain" ? "terrain" :
+          "none"
+        }
         showsUserLocation={true}
         showsMyLocationButton={false}
+        showsBuildings={activeBaseLayer === "google-hybrid"}
         showsTraffic={showTraffic}
         rotateEnabled={rotateEnabled}
+        pitchEnabled={true}
       >
-        {activeBaseLayer !== "apple-maps" && (
+        {!activeBaseLayer.startsWith("google-") && (
           <UrlTile
             urlTemplate={tileUrl}
             tileSize={256}
@@ -656,13 +664,13 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
             ?.filter((point) => !isNaN(point.latitude) && !isNaN(point.longitude))
             .map((point, index) => (
           <Marker
-            key={`osm-${index}`}
+            key={`osm-extract-${index}`}
             coordinate={point}
             anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-            pointerEvents="none"
+            tracksViewChanges={Platform.OS === "android"}
+            zIndex={100 + index}
           >
-            <View style={styles.osmMarker} pointerEvents="none">
+            <View style={styles.osmMarker}>
               <Text style={styles.osmMarkerText}>{index + 1}</Text>
             </View>
           </Marker>

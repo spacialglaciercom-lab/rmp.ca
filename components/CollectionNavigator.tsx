@@ -264,13 +264,21 @@ export default function CollectionNavigator({
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
-        mapType={activeBaseLayer === "apple-maps" ? "standard" : "none"}
+        mapType={
+          activeBaseLayer === "google-maps" ? "standard" :
+          activeBaseLayer === "google-satellite" ? "satellite" :
+          activeBaseLayer === "google-hybrid" ? "hybrid" :
+          activeBaseLayer === "google-terrain" ? "terrain" :
+          "none"
+        }
+        showsBuildings={activeBaseLayer === "google-hybrid"}
         rotateEnabled
+        pitchEnabled={true}
         showsUserLocation={false}
         showsMyLocationButton={false}
         showsCompass={false}
       >
-        {activeBaseLayer !== "apple-maps" && (
+        {!activeBaseLayer.startsWith("google-") && (
           <UrlTile
             urlTemplate={tileUrl}
             tileSize={256}
