@@ -35,29 +35,32 @@ UPLOAD_RETRIES=3
 UPLOAD_RETRY_DELAY=5
 
 # ─── City definitions (id=minLat|maxLat|minLon|maxLon) ────────
+# Canadian cities only. US/Mexico cities removed to reduce build/hosting size.
 declare -A CITIES=(
-  [montreal]="45.2293|45.7913|-74.5876|-73.3104"
+  [montreal]="45.41|45.70|-73.85|-73.50"
+  [laval]="45.53|45.63|-73.80|-73.65"
+  [longueuil]="45.43|45.55|-73.55|-73.42"
   [toronto]="43.58|43.85|-79.64|-79.11"
   [vancouver]="49.20|49.35|-123.25|-123.00"
   [ottawa]="45.30|45.55|-76.05|-75.50"
   [calgary]="50.90|51.20|-114.25|-113.85"
   [edmonton]="53.45|53.65|-113.65|-113.35"
   [quebec_city]="46.75|46.95|-71.35|-71.15"
-  [quebec_south]="45.0|47.5|-74.5|-70.5"
   [halifax]="44.60|44.72|-63.70|-63.52"
-  [new_york]="40.48|40.95|-74.30|-73.65"
-  [los_angeles]="33.70|34.35|-118.65|-118.15"
-  [chicago]="41.64|42.02|-87.95|-87.52"
-  [houston]="29.62|29.95|-95.55|-95.12"
-  [phoenix]="33.25|33.65|-112.25|-111.60"
-  [philadelphia]="39.87|40.15|-75.30|-74.95"
-  [san_antonio]="29.32|29.60|-98.65|-98.38"
-  [san_diego]="32.53|33.12|-117.25|-116.90"
-  [dallas]="32.65|32.99|-97.05|-96.55"
-  [detroit]="42.25|42.45|-83.35|-82.90"
-  [boston]="42.25|42.45|-71.20|-70.95"
-  [mexico_city]="19.20|19.55|-99.25|-98.95"
 )
+
+# ─── Per-city zoom levels (core=8-14, secondary=10-13) ────────
+declare -A CITY_MIN_ZOOM=(
+  [montreal]=8  [laval]=8  [longueuil]=8  [toronto]=8  [vancouver]=8
+  [ottawa]=10  [calgary]=10  [edmonton]=10  [quebec_city]=10  [halifax]=10
+)
+declare -A CITY_MAX_ZOOM=(
+  [montreal]=14  [laval]=14  [longueuil]=14  [toronto]=14  [vancouver]=14
+  [ottawa]=13  [calgary]=13  [edmonton]=13  [quebec_city]=13  [halifax]=13
+)
+
+# Road classes to include (drops footway, cycleway, path, track, driveway, parking_aisle, etc.)
+ROAD_CLASSES="'residential','tertiary','secondary','primary','trunk','motorway','unclassified','living_street','service','secondary_link','primary_link','trunk_link','motorway_link'"
 
 if [ "${1:-}" = "--list" ]; then
   echo "Available cities:"
@@ -83,19 +86,20 @@ extract_overture() {
     return 1
   fi
 
-  python - "$outdir" "$minLon" "$minLat" "$maxLon" "$maxLat" "$OVERTURE_RELEASE" <<'PYEOF'
+  python - "$outdir" "$minLon" "$minLat" "$maxLon" "$maxLat" "$OVERTURE_RELEASE" "$ROAD_CLASSES" <<'PYEOF'
 import sys, json, duckdb
 
 outdir = sys.argv[1]
 min_lon, min_lat, max_lon, max_lat = float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5])
 release = sys.argv[6]
+road_classes = sys.argv[7]
 
 con = duckdb.connect()
 con.execute("INSTALL spatial; LOAD spatial;")
 con.execute("INSTALL httpfs; LOAD httpfs;")
 con.execute("SET s3_region='us-west-2';")
 
-# Extract transportation segments
+# Extract transportation segments (filtered by road class)
 print("  Querying transportation segments...")
 segments = con.execute(f"""
   SELECT
@@ -111,6 +115,7 @@ segments = con.execute(f"""
     AND bbox.xmax <= {max_lon}
     AND bbox.ymin >= {min_lat}
     AND bbox.ymax <= {max_lat}
+    AND class IN ({road_classes})
 """).fetchall()
 
 cols_seg = ['id','name','subtype','class','subclass','geometry_json','surface']
@@ -156,13 +161,15 @@ build_pmtiles() {
   local city="$1"
   local outdir="$BUILD_DIR/$city"
   local output_name="${city}-${PMTILES_VERSION}.pmtiles"
+  local min_zoom="${CITY_MIN_ZOOM[$city]:-10}"
+  local max_zoom="${CITY_MAX_ZOOM[$city]:-14}"
 
   if [ ! -f "$outdir/merged.geojson" ]; then
     echo "ERROR: merged.geojson not found for $city"
     return 1
   fi
 
-  echo "==> Building PMTiles for $city (${output_name})..."
+  echo "==> Building PMTiles for $city (${output_name}, zoom ${min_zoom}-${max_zoom})..."
 
   # Windows Docker path: use C:/ format with MSYS_NO_PATHCONV
   local win_path
@@ -173,7 +180,7 @@ build_pmtiles() {
     morlov/tippecanoe:latest \
     tippecanoe \
       -o "/data/${output_name}" \
-      -z 14 -Z 8 \
+      -z "$max_zoom" -Z "$min_zoom" \
       --drop-densest-as-needed \
       --extend-zooms-if-still-dropping \
       --force \

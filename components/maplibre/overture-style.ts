@@ -21,7 +21,10 @@ export function getPMTilesHttpsUrl(city: string, version?: string): string {
 }
 
 /** Available cities with PMTiles on R2. Add more as you build them. */
-export const PMTILES_CITIES: string[] = ["montreal", "toronto", "vancouver"];
+export const PMTILES_CITIES: string[] = [
+  "montreal", "laval", "longueuil", "toronto", "vancouver",
+  "ottawa", "calgary", "edmonton", "quebec_city", "halifax",
+];
 
 /** Overture road layers only (for overlay on web). Reused between buildOvertureStyle and buildOvertureOverlayStyle. */
 const OVERTURE_ROAD_LAYERS = [

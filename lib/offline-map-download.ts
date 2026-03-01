@@ -68,36 +68,18 @@ export interface DownloadedRegion {
   layers: string[];
 }
 
-/** Predefined cities and regions (North America focus for trash route use). */
+/** Predefined cities and regions (Canadian cities only). */
 export const OFFLINE_CITIES: OfflineCity[] = [
-  {
-    id: "north_america_overview",
-    name: "North America (overview)",
-    country: "Continent",
-    bounds: { minLat: 15, maxLat: 72, minLon: -170, maxLon: -55 },
-    layers: ["transportation_segment"],
-  },
   { id: "montreal", name: "Montreal", country: "Canada", bounds: { minLat: 45.41, maxLat: 45.70, minLon: -73.85, maxLon: -73.50 } },
+  { id: "laval", name: "Laval", country: "Canada", bounds: { minLat: 45.53, maxLat: 45.63, minLon: -73.80, maxLon: -73.65 } },
+  { id: "longueuil", name: "Longueuil", country: "Canada", bounds: { minLat: 45.43, maxLat: 45.55, minLon: -73.55, maxLon: -73.42 } },
   { id: "toronto", name: "Toronto", country: "Canada", bounds: { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.11 } },
   { id: "vancouver", name: "Vancouver", country: "Canada", bounds: { minLat: 49.20, maxLat: 49.35, minLon: -123.25, maxLon: -123.00 } },
   { id: "ottawa", name: "Ottawa", country: "Canada", bounds: { minLat: 45.30, maxLat: 45.55, minLon: -76.05, maxLon: -75.50 } },
   { id: "calgary", name: "Calgary", country: "Canada", bounds: { minLat: 50.90, maxLat: 51.20, minLon: -114.25, maxLon: -113.85 } },
   { id: "edmonton", name: "Edmonton", country: "Canada", bounds: { minLat: 53.45, maxLat: 53.65, minLon: -113.65, maxLon: -113.35 } },
   { id: "quebec_city", name: "Quebec City", country: "Canada", bounds: { minLat: 46.75, maxLat: 46.95, minLon: -71.35, maxLon: -71.15 } },
-  { id: "quebec_south", name: "Quebec (South)", country: "Canada", bounds: { minLat: 45.0, maxLat: 47.5, minLon: -74.5, maxLon: -70.5 } },
   { id: "halifax", name: "Halifax", country: "Canada", bounds: { minLat: 44.60, maxLat: 44.72, minLon: -63.70, maxLon: -63.52 } },
-  { id: "new_york", name: "New York", country: "USA", bounds: { minLat: 40.48, maxLat: 40.95, minLon: -74.30, maxLon: -73.65 } },
-  { id: "los_angeles", name: "Los Angeles", country: "USA", bounds: { minLat: 33.70, maxLat: 34.35, minLon: -118.65, maxLon: -118.15 } },
-  { id: "chicago", name: "Chicago", country: "USA", bounds: { minLat: 41.64, maxLat: 42.02, minLon: -87.95, maxLon: -87.52 } },
-  { id: "houston", name: "Houston", country: "USA", bounds: { minLat: 29.62, maxLat: 29.95, minLon: -95.55, maxLon: -95.12 } },
-  { id: "phoenix", name: "Phoenix", country: "USA", bounds: { minLat: 33.25, maxLat: 33.65, minLon: -112.25, maxLon: -111.60 } },
-  { id: "philadelphia", name: "Philadelphia", country: "USA", bounds: { minLat: 39.87, maxLat: 40.15, minLon: -75.30, maxLon: -74.95 } },
-  { id: "san_antonio", name: "San Antonio", country: "USA", bounds: { minLat: 29.32, maxLat: 29.60, minLon: -98.65, maxLon: -98.38 } },
-  { id: "san_diego", name: "San Diego", country: "USA", bounds: { minLat: 32.53, maxLat: 33.12, minLon: -117.25, maxLon: -116.90 } },
-  { id: "dallas", name: "Dallas", country: "USA", bounds: { minLat: 32.65, maxLat: 32.99, minLon: -97.05, maxLon: -96.55 } },
-  { id: "detroit", name: "Detroit", country: "USA", bounds: { minLat: 42.25, maxLat: 42.45, minLon: -83.35, maxLon: -82.90 } },
-  { id: "boston", name: "Boston", country: "USA", bounds: { minLat: 42.25, maxLat: 42.45, minLon: -71.20, maxLon: -70.95 } },
-  { id: "mexico_city", name: "Mexico City", country: "Mexico", bounds: { minLat: 19.20, maxLat: 19.55, minLon: -99.25, maxLon: -98.95 } },
 ];
 
 // ─── S3 bucket listing ────────────────────────────────────────────

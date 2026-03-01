@@ -26,6 +26,8 @@ const PROGRESS_THROTTLE_MS = 250;
 
 const AVAILABLE_CITIES: { id: string; bounds: RouteBBox }[] = [
   { id: "montreal", bounds: { minLat: 45.41, maxLat: 45.70, minLon: -73.85, maxLon: -73.50 } },
+  { id: "laval", bounds: { minLat: 45.53, maxLat: 45.63, minLon: -73.80, maxLon: -73.65 } },
+  { id: "longueuil", bounds: { minLat: 45.43, maxLat: 45.55, minLon: -73.55, maxLon: -73.42 } },
   { id: "toronto", bounds: { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.11 } },
   { id: "vancouver", bounds: { minLat: 49.20, maxLat: 49.35, minLon: -123.25, maxLon: -123.00 } },
 ];
@@ -291,7 +293,7 @@ export async function downloadRouteMap(
       success: false,
       tileCount: 0,
       sizeBytes: 0,
-      error: "Route is outside available PMTiles coverage (Montreal, Toronto, Vancouver).",
+      error: "Route is outside available PMTiles coverage. Supported: Montreal, Laval, Longueuil, Toronto, Vancouver.",
     };
   }
 
