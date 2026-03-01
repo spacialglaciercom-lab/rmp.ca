@@ -157,6 +157,27 @@ con.close()
 PYEOF
 }
 
+TIPPECANOE_IMAGE="tippecanoe-builder:local"
+
+# Build a local Docker image with tippecanoe compiled from source.
+# Cached after first run — only rebuilds if image doesn't exist.
+ensure_tippecanoe_image() {
+  if docker image inspect "$TIPPECANOE_IMAGE" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "==> Building tippecanoe Docker image (first run only)..."
+  docker build -t "$TIPPECANOE_IMAGE" -f - . <<'DOCKERFILE'
+FROM ubuntu:22.04
+RUN apt-get update -qq && \
+    apt-get install -y -qq git build-essential libsqlite3-dev zlib1g-dev && \
+    cd /tmp && git clone -q https://github.com/felt/tippecanoe.git && \
+    cd tippecanoe && make -j$(nproc) -s && make install -s && \
+    cd / && rm -rf /tmp/tippecanoe && \
+    apt-get remove -y git build-essential && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+DOCKERFILE
+}
+
 build_pmtiles() {
   local city="$1"
   local outdir="$BUILD_DIR/$city"
@@ -171,13 +192,15 @@ build_pmtiles() {
 
   echo "==> Building PMTiles for $city (${output_name}, zoom ${min_zoom}-${max_zoom})..."
 
+  ensure_tippecanoe_image
+
   # Windows Docker path: use C:/ format with MSYS_NO_PATHCONV
   local win_path
   win_path=$(cd "$outdir" && pwd -W 2>/dev/null || echo "$outdir" | sed 's|^/c/|C:/|')
 
   if ! MSYS_NO_PATHCONV=1 docker run --rm \
     -v "${win_path}:/data" \
-    morlov/tippecanoe:latest \
+    "$TIPPECANOE_IMAGE" \
     tippecanoe \
       -o "/data/${output_name}" \
       -z "$max_zoom" -Z "$min_zoom" \
@@ -194,14 +217,6 @@ build_pmtiles() {
     local size
     size=$(wc -c < "$outdir/${output_name}" 2>/dev/null || echo "0")
     echo "  PMTiles created: ${output_name} ($(numfmt --to=iec $size 2>/dev/null || echo "$size bytes"))"
-    # Optional: validate if pmtiles CLI is available
-    if command -v pmtiles >/dev/null 2>&1; then
-      if pmtiles validate "$outdir/${output_name}" 2>/dev/null; then
-        echo "  Validation: OK"
-      else
-        echo "  WARNING: pmtiles validate failed (optional)"
-      fi
-    fi
   else
     echo "ERROR: tippecanoe did not produce ${output_name}"
     return 1
