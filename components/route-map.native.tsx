@@ -511,22 +511,23 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
           />
         )}
         {showRouteLine && (routePointsByVehicle && routePointsByVehicle.length > 1 ? (
-          sanitizeByVehicle(routePointsByVehicle).map((vehiclePoints, vIdx) => {
-            if (vehiclePoints.length < 2) return null;
-            const coords = vehiclePoints.map((p) => ({ latitude: p.lat, longitude: p.lon }));
-            const color = ROUTE_COLORS_BY_VEHICLE[vIdx % ROUTE_COLORS_BY_VEHICLE.length];
-            return (
-              <Polyline
-                key={`vehicle-${vIdx}`}
-                coordinates={coords}
-                strokeColor={color}
-                strokeWidth={6}
-                zIndex={1}
-                lineCap="round"
-                lineJoin="round"
-              />
-            );
-          })
+          sanitizeByVehicle(routePointsByVehicle)
+            .filter((vehiclePoints) => vehiclePoints.length >= 2)
+            .map((vehiclePoints, vIdx) => {
+              const coords = vehiclePoints.map((p) => ({ latitude: p.lat, longitude: p.lon }));
+              const color = ROUTE_COLORS_BY_VEHICLE[vIdx % ROUTE_COLORS_BY_VEHICLE.length];
+              return (
+                <Polyline
+                  key={`vehicle-${vIdx}`}
+                  coordinates={coords}
+                  strokeColor={color}
+                  strokeWidth={6}
+                  zIndex={1}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              );
+            })
         ) : routeCoords.length >= 2 ? (
           <>
             {navSegmentPolylines ? (

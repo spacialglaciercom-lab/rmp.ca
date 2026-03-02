@@ -2,6 +2,10 @@
  * Feedback Service - Sends product feedback via Resend email API.
  */
 
+import { Platform } from "react-native";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+
 const RESEND_API_KEY = "re_gbHYbgot_GZd5U6rZHZ9XH7zL7W6JZjWs";
 const FROM_EMAIL = "RouteMaster Pro <contact@routemasterpro.ca>";
 const FEEDBACK_EMAIL = "droneservivesqc@proton.me";
@@ -18,15 +22,11 @@ interface SuggestionReport {
   deviceInfo?: string;
 }
 
-async function getDeviceInfo(): Promise<string> {
+function getDeviceInfo(): string {
   try {
-    const { Platform } = await import("react-native");
-    const Constants = await import("expo-constants");
-    const Device = await import("expo-device");
-
     const info = [
       `Platform: ${Platform.OS} ${Platform.Version}`,
-      `App Version: ${Constants.default.expoConfig?.version ?? "unknown"}`,
+      `App Version: ${Constants.expoConfig?.version ?? "unknown"}`,
       `Device: ${Device.modelName ?? "unknown"}`,
       `Brand: ${Device.brand ?? "unknown"}`,
     ];
@@ -39,7 +39,7 @@ async function getDeviceInfo(): Promise<string> {
 
 export async function submitIssueReport(report: IssueReport): Promise<boolean> {
   try {
-    const deviceInfo = report.deviceInfo ?? (await getDeviceInfo());
+    const deviceInfo = report.deviceInfo ?? getDeviceInfo();
 
     const htmlContent = `
       <h2>Issue Report</h2>
@@ -82,7 +82,7 @@ export async function submitIssueReport(report: IssueReport): Promise<boolean> {
 
 export async function submitSuggestion(report: SuggestionReport): Promise<boolean> {
   try {
-    const deviceInfo = report.deviceInfo ?? (await getDeviceInfo());
+    const deviceInfo = report.deviceInfo ?? getDeviceInfo();
 
     let htmlContent = `
       <h2>Feature Suggestion</h2>
