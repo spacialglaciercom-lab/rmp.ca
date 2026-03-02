@@ -25,8 +25,8 @@ export const AccountSection: React.FC = () => {
     if (Platform.OS !== "web") preloadFirebaseAuth();
   }, []);
 
-  // Only show on native — web uses cookie-based auth
-  if (Platform.OS === "web") {
+  // Only show on iOS — web uses cookie-based auth, Android doesn't support Sign in with Apple
+  if (Platform.OS !== "ios") {
     return null;
   }
 

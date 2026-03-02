@@ -6,12 +6,9 @@ import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 import { useRouting } from "@/lib/routing-context";
 import { generateGPXString } from "@/lib/routing-context";
-import { routeThroughWaypoints } from "@/lib/mapMatching";
-import { getRoutingConfigAsync } from "@/lib/routing-config";
-import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { overpassToOsmData } from "@/lib/overpassToOsmData";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
-import { useMapStateStore, useMapActions } from "@/stores/mapStateStore";
+import { useMapActions } from "@/stores/mapStateStore";
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
 import type { OverpassElement } from "@/lib/overpassService";
 
@@ -56,29 +53,12 @@ export function useOsmOptimizeRoute() {
           lon: p.longitude,
         }));
 
-        setOptimizationStatus("Snapping to roads...");
-        const routingConfig = await getRoutingConfigAsync();
-        if (routingConfig.baseUrl) {
-          try {
-            const matched = await routeThroughWaypoints(
-              gpxPoints,
-              routingConfig,
-              getRouteOptionsForRouting(),
-            );
-            if (matched) {
-              dispatch({
-                type: "SET_PREVIEW_ROUTE",
-                payload: matched.matchedGeometry.map((p) => ({
-                  lat: p.lat,
-                  lon: p.lon,
-                })),
-              });
-              actions.setCachedMatchedRoute(matched);
-            }
-          } catch (e) {
-            console.warn("Snap to roads failed, using raw route:", e);
-          }
-        }
+        // Snap to roads is now optional - user can press "Fix to roads" button manually
+        // This reduces API requests and gives user control
+        dispatch({
+          type: "SET_PREVIEW_ROUTE",
+          payload: gpxPoints,
+        });
 
         actions.setRoutePoints(gpxPoints);
         const gpxString = generateGPXString("osm-optimized-route", gpxPoints);

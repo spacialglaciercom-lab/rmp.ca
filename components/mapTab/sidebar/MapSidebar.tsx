@@ -36,6 +36,7 @@ export function MapSidebar() {
   const openMapStylePicker = useMapSidebarStore((s) => s.openMapStylePicker);
   const openRouteParametersPanel = useMapSidebarStore((s) => s.openRouteParametersPanel);
   const openOSMExtractor = useMapSidebarStore((s) => s.openOSMExtractor);
+  const openRecordingPanel = useMapSidebarStore((s) => s.openRecordingPanel);
   const isPinned = useMapSidebarStore((s) => s.isPinned);
   const togglePin = useMapSidebarStore((s) => s.togglePin);
 
@@ -102,6 +103,9 @@ export function MapSidebar() {
         break;
       case "osmExtractor":
         openOSMExtractor();
+        break;
+      case "recording":
+        openRecordingPanel();
         break;
       case "markers":
         openMapMarkersPanel();

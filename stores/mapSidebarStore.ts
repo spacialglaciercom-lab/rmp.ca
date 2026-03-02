@@ -5,6 +5,7 @@ export type MapSidebarSubScreen =
   | "markers"
   | "resources"
   | "navigation"
+  | "recording"
   | "configure"
   | null;
 
@@ -20,6 +21,7 @@ interface MapSidebarStore {
   mapStylePickerVisible: boolean;
   routeParametersPanelVisible: boolean;
   osmExtractorVisible: boolean;
+  recordingPanelVisible: boolean;
 
   openSidebar: () => void;
   closeSidebar: () => void;
@@ -43,6 +45,8 @@ interface MapSidebarStore {
   closeRouteParametersPanel: () => void;
   openOSMExtractor: () => void;
   closeOSMExtractor: () => void;
+  openRecordingPanel: () => void;
+  closeRecordingPanel: () => void;
 }
 
 export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
@@ -57,6 +61,7 @@ export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
   mapStylePickerVisible: false,
   routeParametersPanelVisible: false,
   osmExtractorVisible: false,
+  recordingPanelVisible: false,
 
   openSidebar: () => set({ isOpen: true }),
   closeSidebar: () => set({ isOpen: false, activeSubScreen: null }),
@@ -89,4 +94,7 @@ export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
   openOSMExtractor: () =>
     set({ isOpen: false, activeSubScreen: null, osmExtractorVisible: true }),
   closeOSMExtractor: () => set({ osmExtractorVisible: false }),
+  openRecordingPanel: () =>
+    set({ isOpen: false, activeSubScreen: null, recordingPanelVisible: true }),
+  closeRecordingPanel: () => set({ recordingPanelVisible: false }),
 }));

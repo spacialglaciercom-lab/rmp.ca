@@ -59,7 +59,7 @@ const initialState: MapDisplayState = {
   transparentWidgets: false,
   showRouteMarkers: true,
   showOverture: false,
-  showRouteLine: false,
+  showRouteLine: true,
 };
 
 export const useMapDisplayStore = create<MapDisplayStore>()(

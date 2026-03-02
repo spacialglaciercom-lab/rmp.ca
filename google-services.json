@@ -1,20 +1,30 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "trashroute-placeholder",
-    "storage_bucket": "trashroute-placeholder.appspot.com"
+    "project_number": "970176642480",
+    "firebase_url": "https://trashroutemobile-default-rtdb.firebaseio.com",
+    "project_id": "trashroutemobile",
+    "storage_bucket": "trashroutemobile.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:970176642480:android:9a10d70c7e954a9f8d2a75",
         "android_client_info": {
-          "package_name": "space.manus.trashroute.mobile.t20260120004301"
+          "package_name": "com.routemasterpro.mobile"
         }
       },
       "oauth_client": [],
-      "api_key": [{ "current_key": "placeholder-replace-with-real-google-services-json-from-firebase-console" }],
-      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+      "api_key": [
+        {
+          "current_key": "AIzaSyDk763tS-2BZ80876zQRKKX0ueAwInCt8E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     }
-  ]
+  ],
+  "configuration_version": "1"
 }

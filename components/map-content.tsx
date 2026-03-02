@@ -1,4 +1,4 @@
-import React, {
+import React, { Suspense, lazy,
   useState,
   useEffect,
   useCallback,
@@ -90,6 +90,8 @@ import { FlatList, Animated } from "react-native";
 // --- Optimized store selectors ---
 import { useMapStateStore, useMapActions } from "@/stores/mapStateStore";
 import { sanitizeLatLonArray, sanitizeByVehicle } from "@/lib/coord-utils";
+
+const ExtractContent = lazy(() => import("@/components/extract-content"));
 
 /** Max pins to show for a route; avoids treating every track node as a marker. */
 const MAX_ROUTE_MARKERS = 50;
@@ -1373,12 +1375,7 @@ export default function MapContent() {
         visible={routeParametersPanelVisible}
         onClose={closeRouteParametersPanel}
       />
-      <MapStyleSheet
-        visible={mapStylePickerVisible}
-        onClose={closeMapStylePicker}
-      />
-
-      <MapMarkersScreen
+      {'flex': 1, 'justifyContent': 'center', 'alignItems': 'center'}
         visible={mapMarkersPanelVisible}
         onClose={closeMapMarkersPanel}
         collectionPoints={collectionPoints}

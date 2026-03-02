@@ -41,8 +41,7 @@ import { trackScreen } from "@/lib/analytics";
 import { reportErrorToServer } from "@/lib/error-report";
 import { BetaFeaturesProvider } from "@/context/BetaFeaturesContext";
 import { DeliveryInstructionsProvider } from "@/context/DeliveryInstructionsContext";
-import { CoPilotProvider } from "@/context/CoPilotContext";
-import { GeneralChatProvider } from "@/context/GeneralChatContext";
+
 import { FirebaseProvider } from "@/context/FirebaseContext";
 import { MapTypeProvider } from "@/lib/map-type-preference";
 import { MapOrientationProvider } from "@/lib/map-orientation-preference";
@@ -309,8 +308,6 @@ export default function RootLayout() {
           <DeliveryInstructionsProvider>
             {/* --- Feature & AI providers --- */}
             <BetaFeaturesProvider>
-              <CoPilotProvider>
-                <GeneralChatProvider>
                   {/* --- Data providers (Firebase, routing, server) --- */}
                   <FirebaseProvider>
                     <RoutingProvider>
@@ -369,8 +366,6 @@ export default function RootLayout() {
                       </trpc.Provider>
                     </RoutingProvider>
                   </FirebaseProvider>
-                </GeneralChatProvider>
-              </CoPilotProvider>
             </BetaFeaturesProvider>
           </DeliveryInstructionsProvider>
         </PowerSavingProvider>

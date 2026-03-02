@@ -3,7 +3,7 @@
  * Per Master Plan Section 9.
  */
 
-import React, { useMemo, useEffect, useRef } from "react";
+import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import { useMarkersStore } from "@/stores/markersStore";
 import { useRouting } from "@/lib/routing-context";
 import { reverseGeocode } from "@/lib/geocode";
 import { MarkerListItem, type MarkerItem } from "./MarkerListItem";
+import { MediaNoteRecorder } from "./MediaNoteRecorder";
 import type { CollectionPoint } from "@/types";
 
 const PANEL_WIDTH_IPAD = 400;
@@ -60,8 +61,9 @@ export function MapMarkersScreen({
   const insets = useSafeAreaInsets();
   const deviceType = useDeviceType();
   const { dispatch } = useRouting();
-  const { customMarkers, removeMarker, renameMarker, setMarkerLocation, clearAllCustomMarkers } = useMarkersStore();
+  const { customMarkers, removeMarker, renameMarker, setMarkerLocation, clearAllCustomMarkers, addMediaNote } = useMarkersStore();
   const geocodedRef = useRef<Set<string>>(new Set());
+  const [recordingMarkerId, setRecordingMarkerId] = useState<string | null>(null);
 
   // Reverse geocode markers that don't have a cached location
   useEffect(() => {
@@ -118,6 +120,7 @@ export function MapMarkersScreen({
         lon: m.lon,
         type: "custom" as const,
         location: m.location,
+        mediaNotesCount: m.mediaNotes?.length ?? 0,
       })),
     [customMarkers]
   );
@@ -188,6 +191,22 @@ export function MapMarkersScreen({
       "Clear"
     );
   };
+
+  const handleAddNote = useCallback((markerId: string) => {
+    hapticImpact();
+    setRecordingMarkerId(markerId);
+  }, []);
+
+  const handleNoteSaved = useCallback((uri: string, type: "audio" | "video", duration?: number) => {
+    if (recordingMarkerId) {
+      addMediaNote(recordingMarkerId, { uri, type, duration });
+    }
+    setRecordingMarkerId(null);
+  }, [recordingMarkerId, addMediaNote]);
+
+  const handleNoteCancel = useCallback(() => {
+    setRecordingMarkerId(null);
+  }, []);
 
   const isIpad = deviceType === "ipad";
   const panelStyle = isIpad
@@ -292,6 +311,7 @@ export function MapMarkersScreen({
                   onPress={() => handlePreviewMarker(m.lat, m.lon)}
                   onDelete={() => removeMarker(m.id)}
                   onRename={() => handleRenameMarker(m.id, m.name)}
+                  onAddNote={() => handleAddNote(m.id)}
                 />
               ))
             )}
@@ -352,6 +372,14 @@ export function MapMarkersScreen({
           </ScrollView>
         </View>
       </View>
+
+      {recordingMarkerId && (
+        <MediaNoteRecorder
+          visible={!!recordingMarkerId}
+          onSave={handleNoteSaved}
+          onCancel={handleNoteCancel}
+        />
+      )}
     </Modal>
   );
 }

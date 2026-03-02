@@ -26,15 +26,44 @@ interface MapLayer {
   preview?: string;
 }
 
-const MAP_LAYERS: MapLayer[] = [
+// Google Maps native map types (work on Android/iOS)
+const GOOGLE_MAP_LAYERS: MapLayer[] = [
   {
-    id: "apple-maps",
-    name: "Apple Maps",
+    id: "google-maps",
+    name: "Google Maps",
     url: "",
-    attribution: "© Apple",
-    icon: "apple",
-    preview: "Native Apple Maps with smooth performance"
+    attribution: "© Google",
+    icon: "google-maps",
+    preview: "Standard road map with labels"
   },
+  {
+    id: "google-satellite",
+    name: "Satellite",
+    url: "",
+    attribution: "© Google",
+    icon: "satellite-variant",
+    preview: "Photorealistic map based on aerial imagery"
+  },
+  {
+    id: "google-hybrid",
+    name: "Hybrid",
+    url: "",
+    attribution: "© Google",
+    icon: "satellite",
+    preview: "Satellite view with road labels overlay"
+  },
+  {
+    id: "google-terrain",
+    name: "Terrain",
+    url: "",
+    attribution: "© Google",
+    icon: "terrain",
+    preview: "Physical map based on terrain information"
+  },
+];
+
+// OSM-based tile layers (work on iOS/Web)
+const OSM_MAP_LAYERS: MapLayer[] = [
   {
     id: "standard",
     name: "Standard",
@@ -53,7 +82,7 @@ const MAP_LAYERS: MapLayer[] = [
   },
   {
     id: "satellite",
-    name: "Satellite",
+    name: "Satellite (Esri)",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "&copy; Esri &copy; DigitalGlobe",
     icon: "satellite-variant",
@@ -61,13 +90,18 @@ const MAP_LAYERS: MapLayer[] = [
   },
   {
     id: "terrain",
-    name: "Terrain",
+    name: "Terrain (OpenTopo)",
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenTopoMap &copy; OpenStreetMap contributors",
     icon: "terrain",
-    preview: "Topographic map with elevation contours. May take a few seconds to load."
+    preview: "Topographic map with elevation contours"
   }
 ];
+
+// On Android, use Google Maps native types; on iOS/Web, show both Google and OSM options
+const MAP_LAYERS: MapLayer[] = Platform.OS === "android" 
+  ? GOOGLE_MAP_LAYERS
+  : [...GOOGLE_MAP_LAYERS, ...OSM_MAP_LAYERS];
 
 const OVERLAY_LAYERS: LayerOption[] = [
   {

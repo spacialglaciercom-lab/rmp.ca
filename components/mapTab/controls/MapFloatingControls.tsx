@@ -37,6 +37,10 @@ interface MapFloatingControlsProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onCompass?: () => void;
+  /** Start GPS track recording. */
+  onStartRecording?: () => void;
+  /** Whether recording is currently active (hides start button). */
+  isRecordingActive?: boolean;
 }
 
 const styles = StyleSheet.create({
@@ -108,6 +112,8 @@ function MapFloatingControlsInner({
   onZoomIn,
   onZoomOut,
   onCompass,
+  onStartRecording,
+  isRecordingActive = false,
 }: MapFloatingControlsProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -198,7 +204,7 @@ function MapFloatingControlsInner({
         </View>
       )}
 
-      {/* Bottom-left: Navigation (opens From/To panel), Street View + Scale bar */}
+      {/* Bottom-left: Navigation (opens From/To panel), Recording, Street View + Scale bar */}
       <View style={[styles.bottomLeft, { bottom: bottomPad + 8, left: leftPad }]}>
         {onOpenNavigation && (
           <FloatingIconButton
@@ -208,9 +214,18 @@ function MapFloatingControlsInner({
             style={widgetStyle}
           />
         )}
+        {onStartRecording && !isRecordingActive && (
+          <FloatingIconButton
+            icon="record-circle-outline"
+            onPress={onStartRecording}
+            size={44}
+            style={widgetStyle}
+            iconColor="#E53935"
+          />
+        )}
         {showMapillary && hasSelectedLocation && onStreetView && (
           <FloatingIconButton
-            icon="google-street-view"
+            icon="camera-marker"
             onPress={onStreetView}
             size={44}
             style={widgetStyle}

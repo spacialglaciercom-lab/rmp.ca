@@ -64,10 +64,17 @@ export interface SegmentMeasurement {
   distanceKm: number;
 }
 
+export interface ElevationStats {
+  min: number;
+  median: number;
+  max: number;
+}
+
 export interface MeasurementMetrics {
   areaKm2: number;
   perimeterKm: number;
   segments: SegmentMeasurement[];
+  elevation?: ElevationStats;
 }
 
 // ---------------------------------------------------------------------------

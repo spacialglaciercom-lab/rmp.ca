@@ -56,6 +56,8 @@ export interface OfflineCity {
   layers?: OvertureLayerKey[];
 }
 
+export type DownloadSource = "r2" | "s3";
+
 export interface DownloadedRegion {
   id: string;
   name: string;
@@ -66,6 +68,8 @@ export interface DownloadedRegion {
   sizeBytes: number;
   downloadedAt: number;
   layers: string[];
+  /** Which source this was downloaded from. Older entries may lack this field. */
+  source?: DownloadSource;
 }
 
 /** Predefined cities and regions (Canadian cities only). */
@@ -269,9 +273,108 @@ export async function downloadCityData(
     sizeBytes: totalBytes,
     downloadedAt: Date.now(),
     layers: layers,
+    source: "s3",
   };
   await saveDownloadedRegion(region);
   return { success: true, fileCount: downloaded, sizeBytes: totalBytes };
+}
+
+// ─── R2 PMTiles download ──────────────────────────────────────────
+
+const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
+const PMTILES_VERSION = "v2026-02";
+
+/**
+ * Download a single pre-built PMTiles file for a city from our R2 bucket.
+ * Much faster than S3 Parquet — typically 3-35 MB per city.
+ */
+export async function downloadCityFromR2(
+  city: OfflineCity,
+  onProgress?: (done: number, total: number, phase: string) => void,
+  signal?: AbortSignal
+): Promise<{ success: boolean; fileCount: number; sizeBytes: number; error?: string }> {
+  const regionDir = getRegionDir(city.id);
+  const filename = `${city.id}-${PMTILES_VERSION}.pmtiles`;
+  const localPath = `${regionDir}/${filename}`;
+  const url = `${R2_PUBLIC_BASE}/tiles/${filename}`;
+
+  // Ensure region directory exists
+  const dirInfo = await FileSystem.getInfoAsync(regionDir, { size: false });
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(regionDir, { intermediates: true });
+  }
+
+  onProgress?.(0, 1, "Downloading PMTiles…");
+
+  // Use createDownloadResumable for progress tracking
+  let lastProgressTime = 0;
+  const downloadResumable = FileSystem.createDownloadResumable(
+    url,
+    localPath,
+    {},
+    (downloadProgress) => {
+      if (signal?.aborted) return;
+      const now = Date.now();
+      if (now - lastProgressTime < PROGRESS_THROTTLE_MS) return;
+      lastProgressTime = now;
+      const { totalBytesWritten, totalBytesExpectedToWrite } = downloadProgress;
+      const pct = totalBytesExpectedToWrite > 0
+        ? Math.round((totalBytesWritten / totalBytesExpectedToWrite) * 100)
+        : 0;
+      onProgress?.(
+        totalBytesWritten,
+        totalBytesExpectedToWrite,
+        `Downloading… ${pct}% (${formatBytes(totalBytesWritten)})`
+      );
+    }
+  );
+
+  // Handle abort
+  if (signal) {
+    const onAbort = () => {
+      downloadResumable.pauseAsync().catch(() => {});
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  try {
+    const result = await downloadResumable.downloadAsync();
+    if (signal?.aborted) {
+      // Clean up partial file
+      await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+      return { success: false, fileCount: 0, sizeBytes: 0, error: "Cancelled" };
+    }
+    if (!result) {
+      return { success: false, fileCount: 0, sizeBytes: 0, error: "Download returned no result" };
+    }
+
+    // Get actual file size
+    const fileInfo = await FileSystem.getInfoAsync(localPath, { size: true });
+    const sizeBytes = (fileInfo as any).size ?? 0;
+
+    // Save metadata
+    const region: DownloadedRegion = {
+      id: city.id,
+      name: city.name,
+      country: city.country,
+      bounds: city.bounds,
+      fileCount: 1,
+      sizeBytes,
+      downloadedAt: Date.now(),
+      layers: ["pmtiles"],
+      source: "r2",
+    };
+    await saveDownloadedRegion(region);
+    onProgress?.(1, 1, "Done");
+    return { success: true, fileCount: 1, sizeBytes };
+  } catch (err) {
+    // Clean up partial file on error
+    await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+    if (signal?.aborted) {
+      return { success: false, fileCount: 0, sizeBytes: 0, error: "Cancelled" };
+    }
+    throw err;
+  }
 }
 
 // ─── Metadata persistence ─────────────────────────────────────────

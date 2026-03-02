@@ -1,9 +1,9 @@
 /**
- * ElevenLabs TTS Service — High-quality AI voice synthesis.
+ * ElevenLabs TTS & STT Service — High-quality AI voice synthesis and transcription.
  *
  * Prefers server proxy when ELEVENLABS_API_KEY is set on the server (Railway env) — no key on client.
  * Otherwise uses client-stored API key (settings) and calls ElevenLabs directly.
- * Falls back to expo-speech if ElevenLabs is unavailable.
+ * Falls back to expo-speech (TTS) or server Whisper (STT) if ElevenLabs is unavailable.
  */
 import { Platform } from "react-native";
 import {
@@ -343,6 +343,118 @@ export async function playVoicePreview(previewUrl: string): Promise<void> {
     } catch {}
     player.play();
   }
+}
+
+// ── Speech-to-Text ───────────────────────────────────────────────────────────
+
+export interface TranscriptionResult {
+  text: string;
+  languageCode?: string;
+}
+
+/**
+ * Transcribe audio using ElevenLabs Speech-to-Text.
+ * Returns null if ElevenLabs is not available (caller should fall back to Whisper).
+ *
+ * @param audioBase64 - Base64-encoded audio data
+ * @param mimeType - Audio MIME type (e.g., "audio/m4a", "audio/webm")
+ */
+export async function transcribeWithElevenLabs(
+  audioBase64: string,
+  mimeType: string = "audio/m4a"
+): Promise<TranscriptionResult | null> {
+  const base = getApiBaseUrl();
+  
+  // Try server proxy first
+  if (base) {
+    try {
+      const serverOk = await isServerProxyConfigured();
+      if (serverOk) {
+        const resp = await fetch(`${base}/api/elevenlabs/stt`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audioBase64, mimeType }),
+        });
+        
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.text) {
+            log.debug("Transcription via server proxy", { textLength: data.text.length });
+            return {
+              text: data.text,
+              languageCode: data.language_code,
+            };
+          }
+        } else {
+          log.warn("Server STT returned error", { status: resp.status });
+        }
+      }
+    } catch (err) {
+      log.warn("Server proxy STT failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  // Try client API key
+  const apiKey = await getElevenLabsApiKey();
+  if (!apiKey) {
+    log.debug("No ElevenLabs API key, STT unavailable");
+    return null;
+  }
+
+  try {
+    // Convert base64 to Blob for multipart upload
+    const byteCharacters = atob(audioBase64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const audioBlob = new Blob([byteArray], { type: mimeType });
+
+    const formData = new FormData();
+    const extension = mimeType.split("/")[1] || "m4a";
+    formData.append("file", audioBlob, `recording.${extension}`);
+    formData.append("model_id", "scribe_v1");
+
+    const resp = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+      },
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      log.warn("ElevenLabs STT returned error", { status: resp.status });
+      return null;
+    }
+
+    const data = await resp.json();
+    if (data.text) {
+      log.debug("Transcription via client API", { textLength: data.text.length });
+      return {
+        text: data.text,
+        languageCode: data.language_code,
+      };
+    }
+    return null;
+  } catch (err) {
+    log.warn("ElevenLabs STT failed", { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}
+
+/**
+ * Check if ElevenLabs STT is available (server proxy or client key).
+ */
+export async function isElevenLabsSttAvailable(): Promise<boolean> {
+  const base = getApiBaseUrl();
+  if (base) {
+    const serverOk = await isServerProxyConfigured();
+    if (serverOk) return true;
+  }
+  const apiKey = await getElevenLabsApiKey();
+  return !!apiKey;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Modal, Pressable, Share } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Modal, Pressable, Share, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { useColors } from "@/hooks/use-colors";
 import { useTheme } from "@/lib/theme-provider";
 import { Fonts } from "@/lib/_core/theme";
@@ -27,6 +28,7 @@ export default function SettingsContent() {
   const { theme, colorScheme, setColorScheme } = useTheme();
   const router = useRouter();
   const isDark = colorScheme === "dark";
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
   const handleClearCache = () => {
     hapticImpact();
 
@@ -414,8 +416,35 @@ export default function SettingsContent() {
           <Text style={{ fontSize: 11, color: theme.textTertiary, textAlign: "center", marginTop: 4 }}>
             CPP → MC-CARP Hybrid · Beta: Turn-aware CPP (Q1 '26)
           </Text>
+          <TouchableOpacity
+            onPress={() => {
+              hapticImpact();
+              setFeedbackVisible(true);
+            }}
+            style={{ marginTop: 16 }}
+          >
+            <Text style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}>
+              Send Product Feedback
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              hapticImpact();
+              Linking.openURL("https://www.routemasterpro.ca/privacy");
+            }}
+            style={{ marginTop: 12 }}
+          >
+            <Text style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}>
+              Privacy Policy
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <FeedbackSheet
+        visible={feedbackVisible}
+        onClose={() => setFeedbackVisible(false)}
+      />
     </ScreenContainer>
   );
 }

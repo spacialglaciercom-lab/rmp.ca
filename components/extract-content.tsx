@@ -32,7 +32,9 @@ import {
   type ExtractionStage,
   type ExtractionStats,
   type MeasurementMetrics,
+  type ElevationStats,
 } from "@/lib/overtureExtractService";
+import { getElevationForPoints } from "@/services/googleElevationService";
 
 // ---------------------------------------------------------------------------
 // Web-only lazy imports (MapLibre GL JS, mapbox-gl-draw, DuckDB WASM)
@@ -724,12 +726,14 @@ function NativeExtractFallback({
 }) {
   const [polygon, setPolygon] = useState<GeoJSON.Feature<GeoJSON.Polygon> | null>(null);
   const [metrics, setMetrics] = useState<MeasurementMetrics | null>(null);
+  const [elevationLoading, setElevationLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState<ExtractionProgress | null>(null);
   const [resultHash, setResultHash] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<ExtractionStats | null>(null);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [drawMode, setDrawMode] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
 
   const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
@@ -752,7 +756,29 @@ function NativeExtractFallback({
       const feat = coordsToPolygonFeature(drawPoints);
       setPolygon(feat);
       try {
-        setMetrics(computePolygonMetrics(feat));
+        const m = computePolygonMetrics(feat);
+        setMetrics(m);
+        
+        // Fetch elevation for polygon vertices
+        setElevationLoading(true);
+        const points = drawPoints.map(([lon, lat]) => ({ lat, lon }));
+        getElevationForPoints(points)
+          .then((elevations) => {
+            if (elevations.length > 0) {
+              const elevationValues = elevations.map((e) => e.elevationMeters).sort((a, b) => a - b);
+              const min = elevationValues[0];
+              const max = elevationValues[elevationValues.length - 1];
+              const midIdx = Math.floor(elevationValues.length / 2);
+              const median = elevationValues.length % 2 === 0
+                ? (elevationValues[midIdx - 1] + elevationValues[midIdx]) / 2
+                : elevationValues[midIdx];
+              setMetrics((prev) => prev ? { ...prev, elevation: { min, median, max } } : null);
+            }
+          })
+          .catch(() => {
+            // Elevation fetch failed, continue without it
+          })
+          .finally(() => setElevationLoading(false));
       } catch {
         setMetrics(null);
       }
@@ -820,28 +846,88 @@ function NativeExtractFallback({
           osmExtractionPolygon={extractionPoints.length >= 3 ? extractionPoints : undefined}
           osmExtractionPoints={extractionPoints}
         />
-        {/* Vertex count badge */}
+        {/* Polygon Info Panel - Google Earth style */}
         {drawMode && (
           <View
             style={[
-              styles.metricsCard,
+              styles.polygonInfoPanel,
               {
-                backgroundColor: colors.surface + "ee",
+                backgroundColor: colors.surface + "f5",
                 borderColor: colors.border,
                 top: 12 + insets.top,
               },
             ]}
           >
-            <Text style={[styles.metricsLabel, { color: colors.muted }]}>
-              {drawPoints.length < 3
-                ? `Tap map to place vertices (${drawPoints.length}/3+)`
-                : `${drawPoints.length} vertices`}
-            </Text>
-            {metrics && (
-              <Text style={[styles.metricsValue, { color: colors.text, fontFamily: Fonts?.mono, marginTop: 4 }]}>
-                {metrics.areaKm2 < 1 ? `${(metrics.areaKm2 * 1000).toFixed(0)} m²` : `${metrics.areaKm2.toFixed(2)} km²`}
+            <View style={styles.polygonInfoHeader}>
+              <MaterialCommunityIcons name="vector-polygon" size={18} color={colors.primary} />
+              <Text style={[styles.polygonInfoTitle, { color: colors.text }]}>
+                {drawPoints.length < 3 ? "Draw Polygon" : "Polygon"}
               </Text>
-            )}
+              <Text style={[styles.vertexCount, { color: colors.muted }]}>
+                {drawPoints.length} {drawPoints.length === 1 ? "vertex" : "vertices"}
+              </Text>
+            </View>
+            
+            {drawPoints.length < 3 ? (
+              <Text style={[styles.polygonInfoHint, { color: colors.muted }]}>
+                Tap map to place at least 3 vertices
+              </Text>
+            ) : metrics ? (
+              <>
+                <View style={styles.polygonMetricRow}>
+                  <Text style={[styles.polygonMetricLabel, { color: colors.muted }]}>Perimeter</Text>
+                  <Text style={[styles.polygonMetricValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
+                    {metrics.perimeterKm < 1 
+                      ? `${(metrics.perimeterKm * 1000).toFixed(2)} m` 
+                      : `${metrics.perimeterKm.toFixed(2)} km`}
+                  </Text>
+                </View>
+                
+                <View style={styles.polygonMetricRow}>
+                  <Text style={[styles.polygonMetricLabel, { color: colors.muted }]}>Area</Text>
+                  <Text style={[styles.polygonMetricValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
+                    {metrics.areaKm2 < 0.001 
+                      ? `${(metrics.areaKm2 * 1000000).toFixed(2)} m²`
+                      : metrics.areaKm2 < 1 
+                        ? `${(metrics.areaKm2 * 1000000).toFixed(0)} m²` 
+                        : `${metrics.areaKm2.toFixed(2)} km²`}
+                  </Text>
+                </View>
+                
+                <TouchableOpacity 
+                  style={styles.advancedToggle}
+                  onPress={() => setShowAdvanced(!showAdvanced)}
+                >
+                  <Text style={[styles.advancedToggleText, { color: colors.primary }]}>
+                    Advanced measurements
+                  </Text>
+                  <MaterialCommunityIcons 
+                    name={showAdvanced ? "chevron-up" : "chevron-down"} 
+                    size={18} 
+                    color={colors.primary} 
+                  />
+                </TouchableOpacity>
+                
+                {showAdvanced && (
+                  <View style={[styles.advancedSection, { borderTopColor: colors.border }]}>
+                    <View style={styles.polygonMetricRow}>
+                      <Text style={[styles.polygonMetricLabel, { color: colors.muted }]}>Elevation estimate</Text>
+                      {elevationLoading ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : metrics.elevation ? (
+                        <Text style={[styles.polygonMetricValue, { color: colors.text, fontFamily: Fonts?.mono, fontSize: 11 }]}>
+                          Min: {metrics.elevation.min.toFixed(1)}m | Med: {metrics.elevation.median.toFixed(1)}m | Max: {metrics.elevation.max.toFixed(1)}m
+                        </Text>
+                      ) : (
+                        <Text style={[styles.polygonMetricValue, { color: colors.muted, fontSize: 11 }]}>
+                          Not available
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : null}
           </View>
         )}
       </View>
@@ -993,7 +1079,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   mapContainer: { flex: 1, position: "relative" as any },
 
-  // Metrics card
+  // Metrics card (legacy)
   metricsCard: {
     position: "absolute",
     left: 12,
@@ -1006,6 +1092,72 @@ const styles = StyleSheet.create({
   metricsLabel: { fontSize: 10, fontWeight: "500" },
   metricsValue: { fontSize: 15, fontWeight: "700" },
   segmentText: { fontSize: 12, fontWeight: "500", marginTop: 2 },
+
+  // Polygon Info Panel (Google Earth style)
+  polygonInfoPanel: {
+    position: "absolute",
+    right: 12,
+    width: 220,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  polygonInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  polygonInfoTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    flex: 1,
+  },
+  vertexCount: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  polygonInfoHint: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  polygonMetricRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  polygonMetricLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  polygonMetricValue: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  advancedToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  advancedToggleText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  advancedSection: {
+    borderTopWidth: 1,
+    paddingTop: 8,
+    marginTop: 4,
+  },
 
   // City presets
   presetsContainer: {

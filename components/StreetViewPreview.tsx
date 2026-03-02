@@ -321,6 +321,7 @@ export function StreetViewPreview({
   }, [points]);
 
   const scrubValue = totalDistance > 0 ? distanceTraveled / totalDistance : 0;
+  const isSinglePoint = points.length <= 1;
 
   if (Platform.OS === "web") return null;
 
@@ -436,8 +437,8 @@ export function StreetViewPreview({
           </View>
         )}
 
-        {/* Manual navigation arrows */}
-        {svReady && !playing && (
+        {/* Manual navigation arrows - only show for routes with multiple points */}
+        {svReady && !playing && !isSinglePoint && (
           <View style={styles.arrowOverlay} pointerEvents="box-none">
             <TouchableOpacity
               style={styles.arrowButton}
@@ -462,8 +463,8 @@ export function StreetViewPreview({
           </View>
         )}
 
-        {/* Bottom controls */}
-        {svReady && (
+        {/* Bottom controls - only show for routes with multiple points */}
+        {svReady && !isSinglePoint && (
           <View style={[styles.controls, { paddingBottom: insets.bottom + 12 }]}>
             {/* Scrubber */}
             <View style={styles.scrubberRow}>

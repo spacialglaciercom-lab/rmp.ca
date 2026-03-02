@@ -87,7 +87,7 @@ function RouteActionChipsInner({
           {streetViewLoading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={chipStyles.chipText}>Street View</Text>
+            <Text style={chipStyles.chipText}>Mapillary</Text>
           )}
         </TouchableOpacity>
       )}

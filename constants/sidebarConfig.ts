@@ -8,6 +8,7 @@ export type SidebarMenuItemId =
   | "markers"
   | "resources"
   | "navigation"
+  | "recording"
   | "routeParameters"
   | "osmExtractor"
   | "configure"
@@ -30,6 +31,7 @@ export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
   { id: "markers", label: "Map Markers", icon: "map-marker", showChevron: true },
   { id: "resources", label: "Maps & Resources", icon: "folder-download-outline", showChevron: true },
   { id: "navigation", label: "Navigation", icon: "navigation-variant-outline", showChevron: true },
+  { id: "recording", label: "Recording", icon: "record-circle-outline", showChevron: true },
   { id: "routeParameters", label: "Route parameters", icon: "map-marker-path", showChevron: true },
   { id: "osmExtractor", label: "OSM Extractor", icon: "database-export-outline", showChevron: true },
   { id: "separator1", label: "", icon: "minus", isSeparator: true } as SidebarMenuItem,

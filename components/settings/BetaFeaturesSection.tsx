@@ -235,26 +235,9 @@ export const BetaFeaturesSection: React.FC = () => {
       {features.enabled && (
         <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
           <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Weather-Optimized Routing</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>AI Chat</Text>
             <Text style={[styles.description, { color: colors.muted }]}>
-              OpenWeatherMap + Leap AI (iOS). Set EXPO_PUBLIC_OPENWEATHERMAP_API_KEY for weather data.
-            </Text>
-          </View>
-          <Switch
-            value={features.weatherOptimizedRouting}
-            onValueChange={toggleWeatherOptimizedRouting}
-            trackColor={switchTrack}
-            thumbColor={Platform.OS === "android" ? (features.weatherOptimizedRouting ? colors.accentCyan : colors.muted) : undefined}
-          />
-        </View>
-      )}
-
-      {features.enabled && (
-        <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
-          <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>AI Co-Pilot</Text>
-            <Text style={[styles.description, { color: colors.muted }]}>
-              Voice/text companion while driving or parked. Uses server AI (no API key needed).
+              Floating chat bubble on map. Tap to type, hold to talk.
             </Text>
           </View>
           <Switch
@@ -280,46 +263,6 @@ export const BetaFeaturesSection: React.FC = () => {
             trackColor={switchTrack}
             thumbColor={Platform.OS === "android" ? (features.routeMasterConstraints ? colors.accentCyan : colors.muted) : undefined}
           />
-        </View>
-      )}
-
-      {features.enabled && (
-        <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
-          <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Leap SDK status</Text>
-            <Text style={[styles.description, { color: colors.muted }]}>
-              {Platform.OS === "web"
-                ? "N/A (web)"
-                : leapStatus === null
-                  ? "Checking…"
-                  : !leapStatus.linked
-                    ? "Not linked (Expo Go or build without leap-extract)"
-                    : leapStatus.modelLoaded
-                      ? "Linked ✓ · Model loaded ✓"
-                      : "Linked ✓ · Model not yet loaded (loads on first use)"}
-            </Text>
-          </View>
-          {Platform.OS !== "web" && (
-            <TouchableOpacity
-              onPress={handleVerifyLeap}
-              disabled={verifyingLeap}
-              style={[
-                styles.verifyButton,
-                {
-                  borderColor: colors.border,
-                  opacity: verifyingLeap ? 0.7 : 1,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Verify Leap SDK"
-            >
-              {verifyingLeap ? (
-                <ActivityIndicator size="small" color={colors.muted} />
-              ) : (
-                <Text style={[styles.verifyButtonText, { color: colors.foreground }]}>Verify</Text>
-              )}
-            </TouchableOpacity>
-          )}
         </View>
       )}
 

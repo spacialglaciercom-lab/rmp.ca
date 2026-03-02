@@ -115,7 +115,7 @@ export function MapillaryViewer({
 
           {/* Header with Close in top right */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>Street View</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Mapillary Street View</Text>
             <TouchableOpacity
               onPress={handleClose}
               style={styles.closeButton}

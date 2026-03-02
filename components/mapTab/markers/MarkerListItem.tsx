@@ -14,6 +14,8 @@ export interface MarkerItem {
   type: "start" | "waypoint" | "custom";
   /** Cached reverse-geocoded location (e.g. "Denver, United States") */
   location?: string;
+  /** Number of audio/video notes attached */
+  mediaNotesCount?: number;
 }
 
 interface MarkerListItemProps {
@@ -21,6 +23,7 @@ interface MarkerListItemProps {
   onPress?: () => void;
   onDelete?: () => void;
   onRename?: () => void;
+  onAddNote?: () => void;
   showDelete?: boolean;
 }
 
@@ -29,6 +32,7 @@ function MarkerListItemInner({
   onPress,
   onDelete,
   onRename,
+  onAddNote,
   showDelete = false,
 }: MarkerListItemProps) {
   const colors = useColors();
@@ -77,8 +81,28 @@ function MarkerListItemInner({
               {marker.location}
             </Text>
           ) : null}
+          {marker.mediaNotesCount && marker.mediaNotesCount > 0 ? (
+            <View style={styles.noteBadge}>
+              <MaterialCommunityIcons name="microphone" size={12} color={colors.primary} />
+              <Text style={[styles.noteCount, { color: colors.primary }]}>
+                {marker.mediaNotesCount} note{marker.mediaNotesCount > 1 ? "s" : ""}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
+      {showDelete && onAddNote && (
+        <TouchableOpacity
+          onPress={() => {
+            if (Platform.OS !== "web") hapticImpact();
+            onAddNote();
+          }}
+          style={styles.actionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="microphone-plus" size={20} color={colors.primary} />
+        </TouchableOpacity>
+      )}
       {showDelete && onRename && (
         <TouchableOpacity
           onPress={() => {
@@ -141,6 +165,16 @@ const styles = StyleSheet.create({
   actionBtn: {
     padding: 4,
     marginLeft: 4,
+  },
+  noteBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  noteCount: {
+    fontSize: 11,
+    fontWeight: "500",
   },
 });
 

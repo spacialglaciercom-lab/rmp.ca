@@ -34,10 +34,10 @@ export interface MapLayerState {
 // Default map layers
 const DEFAULT_LAYERS: MapLayer[] = [
   {
-    id: "apple-maps",
-    name: "Apple Maps",
+    id: "google-maps",
+    name: "Google Maps",
     url: "",
-    attribution: "© Apple",
+    attribution: "© Google",
     type: "base",
     category: "standard"
   },
@@ -97,7 +97,7 @@ export const SLOW_LOADING_BASE_LAYERS: string[] = ["terrain", "satellite"];
 export const useMapLayerStore = create<MapLayerState>()(
   persist(
     (set, get) => ({
-      activeBaseLayer: "apple-maps",
+      activeBaseLayer: "google-maps",
       activeOverlays: ["collection-points"],
       availableLayers: DEFAULT_LAYERS,
       layerOpacity: {},
@@ -127,7 +127,7 @@ export const useMapLayerStore = create<MapLayerState>()(
 
       resetLayerSettings: () => {
         set({
-          activeBaseLayer: "apple-maps",
+          activeBaseLayer: "google-maps",
           activeOverlays: ["collection-points"],
           layerOpacity: {}
         });

@@ -18,6 +18,7 @@ interface FloatingIconButtonProps {
   size?: number;
   style?: ViewStyle;
   disabled?: boolean;
+  iconColor?: string;
 }
 
 const styles = StyleSheet.create({
@@ -45,6 +46,7 @@ function FloatingIconButtonInner({
   size = 44,
   style,
   disabled = false,
+  iconColor,
 }: FloatingIconButtonProps) {
   const colors = useColors();
 
@@ -70,7 +72,7 @@ function FloatingIconButtonInner({
       <MaterialCommunityIcons
         name={icon}
         size={size * 0.45}
-        color={colors.text}
+        color={iconColor ?? colors.text}
         style={styles.icon}
       />
     </Pressable>

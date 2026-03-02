@@ -39,6 +39,12 @@ interface PlaceInfoSheetProps {
   lat: number;
   lon: number;
   onDirectionsHere?: () => void;
+  /** Opens Mapillary street view */
+  onStreetView?: () => void;
+  /** Opens Mapillary app to contribute images */
+  onContributeImages?: () => void;
+  /** Opens Google Street View */
+  onGoogleStreetView?: () => void;
   onSaveToFavorites?: (name: string, lat: number, lon: number) => void;
   onClear?: () => void;
 }
@@ -49,6 +55,9 @@ export function PlaceInfoSheet({
   lat,
   lon,
   onDirectionsHere,
+  onStreetView,
+  onContributeImages,
+  onGoogleStreetView,
   onSaveToFavorites,
   onClear,
 }: PlaceInfoSheetProps) {
@@ -116,6 +125,21 @@ export function PlaceInfoSheet({
     if (Platform.OS !== "web") hapticImpact();
     onDirectionsHere?.();
   }, [onDirectionsHere]);
+
+  const handleStreetView = useCallback(() => {
+    if (Platform.OS !== "web") hapticImpact();
+    onStreetView?.();
+  }, [onStreetView]);
+
+  const handleGoogleStreetView = useCallback(() => {
+    if (Platform.OS !== "web") hapticImpact();
+    onGoogleStreetView?.();
+  }, [onGoogleStreetView]);
+
+  const handleContributeImages = useCallback(() => {
+    if (Platform.OS !== "web") hapticImpact();
+    onContributeImages?.();
+  }, [onContributeImages]);
 
   const handleSave = useCallback(() => {
     if (Platform.OS !== "web") hapticImpact();
@@ -227,6 +251,39 @@ export function PlaceInfoSheet({
                       onPress={handleDirections}
                       style={styles.actionBtn}
                     />
+                  )}
+                  {Platform.OS !== "web" && onStreetView && (
+                    <TouchableOpacity
+                      style={[styles.streetViewBtn, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+                      onPress={handleStreetView}
+                    >
+                      <MaterialCommunityIcons name="camera-marker" size={22} color={colors.primary} />
+                      <Text style={[styles.streetViewBtnText, { color: colors.text }]}>
+                        Mapillary Street View
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {Platform.OS !== "web" && onContributeImages && (
+                    <TouchableOpacity
+                      style={[styles.streetViewBtn, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+                      onPress={handleContributeImages}
+                    >
+                      <MaterialCommunityIcons name="camera-plus-outline" size={22} color="#10B981" />
+                      <Text style={[styles.streetViewBtnText, { color: colors.text }]}>
+                        Contribute images
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {Platform.OS !== "web" && onGoogleStreetView && (
+                    <TouchableOpacity
+                      style={[styles.streetViewBtn, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+                      onPress={handleGoogleStreetView}
+                    >
+                      <MaterialCommunityIcons name="google-street-view" size={22} color={colors.primary} />
+                      <Text style={[styles.streetViewBtnText, { color: colors.text }]}>
+                        Google Street View
+                      </Text>
+                    </TouchableOpacity>
                   )}
                   {onSaveToFavorites && (
                     <MinimalButton
@@ -366,6 +423,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   clearBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  streetViewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  streetViewBtnText: {
     fontSize: 15,
     fontWeight: "600",
   },
