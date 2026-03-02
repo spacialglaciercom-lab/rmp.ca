@@ -1375,7 +1375,7 @@ export default function MapContent() {
         visible={routeParametersPanelVisible}
         onClose={closeRouteParametersPanel}
       />
-      {'flex': 1, 'justifyContent': 'center', 'alignItems': 'center'}
+      <MapMarkersScreen
         visible={mapMarkersPanelVisible}
         onClose={closeMapMarkersPanel}
         collectionPoints={collectionPoints}
