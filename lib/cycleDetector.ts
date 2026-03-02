@@ -256,7 +256,7 @@ export class CycleDetector {
    */
   getPenalty(nodeKey: string): number {
     const visits = this.nodeVisitCount.get(nodeKey) ?? 0;
-    if (this.tabuNodes.has(nodeKey)) return 2000; // Increased from 1000
+    if (this.tabuNodes.has(nodeKey)) return 1000;
     if (visits === 0) return 0;
     // Exponential penalty based on recent visits, capped to avoid overflow
     const expPenalty = Math.min(Math.pow(2, visits), 256) * 15;

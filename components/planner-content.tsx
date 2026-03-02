@@ -27,6 +27,7 @@ import {
   generateSampleReport,
 } from "@/lib/routing-context";
 import { calculateRouteStatistics } from "@/lib/route-calculator";
+import { douglasPeucker } from "@/lib/douglas-peucker";
 import { sanitizeRouteStatistics } from "@/lib/export-utils";
 import { useCustomStartPoint } from "@/hooks/useCustomStartPoint";
 import { OSM_DATA_STORAGE_KEY, storedToOsmData } from "@/lib/osm-storage";
@@ -34,6 +35,7 @@ import type { StoredOSMData } from "@/lib/osm-storage";
 import { storage } from "@/lib/storage";
 import { generateRouteId } from "@/lib/utils";
 import { routeThroughWaypoints } from "@/lib/mapMatching";
+import { repairRouteGaps, countGaps } from "@/lib/routeGapFilter";
 import { getRoutingConfigAsync } from "@/lib/routing-config";
 import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2";
@@ -301,19 +303,28 @@ export default function PlannerContent() {
           if (matched && matched.matchedGeometry.length >= 2) {
             gpxPoints = matched.matchedGeometry;
             optimizerDistanceKm = matched.totalDistance / 1000;
-            // Build collection points from matched geometry so saved route draws on-road on Map tab (downsample if very long)
-            const maxStored = 500;
-            const step = gpxPoints.length <= maxStored ? 1 : Math.ceil(gpxPoints.length / maxStored);
-            pointsForStorage = gpxPoints
-              .filter((_, i) => i % step === 0 || i === gpxPoints.length - 1)
-              .map((p, i) => ({
-                id: `route-${i}`,
-                address: `Stop ${i + 1}`,
-                latitude: p.lat,
-                longitude: p.lon,
-                collectionType: "residential" as const,
-                status: "pending" as const,
-              }));
+            // Repair teleporting gaps (>400 m straight-line jumps) caused by OSRM
+            // chunk-join mismatches or partial failures. Each gap gets a targeted
+            // 2-waypoint re-route so the road-following geometry fills the jump.
+            const gapsBefore = countGaps(gpxPoints);
+            if (gapsBefore > 0) {
+              debug("Planner.generateRoute", { teleportingGapsDetected: gapsBefore });
+              gpxPoints = await repairRouteGaps(gpxPoints, routingConfig, getRouteOptionsForRouting());
+              debug("Planner.generateRoute", { teleportingGapsAfterRepair: countGaps(gpxPoints) });
+            }
+
+            // Build collection points from matched geometry so saved route draws on-road on Map tab.
+            // Use Douglas-Peucker simplification (5 m tolerance) to preserve shape without
+            // the "invisible road" teleporting segments caused by uniform stride downsampling.
+            const allMatchedPoints: CollectionPoint[] = gpxPoints.map((p, i) => ({
+              id: `route-${i}`,
+              address: `Stop ${i + 1}`,
+              latitude: p.lat,
+              longitude: p.lon,
+              collectionType: "residential" as const,
+              status: "pending" as const,
+            }));
+            pointsForStorage = douglasPeucker(allMatchedPoints, 0.005); // 5 m tolerance
             debug("Planner.generateRoute", { snappedToRoads: true, points: gpxPoints.length });
           }
         }
