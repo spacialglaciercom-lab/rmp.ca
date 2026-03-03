@@ -326,7 +326,10 @@ export default function ExtractContent() {
     setPreviewPointCount(null);
     try {
       const conn = await initDuckDB();
-      if (!conn) throw new Error("DuckDB not available");
+      if (!conn) {
+        console.warn("[Preview] DuckDB not available in this environment; preview skipped. Extract via WebSocket still works.");
+        return;
+      }
 
       const bbox = getBBox(polygon);
       const query = `

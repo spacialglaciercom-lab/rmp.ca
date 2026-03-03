@@ -13,6 +13,7 @@ import { handleEasBuildWebhook } from "../easBuildWebhook";
 import { registerMapsProxyRoutes } from "../mapsProxy";
 import { registerAiProxyRoutes } from "../aiProxy";
 import { registerElevenLabsProxyRoutes } from "../elevenLabsProxy";
+import { registerWsExtractProxy } from "../wsExtractProxy";
 import { createLogger } from "../logger";
 import { ENV } from "./env";
 
@@ -60,6 +61,9 @@ async function startServer() {
 
   const app = express();
   const server = createServer(app);
+
+  // WebSocket proxy for /ws/extract (web same-origin; forwards to optimizer backend)
+  registerWsExtractProxy(server);
 
   // Enable CORS for all routes - reflect the request origin to support credentials
   app.use((req, res, next) => {
@@ -115,6 +119,7 @@ async function startServer() {
         reportError: "POST /api/report-error",
         registerPushToken: "POST /api/register-push-token",
         easBuildWebhook: "POST /api/eas-build-webhook (EAS Build events)",
+        wsExtract: "WebSocket /ws/extract (proxy to optimizer backend for web same-origin)",
       },
       timestamp: Date.now(),
     });

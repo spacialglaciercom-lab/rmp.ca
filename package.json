@@ -118,6 +118,7 @@
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
     "genkit": "^1.28.0",
+    "http-proxy": "^1.18.1",
     "jose": "6.1.0",
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",

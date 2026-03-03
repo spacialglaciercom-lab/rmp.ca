@@ -253,7 +253,7 @@ const config = {
     // Python/FastAPI Overture route optimizer backend URL (baked in at build time)
     optimizerUrl:
       process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
-      "https://zooming-creativity-backend.up.railway.app",
+      "https://trashroute-mobile-286569721223.northamerica-northeast1.run.app",
   },
 };
 
