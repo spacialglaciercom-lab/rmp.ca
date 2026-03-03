@@ -4,7 +4,6 @@
 
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import * as Device from "expo-device";
 
 const RESEND_API_KEY = "re_gbHYbgot_GZd5U6rZHZ9XH7zL7W6JZjWs";
 const FROM_EMAIL = "RouteMaster Pro <contact@routemasterpro.ca>";
@@ -19,18 +18,22 @@ interface IssueReport {
 interface SuggestionReport {
   description: string;
   screenshotBase64?: string;
+  /** Optional file attachment (e.g. PDF); when present, sent as email attachment. */
+  attachment?: { name: string; base64: string; mimeType: string };
   deviceInfo?: string;
 }
 
+/**
+ * Collect device info using only Platform and Constants to avoid pulling in
+ * expo-device or other native modules that can trigger NativeEventEmitter
+ * crashes (e.g. PushNotificationIOS null on Android) when reporting errors.
+ */
 function getDeviceInfo(): string {
   try {
     const info = [
-      `Platform: ${Platform.OS} ${Platform.Version}`,
-      `App Version: ${Constants.expoConfig?.version ?? "unknown"}`,
-      `Device: ${Device.modelName ?? "unknown"}`,
-      `Brand: ${Device.brand ?? "unknown"}`,
+      `Platform: ${Platform.OS} ${Platform.Version ?? "unknown"}`,
+      `App Version: ${Constants.expoConfig?.version ?? Constants.manifest?.version ?? "unknown"}`,
     ];
-
     return info.join("\n");
   } catch {
     return "Device info unavailable";
@@ -115,6 +118,14 @@ export async function submitSuggestion(report: SuggestionReport): Promise<boolea
         to: [FEEDBACK_EMAIL],
         subject: "[Feature Suggestion] New idea submitted",
         html: htmlContent,
+        ...(report.attachment && {
+          attachments: [
+            {
+              filename: report.attachment.name,
+              content: report.attachment.base64,
+            },
+          ],
+        }),
       }),
     });
 

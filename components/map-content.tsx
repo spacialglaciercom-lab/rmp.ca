@@ -51,6 +51,7 @@ import { MapSidebar } from "@/components/mapTab/sidebar/MapSidebar";
 import { HelpPrompt } from "@/components/help/HelpPrompt";
 import { NavigationPanel } from "@/components/mapTab/navigation/NavigationPanel";
 import { MyPlacesScreen } from "@/components/mapTab/places/MyPlacesScreen";
+import { ZonesScreen } from "@/components/mapTab/places/ZonesScreen";
 import { MapsAndResourcesScreen } from "@/components/mapTab/resources/MapsAndResourcesScreen";
 import { ConfigureScreenSheet } from "@/components/mapTab/resources/ConfigureScreenSheet";
 import { RouteParametersSheet } from "@/components/mapTab/resources/RouteParametersSheet";
@@ -294,6 +295,8 @@ export default function MapContent() {
     (s) => s.myPlacesPanelVisible,
   );
   const closeMyPlacesPanel = useMapSidebarStore((s) => s.closeMyPlacesPanel);
+  const zonesPanelVisible = useMapSidebarStore((s) => s.zonesPanelVisible);
+  const closeZonesPanel = useMapSidebarStore((s) => s.closeZonesPanel);
   const mapsResourcesVisible = useMapSidebarStore(
     (s) => s.mapsResourcesVisible,
   );
@@ -1362,6 +1365,10 @@ export default function MapContent() {
       <MyPlacesScreen
         visible={myPlacesPanelVisible}
         onClose={closeMyPlacesPanel}
+      />
+      <ZonesScreen
+        visible={zonesPanelVisible}
+        onClose={closeZonesPanel}
       />
       <MapsAndResourcesScreen
         visible={mapsResourcesVisible}

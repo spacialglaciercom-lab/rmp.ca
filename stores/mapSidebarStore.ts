@@ -15,6 +15,7 @@ interface MapSidebarStore {
   activeSubScreen: MapSidebarSubScreen;
   navigationPanelVisible: boolean;
   myPlacesPanelVisible: boolean;
+  zonesPanelVisible: boolean;
   mapsResourcesVisible: boolean;
   configureScreenVisible: boolean;
   mapMarkersPanelVisible: boolean;
@@ -33,6 +34,8 @@ interface MapSidebarStore {
   closeNavigationPanel: () => void;
   openMyPlacesPanel: () => void;
   closeMyPlacesPanel: () => void;
+  openZonesPanel: () => void;
+  closeZonesPanel: () => void;
   openMapsResources: () => void;
   closeMapsResources: () => void;
   openConfigureScreen: () => void;
@@ -55,6 +58,7 @@ export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
   activeSubScreen: null,
   navigationPanelVisible: false,
   myPlacesPanelVisible: false,
+  zonesPanelVisible: false,
   mapsResourcesVisible: false,
   configureScreenVisible: false,
   mapMarkersPanelVisible: false,
@@ -76,6 +80,9 @@ export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
   openMyPlacesPanel: () =>
     set({ isOpen: false, activeSubScreen: null, myPlacesPanelVisible: true }),
   closeMyPlacesPanel: () => set({ myPlacesPanelVisible: false }),
+  openZonesPanel: () =>
+    set({ isOpen: false, activeSubScreen: null, zonesPanelVisible: true }),
+  closeZonesPanel: () => set({ zonesPanelVisible: false }),
   openMapsResources: () =>
     set({ isOpen: false, activeSubScreen: null, mapsResourcesVisible: true }),
   closeMapsResources: () => set({ mapsResourcesVisible: false }),

@@ -50,6 +50,7 @@ export function useTrackRecorder() {
   const internalDistance = useRef(0);
   const lastPoint = useRef<TrackPoint | null>(null);
   const locationSub = useRef<{ remove: () => void } | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const batchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedBase = useRef(0); // accumulated ms before current resume
@@ -64,6 +65,8 @@ export function useTrackRecorder() {
       } catch {
         // expo-location removeSubscription not available on web
       }
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
       if (timerRef.current) clearInterval(timerRef.current);
       if (batchTimerRef.current) clearInterval(batchTimerRef.current);
     };
@@ -189,8 +192,9 @@ export function useTrackRecorder() {
 
         const { loggingIntervalSeconds } = useRecordingSettingsStore.getState();
         const distanceInterval = loggingIntervalSecondsToDistanceMeters(loggingIntervalSeconds);
+        // Use High accuracy for more reliable updates (BestForNavigation can delay or skip on some devices).
         const watchOptions: Parameters<typeof Location.watchPositionAsync>[0] = {
-          accuracy: Location.Accuracy.BestForNavigation,
+          accuracy: Location.Accuracy.High,
           distanceInterval,
           timeInterval: loggingIntervalSeconds * 1000,
         };
@@ -198,6 +202,21 @@ export function useTrackRecorder() {
           watchOptions,
           (loc: any) => onLocationUpdate(loc)
         );
+
+        // Fallback poll: expo-location often ignores timeInterval when distanceInterval is set,
+        // so we get no updates when stationary. Poll getCurrentPositionAsync every interval
+        // to ensure we record points even when not moving.
+        const intervalMs = Math.max(1000, loggingIntervalSeconds * 1000);
+        pollIntervalRef.current = setInterval(async () => {
+          try {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            onLocationUpdate(loc);
+          } catch (e) {
+            log.warn("Fallback getCurrentPosition failed", e instanceof Error ? e : new Error(String(e)));
+          }
+        }, intervalMs);
       } catch (err) {
         log.error("Failed to start location watch", err instanceof Error ? err : new Error(String(err)));
         throw err;
@@ -206,6 +225,10 @@ export function useTrackRecorder() {
   }, [onLocationUpdate]);
 
   const stopLocationWatch = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
     try {
       locationSub.current?.remove();
     } catch (err) {

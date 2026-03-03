@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Modal, Pressable, Share, Linking } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Modal, Pressable, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
@@ -12,16 +12,13 @@ import { clearAllAppCache } from "@/lib/clear-all-cache";
 import { clearMapCache } from "@/lib/map-cache";
 import { confirmDestructive } from "@/lib/confirmDestructive";
 import { ExportButton } from "@/components/export-button";
-import { AccountSection } from "@/components/settings/AccountSection";
 import { BetaFeaturesSection } from "@/components/settings/BetaFeaturesSection";
 import { OfflineMapDownloadSection } from "@/components/settings/OfflineMapDownloadSection";
-import { RouteMapDownloadSection } from "@/components/settings/RouteMapDownloadSection";
 import { MinimalCard, SectionLabel } from "@/components/minimal";
 import { MapOrientationSection } from "@/components/settings/MapOrientationSection";
 import { MapWebPluginsSection } from "@/components/settings/MapWebPluginsSection";
 import { NavigationProviderSection } from "@/components/settings/NavigationProviderSection";
 import { PowerSavingSettingsSection } from "@/components/PowerSavingSettings/PowerSavingSettingsSection";
-import { registerForPushNotificationsAsync } from "@/lib/registerPushToken";
 
 export default function SettingsContent() {
   const colors = useColors();
@@ -81,21 +78,6 @@ export default function SettingsContent() {
   };
 
   const settingsSections = [
-    ...(Platform.OS !== "web"
-      ? [
-          {
-            title: "Account",
-            items: [
-              {
-                label: "",
-                value: "",
-                component: AccountSection,
-                isComponent: true,
-              },
-            ],
-          },
-        ]
-      : []),
     {
       title: "Route Configuration",
       items: [
@@ -201,17 +183,6 @@ export default function SettingsContent() {
               },
             ],
           },
-          {
-            title: "Route map tiles",
-            items: [
-              {
-                label: "",
-                value: "",
-                component: RouteMapDownloadSection,
-                isComponent: true,
-              },
-            ],
-          },
         ]
       : []),
     {
@@ -238,49 +209,12 @@ export default function SettingsContent() {
         },
       ],
     },
-    ...(Platform.OS !== "web"
-      ? [
-          {
-            title: "Developer",
-            items: [
-              {
-                label: "Register for error alerts",
-                value: "Push token",
-                onPress: async () => {
-                  hapticImpact();
-                  try {
-                    const token = await registerForPushNotificationsAsync();
-                    if (!token) {
-                      Alert.alert("Permission needed", "Enable notifications to receive error alerts on this device.");
-                      return;
-                    }
-                    Alert.alert(
-                      "Registered",
-                      "This device is now registered for error alerts. You can also share the token to add it to EXPO_ERROR_PUSH_TOKENS on another server.",
-                      [
-                        { text: "OK" },
-                        {
-                          text: "Share token",
-                          onPress: () => Share.share({ message: token, title: "Expo push token" }),
-                        },
-                      ]
-                    );
-                  } catch (e) {
-                    Alert.alert("Error", e instanceof Error ? e.message : "Could not register push token");
-                  }
-                },
-                description: "Register this device with the API to receive error push notifications",
-              },
-            ],
-          },
-        ]
-      : []),
     {
       title: "About",
       items: [
         {
           label: "Version",
-          value: "1.0.8",
+          value: "1.0.9",
           onPress: () => {},
         },
         {

@@ -48,13 +48,6 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="schedule"
-        options={{
-          title: "Schedule",
-          tabBarItemStyle: { display: "none" },
-        }}
-      />
-      <Tabs.Screen
         name="index"
         options={{
           title: "Home",

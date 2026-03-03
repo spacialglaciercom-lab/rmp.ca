@@ -4,6 +4,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 export type SidebarMenuItemId =
   | "map"
   | "layers"
+  | "zones"
   | "places"
   | "markers"
   | "resources"
@@ -27,6 +28,7 @@ export interface SidebarMenuItem {
 export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
   { id: "map", label: "Map", icon: "map-outline", showChevron: false },
   { id: "layers", label: "Layers", icon: "layers-outline", showChevron: true },
+  { id: "zones", label: "Zones", icon: "vector-polygon", showChevron: true },
   { id: "places", label: "My Places", icon: "star-outline", showChevron: true },
   { id: "markers", label: "Map Markers", icon: "map-marker", showChevron: true },
   { id: "resources", label: "Maps & Resources", icon: "folder-download-outline", showChevron: true },

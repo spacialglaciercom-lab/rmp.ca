@@ -54,7 +54,7 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [issueDescription, setIssueDescription] = useState("");
   const [suggestionDescription, setSuggestionDescription] = useState("");
-  const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const resetState = useCallback(() => {
@@ -62,7 +62,7 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
     setSelectedCategory(null);
     setIssueDescription("");
     setSuggestionDescription("");
-    setScreenshotUri(null);
+    setUploadedFile(null);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -78,37 +78,34 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
       setSelectedCategory(null);
       setIssueDescription("");
       setSuggestionDescription("");
-      setScreenshotUri(null);
+      setUploadedFile(null);
     }
   }, [view]);
 
-  const handleCaptureScreenshot = useCallback(async () => {
+  const handleUpload = useCallback(async () => {
     if (Platform.OS === "web") {
-      Alert.alert("Not Available", "Screenshot capture is not available on web.");
+      Alert.alert("Not Available", "File upload is not available on web.");
       return;
     }
 
     try {
-      const ImagePicker = await import("expo-image-picker");
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!permission.granted) {
-        Alert.alert("Permission Required", "Photo library access is required to attach screenshots.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        setScreenshotUri(result.assets[0].uri);
-      }
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      setUploadedFile({
+        uri: file.uri,
+        name: file.name ?? "attachment",
+        mimeType: file.mimeType ?? "application/octet-stream",
+      });
     } catch (error) {
-      console.error("Screenshot capture failed:", error);
-      Alert.alert("Error", "Failed to capture screenshot.");
+      console.error("Upload failed:", error);
+      Alert.alert("Error", "Failed to pick file. Please try again.");
     }
   }, []);
 
@@ -159,20 +156,28 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
 
     try {
       let screenshotBase64: string | undefined;
-      
-      if (screenshotUri && Platform.OS !== "web") {
+      let attachment: { name: string; base64: string; mimeType: string } | undefined;
+
+      if (uploadedFile && Platform.OS !== "web") {
         try {
-          screenshotBase64 = await FileSystem.readAsStringAsync(screenshotUri, {
+          const base64 = await FileSystem.readAsStringAsync(uploadedFile.uri, {
             encoding: FileSystem.EncodingType.Base64,
           });
+          const isImage = (uploadedFile.mimeType ?? "").startsWith("image/");
+          if (isImage) {
+            screenshotBase64 = base64;
+          } else {
+            attachment = { name: uploadedFile.name, base64, mimeType: uploadedFile.mimeType };
+          }
         } catch (e) {
-          console.warn("Failed to read screenshot:", e);
+          console.warn("Failed to read uploaded file:", e);
         }
       }
 
       const success = await submitSuggestion({
         description: suggestionDescription.trim(),
         screenshotBase64,
+        attachment,
       });
 
       if (success) {
@@ -189,7 +194,7 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
     } finally {
       setSubmitting(false);
     }
-  }, [suggestionDescription, screenshotUri, handleClose]);
+  }, [suggestionDescription, uploadedFile, handleClose]);
 
   const isIpad = deviceType === "ipad";
   const panelStyle = isIpad
@@ -379,15 +384,24 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
       </Text>
 
       <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 20 }]}>
-        A screenshot will help us better understand your idea
+        Upload an image or file to help us better understand your idea
       </Text>
       
-      {screenshotUri ? (
+      {uploadedFile ? (
         <View style={styles.screenshotPreview}>
-          <Image source={{ uri: screenshotUri }} style={styles.screenshotImage} resizeMode="cover" />
+          {(uploadedFile.mimeType ?? "").startsWith("image/") ? (
+            <Image source={{ uri: uploadedFile.uri }} style={styles.screenshotImage} resizeMode="cover" />
+          ) : (
+            <View style={[styles.filePreview, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="file-document-outline" size={40} color={colors.muted} />
+              <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={2}>
+                {uploadedFile.name}
+              </Text>
+            </View>
+          )}
           <TouchableOpacity
             style={[styles.removeScreenshot, { backgroundColor: colors.surface }]}
-            onPress={() => setScreenshotUri(null)}
+            onPress={() => setUploadedFile(null)}
           >
             <MaterialCommunityIcons name="close" size={18} color={colors.text} />
           </TouchableOpacity>
@@ -395,11 +409,11 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
       ) : (
         <TouchableOpacity
           style={[styles.screenshotButton, { borderColor: colors.border }]}
-          onPress={handleCaptureScreenshot}
+          onPress={handleUpload}
         >
-          <MaterialCommunityIcons name="camera-plus-outline" size={24} color={colors.primary} />
+          <MaterialCommunityIcons name="upload-outline" size={24} color={colors.primary} />
           <Text style={[styles.screenshotButtonText, { color: colors.primary }]}>
-            Capture Screenshot
+            Upload
           </Text>
         </TouchableOpacity>
       )}
@@ -625,6 +639,20 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 200,
     borderRadius: 12,
+  },
+  filePreview: {
+    width: "100%",
+    height: 120,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  fileName: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
   },
   removeScreenshot: {
     position: "absolute",

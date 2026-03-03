@@ -32,6 +32,7 @@ export function MapSidebar() {
   const openMapsResources = useMapSidebarStore((s) => s.openMapsResources);
   const openConfigureScreen = useMapSidebarStore((s) => s.openConfigureScreen);
   const openMyPlacesPanel = useMapSidebarStore((s) => s.openMyPlacesPanel);
+  const openZonesPanel = useMapSidebarStore((s) => s.openZonesPanel);
   const openMapMarkersPanel = useMapSidebarStore((s) => s.openMapMarkersPanel);
   const openMapStylePicker = useMapSidebarStore((s) => s.openMapStylePicker);
   const openRouteParametersPanel = useMapSidebarStore((s) => s.openRouteParametersPanel);
@@ -91,6 +92,9 @@ export function MapSidebar() {
         break;
       case "places":
         openMyPlacesPanel();
+        break;
+      case "zones":
+        openZonesPanel();
         break;
       case "resources":
         openMapsResources();

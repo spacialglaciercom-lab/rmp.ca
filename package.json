@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.12.0",
   "main": "expo-router/entry",
   "scripts": {
+    "test:spatial": "node -e \"require('./scripts/spatialTest.js')\"",
     "dev": "cross-env CI=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port 19007",
     "dev:clear": "cross-env CI=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port 19007 --clear",
     "dev:server": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",

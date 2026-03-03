@@ -6,10 +6,11 @@
  * and source_id grouping.
  *
  * Also provides a general-purpose client for the Python/FastAPI backend:
- *   POST /api/optimize     — Chinese Postman route optimization
+ *   POST /api/optimize        — Chinese Postman route optimization
  *   POST /api/geojson/filter   — Filter GeoJSON by polygon + road classes
  *   POST /api/geojson/validate — Validate GeoJSON structure
  *   POST /api/geojson/roads    — Extract road features from raw Overture GeoJSON
+ *   POST /api/zones/partition  — Spectral clustering zones partition (no GNN)
  */
 
 import Constants from "expo-constants";
@@ -21,7 +22,7 @@ import Constants from "expo-constants";
 const OPTIMIZER_BASE_URL =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://zooming-creativity-backend.up.railway.app";
+  "https://trashroute-mobile-286569721223.northamerica-northeast1.run.app";
 
 // ---------------------------------------------------------------------------
 // Overture Split-Segment Types
@@ -130,6 +131,37 @@ export interface RoadExtractResponse {
   road_count: number;
   road_class_counts: Record<string, number>;
   total_length_km: number;
+}
+
+// ---------------------------------------------------------------------------
+// Zones partition (spectral clustering)
+// ---------------------------------------------------------------------------
+
+export interface ZonesPartitionEdge {
+  u: number;
+  v: number;
+  length?: number;
+  intersection_density?: number;
+  cul_de_sac_penalty?: number;
+  width_penalty?: number;
+}
+
+export interface ZonesPartitionRequest {
+  edges: ZonesPartitionEdge[];
+  node_count: number;
+  truck_count: number;
+  balance_metric: "time" | "distance";
+}
+
+export interface ZoneOutput {
+  zone_id: number;
+  node_ids: number[];
+  estimated_time: number;
+  estimated_distance?: number;
+}
+
+export interface ZonesPartitionResponse {
+  zones: ZoneOutput[];
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +324,16 @@ export async function extractRoads(
   geojson: GeoJSONFeatureCollection,
 ): Promise<RoadExtractResponse> {
   return request<RoadExtractResponse>("/api/geojson/roads", geojson);
+}
+
+/**
+ * Partition a graph into truck zones using spectral clustering (no GNN).
+ * Uses the same optimizer backend (Google Run). Balance is by total edge length × complexity factor.
+ */
+export async function partitionZones(
+  params: ZonesPartitionRequest,
+): Promise<ZonesPartitionResponse> {
+  return request<ZonesPartitionResponse>("/api/zones/partition", params);
 }
 
 export async function healthCheck(): Promise<boolean> {
