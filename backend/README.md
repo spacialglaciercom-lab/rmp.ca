@@ -27,4 +27,28 @@ uvicorn app.main:app --reload --port 8000
 
 ## Deploy to Google Run
 
-Build and push a container that runs `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, then set `EXPO_PUBLIC_OPTIMIZER_URL` (or your app’s optimizer URL) to the Run service URL so the mobile app uses this API.
+If you see **404** on `/health` and the Cloud Run log shows a container like **"placeholder-1"**, the service is running a placeholder image, not this FastAPI app. Deploy this backend so `/health` and `/api/zones/partition` work.
+
+1. **Build and push** (replace `PROJECT_ID` and `REGION` with your Google Cloud project and region, e.g. `northamerica-northeast1`):
+
+   ```bash
+   cd backend
+   docker build -t gcr.io/PROJECT_ID/trashroute-backend .
+   docker push gcr.io/PROJECT_ID/trashroute-backend
+   ```
+
+   Or with Google Cloud Build:
+
+   ```bash
+   gcloud builds submit --tag gcr.io/PROJECT_ID/trashroute-backend ./backend
+   ```
+
+2. **Deploy to Cloud Run** (same service URL so the app keeps using it):
+
+   ```bash
+   gcloud run deploy trashroute-mobile --image gcr.io/PROJECT_ID/trashroute-backend --region REGION --platform managed --allow-unauthenticated --set-env-vars PORT=8080
+   ```
+
+3. Set `EXPO_PUBLIC_OPTIMIZER_URL` (or your app's optimizer URL) to the Run service URL so the mobile app uses this API.
+
+**Note:** This API does **not** expose `/ws/extract` (Overture extract WebSocket). The app uses that for map extraction; if you need it on the same host, you'll need to add a WebSocket endpoint here or run a separate extract service and point the app to it via `EXPO_PUBLIC_OVERTURE_WS_BASE`.
