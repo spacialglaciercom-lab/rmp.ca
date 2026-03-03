@@ -1,24 +1,33 @@
 /**
  * Overture Extract WebSocket client + helpers.
  * Connects to the Google Run backend to extract & process road networks from Overture Maps data.
+ * On web, uses the API base URL (same-origin) so the browser hits our server's WebSocket proxy.
  */
 
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 import { area as turfArea } from "@turf/area";
 import { length as turfLength } from "@turf/length";
+import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
-// Backend URLs (Google Run; override with EXPO_PUBLIC_OVERTURE_* for a different extract service)
+// Backend URLs (Google Run). Use production by default so web and mobile work
+// without a local extract service. Override with EXPO_PUBLIC_OVERTURE_* for
+// a local backend (e.g. EXPO_PUBLIC_OVERTURE_WS_BASE=ws://localhost:8000).
+// On web we use the API base URL so the WebSocket goes same-origin (then server proxies to optimizer).
 // ---------------------------------------------------------------------------
-const isDev = __DEV__ && typeof window !== "undefined" && window.location?.hostname === "localhost";
 const defaultHttpBase =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
   "https://trashroute-mobile-286569721223.northamerica-northeast1.run.app";
 const defaultWsBase = defaultHttpBase.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
-const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? (isDev ? "http://localhost:8000" : defaultHttpBase);
-const WS_BASE = process.env.EXPO_PUBLIC_OVERTURE_WS_BASE ?? (isDev ? "ws://localhost:8000" : defaultWsBase);
+const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? defaultHttpBase;
+// Web: same-origin WebSocket via API server proxy to avoid browser CORS/Origin issues
+const WS_BASE =
+  Platform.OS === "web"
+    ? (getApiBaseUrl().replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://"))
+    : (process.env.EXPO_PUBLIC_OVERTURE_WS_BASE ?? defaultWsBase);
 
 export const WS_EXTRACT_URL = `${WS_BASE}/ws/extract`;
 export const httpGeoJSONUrl = (hash: string) => `${HTTP_BASE}/geojson/${hash}`;
