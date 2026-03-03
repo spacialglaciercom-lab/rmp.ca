@@ -1,4 +1,5 @@
 # Cloud Build: build from repo root Dockerfile and deploy to Cloud Run.
+# Trigger: "Push to branch" → ^main$ so every main push builds.
 steps:
   - name: "gcr.io/cloud-builders/docker"
     args:
@@ -28,6 +29,7 @@ steps:
       - "${_REGION}"
       - "--platform"
       - "managed"
+    id: "deploy"
 options:
   logging: CLOUD_LOGGING_ONLY
 substitutions:
