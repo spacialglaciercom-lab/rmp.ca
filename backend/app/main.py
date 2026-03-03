@@ -277,14 +277,13 @@ def _balance_postprocess(
 
             trial_old = zone_weights[z_old] - half_total
             best_z = z_old
-            initial_imb = _imbalance()
-            best_imb = initial_imb
+            best_imb = _imbalance()
 
             for z_new in range(k):
                 if z_new == z_old:
                     continue
                 trial_new = zone_weights[z_new] + half_total
-                imb = initial_imb
+                imb = best_imb
                 imb -= (zone_weights[z_old] - target) ** 2
                 imb -= (zone_weights[z_new] - target) ** 2
                 imb += (trial_old - target) ** 2
@@ -331,7 +330,6 @@ def partition_graph(
 
     A = _build_adjacency(edges, n, balance_metric)
     edge_weights = [(e.u, e.v, _edge_weight(e, balance_metric)) for e in edges]
-    time_weights = [(e.u, e.v, e.length * _complexity_factor(e)) for e in edges]
     edge_lengths = [(e.u, e.v, e.length) for e in edges]
 
     total_weight = sum(w for _, _, w in edge_weights)
@@ -380,7 +378,7 @@ def partition_graph(
         if z < k_eff:
             node_ids = np.where(labels == z)[0].tolist()
             weight_sum, dist_sum = _zone_weight_and_distance(
-                labels, z, time_weights, edge_lengths,
+                labels, z, edge_weights, edge_lengths,
             )
         else:
             # Extra zones beyond node count are empty
