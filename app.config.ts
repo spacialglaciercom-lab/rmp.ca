@@ -23,7 +23,7 @@ const bundleId =
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
-const APP_VERSION = "1.0.9";
+const APP_VERSION = "1.1.0";
 
 const env = {
   // App branding - update these values directly (do not use env vars)
@@ -53,7 +53,7 @@ const config = {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
     /** CFBundleVersion; must increment for each App Store submission (EAS Submit). */
-    buildNumber: "6",
+    buildNumber: "7",
     /** Required for Sign in with Apple (expo-apple-authentication) — adds the Apple Sign In entitlement. */
     usesAppleSignIn: true,
     googleServicesFile: "./GoogleService-Info.plist",
