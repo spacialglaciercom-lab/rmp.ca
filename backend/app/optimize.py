@@ -42,6 +42,7 @@ class OptimizeRequest(BaseModel):
     start_lat: float | None = None
     start_lon: float | None = None
     oneway_mode: str | None = None  # "ignore", "respect", "reverse"
+    service_both_sides: bool | None = None  # when True, traverse each bidirectional segment twice (both curbs)
     road_classes: list[str] | None = None
     turn_penalties: TurnPenalties | None = None
 
@@ -148,12 +149,12 @@ def _build_graph(
 # ---------------------------------------------------------------------------
 
 
-def _solve_cpp(G: nx.MultiGraph) -> list[str]:
+def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
     """
     Approximate solution to the Chinese Postman Problem:
     traverse every edge at least once with minimum extra (deadhead) distance.
 
-    1. Find odd-degree vertices.
+    1. Find odd-degree vertices (or unbalanced for directed: in_degree != out_degree).
     2. Compute shortest paths between all pairs of odd-degree vertices.
     3. Find minimum weight perfect matching on odd-degree vertices.
     4. Augment graph with matching edges (duplicating shortest paths).
@@ -162,15 +163,22 @@ def _solve_cpp(G: nx.MultiGraph) -> list[str]:
     if G.number_of_edges() == 0:
         return []
 
+    is_directed = G.is_directed()
+
     # If graph is disconnected, work on largest component
-    components = list(nx.connected_components(G))
+    if is_directed:
+        components = list(nx.weakly_connected_components(G))
+    else:
+        components = list(nx.connected_components(G))
     if len(components) > 1:
-        # Pick the largest component
         largest = max(components, key=len)
         G = G.subgraph(largest).copy()
 
-    # Find odd-degree vertices
-    odd_nodes = [n for n in G.nodes() if G.degree(n) % 2 != 0]
+    # Find odd-degree (undirected) or unbalanced (directed) vertices
+    if is_directed:
+        odd_nodes = [n for n in G.nodes() if G.in_degree(n) != G.out_degree(n)]
+    else:
+        odd_nodes = [n for n in G.nodes() if G.degree(n) % 2 != 0]
 
     if len(odd_nodes) == 0:
         # Already Eulerian — find circuit directly
@@ -241,7 +249,7 @@ def _solve_cpp(G: nx.MultiGraph) -> list[str]:
 
     def _dfs(node: str):
         for u, v, key in G.edges(node, keys=True):
-            edge_key = (min(u, v), max(u, v), key)
+            edge_key = (u, v, key) if is_directed else (min(u, v), max(u, v), key)
             if edge_key not in visited_edges:
                 visited_edges.add(edge_key)
                 next_node = v if u == node else u
@@ -315,6 +323,25 @@ def optimize_route(body: OptimizeRequest):
     # Build graph
     oneway_mode = body.oneway_mode or "ignore"
     G = _build_graph(features, oneway_mode)
+
+    # When service_both_sides is True, ensure each segment is traversed in BOTH directions
+    # (u→v and v→u = both curbs). Use a directed graph so the Eulerian circuit must use both.
+    if body.service_both_sides:
+        edges_snapshot = list(G.edges(keys=True, data=True))
+        max_key = max((k for _, _, k in G.edges(keys=True)), default=0)
+        G_dir = nx.MultiDiGraph()
+        for n, ndata in G.nodes(data=True):
+            G_dir.add_node(n, **ndata)
+        for i, (u, v, key, data) in enumerate(edges_snapshot):
+            d = dict(
+                length_km=data["length_km"],
+                coords=data.get("coords", []),
+                feature_idx=data.get("feature_idx", 0),
+                road_class=data.get("road_class", ""),
+            )
+            G_dir.add_edge(u, v, key=key, **d)
+            G_dir.add_edge(v, u, key=max_key + 1 + i, **d)
+        G = G_dir
 
     if G.number_of_nodes() < 2:
         raise HTTPException(

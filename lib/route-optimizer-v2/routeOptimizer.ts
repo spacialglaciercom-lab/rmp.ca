@@ -58,6 +58,8 @@ export interface RouteOptimizerOptions {
   logLoopEvery?: number;
   /** Minimum edge length in meters to avoid micro-stubs (default 0.05) */
   minEdgeMeters?: number;
+  /** When true, each bidirectional street is traversed twice (both sides / left and right curb). */
+  serviceBothSides?: boolean;
 }
 
 // ─── Graph helpers ────────────────────────────────────────────────
@@ -581,6 +583,28 @@ export class RouteOptimizer {
       }
     });
 
+    // Pass 3: when serviceBothSides (two-pass / both curbs), add a second copy of every
+    // bidirectional edge so the route traverses each segment twice (left and right side).
+    if (this.options.serviceBothSides) {
+      const entriesToDuplicate: { u: string; entry: AdjEntry }[] = [];
+      this.doubledGraph.forEach((list, u) => {
+        for (const entry of list) {
+          if (!entry.data.oneway) {
+            entriesToDuplicate.push({ u, entry });
+          }
+        }
+      });
+      for (const { u, entry } of entriesToDuplicate) {
+        const v = entry.target;
+        const wayId = entry.data.wayId ?? "";
+        ensureNode(this.doubledGraph, u).push({
+          target: v,
+          data: { ...entry.data, direction: "forward" },
+          edgeId: `${genEdgeId(wayId, u, v)}:2`,
+        });
+      }
+    }
+
     this.identifyDeadEnds();
     this.applyUturnRestrictions();
     const edgeCount = totalEdges(this.doubledGraph);
@@ -681,22 +705,24 @@ export class RouteOptimizer {
     this.recentUturnCount = 0;
     this.uturnLocations.clear();
 
-    // Initialize cycle detector for this traversal
-    // Tighter thresholds to catch loops earlier
+    // Initialize cycle detector for this traversal (skip when antiLoopMode is "off")
     const strict = this.options.antiLoopMode === "strict";
-    this.cycleDetector = new CycleDetector({
-      maxSccRevisits: strict ? 2 : 3,
-      maxNodeRevisits: strict ? 3 : 4,
-      recentWindowSize: strict ? 30 : 40,
-      debug: false,
-    });
+    const antiLoopOff = this.options.antiLoopMode === "off";
+    this.cycleDetector = antiLoopOff
+      ? null
+      : new CycleDetector({
+          maxSccRevisits: strict ? 1 : 2,
+          maxNodeRevisits: strict ? 2 : 3,
+          recentWindowSize: strict ? 20 : 30,
+          debug: false,
+        });
     this.cycleDiagnostics = { loopsDetected: 0, escapeAttempts: 0 };
     // Reset traversal quotas and local tabu state
     this.edgeTraversalCounts.clear();
     this.localTabuNodes.clear();
-    
+
     // Safety cap based on graph size
-    const maxIterations = totalEdges(this.doubledGraph) * 5;
+    const maxIterations = totalEdges(this.doubledGraph) * 3;
     let iterations = 0;
 
     while (stack.length > 0 && iterations < maxIterations) {
@@ -721,8 +747,8 @@ export class RouteOptimizer {
           this.cycleDiagnostics.escapeAttempts++;
           loopEscapeMode = true;
           
-          // If severely stuck (50+ stagnant iterations), try forced backtrack
-          const backtrackThreshold = strict ? 25 : 50;
+          // If severely stuck, force backtrack to break circular patterns earlier
+          const backtrackThreshold = strict ? 25 : 35;
           if (detection.stagnantIterations > backtrackThreshold && stack.length > 3) {
             // Force backtrack by treating current as having no edges
             if (this.cycleDetector) {

@@ -44,6 +44,7 @@ type RoutingAction =
   | { type: "SET_START_POINT"; payload: StartPoint | undefined }
   | { type: "SET_TURN_PENALTIES"; payload: TurnPenalties }
   | { type: "SET_ONEWAY_MODE"; payload: "A" | "B" }
+  | { type: "SET_SERVICE_BOTH_SIDES"; payload: boolean }
   | { type: "SET_OUTPUT_FILENAME"; payload: string }
   | { type: "SET_STATISTICS"; payload: RouteStatistics }
   | { type: "ADD_LOG_ENTRY"; payload: ProcessingLogEntry }
@@ -74,6 +75,7 @@ const initialState: RoutingState = {
     startPoint: undefined,
     turnPenalties: defaultTurnPenalties,
     onewayMode: "B",
+    serviceBothSides: false,
     outputFileName: "trash_route",
   },
   statistics: null,
@@ -103,6 +105,11 @@ function routingReducer(state: RoutingState, action: RoutingAction): RoutingStat
       return {
         ...state,
         configuration: { ...state.configuration, onewayMode: action.payload },
+      };
+    case "SET_SERVICE_BOTH_SIDES":
+      return {
+        ...state,
+        configuration: { ...state.configuration, serviceBothSides: action.payload },
       };
     case "SET_OUTPUT_FILENAME":
       return {

@@ -275,6 +275,9 @@ interface CollectionNavigationActions {
   /** Mark a specific segment as completed. */
   completeSegment: (index: number) => void;
 
+  /** Mark a specific segment as skipped by index (counts toward distance progress but not completedStops). */
+  skipSegmentByIndex: (index: number) => void;
+
   /** Go back to a previous segment (undo advance). */
   goBackToSegment: (index: number) => void;
 
@@ -548,6 +551,37 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
 
       const completedDistance = newSegments
         .filter((s) => s.status === "completed")
+        .reduce((sum, s) => sum + s.distance, 0);
+      const completedStops = newSegments.filter(
+        (s) => s.status === "completed" && s.collectionPoint,
+      ).length;
+      const groups = buildSegmentGroups(newSegments);
+      const streets = computeStreetCounts(groups);
+
+      set({
+        segments: newSegments,
+        completedDistance,
+        completedStops,
+        segmentGroups: groups,
+        totalStreets: streets.total,
+        completedStreets: streets.completed,
+      });
+    },
+
+    skipSegmentByIndex: (index) => {
+      const state = get();
+      if (index < 0 || index >= state.segments.length) return;
+
+      const newSegments = [...state.segments];
+      newSegments[index] = {
+        ...newSegments[index],
+        status: "skipped",
+        linearProgress: 1,
+      };
+
+      // skipped distance counts toward progress % so the bar advances
+      const completedDistance = newSegments
+        .filter((s) => s.status === "completed" || s.status === "skipped")
         .reduce((sum, s) => sum + s.distance, 0);
       const completedStops = newSegments.filter(
         (s) => s.status === "completed" && s.collectionPoint,

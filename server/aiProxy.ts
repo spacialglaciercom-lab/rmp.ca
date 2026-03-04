@@ -23,14 +23,74 @@ function isAnthropicModel(modelId: string): boolean {
   return id.startsWith("anthropic/") || id.includes("claude");
 }
 
-function getGateway() {
-  const apiKey = ENV.aiGatewayApiKey;
+const VERCEL_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1";
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1";
+
+/** Build gateway client. Prefer explicit key (e.g. from client); then server AI_GATEWAY_API_KEY; then OPENROUTER_API_KEY. */
+function getGateway(overrideApiKey?: string): ReturnType<typeof createOpenAICompatible> | null {
+  const apiKey = overrideApiKey?.trim() || ENV.aiGatewayApiKey || ENV.openRouterApiKey;
   if (!apiKey) return null;
+  const baseURL = overrideApiKey?.trim()
+    ? OPENROUTER_API_URL
+    : ENV.aiGatewayApiKey
+      ? VERCEL_GATEWAY_URL
+      : OPENROUTER_API_URL;
   return createOpenAICompatible({
     name: "openai",
     apiKey,
-    baseURL: "https://ai-gateway.vercel.sh/v1",
+    baseURL,
   });
+}
+
+const GATEWAY_TIMEOUT_MS = 35_000;
+
+/** Shared sync chat via AI Gateway for voice.chat / CoPilot. Returns reply text or throws. */
+export async function chatWithAiGateway(
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  systemPrompt?: string,
+  options?: { maxOutputTokens?: number; temperature?: number; apiKey?: string },
+): Promise<string> {
+  const gateway = getGateway(options?.apiKey);
+  if (!gateway) throw new Error("AI Gateway not configured (set AI_GATEWAY_API_KEY or OPENROUTER_API_KEY)");
+
+  const usingClientKey = Boolean(options?.apiKey?.trim());
+  log.info("CoPilot gateway request", {
+    usingClientKey,
+    hasServerGatewayKey: Boolean(ENV.aiGatewayApiKey),
+    hasServerOpenRouterKey: Boolean(ENV.openRouterApiKey),
+  });
+
+  const finalMessages = systemPrompt
+    ? messages.filter((m) => m.role !== "system")
+    : messages;
+  if (finalMessages.length === 0) throw new Error("messages required");
+
+  const opts = {
+    messages: finalMessages,
+    system: systemPrompt ?? undefined,
+    maxOutputTokens: options?.maxOutputTokens ?? 256,
+    temperature: options?.temperature ?? 0.9,
+  };
+
+  let result: Awaited<ReturnType<typeof streamText>> | undefined;
+  let lastErr: unknown = null;
+  for (const model of FALLBACK_MODELS) {
+    try {
+      result = streamText({ model: gateway(model), ...opts });
+      break;
+    } catch (err) {
+      lastErr = err;
+      log.warn("gateway model failed", { model, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  if (!result) throw lastErr ?? new Error("AI Gateway request failed");
+
+  const textPromise = Promise.resolve(result.text).then((t) => (typeof t === "string" ? t : ""));
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("AI gateway timed out. Try again or check your API key.")), GATEWAY_TIMEOUT_MS);
+  });
+  const fullText = await Promise.race([textPromise, timeoutPromise]);
+  return fullText.trim();
 }
 
 function getAiSdkVersion(): string {
@@ -45,7 +105,7 @@ function getAiSdkVersion(): string {
 
 export function registerAiProxyRoutes(app: Express) {
   const sdkVersion = getAiSdkVersion();
-  const hasKey = Boolean(ENV.aiGatewayApiKey);
+  const hasKey = Boolean(ENV.aiGatewayApiKey || ENV.openRouterApiKey);
   log.warn("AI SDK version", { version: sdkVersion, apiKey: hasKey ? "set" : "not set" });
   if (sdkVersion.startsWith("5.")) {
     log.error("AI SDK 5 does not support gateway v3 models; deploy must use ai@6 (see package.json). Clear build cache and redeploy.");
@@ -55,7 +115,7 @@ export function registerAiProxyRoutes(app: Express) {
     res.json({
       ok: true,
       message: "AI chat endpoint. Use POST with body: { messages, systemPrompt?, model?, max_tokens?, temperature? }",
-      configured: Boolean(ENV.aiGatewayApiKey),
+      configured: Boolean(ENV.aiGatewayApiKey || ENV.openRouterApiKey),
       aiSdkVersion: getAiSdkVersion(),
     });
   });
@@ -68,7 +128,7 @@ export function registerAiProxyRoutes(app: Express) {
   app.post("/api/ai/chat", async (req: Request, res: Response) => {
     const gateway = getGateway();
     if (!gateway) {
-      res.status(503).json({ error: "AI Gateway API key not configured on server. Set AI_GATEWAY_API_KEY." });
+      res.status(503).json({ error: "AI Gateway API key not configured on server. Set AI_GATEWAY_API_KEY or OPENROUTER_API_KEY." });
       return;
     }
 
@@ -148,7 +208,7 @@ export function registerAiProxyRoutes(app: Express) {
         const gatewayMessage = msg || cause || "AI Gateway request failed";
         res.status(status >= 400 && status < 600 ? status : 500).json({
           error: gatewayMessage.includes("API key") || gatewayMessage.includes("401")
-            ? "Invalid or missing AI Gateway API key. Check AI_GATEWAY_API_KEY."
+            ? "Invalid or missing AI Gateway API key. Check AI_GATEWAY_API_KEY or OPENROUTER_API_KEY."
             : gatewayMessage,
         });
         return;
@@ -166,7 +226,7 @@ export function registerAiProxyRoutes(app: Express) {
       log.error("chat error", { message, cause: cause || undefined });
       const hint =
         message.includes("API key") || message.includes("401")
-          ? "Invalid or missing AI_GATEWAY_API_KEY."
+          ? "Invalid or missing AI_GATEWAY_API_KEY or OPENROUTER_API_KEY."
           : message.includes("429") || message.includes("rate")
             ? "AI Gateway rate limit. Try again shortly."
             : message || "AI proxy request failed";

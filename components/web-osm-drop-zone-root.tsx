@@ -159,6 +159,7 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
 
         const onewayMode = customStartPoint.state.configuration.onewayMode ?? "A";
         const turnPenalties = customStartPoint.state.configuration.turnPenalties;
+        const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
 
         const stepLabels: Record<string, string> = {
           "street-edges": "Converting streets...",
@@ -178,6 +179,7 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
               turnPenalties,
               onewayMode,
               turnRestrictions: turnRestrictions ?? [],
+              serviceBothSides,
               onProgress: (step) => {
                 const label = stepLabels[step] ?? "Optimizing...";
                 setProgress({ stage: "parsing", progress: 50, message: label });
@@ -186,7 +188,7 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
           : await new Promise<any>((resolve, reject) => {
               setTimeout(() => {
                 try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? []);
+                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
                   resolve(optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties));
                 } catch (err) { reject(err); }
               }, 0);

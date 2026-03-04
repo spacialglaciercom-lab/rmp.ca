@@ -66,6 +66,8 @@ export interface RouteConfiguration {
   startPoint?: StartPoint;
   turnPenalties: TurnPenalties;
   onewayMode: "A" | "B"; // A: Ignore oneways, B: Respect oneways
+  /** When true, route traverses each street twice (left and right side / both curbs). */
+  serviceBothSides: boolean;
   outputFileName: string;
 }
 

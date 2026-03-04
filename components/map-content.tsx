@@ -48,6 +48,7 @@ import type { NormalNavDestination } from "@/types/navigation";
 import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
 import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingControls";
 import { MapSidebar } from "@/components/mapTab/sidebar/MapSidebar";
+import { AIChatBubble } from "@/components/AIChatBubble";
 import { HelpPrompt } from "@/components/help/HelpPrompt";
 import { NavigationPanel } from "@/components/mapTab/navigation/NavigationPanel";
 import { MyPlacesScreen } from "@/components/mapTab/places/MyPlacesScreen";
@@ -1340,6 +1341,8 @@ export default function MapContent() {
         onZoomOut={handleZoomOut}
         onCompass={handleCompass}
       />
+
+      <AIChatBubble />
 
       <MapSidebar />
 

@@ -7,20 +7,20 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, publicProcedure } from "./_core/trpc";
+import { router, publicProcedure } from "./_core/trpc";
 import { transcribeAudio, transcribeAudioFromBase64 } from "./_core/voiceTranscription";
 import { transcribeWithFallback, transcribeBase64WithFallback } from "./_core/moonshineTranscription";
 import { chatWithCoPilot, NavContextSchema, ChatMessageSchema } from "./genkit/coPilot";
 
 export const voiceRouter = router({
   /**
-   * Transcribe audio to text.
+   * Transcribe audio to text. Public so AI chat recording works without sign-in.
    *
    * Provider priority:
    *  1. Moonshine Python sidecar (if MOONSHINE_STT_ENABLED=true and sidecar URL configured)
    *  2. Whisper API via Forge (fallback)
    */
-  transcribe: protectedProcedure
+  transcribe: publicProcedure
     .input(
       z.object({
         audioUrl: z.string().optional(),
@@ -56,13 +56,14 @@ export const voiceRouter = router({
       return result;
     }),
 
-  /** Chat with the AI co-pilot. Accepts text (pre-transcribed or typed). */
+  /** Chat with the AI co-pilot. Accepts text (pre-transcribed or typed). Optional client gateway key (e.g. OpenRouter from Settings) uses AI gateway. */
   chat: publicProcedure
     .input(
       z.object({
         message: z.string().min(1),
         history: z.array(ChatMessageSchema).optional(),
         navContext: NavContextSchema.optional(),
+        clientGatewayApiKey: z.string().optional().nullable(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -70,6 +71,7 @@ export const voiceRouter = router({
         input.message,
         input.history ?? undefined,
         input.navContext ?? undefined,
+        input.clientGatewayApiKey ?? undefined,
       );
 
       return { reply };

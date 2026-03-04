@@ -23,6 +23,7 @@ export interface OvertureOptimizeOptions {
   startLat?: number;
   startLon?: number;
   onewayMode?: string;
+  serviceBothSides?: boolean;
   roadClasses?: string[];
   turnPenalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
 }
@@ -51,6 +52,7 @@ export function useOvertureOptimizeRoute() {
           start_lat: options.startLat,
           start_lon: options.startLon,
           oneway_mode: options.onewayMode ?? (config?.onewayMode as string) ?? "A",
+          service_both_sides: options.serviceBothSides ?? config?.serviceBothSides ?? false,
           road_classes: options.roadClasses,
           turn_penalties: options.turnPenalties ?? {
             left_turn: config?.turnPenalties?.leftTurn ?? 50,

@@ -109,6 +109,33 @@ export function geojsonToOsmData(fc: GeoJSONFeatureCollection, opts: GeoJSONConv
   return { nodes, ways };
 }
 
+/**
+ * Convert OSM nodes + ways to a GeoJSON FeatureCollection of LineStrings for the backend optimizer.
+ * Used so the planner can call the same POST /api/optimize as the map page.
+ */
+export function osmDataToGeoJSON(
+  nodes: Map<string, Node>,
+  ways: Way[],
+): GeoJSONFeatureCollection {
+  const features: GeoJSONFeature[] = [];
+  for (const way of ways) {
+    const coords: number[][] = [];
+    for (const id of way.nodes) {
+      const n = nodes.get(id);
+      if (!n) continue;
+      coords.push([n.lon, n.lat]);
+    }
+    if (coords.length >= 2) {
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: { ...way.tags, id: way.id },
+      });
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
 /** Convert RoutePoints to a GeoJSON FeatureCollection for inspection. */
 export function routePointsToGeoJSON(points: RoutePoint[]): GeoJSONFeatureCollection {
   const coords = points.map((p) => [p.longitude, p.latitude]);

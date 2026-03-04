@@ -7,7 +7,9 @@ import {
   TextInput,
   Alert,
   Linking,
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useRouter, useLocalSearchParams } from "expo-router";
 
@@ -16,16 +18,23 @@ import { useColors } from "@/hooks/use-colors";
 import type { CollectionPoint } from "@/types";
 import { storage } from "@/lib/storage";
 import { MapillaryViewer } from "@/components/MapillaryViewer";
+import { StreetViewPreview } from "@/components/StreetViewPreview";
 import { openMapillaryCapture } from "@/lib/mapillary";
+import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
 
 export default function PointDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const { pointId } = useLocalSearchParams<{ pointId: string }>();
+  const storeSegments = useCollectionNavigationStore((s) => s.segments);
+  const storeComplete = useCollectionNavigationStore((s) => s.completeSegment);
+  const storeSkip = useCollectionNavigationStore((s) => s.skipSegmentByIndex);
   const [point, setPoint] = useState<CollectionPoint | null>(null);
   const [notes, setNotes] = useState("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [streetViewVisible, setStreetViewVisible] = useState(false);
+  const [googleStreetViewVisible, setGoogleStreetViewVisible] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   useEffect(() => {
     loadPoint();
@@ -39,6 +48,7 @@ export default function PointDetailScreen() {
     if (foundPoint) {
       setPoint(foundPoint);
       setNotes(foundPoint.notes || "");
+      setPhotoUri(foundPoint.photoUri || null);
     }
   };
 
@@ -55,7 +65,83 @@ export default function PointDetailScreen() {
       lastCollectionDate: new Date().toISOString(),
     });
 
+    const segIdx = storeSegments.findIndex((s) => s.collectionPoint?.id === point.id);
+    if (segIdx !== -1) storeComplete(segIdx);
+
     router.back();
+  };
+
+  const handleSkip = async () => {
+    if (!point) return;
+
+    hapticImpact();
+
+    const route = await storage.loadRoute();
+    if (!route) return;
+
+    await storage.updateCollectionPoint(route.id, point.id, {
+      status: "skipped",
+    });
+
+    const skipIdx = storeSegments.findIndex((s) => s.collectionPoint?.id === point.id);
+    if (skipIdx !== -1) storeSkip(skipIdx);
+
+    Alert.alert("Skipped", "Stop marked as skipped");
+    router.back();
+  };
+
+  const handleTakePhoto = async () => {
+    if (!point) return;
+    hapticImpact();
+    Alert.alert(
+      "Add Photo",
+      "Choose an option",
+      [
+        {
+          text: "Take Photo",
+          onPress: async () => {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert("Permission required", "Camera access is needed to take photos.");
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              quality: 0.8,
+              allowsEditing: false,
+            });
+            if (!result.canceled && result.assets.length > 0) {
+              const uri = result.assets[0].uri;
+              setPhotoUri(uri);
+              const route = await storage.loadRoute();
+              if (route) await storage.updateCollectionPoint(route.id, point.id, { photoUri: uri });
+            }
+          },
+        },
+        {
+          text: "Choose from Library",
+          onPress: async () => {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert("Permission required", "Photo library access is needed.");
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              quality: 0.8,
+              allowsEditing: false,
+            });
+            if (!result.canceled && result.assets.length > 0) {
+              const uri = result.assets[0].uri;
+              setPhotoUri(uri);
+              const route = await storage.loadRoute();
+              if (route) await storage.updateCollectionPoint(route.id, point.id, { photoUri: uri });
+            }
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
   };
 
   const handleSaveNotes = async () => {
@@ -256,6 +342,30 @@ export default function PointDetailScreen() {
           )}
         </View>
 
+        {/* Photo Section */}
+        <View
+          className="bg-surface rounded-2xl p-5 mb-4"
+          style={{ backgroundColor: colors.surface }}
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-lg font-semibold text-foreground">Photo</Text>
+            <TouchableOpacity onPress={handleTakePhoto} className="active:opacity-70">
+              <Text className="text-primary font-medium">
+                {photoUri ? "Retake / Change" : "Add Photo"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={{ width: "100%", height: 200, borderRadius: 10 }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text className="text-base text-muted">No photo added yet</Text>
+          )}
+        </View>
+
         {/* Notes Section */}
         <View
           className="bg-surface rounded-2xl p-5 mb-4"
@@ -319,7 +429,7 @@ export default function PointDetailScreen() {
 
         {/* Action Buttons */}
         <View className="gap-3 mb-6">
-          {point.status === "pending" && (
+          {point.status !== "completed" && (
             <TouchableOpacity
               onPress={handleMarkComplete}
               style={{ backgroundColor: colors.success }}
@@ -330,6 +440,28 @@ export default function PointDetailScreen() {
               </Text>
             </TouchableOpacity>
           )}
+
+          {point.status !== "completed" && point.status !== "skipped" && (
+            <TouchableOpacity
+              onPress={handleSkip}
+              style={{ backgroundColor: "#F59E0B" }}
+              className="py-4 rounded-xl items-center active:opacity-70"
+            >
+              <Text className="text-white text-base font-semibold">
+                Skip
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            onPress={handleTakePhoto}
+            style={{ backgroundColor: "#6366F1" }}
+            className="py-4 rounded-xl items-center active:opacity-70"
+          >
+            <Text className="text-white text-base font-semibold">
+              {photoUri ? "Retake / Change Photo" : "Take Photo / Upload"}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleNavigate}
@@ -347,6 +479,19 @@ export default function PointDetailScreen() {
               setStreetViewVisible(true);
             }}
             style={{ backgroundColor: "#3B82F6" }}
+            className="py-4 rounded-xl items-center active:opacity-70"
+          >
+            <Text className="text-white text-base font-semibold">
+              Mapillary View
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              hapticImpact();
+              setGoogleStreetViewVisible(true);
+            }}
+            style={{ backgroundColor: "#4285F4" }}
             className="py-4 rounded-xl items-center active:opacity-70"
           >
             <Text className="text-white text-base font-semibold">
@@ -384,6 +529,12 @@ export default function PointDetailScreen() {
         longitude={point.longitude}
         isVisible={streetViewVisible}
         onClose={() => setStreetViewVisible(false)}
+      />
+      <StreetViewPreview
+        points={[{ lat: point.latitude, lon: point.longitude }]}
+        isVisible={googleStreetViewVisible}
+        onClose={() => setGoogleStreetViewVisible(false)}
+        trackName={point.address ?? "Stop"}
       />
     </ScreenContainer>
   );

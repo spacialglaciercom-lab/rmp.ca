@@ -196,12 +196,53 @@ export const coPilotChatFlow = ai.defineFlow(
 /**
  * Direct function call for use in tRPC procedures (avoids needing
  * to import the Genkit runner infrastructure).
+ * Uses AI Gateway when AI_GATEWAY_API_KEY, OPENROUTER_API_KEY, or clientGatewayApiKey is set.
  */
 export async function chatWithCoPilot(
   message: string,
   history?: ChatMessage[],
   navContext?: NavContext,
+  clientGatewayApiKey?: string | null,
 ): Promise<string> {
+  const { ENV } = await import("../_core/env.js");
+  const hasGateway =
+    Boolean(ENV.aiGatewayApiKey) ||
+    Boolean(ENV.openRouterApiKey) ||
+    Boolean(clientGatewayApiKey?.trim());
+
+  if (hasGateway) {
+    try {
+      const { chatWithAiGateway } = await import("../aiProxy");
+      let ragContext: string | undefined;
+      try {
+        const { retrieveContext } = await import("../rag/ragService");
+        const chunks = await retrieveContext(message, 3);
+        if (chunks.length > 0) {
+          ragContext = chunks.map((c) => `[${c.filename}]: ${c.content}`).join("\n\n");
+        }
+      } catch {
+        // RAG optional
+      }
+      const systemPrompt = buildSystemPrompt(navContext, ragContext);
+      const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+      if (history) {
+        for (const msg of history.slice(-20)) {
+          messages.push({ role: msg.role, content: msg.content });
+        }
+      }
+      messages.push({ role: "user", content: message });
+      const reply = await chatWithAiGateway(messages, systemPrompt, {
+        maxOutputTokens: 256,
+        temperature: 0.9,
+        apiKey: clientGatewayApiKey?.trim() || undefined,
+      });
+      return reply || "Hey, I missed that. Say it again?";
+    } catch (err) {
+      console.error("[CoPilot] AI Gateway error:", err);
+      return "Sorry, I couldn't reach the AI right now. Try again in a moment.";
+    }
+  }
+
   try {
     const result = await coPilotChatFlow({
       message,
@@ -211,7 +252,6 @@ export async function chatWithCoPilot(
     return result.reply;
   } catch (error) {
     console.error("[CoPilot] Genkit flow error:", error);
-    // Friendly fallback
-    return "Sorry, I spaced out for a second. What were you saying?";
+    return "Sorry, I couldn't process that. Make sure the Co-Pilot backend is configured (Forge, AI_GATEWAY_API_KEY, OPENROUTER_API_KEY, or add your key in Settings).";
   }
 }

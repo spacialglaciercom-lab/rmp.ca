@@ -13,6 +13,7 @@ import { clearMapCache } from "@/lib/map-cache";
 import { confirmDestructive } from "@/lib/confirmDestructive";
 import { ExportButton } from "@/components/export-button";
 import { BetaFeaturesSection } from "@/components/settings/BetaFeaturesSection";
+import { OpenRouterApiKeySection } from "@/components/settings/OpenRouterApiKeySection";
 import { OfflineMapDownloadSection } from "@/components/settings/OfflineMapDownloadSection";
 import { MinimalCard, SectionLabel } from "@/components/minimal";
 import { MapOrientationSection } from "@/components/settings/MapOrientationSection";
@@ -97,6 +98,17 @@ export default function SettingsContent() {
           label: "",
           value: "",
           component: BetaFeaturesSection,
+          isComponent: true,
+        },
+      ],
+    },
+    {
+      title: "AI / Co-Pilot",
+      items: [
+        {
+          label: "",
+          value: "",
+          component: OpenRouterApiKeySection,
           isComponent: true,
         },
       ],

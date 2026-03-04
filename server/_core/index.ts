@@ -17,6 +17,8 @@ import { registerWsExtractProxy } from "../wsExtractProxy";
 import { registerOptimizerProxyRoutes } from "../optimizerProxy";
 import { createLogger } from "../logger";
 import { ENV } from "./env";
+import { transcribeBase64WithFallback } from "../moonshineTranscription";
+import { chatWithCoPilot } from "../genkit/coPilot";
 
 const log = createLogger("api");
 
@@ -110,6 +112,8 @@ async function startServer() {
       endpoints: {
         health: "/api/health",
         trpc: "/api/trpc",
+        voiceTranscribe: "POST /api/voice/transcribe",
+        voiceChat: "POST /api/voice/chat",
         mapsDirections: "POST /api/maps/directions",
         mapsSnapToRoads: "POST /api/maps/snap-to-roads",
         aiChat: "POST /api/ai/chat",
@@ -147,7 +151,9 @@ async function startServer() {
     res.json({
       ok: true,
       message: "AI chat: use POST with body { messages, systemPrompt?, model?, max_tokens?, temperature? }",
-      configured: Boolean(process.env.AI_GATEWAY_API_KEY),
+      configured: Boolean(
+        (process.env.AI_GATEWAY_API_KEY ?? "").trim() || (process.env.OPENROUTER_API_KEY ?? "").trim(),
+      ),
     });
   });
 
@@ -177,6 +183,50 @@ async function startServer() {
       log.error("report-error", err instanceof Error ? err : new Error(String(err)));
       res.status(500).json({ ok: false, error: "Failed to process report" });
     });
+  });
+
+  /** Voice: public REST endpoints (no tRPC, no auth) so AI chat always works. */
+  app.post("/api/voice/transcribe", async (req, res) => {
+    try {
+      const body = req.body as { audioBase64?: string; mimeType?: string };
+      const audioBase64 = typeof body?.audioBase64 === "string" ? body.audioBase64 : undefined;
+      if (!audioBase64) {
+        res.status(400).json({ ok: false, error: "audioBase64 required" });
+        return;
+      }
+      const result = await transcribeBase64WithFallback(
+        audioBase64,
+        typeof body?.mimeType === "string" ? body.mimeType : "audio/m4a",
+        undefined,
+        undefined,
+      );
+      if ("error" in result) {
+        res.status(400).json({ ok: false, error: result.error });
+        return;
+      }
+      res.status(200).json({ ok: true, text: result.text, language: result.language, segments: result.segments });
+    } catch (err) {
+      log.error("voice/transcribe", err instanceof Error ? err : new Error(String(err)));
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : "Transcription failed" });
+    }
+  });
+
+  app.post("/api/voice/chat", async (req, res) => {
+    try {
+      const body = req.body as { message?: string; history?: Array<{ role: string; content: string }>; clientGatewayApiKey?: string | null };
+      const message = typeof body?.message === "string" ? body.message.trim() : "";
+      if (!message) {
+        res.status(400).json({ ok: false, error: "message required" });
+        return;
+      }
+      const history = Array.isArray(body?.history) ? body.history : undefined;
+      const clientGatewayApiKey = typeof body?.clientGatewayApiKey === "string" ? body.clientGatewayApiKey : undefined;
+      const reply = await chatWithCoPilot(message, history, undefined, clientGatewayApiKey ?? undefined);
+      res.status(200).json({ ok: true, reply });
+    } catch (err) {
+      log.error("voice/chat", err instanceof Error ? err : new Error(String(err)));
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : "Chat failed" });
+    }
   });
 
   app.use(

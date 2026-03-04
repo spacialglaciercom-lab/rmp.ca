@@ -202,26 +202,40 @@ function formatApiErrorDetail(status: number, detail: unknown): string {
   return `${prefix}: ${JSON.stringify(detail)}`;
 }
 
-async function request<T>(path: string, body: unknown): Promise<T> {
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<T> {
   const url = `${OPTIMIZER_BASE_URL}${path}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
 
-  if (!res.ok) {
-    const errorBody = await res.text();
-    let detail: unknown = errorBody;
-    try {
-      const parsed = JSON.parse(errorBody);
-      detail = parsed.detail ?? parsed.message ?? errorBody;
-    } catch {}
-    const message = formatApiErrorDetail(res.status, detail);
-    throw new Error(message);
+    if (!res.ok) {
+      const errorBody = await res.text();
+      let detail: unknown = errorBody;
+      try {
+        const parsed = JSON.parse(errorBody);
+        detail = parsed.detail ?? parsed.message ?? errorBody;
+      } catch {}
+      const message = formatApiErrorDetail(res.status, detail);
+      throw new Error(message);
+    }
+
+    return res.json() as Promise<T>;
+  } catch (err) {
+    clearTimeout(timeout);
+    if ((err as { name?: string }).name === "AbortError") {
+      throw new Error(`Backend optimizer timed out after ${timeoutMs / 1000}s – falling back to offline`);
+    }
+    throw err;
   }
-
-  return res.json() as Promise<T>;
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +314,7 @@ export async function optimizeRoute(params: {
   start_lat?: number;
   start_lon?: number;
   oneway_mode?: string;
+  service_both_sides?: boolean;
   road_classes?: string[];
   turn_penalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
 }): Promise<OptimizeResponse> {

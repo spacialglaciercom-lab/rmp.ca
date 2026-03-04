@@ -30,6 +30,8 @@ export interface RouteOptimizationOptions {
   turnPenalties?: TurnPenaltyWeights;
   onewayMode?: "A" | "B";
   turnRestrictions?: TurnRestriction[];
+  /** When true, route traverses each street twice (both sides / left and right curb). */
+  serviceBothSides?: boolean;
   /** Called with pipeline step updates so the UI can show granular progress. */
   onProgress?: (step: string, detail?: string) => void;
 }
@@ -79,6 +81,7 @@ export function useRouteOptimization() {
       turnPenalties,
       onewayMode = "A",
       turnRestrictions = [],
+      serviceBothSides = false,
       onProgress,
     } = options;
 
@@ -102,7 +105,8 @@ export function useRouteOptimization() {
         ways,
         onewayMode,
         turnRestrictions,
-        edgePenalties
+        edgePenalties,
+        { serviceBothSides }
       );
       const result = optimizer.optimize(customLat, customLon, turnPenalties);
       return { ...result, type: "standard" };

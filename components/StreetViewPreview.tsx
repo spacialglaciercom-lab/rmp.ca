@@ -361,6 +361,9 @@ export function StreetViewPreview({
                 <Text style={[styles.loadingText, { color: colors.muted }]}>
                   No Google Maps API key configured
                 </Text>
+                <Text style={[styles.hintText, { color: colors.muted }]}>
+                  Set your key in Settings → Maps & Resources → Navigation (Google Maps API key), or set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY when building.
+                </Text>
               </>
             )}
           </View>
@@ -560,6 +563,12 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+  },
+  hintText: {
+    marginTop: 8,
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: 24,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -12,8 +12,10 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
   mistralApiKey: process.env.MISTRAL_API_KEY ?? "",
-  /** AI Gateway — single key for CoPilot + Chat. */
-  aiGatewayApiKey: process.env.AI_GATEWAY_API_KEY ?? "",
+  /** AI Gateway (Vercel) — single key for CoPilot + Chat. Trimmed so whitespace is not treated as set. */
+  aiGatewayApiKey: (process.env.AI_GATEWAY_API_KEY ?? "").trim(),
+  /** OpenRouter — alternative gateway; when set, CoPilot uses OpenRouter. Server-only. */
+  openRouterApiKey: (process.env.OPENROUTER_API_KEY ?? "").trim(),
   /** ElevenLabs TTS — set on Railway so the app can use TTS without storing the key on the client. */
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? "",
   /** Firebase Admin SDK service account JSON (for verifying Firebase Auth ID tokens) */

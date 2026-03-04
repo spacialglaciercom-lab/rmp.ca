@@ -260,6 +260,7 @@ export function OSMImport({ onImportComplete }: OSMImportProps) {
       try {
         const onewayMode = customStartPoint.state.configuration.onewayMode ?? "A";
         const turnPenalties = customStartPoint.state.configuration.turnPenalties;
+        const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
 
         const stepLabels: Record<string, string> = {
           "street-edges": "Converting streets...",
@@ -279,6 +280,7 @@ export function OSMImport({ onImportComplete }: OSMImportProps) {
               turnPenalties,
               onewayMode,
               turnRestrictions: turnRestrictions ?? [],
+              serviceBothSides,
               onProgress: (step) => {
                 const label = stepLabels[step] ?? "Optimizing...";
                 setProgress({ stage: "parsing", progress: 50, message: label });
@@ -289,7 +291,7 @@ export function OSMImport({ onImportComplete }: OSMImportProps) {
               // render the progress bar update before we block the thread.
               setTimeout(() => {
                 try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? []);
+                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
                   resolve(
                     optimizer.optimize(
                       startCoords?.latitude,

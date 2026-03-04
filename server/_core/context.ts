@@ -9,18 +9,25 @@ export type TrpcContext = {
 };
 
 export async function createContext(opts: CreateExpressContextOptions): Promise<TrpcContext> {
-  let user: User | null = null;
-
   try {
-    user = await sdk.authenticateRequest(opts.req);
+    let user: User | null = null;
+    try {
+      user = await sdk.authenticateRequest(opts.req);
+    } catch {
+      // Authentication is optional for public procedures (e.g. voice.transcribe, voice.chat).
+      user = null;
+    }
+    return {
+      req: opts.req,
+      res: opts.res,
+      user,
+    };
   } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
+    // Ensure we never throw: public procedures must work without login.
+    return {
+      req: opts.req,
+      res: opts.res,
+      user: null,
+    };
   }
-
-  return {
-    req: opts.req,
-    res: opts.res,
-    user,
-  };
 }

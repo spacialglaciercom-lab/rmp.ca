@@ -41,6 +41,8 @@ import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
+import { optimizeRoute as backendOptimizeRoute } from "@/services/overtureOptimizerService";
+import { osmDataToGeoJSON } from "@/lib/geojsonToOsmData";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { isMockCollectionPoints } from "@/lib/is-mock-route";
 import type { CollectionPoint, Route } from "@/types";
@@ -225,32 +227,60 @@ export default function PlannerContent() {
         const startCoords = customStartPoint.getStartPoint();
         const onewayMode = state.configuration.onewayMode ?? "A";
         const turnPenalties = state.configuration.turnPenalties;
-        // Yield so React can paint "processing" state before CPU-heavy optimisation
+        const serviceBothSides = state.configuration.serviceBothSides ?? false;
+        // Yield so React can paint "processing" state before optimisation
         await new Promise<void>((r) => setTimeout(r, 0));
-        optResult = isExperimentalRoute
-          ? await optimizeRouteTurnAware(nodes, ways, {
-              customLat: startCoords?.latitude,
-              customLon: startCoords?.longitude,
-              turnPenalties,
-              onewayMode,
-              turnRestrictions,
-            })
-          : await new Promise<any>((resolve, reject) => {
-              setTimeout(() => {
-                try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions);
-                  resolve(
-                    optimizer.optimize(
-                      startCoords?.latitude,
-                      startCoords?.longitude,
-                      turnPenalties
-                    )
-                  );
-                } catch (err) {
-                  reject(err);
-                }
-              }, 0);
-            });
+        // Use same backend optimizer as map page (POST /api/optimize). Fall back to local optimizer if backend fails.
+        try {
+          const geojson = osmDataToGeoJSON(nodes, ways);
+          const backendResult = await backendOptimizeRoute({
+            geojson,
+            start_lat: startCoords?.latitude,
+            start_lon: startCoords?.longitude,
+            oneway_mode: onewayMode,
+            service_both_sides: serviceBothSides,
+            turn_penalties: {
+              left_turn: turnPenalties.leftTurn,
+              u_turn: turnPenalties.uTurn,
+              right_turn: turnPenalties.rightTurn,
+            },
+          });
+          optResult = {
+            route: backendResult.route,
+            totalDistance: backendResult.total_distance_km,
+          };
+        } catch (backendErr) {
+          debug("Planner.generateRoute", { backendOptimizerFailed: (backendErr as Error).message });
+          // Fallback to local optimizer (same as before) when backend is unavailable
+          optResult = isExperimentalRoute
+            ? await optimizeRouteTurnAware(nodes, ways, {
+                customLat: startCoords?.latitude,
+                customLon: startCoords?.longitude,
+                turnPenalties,
+                onewayMode,
+                turnRestrictions,
+                serviceBothSides,
+              })
+            : await new Promise<any>((resolve, reject) => {
+                setTimeout(() => {
+                  try {
+                    const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions, undefined, {
+                      serviceBothSides,
+                      antiLoopMode: "strict",
+                    });
+                    resolve(
+                      optimizer.optimize(
+                        startCoords?.latitude,
+                        startCoords?.longitude,
+                        turnPenalties
+                      )
+                    );
+                  } catch (err) {
+                    reject(err);
+                  }
+                }, 0);
+              });
+        }
         if (optResult.route.length > 0) {
           optimizerDistanceKm = optResult.totalDistance;
           optimizedPoints = optResult.route.map((p, i) => ({
@@ -526,20 +556,36 @@ export default function PlannerContent() {
               const startCoords = customStartPoint.getStartPoint();
               const onewayMode = state.configuration.onewayMode ?? "A";
               const turnPenalties = state.configuration.turnPenalties;
-              const optResult = isExperimentalRoute
-                ? await optimizeRouteTurnAware(nodes, ways, {
-                    customLat: startCoords?.latitude,
-                    customLon: startCoords?.longitude,
-                    turnPenalties,
-                    onewayMode,
-                    turnRestrictions: turnRestrictions ?? [],
-                  })
-                : (() => {
-                    const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? []);
-                    return optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties);
-                  })();
-              const route = (optResult as { route?: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number }).route ?? [];
-              const totalDistance = (optResult as { totalDistance?: number }).totalDistance;
+              const serviceBothSides = state.configuration.serviceBothSides ?? false;
+              let optResult: { route: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number };
+              try {
+                const geojson = osmDataToGeoJSON(nodes, ways);
+                const backendResult = await backendOptimizeRoute({
+                  geojson,
+                  start_lat: startCoords?.latitude,
+                  start_lon: startCoords?.longitude,
+                  oneway_mode: onewayMode,
+                  service_both_sides: serviceBothSides,
+                  turn_penalties: { left_turn: turnPenalties.leftTurn, u_turn: turnPenalties.uTurn, right_turn: turnPenalties.rightTurn },
+                });
+                optResult = { route: backendResult.route, totalDistance: backendResult.total_distance_km };
+              } catch {
+                optResult = isExperimentalRoute
+                  ? await optimizeRouteTurnAware(nodes, ways, {
+                      customLat: startCoords?.latitude,
+                      customLon: startCoords?.longitude,
+                      turnPenalties,
+                      onewayMode,
+                      turnRestrictions: turnRestrictions ?? [],
+                      serviceBothSides,
+                    })
+                  : (() => {
+                      const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
+                      return optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties);
+                    })();
+              }
+              const route = optResult.route ?? [];
+              const totalDistance = optResult.totalDistance;
               const collectionPts: CollectionPoint[] = route.map(
                 (p, i) => ({
                   id: p.nodeId ?? `route-${i}`,
@@ -602,6 +648,71 @@ export default function PlannerContent() {
               style={{ backgroundColor: colors.background, color: colors.foreground }}
             />
             <Text className="text-muted ml-2">.gpx</Text>
+          </View>
+        </View>
+
+        {/* Route passes: one pass vs two pass (both sides of street) */}
+        <View
+          className="bg-surface rounded-2xl p-5 mb-4"
+          style={{ backgroundColor: colors.surface }}
+        >
+          <Text className="text-lg font-semibold text-foreground mb-1">
+            Route passes
+          </Text>
+          <Text className="text-sm text-muted mb-3">
+            One pass: each street once per direction. Two pass: both sides (left and right curb), e.g. for mechanical arm collection.
+          </Text>
+          <View className="flex-row gap-3">
+            <TouchableOpacity
+              onPress={() => {
+                hapticImpact();
+                dispatch({ type: "SET_SERVICE_BOTH_SIDES", payload: false });
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: !state.configuration.serviceBothSides ? colors.primary : colors.border,
+                backgroundColor: !state.configuration.serviceBothSides ? colors.primary + "18" : "transparent",
+              }}
+            >
+              <Text
+                style={{
+                  color: !state.configuration.serviceBothSides ? colors.primary : colors.muted,
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                One pass
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                hapticImpact();
+                dispatch({ type: "SET_SERVICE_BOTH_SIDES", payload: true });
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: state.configuration.serviceBothSides ? colors.primary : colors.border,
+                backgroundColor: state.configuration.serviceBothSides ? colors.primary + "18" : "transparent",
+              }}
+            >
+              <Text
+                style={{
+                  color: state.configuration.serviceBothSides ? colors.primary : colors.muted,
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                Two pass (both sides)
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 

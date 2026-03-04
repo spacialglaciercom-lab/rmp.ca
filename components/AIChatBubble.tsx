@@ -28,6 +28,32 @@ const log = createLogger("AIChatBubble");
 
 type Status = "idle" | "recording" | "processing" | "speaking";
 
+/** On web, render as <form> so Enter key submit can be caught with preventDefault (avoids full page reload). On native, render as View. */
+function InputBarWrapper({
+  children,
+  style,
+  onSubmit,
+}: {
+  children: React.ReactNode;
+  style: Record<string, unknown> | unknown[];
+  onSubmit?: () => void;
+}) {
+  if (Platform.OS === "web") {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit?.();
+        }}
+        style={[styles.inputBar, style] as React.CSSProperties}
+      >
+        {children}
+      </form>
+    );
+  }
+  return <View style={[styles.inputBar, style]}>{children}</View>;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -164,33 +190,30 @@ function AIChatBubbleInner() {
 
     try {
       const { getApiBaseUrl } = await import("@/shared/oauth");
-      const { getSessionToken } = await import("@/lib/_core/auth");
+      const { getOpenRouterApiKey } = await import("@/lib/openrouter-api-key");
       const base = getApiBaseUrl();
-      const token = await getSessionToken();
-      const url = `${base}/api/trpc/voice.chat`;
-      log.debug("AIChatBubble request", { url, hasToken: !!token });
+      const clientGatewayApiKey = await getOpenRouterApiKey();
+      log.debug("AIChatBubble request", { hasGatewayKey: !!clientGatewayApiKey });
 
-      const resp = await fetch(url, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45_000);
+      const res = await fetch(`${base}/api/voice/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          json: {
-            message: text.trim(),
-            history: messages.slice(-10),
-          },
+          message: text.trim(),
+          history: messages.slice(-10),
+          ...(clientGatewayApiKey ? { clientGatewayApiKey } : {}),
         }),
       });
+      clearTimeout(timeoutId);
 
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => "");
-        log.error("AIChatBubble response error", { status: resp.status, url, body: body.slice(0, 200) });
-        throw new Error(`Server error: ${resp.status} at ${url} — ${body.slice(0, 100)}`);
+      const data = (await res.json()) as { ok?: boolean; reply?: string; error?: string };
+      if (!res.ok || !data?.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : `Server error ${res.status}`);
       }
-      const data = await resp.json();
-      const reply = data?.result?.data?.json?.reply ?? data?.result?.data?.reply ?? "Sorry, I couldn't process that.";
+      const reply = typeof data.reply === "string" ? data.reply : "Sorry, I couldn't process that.";
 
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
 
@@ -209,7 +232,13 @@ function AIChatBubbleInner() {
       setStatus("idle");
     } catch (err) {
       log.error("sendMessage failed", err instanceof Error ? err : new Error(String(err)));
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      const message =
+        err instanceof Error && err.name === "AbortError"
+          ? "Request timed out. Check your connection or try again."
+          : err instanceof Error
+            ? err.message
+            : "Failed to send message";
+      setError(message);
       setStatus("idle");
     }
   }, [messages]);
@@ -226,6 +255,13 @@ function AIChatBubbleInner() {
     } else {
       try {
         const { Audio } = await import("expo-av");
+        const existing = (globalThis as any).__aiChatRecording;
+        if (existing) {
+          try {
+            await existing.stopAndUnloadAsync();
+          } catch (_) {}
+          (globalThis as any).__aiChatRecording = null;
+        }
         const { status: permStatus } = await Audio.requestPermissionsAsync();
         if (permStatus !== "granted") {
           setError("Microphone permission denied");
@@ -241,7 +277,8 @@ function AIChatBubbleInner() {
         (globalThis as any).__aiChatRecording = recording;
         setStatus("recording");
       } catch (err) {
-        setError("Could not start recording");
+        log.warn("startRecording failed", err instanceof Error ? err : new Error(String(err)));
+        setError(err instanceof Error ? err.message : "Could not start recording");
       }
     }
   }, []);
@@ -274,52 +311,61 @@ function AIChatBubbleInner() {
           return;
         }
 
-        // Transcribe
-        const FileSystem = await import("expo-file-system");
+        // Transcribe: use server first (Moonshine when configured, else Whisper), then ElevenLabs fallback
+        const FileSystem = await import("expo-file-system/legacy");
         const base64 = await FileSystem.readAsStringAsync(uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Try ElevenLabs first
         let transcribedText: string | null = null;
-        try {
-          const { transcribeWithElevenLabs } = await import("@/services/elevenLabsTtsService");
-          const result = await transcribeWithElevenLabs(base64, "audio/m4a");
-          if (result?.text) transcribedText = result.text;
-        } catch {}
+        let serverError: string | null = null;
 
-        // Fallback to server Whisper
-        if (!transcribedText) {
-          const { getApiBaseUrl } = await import("@/shared/oauth");
-          const { getSessionToken } = await import("@/lib/_core/auth");
-          const token = await getSessionToken();
-          if (!token) {
-            setError("Sign in required for voice input");
-            setStatus("idle");
-            return;
-          }
-          const resp = await fetch(`${getApiBaseUrl()}/api/trpc/voice.transcribe`, {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60_000);
+        try {
+          const res = await fetch(`${(await import("@/shared/oauth")).getApiBaseUrl()}/api/voice/transcribe`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ json: { audioBase64: base64, mimeType: "audio/m4a" } }),
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audioBase64: base64, mimeType: "audio/m4a" }),
           });
-          if (resp.ok) {
-            const data = await resp.json();
-            transcribedText = data?.result?.data?.json?.text ?? data?.result?.data?.text;
+          clearTimeout(timeoutId);
+          const data = (await res.json()) as { ok?: boolean; text?: string; error?: string };
+          if (res.ok && data?.ok && typeof data.text === "string") {
+            transcribedText = data.text;
+          } else {
+            serverError = typeof data?.error === "string" ? data.error : `Server error ${res.status}`;
+            log.warn("voice/transcribe request error", { error: serverError });
           }
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          serverError =
+            fetchErr instanceof Error && fetchErr.name === "AbortError"
+              ? "Transcription timed out"
+              : fetchErr instanceof Error
+                ? fetchErr.message
+                : "Request failed";
+          log.warn("voice/transcribe request error", { error: serverError });
+        }
+
+        if (!transcribedText && !serverError) {
+          try {
+            const { transcribeWithElevenLabs } = await import("@/services/elevenLabsTtsService");
+            const result = await transcribeWithElevenLabs(base64, "audio/m4a");
+            if (result?.text) transcribedText = result.text;
+          } catch {}
         }
 
         if (transcribedText) {
           await sendMessage(transcribedText);
         } else {
-          setError("Couldn't understand that");
+          setError(serverError || "Couldn't understand that");
           setStatus("idle");
         }
       } catch (err) {
-        setError("Recording failed");
+        const message = err instanceof Error ? err.message : "Recording failed";
+        log.error("stopRecording failed", err instanceof Error ? err : new Error(String(err)));
+        setError(message);
         setStatus("idle");
       }
     }
@@ -444,8 +490,13 @@ function AIChatBubbleInner() {
             <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           )}
 
-          {/* Input bar */}
-          <View style={[styles.inputBar, { borderTopColor: colors.border }]}>
+          {/* Input bar — on web wrap in form so Enter doesn't trigger full page reload */}
+          <InputBarWrapper
+            style={[styles.inputBar, { borderTopColor: colors.border }]}
+            onSubmit={() => {
+              if (inputText.trim() && status !== "processing") sendMessage(inputText);
+            }}
+          >
             {/* Mic button */}
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
               <TouchableOpacity
@@ -483,7 +534,7 @@ function AIChatBubbleInner() {
             >
               <Text style={styles.sendText}>→</Text>
             </TouchableOpacity>
-          </View>
+          </InputBarWrapper>
         </View>
       ) : (
         // Collapsed button
