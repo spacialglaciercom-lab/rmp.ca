@@ -24,7 +24,6 @@ export function registerWsExtractProxy(server: Server): void {
 
   server.on("upgrade", (req, socket, head) => {
     if (!req.url?.startsWith("/ws/extract")) {
-      socket.destroy();
       return;
     }
     log.info("Proxying WebSocket /ws/extract to upstream", { target: UPSTREAM_WS });
