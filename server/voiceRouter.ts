@@ -2,17 +2,24 @@
  * Voice router — tRPC endpoints for AI Co-Pilot voice features.
  *
  * Provides:
- * - voice.transcribe — Whisper speech-to-text via existing voiceTranscription service
+ * - voice.transcribe — Speech-to-text (Moonshine sidecar with Whisper fallback)
  * - voice.chat — Genkit-powered co-pilot chat (text in, text out)
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "./_core/trpc";
 import { transcribeAudio, transcribeAudioFromBase64 } from "./_core/voiceTranscription";
+import { transcribeWithFallback, transcribeBase64WithFallback } from "./_core/moonshineTranscription";
 import { chatWithCoPilot, NavContextSchema, ChatMessageSchema } from "./genkit/coPilot";
 
 export const voiceRouter = router({
-  /** Transcribe audio to text using Whisper (speech-to-text). */
+  /**
+   * Transcribe audio to text.
+   *
+   * Provider priority:
+   *  1. Moonshine Python sidecar (if MOONSHINE_STT_ENABLED=true and sidecar URL configured)
+   *  2. Whisper API via Forge (fallback)
+   */
   transcribe: protectedProcedure
     .input(
       z.object({
@@ -26,7 +33,7 @@ export const voiceRouter = router({
     .mutation(async ({ input }) => {
       // Support base64 audio upload (for native iOS/Android where local file:// URIs can't be fetched by server)
       if (input.audioBase64) {
-        const result = await transcribeAudioFromBase64(
+        const result = await transcribeBase64WithFallback(
           input.audioBase64,
           input.mimeType || "audio/m4a",
           input.language,
@@ -42,7 +49,7 @@ export const voiceRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Either audioUrl or audioBase64 is required" });
       }
 
-      const result = await transcribeAudio({ audioUrl: input.audioUrl, language: input.language, prompt: input.prompt });
+      const result = await transcribeWithFallback({ audioUrl: input.audioUrl, language: input.language, prompt: input.prompt });
       if ("error" in result) {
         throw new TRPCError({ code: "BAD_REQUEST", message: result.error, cause: result });
       }

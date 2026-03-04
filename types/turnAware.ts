@@ -45,6 +45,8 @@ export interface BetaFeatures {
   voiceCoPilot: boolean;
   /** RouteMaster Constraints: parse natural language into route constraints via Gemini */
   routeMasterConstraints: boolean;
+  /** Moonshine Voice: on-device streaming STT replacing cloud Whisper */
+  moonshineVoice: boolean;
   crashCount: number; // safety fallback
 }
 

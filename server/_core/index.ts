@@ -14,6 +14,7 @@ import { registerMapsProxyRoutes } from "../mapsProxy";
 import { registerAiProxyRoutes } from "../aiProxy";
 import { registerElevenLabsProxyRoutes } from "../elevenLabsProxy";
 import { registerWsExtractProxy } from "../wsExtractProxy";
+import { registerOptimizerProxyRoutes } from "../optimizerProxy";
 import { createLogger } from "../logger";
 import { ENV } from "./env";
 
@@ -100,6 +101,7 @@ async function startServer() {
   registerMapsProxyRoutes(app);
   registerAiProxyRoutes(app);
   registerElevenLabsProxyRoutes(app);
+  registerOptimizerProxyRoutes(app);
 
   app.get("/", (_req, res) => {
     res.json({
@@ -120,6 +122,11 @@ async function startServer() {
         registerPushToken: "POST /api/register-push-token",
         easBuildWebhook: "POST /api/eas-build-webhook (EAS Build events)",
         wsExtract: "WebSocket /ws/extract (proxy to optimizer backend for web same-origin)",
+        optimizerOptimize: "POST /api/optimize (proxy to Python optimizer)",
+        optimizerGeojson: "POST /api/geojson/* (proxy to Python optimizer)",
+        optimizerZones: "POST /api/zones/partition (proxy to Python optimizer)",
+        optimizerOverture: "POST /overture/optimize (proxy to Python optimizer)",
+        optimizerHealth: "GET /optimizer/health (proxy to Python optimizer /health)",
       },
       timestamp: Date.now(),
     });

@@ -14,6 +14,7 @@ interface BetaContextType {
   toggleWeatherOptimizedRouting: (enabled: boolean) => Promise<void>;
   toggleVoiceCoPilot: (enabled: boolean) => Promise<void>;
   toggleRouteMasterConstraints: (enabled: boolean) => Promise<void>;
+  toggleMoonshineVoice: (enabled: boolean) => Promise<void>;
   recordCrash: () => Promise<void>; // safety mechanism
   isExperimentalRoute: boolean;
 }
@@ -29,6 +30,7 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
     weatherOptimizedRouting: false,
     voiceCoPilot: false,
     routeMasterConstraints: false,
+    moonshineVoice: false,
     crashCount: 0,
   });
 
@@ -48,6 +50,7 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
           weatherOptimizedRouting: parsed.weatherOptimizedRouting ?? false,
           voiceCoPilot: parsed.voiceCoPilot ?? false,
           routeMasterConstraints: parsed.routeMasterConstraints ?? false,
+          moonshineVoice: parsed.moonshineVoice ?? false,
           crashCount: parsed.crashCount ?? 0,
         });
       }
@@ -74,6 +77,7 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
       weatherOptimizedRouting: false,
       voiceCoPilot: false,
       routeMasterConstraints: false,
+      moonshineVoice: false,
       crashCount: 0,
     });
   };
@@ -101,6 +105,11 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const toggleRouteMasterConstraints = async (enabled: boolean) => {
     if (!features.enabled) return;
     await saveFeatures({ ...features, routeMasterConstraints: enabled });
+  };
+
+  const toggleMoonshineVoice = async (enabled: boolean) => {
+    if (!features.enabled) return;
+    await saveFeatures({ ...features, moonshineVoice: enabled });
   };
 
   const recordCrash = async () => {
@@ -135,6 +144,7 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
         toggleWeatherOptimizedRouting,
         toggleVoiceCoPilot,
         toggleRouteMasterConstraints,
+        toggleMoonshineVoice,
         recordCrash,
         isExperimentalRoute: isExperimental,
       }}
