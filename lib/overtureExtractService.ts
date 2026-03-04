@@ -19,7 +19,7 @@ import { getApiBaseUrl } from "@/shared/oauth";
 const defaultHttpBase =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://awake-expression-backend.up.railway.app";
+  "https://proactive-adaptation-backend.up.railway.app";
 const defaultWsBase = defaultHttpBase.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
 const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? defaultHttpBase;

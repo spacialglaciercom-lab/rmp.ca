@@ -256,7 +256,7 @@ const config = {
     // Python/FastAPI Overture route optimizer backend URL (baked in at build time)
     optimizerUrl:
       process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
-      "https://awake-expression-backend.up.railway.app",
+      "https://proactive-adaptation-backend.up.railway.app",
   },
 };
 

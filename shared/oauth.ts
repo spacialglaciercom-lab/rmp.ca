@@ -8,7 +8,7 @@ const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
 /** Production API (Railway). Override with EXPO_PUBLIC_API_BASE_URL for local or other hosts. */
-const DEFAULT_API_BASE_URL = "https://awake-expression-backend.up.railway.app";
+const DEFAULT_API_BASE_URL = "https://proactive-adaptation-backend.up.railway.app";
 
 const rawApiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 const env = {
