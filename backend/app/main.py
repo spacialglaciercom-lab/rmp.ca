@@ -14,7 +14,16 @@ from scipy import sparse
 from scipy.sparse.linalg import eigsh
 from sklearn.cluster import KMeans
 
-app = FastAPI(title="Zones Partition API", version="1.0.0")
+app = FastAPI(title="RouteMasterPro Optimizer API", version="1.1.0")
+
+# Register sub-routers for other endpoints
+from .geojson_ops import router as geojson_router
+from .optimize import router as optimize_router
+from .overture import router as overture_router
+
+app.include_router(geojson_router)
+app.include_router(optimize_router)
+app.include_router(overture_router)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,67 @@
+# Deploy Moonshine Voice sidecar to Google Cloud Run.
+#
+# Usage:
+#   cd server/moonshine-sidecar
+#   gcloud builds submit --config cloudbuild.yaml .
+#
+# Or manually:
+#   gcloud run deploy moonshine-sidecar \
+#     --source . \
+#     --region northamerica-northeast1 \
+#     --memory 1Gi \
+#     --cpu 2 \
+#     --min-instances 0 \
+#     --max-instances 3 \
+#     --timeout 60 \
+#     --concurrency 10 \
+#     --allow-unauthenticated
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/moonshine-sidecar:$COMMIT_SHA"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/moonshine-sidecar:latest"
+      - "."
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "gcr.io/$PROJECT_ID/moonshine-sidecar:$COMMIT_SHA"
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "gcr.io/$PROJECT_ID/moonshine-sidecar:latest"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "moonshine-sidecar"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/moonshine-sidecar:$COMMIT_SHA"
+      - "--region"
+      - "northamerica-northeast1"
+      - "--memory"
+      - "1Gi"
+      - "--cpu"
+      - "2"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "3"
+      - "--timeout"
+      - "60"
+      - "--concurrency"
+      - "10"
+      - "--allow-unauthenticated"
+      - "--set-env-vars"
+      - "MOONSHINE_MODEL=small-streaming-en,MOONSHINE_ARCH=SMALL_STREAMING"
+
+images:
+  - "gcr.io/$PROJECT_ID/moonshine-sidecar:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/moonshine-sidecar:latest"
