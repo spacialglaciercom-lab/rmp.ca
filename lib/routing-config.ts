@@ -32,7 +32,8 @@ export function getRoutingConfig(): RoutingConfig {
  * Returns Google Maps config when selected (default), otherwise OSRM.
  *
  * On web, when our API server is used (Railway etc.), Google routing goes through the
- * server proxy which adds GOOGLE_MAPS_API_KEY — no client key needed.
+ * server proxy which requires GOOGLE_MAPS_API_KEY on the server. If the server has no key,
+ * we fall back to OSRM to avoid 503 on /api/maps/directions.
  */
 export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   const provider = await getNavigationProvider();
@@ -40,12 +41,13 @@ export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   if (provider === "google") {
     const apiKey = await getGoogleMapsApiKey();
 
-    // Web: if we have our API server (e.g. Railway), proxy uses server's GOOGLE_MAPS_API_KEY
+    // Web: proxy uses server's GOOGLE_MAPS_API_KEY. If server has no key (apiKey empty after /api/config), use OSRM to avoid 503.
     if (Platform.OS === "web" && getApiBaseUrl()) {
+      if (!apiKey) return getRoutingConfig();
       return {
         baseUrl: GOOGLE_DIRECTIONS_BASE_URL,
         provider: "google",
-        googleApiKey: apiKey || "",
+        googleApiKey: apiKey,
       };
     }
 

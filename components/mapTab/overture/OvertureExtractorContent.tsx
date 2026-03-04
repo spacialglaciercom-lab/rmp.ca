@@ -29,6 +29,12 @@ import {
   type GeoJSONFeatureCollection,
   type OptimizeResponse,
 } from "@/services/overtureOptimizerService";
+import {
+  connectAndExtract,
+  httpGeoJSONUrl,
+  coordsToPolygonFeature,
+  type ExtractionProgress,
+} from "@/lib/overtureExtractService";
 
 const MIN_POINTS = 3;
 
@@ -104,6 +110,7 @@ export function OvertureExtractorContent({
     warnings: string[];
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [extractProgress, setExtractProgress] = useState<string | null>(null);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [showResults, setShowResults] = useState(false);
 
@@ -127,7 +134,7 @@ export function OvertureExtractorContent({
     return ok;
   }, []);
 
-  const handleExtractGeoJSON = useCallback(async () => {
+  const handleExtractGeoJSON = useCallback(() => {
     if (safePoints.length < MIN_POINTS) {
       Alert.alert(
         "Polygon Required",
@@ -136,50 +143,72 @@ export function OvertureExtractorContent({
       return;
     }
 
-    try {
-      setIsLoading(true);
-      const online = await checkBackend();
-      if (!online) return;
+    const polygonCoords: [number, number][] = safePoints.map((p) => [p.longitude, p.latitude]);
+    const polygon = coordsToPolygonFeature(polygonCoords);
+    const polygonForFilter = safePoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
 
-      // Extract from Overture bucket using polygon boundary
-      const polygon = safePoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+    setIsLoading(true);
+    setExtractProgress("Connecting...");
 
-      // Create minimal valid GeoJSON (satisfies schema requirements)
-      const emptyGeojson: GeoJSONFeatureCollection = {
-        type: "FeatureCollection",
-        features: [],
-      };
+    const handle = connectAndExtract(
+      polygon,
+      (progress: ExtractionProgress) => {
+        setExtractProgress(progress.message);
+      },
+      async (hash, _stats) => {
+        try {
+          setExtractProgress("Loading road data...");
+          const url = httpGeoJSONUrl(hash);
+          const res = await fetch(url);
+          if (!res.ok) {
+            throw new Error(`Failed to load GeoJSON: ${res.status}`);
+          }
+          const rawGeojson = (await res.json()) as GeoJSONFeatureCollection;
+          if (!rawGeojson?.features?.length) {
+            setGeoJSONInfo({
+              featureCount: 0,
+              roadClasses: {},
+              valid: false,
+              warnings: ["No road features found in the extraction area"],
+            });
+            setLoadedGeoJSON({ type: "FeatureCollection", features: [] });
+            return;
+          }
+          const filtered = await filterGeoJSON({
+            geojson: rawGeojson,
+            polygon: polygonForFilter,
+            road_classes: effectiveRoadClasses,
+          });
+          const geojson = filtered.geojson;
+          setGeoJSONInfo({
+            featureCount: filtered.feature_count,
+            roadClasses: filtered.road_class_counts,
+            valid: filtered.feature_count > 0,
+            warnings:
+              filtered.feature_count === 0
+                ? ["No road features match the selected road classes in this area"]
+                : [`Extracted ${filtered.feature_count} road features from Overture Maps`],
+          });
+          setLoadedGeoJSON(geojson);
+        } catch (err) {
+          Alert.alert(
+            "Extraction Failed",
+            err instanceof Error ? err.message : "Could not load or filter road data.",
+          );
+        } finally {
+          setIsLoading(false);
+          setExtractProgress(null);
+        }
+      },
+      (error) => {
+        Alert.alert("Extraction Failed", error);
+        setIsLoading(false);
+        setExtractProgress(null);
+      },
+    );
 
-      const filtered = await filterGeoJSON({
-        geojson: emptyGeojson,
-        polygon,
-        road_classes: effectiveRoadClasses,
-      });
-
-      const geojson = filtered.geojson;
-      setGeoJSONInfo({
-        featureCount: filtered.feature_count,
-        roadClasses: filtered.road_class_counts,
-        valid: filtered.feature_count > 0,
-        warnings:
-          filtered.feature_count === 0
-            ? ["No road features found in the extraction area"]
-            : [
-                `Extracted ${filtered.feature_count} road features from Overture Maps`,
-              ],
-      });
-
-      setLoadedGeoJSON(geojson);
-    } catch (err) {
-      Alert.alert(
-        "Extraction Failed",
-        err instanceof Error
-          ? err.message
-          : "Could not extract from Overture. Check backend logs.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    // Allow cancel on unmount or user action if we add a cancel button
+    return () => handle.cancel();
   }, [checkBackend, safePoints, effectiveRoadClasses]);
 
   const toggleRoadClass = (key: string) => {
@@ -316,7 +345,12 @@ export function OvertureExtractorContent({
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#fff" />
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <ActivityIndicator color="#fff" />
+              {extractProgress ? (
+                <Text style={[styles.loadBtnText, { marginLeft: 8 }]}>{extractProgress}</Text>
+              ) : null}
+            </View>
           ) : (
             <Text style={styles.loadBtnText}>
               {loadedGeoJSON ? "Re-extract GeoJSON" : "Extract GeoJSON"}

@@ -1,7 +1,8 @@
 /**
  * Overture Extract WebSocket client + helpers.
  * Connects to the web extractor backend to extract & process road networks from Overture Maps data.
- * On web, uses the API base URL (same-origin) so the browser hits our server's WebSocket proxy.
+ * On web, uses the main API URL so the browser hits the backend's /ws/extract proxy (avoids cross-origin
+ * WebSocket failures to webovertureextract from Vercel). The backend proxies to webovertureextract.
  */
 
 import Constants from "expo-constants";
@@ -11,9 +12,8 @@ import { length as turfLength } from "@turf/length";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
-// Extract backend URL (web extractor service). Override with EXPO_PUBLIC_OVERTURE_EXTRACT_URL
-// or EXPO_PUBLIC_OVERTURE_HTTP_BASE / EXPO_PUBLIC_OVERTURE_WS_BASE for local dev.
-// On web we use the API base URL for WS so the browser hits our server's proxy.
+// Extract backend URL. HTTP_BASE used for /geojson/, /download/ (after extract).
+// On web, WS goes to main API so the server can proxy to webovertureextract (avoids CORS/origin issues).
 // ---------------------------------------------------------------------------
 const DEFAULT_EXTRACT_BASE = "https://webovertureextract-webovertureextract.up.railway.app";
 const defaultHttpBase =
@@ -25,7 +25,6 @@ const defaultHttpBase =
 const defaultWsBase = defaultHttpBase.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
 const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? defaultHttpBase;
-// Web: same-origin WebSocket via API server proxy to avoid browser CORS/Origin issues
 const WS_BASE =
   Platform.OS === "web"
     ? (getApiBaseUrl().replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://"))

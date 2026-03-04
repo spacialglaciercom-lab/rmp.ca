@@ -9,7 +9,7 @@ import { createLogger } from "./logger";
 
 const log = createLogger("ws-extract-proxy");
 
-/** Public web extractor backend (Railway). */
+/** Public web extractor backend (Railway). Override with EXTRACT_WS_UPSTREAM if your service URL differs (e.g. typo). */
 const DEFAULT_EXTRACT_UPSTREAM = "https://webovertureextract-webovertureextract.up.railway.app";
 const UPSTREAM_HTTP =
   process.env.EXTRACT_WS_UPSTREAM ||
@@ -21,8 +21,15 @@ const UPSTREAM_WS = UPSTREAM_HTTP.replace(/^https:\/\//i, "wss://").replace(/^ht
 export function registerWsExtractProxy(server: Server): void {
   const proxy = httpProxy.createProxyServer({ ws: true });
 
-  proxy.on("error", (err, _req, _res) => {
-    log.warn("WebSocket proxy error", { error: err.message });
+  proxy.on("error", (err: NodeJS.ErrnoException, req, _res) => {
+    const code = err.code ?? "";
+    const msg = (err.message || String(err) || code || "Unknown WebSocket proxy error").trim() || "Unknown WebSocket proxy error";
+    log.warn("WebSocket proxy error", {
+      error: msg,
+      code: code || undefined,
+      target: UPSTREAM_WS,
+      url: req?.url,
+    });
   });
 
   server.on("upgrade", (req, socket, head) => {
@@ -30,7 +37,8 @@ export function registerWsExtractProxy(server: Server): void {
       socket.destroy();
       return;
     }
-    log.info("Proxying WebSocket /ws/extract to upstream", { target: UPSTREAM_WS });
+    // target = origin only; http-proxy forwards req.url (e.g. /ws/extract) to that origin
+    log.info("Proxying WebSocket /ws/extract to upstream", { target: UPSTREAM_WS, path: req.url });
     proxy.ws(req, socket, head, { target: UPSTREAM_WS });
   });
 }
