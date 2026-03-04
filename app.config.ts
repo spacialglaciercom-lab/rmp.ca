@@ -256,7 +256,11 @@ const config = {
     // Python/FastAPI Overture route optimizer backend URL (baked in at build time)
     optimizerUrl:
       process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
-      "https://proactive-adaptation-backend.up.railway.app",
+      "https://reasonable-trust-optimizer-dfc3.up.railway.app",
+    // Web Overture extract backend (polygon → GeoJSON/graph via WebSocket); used for extract tab
+    extractUrl:
+      process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
+      "https://webovertureextract-webovertureextract.up.railway.app",
   },
 };
 

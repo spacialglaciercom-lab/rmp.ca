@@ -1,6 +1,6 @@
 /**
  * Overture Extract WebSocket client + helpers.
- * Connects to the Google Run backend to extract & process road networks from Overture Maps data.
+ * Connects to the web extractor backend to extract & process road networks from Overture Maps data.
  * On web, uses the API base URL (same-origin) so the browser hits our server's WebSocket proxy.
  */
 
@@ -11,15 +11,17 @@ import { length as turfLength } from "@turf/length";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
-// Backend URLs (Google Run). Use production by default so web and mobile work
-// without a local extract service. Override with EXPO_PUBLIC_OVERTURE_* for
-// a local backend (e.g. EXPO_PUBLIC_OVERTURE_WS_BASE=ws://localhost:8000).
-// On web we use the API base URL so the WebSocket goes same-origin (then server proxies to optimizer).
+// Extract backend URL (web extractor service). Override with EXPO_PUBLIC_OVERTURE_EXTRACT_URL
+// or EXPO_PUBLIC_OVERTURE_HTTP_BASE / EXPO_PUBLIC_OVERTURE_WS_BASE for local dev.
+// On web we use the API base URL for WS so the browser hits our server's proxy.
 // ---------------------------------------------------------------------------
+const DEFAULT_EXTRACT_BASE = "https://webovertureextract-webovertureextract.up.railway.app";
 const defaultHttpBase =
+  process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
+  Constants.expoConfig?.extra?.extractUrl ??
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://proactive-adaptation-backend.up.railway.app";
+  DEFAULT_EXTRACT_BASE;
 const defaultWsBase = defaultHttpBase.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
 const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? defaultHttpBase;

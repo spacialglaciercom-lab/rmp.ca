@@ -22,7 +22,7 @@ import Constants from "expo-constants";
 const OPTIMIZER_BASE_URL =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://proactive-adaptation-backend.up.railway.app";
+  "https://reasonable-trust-optimizer-dfc3.up.railway.app";
 
 // ---------------------------------------------------------------------------
 // Overture Split-Segment Types
