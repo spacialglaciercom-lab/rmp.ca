@@ -256,7 +256,7 @@ const config = {
     // Python/FastAPI Overture route optimizer backend URL (baked in at build time)
     optimizerUrl:
       process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
-      "https://trashroute-mobile-286569721223.northamerica-northeast1.run.app",
+      "https://rmp-ca-286569721223.europe-west1.run.app",
   },
 };
 

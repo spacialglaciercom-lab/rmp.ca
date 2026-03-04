@@ -22,7 +22,7 @@ import Constants from "expo-constants";
 const OPTIMIZER_BASE_URL =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://trashroute-mobile-286569721223.northamerica-northeast1.run.app";
+  "https://rmp-ca-286569721223.europe-west1.run.app";
 
 // ---------------------------------------------------------------------------
 // Overture Split-Segment Types

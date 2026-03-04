@@ -8,7 +8,7 @@ const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
 /** Production API (Cloud Run). Override with EXPO_PUBLIC_API_BASE_URL for local or other hosts. */
-const DEFAULT_API_BASE_URL = "https://trashroute-mobile-286569721223.northamerica-northeast1.run.app";
+const DEFAULT_API_BASE_URL = "https://rmp-ca-286569721223.europe-west1.run.app";
 
 const rawApiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 const env = {
