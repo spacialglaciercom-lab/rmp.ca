@@ -10,10 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the default model during build so cold starts are fast.
-# The model files are baked into the image (~60MB compressed).
-RUN python -c "from moonshine_voice import Transcriber, ModelArch; \
-    Transcriber(model_name='small-streaming-en', model_arch=ModelArch.SMALL_STREAMING)"
+# Pre-download the default model during build (0.0.x API: get_model_for_language only).
+RUN python -c "from moonshine_voice import get_model_for_language; get_model_for_language('en')"
 
 COPY main.py .
 

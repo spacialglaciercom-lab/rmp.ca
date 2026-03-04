@@ -60,7 +60,7 @@ steps:
       - "10"
       - "--allow-unauthenticated"
       - "--set-env-vars"
-      - "MOONSHINE_MODEL=small-streaming-en,MOONSHINE_ARCH=SMALL_STREAMING"
+      - "MOONSHINE_LANGUAGE=en"
 
 images:
   - "gcr.io/$PROJECT_ID/moonshine-sidecar:$COMMIT_SHA"
