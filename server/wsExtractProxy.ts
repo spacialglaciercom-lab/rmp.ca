@@ -12,7 +12,7 @@ const log = createLogger("ws-extract-proxy");
 const UPSTREAM_HTTP =
   process.env.OPTIMIZER_WS_UPSTREAM ||
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ||
-  "https://rmp-ca-286569721223.europe-west1.run.app";
+  "https://awake-expression-backend.up.railway.app";
 const UPSTREAM_WS = UPSTREAM_HTTP.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
 export function registerWsExtractProxy(server: Server): void {
