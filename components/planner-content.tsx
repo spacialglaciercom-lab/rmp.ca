@@ -412,7 +412,7 @@ export default function PlannerContent() {
         { msg: "Starting route generation...", type: "info" as const },
         { msg: `Processing ${pointsToUse.length} collection points...`, type: "info" as const },
         { msg: "Building directed graph from OSM extract", type: "info" as const },
-        { msg: "Filtering highway types: residential, unclassified, service, tertiary, secondary", type: "info" as const },
+        { msg: "Filtering highway types: residential, unclassified, tertiary, secondary, living_street, secondary_link, tertiary_link, service=alley", type: "info" as const },
         { msg: "Identifying Largest Strongly Connected Component (LSCC)", type: "info" as const },
         { msg: `Applying turn penalties: Left=${state.configuration.turnPenalties.leftTurn}, U-Turn=${state.configuration.turnPenalties.uTurn}`, type: "info" as const },
         { msg: "Route generation complete!", type: "success" as const },

@@ -36,6 +36,8 @@ interface EdgeData {
   direction?: "forward" | "reverse";
   oneway_violation?: boolean;
   wayId?: string;
+  /** Full segment geometry [lat, lon][] so the drawn route follows the road shape (no straight jumps). */
+  geometry?: Array<[number, number]>;
 }
 
 /** Single entry in an adjacency list. Carries a unique id so parallel edges
@@ -50,7 +52,7 @@ type AdjGraph = Map<string, AdjEntry[]>;
 
 // Optional configuration for RouteOptimizer behavior
 export interface RouteOptimizerOptions {
-  /** Distance in meters to merge nearby nodes (default 15) */
+  /** Distance in meters to merge nearby nodes (default 2 = only same intersection). Use ~15 for aggressive merge. */
   mergeNearbyThresholdM?: number;
   /** Anti-loop mode strength */
   antiLoopMode?: "off" | "standard" | "strict";
@@ -206,9 +208,16 @@ function mergeNearbyNodes(
 
   // Build a set of nodes that are actually used in ways
   const usedNodeIds = new Set<string>();
+  /** Pairs of node IDs that are consecutive on the same way — do NOT merge these so road geometry is preserved. */
+  const consecutiveOnSameWay = new Set<string>();
   for (const way of ways) {
-    for (const nodeId of way.nodes) {
-      usedNodeIds.add(nodeId);
+    for (let i = 0; i < way.nodes.length; i++) {
+      usedNodeIds.add(way.nodes[i]!);
+      if (i < way.nodes.length - 1) {
+        const a = way.nodes[i]!;
+        const b = way.nodes[i + 1]!;
+        consecutiveOnSameWay.add(a < b ? `${a},${b}` : `${b},${a}`);
+      }
     }
   }
 
@@ -281,6 +290,9 @@ function mergeNearbyNodes(
         for (const [id1, node1] of cellNodes) {
           for (const [id2, node2] of neighborNodes) {
             if (id1 >= id2) continue; // Avoid duplicate comparisons
+            // Do not merge nodes that are consecutive on the same way — preserves road curves
+            const pairKey = id1 < id2 ? `${id1},${id2}` : `${id2},${id1}`;
+            if (consecutiveOnSameWay.has(pairKey)) continue;
             const dist = haversineMeters(node1.lat, node1.lon, node2.lat, node2.lon);
             if (dist <= thresholdM) {
               union(id1, id2);
@@ -378,7 +390,7 @@ export class RouteOptimizer {
   ) {
     this.options = options ?? {};
     // Merge nearby nodes (within 15m) to handle offset road data
-    const mergeM = this.options.mergeNearbyThresholdM ?? 15;
+    const mergeM = this.options.mergeNearbyThresholdM ?? 2;
     const { nodeMapping } = mergeNearbyNodes(nodes, ways, mergeM);
     this.nodeMapping = nodeMapping;
     this.nodes = nodes;
@@ -396,10 +408,38 @@ export class RouteOptimizer {
 
   // ─── Graph construction ───────────────────────────────────────
 
+  /** Build set of node IDs that are "intersections" (used in >1 way, or way endpoint). */
+  private buildIntersectionSet(): Set<string> {
+    const nodeWayCount = new Map<string, number>();
+    for (const way of this.ways) {
+      if (isNonVehicleRoad(way)) continue;
+      const seen = new Set<string>();
+      for (const nid of way.nodes) {
+        if (!seen.has(nid)) {
+          seen.add(nid);
+          nodeWayCount.set(nid, (nodeWayCount.get(nid) ?? 0) + 1);
+        }
+      }
+    }
+    const intersections = new Set<string>();
+    for (const way of this.ways) {
+      if (isNonVehicleRoad(way)) continue;
+      if (way.nodes.length < 2) continue;
+      for (let i = 0; i < way.nodes.length; i++) {
+        const nid = way.nodes[i]!;
+        const count = nodeWayCount.get(nid) ?? 0;
+        if (count > 1 || i === 0 || i === way.nodes.length - 1) {
+          intersections.add(nid);
+        }
+      }
+    }
+    return intersections;
+  }
+
   private buildOriginalGraph(): void {
     this.originalGraph.clear();
 
-    // Track seen segments to prevent duplicates (same road from multiple features)
+    const intersections = this.buildIntersectionSet();
     const seenSegments = new Set<string>();
     let edgesAdded = 0;
     let duplicatesSkipped = 0;
@@ -408,7 +448,6 @@ export class RouteOptimizer {
     const filteredClasses = new Map<string, number>();
 
     for (const way of this.ways) {
-      // Filter out non-vehicle road classes (footway, steps, cycleway, etc.)
       if (isNonVehicleRoad(way)) {
         nonVehicleFiltered++;
         const roadClass = way.tags?.highway || way.tags?.class || "unknown";
@@ -416,11 +455,8 @@ export class RouteOptimizer {
         continue;
       }
 
-      // Determine direction from Overture 'direction' property or OSM 'oneway' tag
-      // direction: "forward" (one-way in digitization), "backward" (one-way reverse), "both" (two-way)
       const directionTag = way.tags?.direction?.toLowerCase()?.trim();
       let direction: "forward" | "backward" | "both" = "both";
-      
       if (directionTag === "forward" || directionTag === "backward") {
         direction = directionTag;
       } else if (
@@ -432,88 +468,99 @@ export class RouteOptimizer {
       } else if (way.tags?.oneway === "-1") {
         direction = "backward";
       }
-      
       const oneway = direction !== "both";
+      const wayId = way.id || "";
 
-      for (let i = 0; i < way.nodes.length - 1; i++) {
-        const rawFrom = way.nodes[i]!;
-        const rawTo = way.nodes[i + 1]!;
+      // Split way at intersection nodes; each run becomes one edge with full geometry.
+      let runStart = 0;
+      for (let i = 1; i < way.nodes.length; i++) {
+        const rawEnd = way.nodes[i]!;
+        const isIntersection = intersections.has(rawEnd);
+        const isLast = i === way.nodes.length - 1;
+        if (!isIntersection && !isLast) continue;
 
-        // Apply node merging - use canonical IDs for graph construction
+        const rawFrom = way.nodes[runStart]!;
         const from = this.canonical(rawFrom);
-        const to = this.canonical(rawTo);
-        if (from !== rawFrom || to !== rawTo) nodesMerged++;
-
-        // Skip self-loops created by node merging
+        const to = this.canonical(rawEnd);
+        if (from !== rawFrom || to !== rawEnd) nodesMerged++;
         if (from === to) {
           duplicatesSkipped++;
+          runStart = i;
           continue;
         }
 
-        const fromNode = this.nodes.get(rawFrom); // Use raw ID for coordinates
-        const toNode = this.nodes.get(rawTo);
-        if (!fromNode || !toNode) continue;
-
-        // Deduplicate segments: same physical road from different features
-        // should only be traversed once per direction
-        const segKey = segmentKey(
-          fromNode.lat, fromNode.lon,
-          toNode.lat, toNode.lon,
-          oneway
-        );
-        if (seenSegments.has(segKey)) {
-          duplicatesSkipped++;
+        const fromNode = this.nodes.get(rawFrom);
+        const toNode = this.nodes.get(rawEnd);
+        if (!fromNode || !toNode) {
+          runStart = i;
           continue;
         }
-        seenSegments.add(segKey);
 
-        let length =
-          this.haversineDistance(
-            fromNode.lat, fromNode.lon,
-            toNode.lat, toNode.lon
-          ) * 1000;
-        // Guard against zero-length or near-zero edges caused by precision or
-        // merged nodes. Enforce a small minimum to avoid zero-cost loops.
+        // Build full geometry for this run (all points runStart..i inclusive).
+        const geometry: Array<[number, number]> = [];
+        let length = 0;
+        let prevLat: number | null = null;
+        let prevLon: number | null = null;
+        for (let j = runStart; j <= i; j++) {
+          const n = this.nodes.get(way.nodes[j]!);
+          if (!n) break;
+          geometry.push([n.lat, n.lon]);
+          if (prevLat != null && prevLon != null) {
+            length += this.haversineDistance(prevLat, prevLon, n.lat, n.lon) * 1000;
+          }
+          prevLat = n.lat;
+          prevLon = n.lon;
+        }
+        if (geometry.length < 2) {
+          runStart = i;
+          continue;
+        }
         const minEdge = this.options.minEdgeMeters ?? 0.05;
         if (length < minEdge) length = minEdge;
-
-        const wayId = way.id || "";
         const penalty = this.edgePenaltyMultipliers.get(wayId) ?? 0;
         length = length * (1 + penalty);
 
-        const edgeData: EdgeData = { length, oneway, wayId };
+        const segKey = segmentKey(
+          geometry[0]![0], geometry[0]![1],
+          geometry[geometry.length - 1]![0], geometry[geometry.length - 1]![1],
+          oneway
+        );
+        const waySegKey = `${wayId}:${segKey}`;
+        if (seenSegments.has(waySegKey)) {
+          duplicatesSkipped++;
+          runStart = i;
+          continue;
+        }
+        seenSegments.add(waySegKey);
 
-        // Add edges based on direction:
-        // - "forward": only from→to (one-way in digitization direction)
-        // - "backward": only to→from (one-way opposite to digitization)
-        // - "both": both directions (two-way street)
+        const edgeData: EdgeData = { length, oneway, wayId, geometry };
+
         if (direction === "backward") {
-          // One-way in reverse: only add to→from edge
+          const revGeo = [...geometry].reverse();
           ensureNode(this.originalGraph, to).push({
             target: from,
-            data: { length, oneway: true, wayId },
+            data: { length, oneway: true, wayId, geometry: revGeo },
             edgeId: genEdgeId(wayId, to, from),
           });
           edgesAdded++;
         } else {
-          // Forward or both: add from→to edge
           ensureNode(this.originalGraph, from).push({
             target: to,
             data: edgeData,
             edgeId: genEdgeId(wayId, from, to),
           });
           edgesAdded++;
-
           if (direction === "both") {
-            // Two-way: also add reverse edge
+            const revGeo = [...geometry].reverse();
             ensureNode(this.originalGraph, to).push({
               target: from,
-              data: { length, oneway: false, wayId },
+              data: { length, oneway: false, wayId, geometry: revGeo },
               edgeId: genEdgeId(wayId, to, from),
             });
             edgesAdded++;
           }
         }
+        runStart = i;
       }
     }
 
@@ -1047,7 +1094,92 @@ export class RouteOptimizer {
     return R * c;
   }
 
-  // ─── Start node selection ─────────────────────────────────────
+  // ─── Connected components & start node selection ─────────────
+
+  /**
+   * Returns all weakly connected components of the doubled graph (each component
+   * is a list of node IDs). Used to run Hierholzer on every component so no
+   * segments are missing when the graph has islands or disconnected clusters.
+   */
+  private getConnectedComponents(): string[][] {
+    const reverseAdj = new Map<string, Set<string>>();
+    for (const [u, list] of this.doubledGraph.entries()) {
+      for (const e of list) {
+        if (!reverseAdj.has(e.target)) reverseAdj.set(e.target, new Set());
+        reverseAdj.get(e.target)!.add(u);
+      }
+    }
+    const visited = new Set<string>();
+    const components: string[][] = [];
+    const allNodes = Array.from(this.doubledGraph.keys());
+    for (const start of allNodes) {
+      if (visited.has(start)) continue;
+      const outDegree = this.doubledGraph.get(start)?.length ?? 0;
+      if (outDegree === 0) {
+        visited.add(start);
+        continue;
+      }
+      const q: string[] = [start];
+      visited.add(start);
+      const comp: string[] = [];
+      while (q.length) {
+        const v = q.shift()!;
+        comp.push(v);
+        const outs = this.doubledGraph.get(v) ?? [];
+        for (const e of outs) {
+          if (!visited.has(e.target)) {
+            visited.add(e.target);
+            q.push(e.target);
+          }
+        }
+        const revs = reverseAdj.get(v) ?? new Set<string>();
+        for (const r of revs) {
+          if (!visited.has(r)) {
+            visited.add(r);
+            q.push(r);
+          }
+        }
+      }
+      components.push(comp);
+    }
+    return components;
+  }
+
+  /** Pick best start node within a component (highest degree, prefer non-dead-end). */
+  private findStartNodeInComponent(
+    component: string[],
+    customLat?: number,
+    customLon?: number
+  ): string | null {
+    if (component.length === 0) return null;
+    if (customLat !== undefined && customLon !== undefined && !Number.isNaN(customLat) && !Number.isNaN(customLon)) {
+      let closestNode: string | null = null;
+      let minDistance = Infinity;
+      for (const nodeId of component) {
+        const node = this.nodes.get(nodeId);
+        if (!node) continue;
+        const distance = this.haversineDistance(customLat, customLon, node.lat, node.lon);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestNode = nodeId;
+        }
+      }
+      return closestNode;
+    }
+    let bestNode: string | null = null;
+    let bestDeg = -1;
+    for (const nodeId of component) {
+      const deg = this.doubledGraph.get(nodeId)?.length ?? 0;
+      if (deg === 0) continue;
+      const isDead = this.deadEndNodes.has(nodeId);
+      const score = isDead ? deg - 2 : deg;
+      if (score > bestDeg) {
+        bestDeg = score;
+        bestNode = nodeId;
+      }
+    }
+    return bestNode ?? component[0] ?? null;
+  }
 
   private findStartNode(customLat?: number, customLon?: number): string | null {
     if (customLat !== undefined && customLon !== undefined && !Number.isNaN(customLat) && !Number.isNaN(customLon)) {
@@ -1163,6 +1295,56 @@ export class RouteOptimizer {
     return null;
   }
 
+  /**
+   * Build route points from circuit using full edge geometry when available,
+   * so the drawn route follows the road shape (curves) instead of straight jumps.
+   */
+  private buildRoutePointsFromCircuit(circuit: string[]): RoutePoint[] {
+    const routePoints: RoutePoint[] = [];
+    if (circuit.length === 0) return routePoints;
+    for (let i = 0; i < circuit.length - 1; i++) {
+      const fromId = circuit[i]!;
+      const toId = circuit[i + 1]!;
+      const entry = this.originalGraph.get(fromId)?.find((e) => e.target === toId);
+      const geometry = entry?.data?.geometry;
+      if (geometry && geometry.length >= 2) {
+        const startIdx = routePoints.length === 0 ? 0 : 1;
+        for (let k = startIdx; k < geometry.length; k++) {
+          const [lat, lon] = geometry[k]!;
+          routePoints.push({ latitude: lat, longitude: lon, nodeId: fromId });
+        }
+      } else {
+        const fromNode = this.nodes.get(fromId);
+        const toNode = this.nodes.get(toId);
+        if (i === 0 && fromNode) {
+          routePoints.push({
+            latitude: fromNode.lat,
+            longitude: fromNode.lon,
+            nodeId: fromId,
+          });
+        }
+        if (toNode) {
+          routePoints.push({
+            latitude: toNode.lat,
+            longitude: toNode.lon,
+            nodeId: toId,
+          });
+        }
+      }
+    }
+    if (routePoints.length === 0 && circuit.length > 0) {
+      const first = this.nodes.get(circuit[0]!);
+      if (first) {
+        routePoints.push({
+          latitude: first.lat,
+          longitude: first.lon,
+          nodeId: circuit[0],
+        });
+      }
+    }
+    return routePoints;
+  }
+
   // ─── Stats ────────────────────────────────────────────────────
 
   private calculateRouteStats(): void {
@@ -1260,40 +1442,78 @@ export class RouteOptimizer {
       this.onewayMode = originalOnewayMode;
     }
 
-    const startNode = this.findStartNode(customLat, customLon);
-    debug("optimize", {
-      startNode: startNode ?? null,
-      customStart: customLat != null && customLon != null ? [customLat, customLon] : null,
-      doubledGraphSize: this.doubledGraph.size,
-      startOutDegree: startNode ? outDegree(this.doubledGraph, startNode) : 0,
+    const components = this.getConnectedComponents();
+    const hasMultipleComponents = components.length > 1;
+    if (hasMultipleComponents) {
+      debug("optimize", {
+        message: "Multiple connected components – will run Hierholzer per component to cover all segments",
+        componentCount: components.length,
+        componentSizes: components.map((c) => c.length),
+      });
+    }
+
+    // Order components: if custom start, put the component containing the closest node first; else largest first
+    const orderedComponents = [...components].sort((a, b) => {
+      if (customLat == null || customLon == null || Number.isNaN(customLat) || Number.isNaN(customLon)) {
+        return b.length - a.length;
+      }
+      const distA = Math.min(
+        ...a.map((id) => {
+          const n = this.nodes.get(id);
+          return n ? this.haversineDistance(customLat, customLon, n.lat, n.lon) : Infinity;
+        })
+      );
+      const distB = Math.min(
+        ...b.map((id) => {
+          const n = this.nodes.get(id);
+          return n ? this.haversineDistance(customLat, customLon, n.lat, n.lon) : Infinity;
+        })
+      );
+      return distA - distB;
     });
-    if (!startNode) {
-      warn("optimize", "early exit: no start node with outgoing edges", {
+
+    const circuits: string[][] = [];
+    for (const comp of orderedComponents) {
+      const startNode = this.findStartNodeInComponent(comp, customLat, customLon);
+      if (!startNode) continue;
+      const circuit = this.hierholzerWithTurnOptimization(startNode);
+      if (circuit.length > 0) circuits.push(circuit);
+    }
+
+    if (circuits.length === 0) {
+      warn("optimize", "early exit: no start node with outgoing edges in any component", {
         doubledGraphSize: this.doubledGraph.size,
+        componentCount: components.length,
       });
       return {
         route: [],
         totalDistance: 0,
-        message: "Could not find a starting node",
+        message: "Could not find a starting node in any connected component",
         stats: this.stats,
       };
     }
 
-    const circuit = this.hierholzerWithTurnOptimization(startNode);
+    const startNode = this.findStartNodeInComponent(
+      orderedComponents[0]!,
+      customLat,
+      customLon
+    );
+    debug("optimize", {
+      startNode: startNode ?? null,
+      customStart: customLat != null && customLon != null ? [customLat, customLon] : null,
+      doubledGraphSize: this.doubledGraph.size,
+      componentCount: circuits.length,
+      totalCircuitNodes: circuits.reduce((sum, c) => sum + c.length, 0),
+    });
+
+    // Concatenate circuits so every component is traversed (no missing segments)
+    const circuit = circuits.flat();
     this.route = circuit;
     this.stats.total_traversals = circuit.length - 1;
     this.calculateRouteStats();
 
-    const routePoints: RoutePoint[] = [];
+    const routePoints = this.buildRoutePointsFromCircuit(circuit);
     const missingNodeIds: string[] = [];
-    for (const nodeId of circuit) {
-      const node = this.nodes.get(nodeId);
-      if (node != null && typeof node.lat === "number" && typeof node.lon === "number") {
-        routePoints.push({ latitude: node.lat, longitude: node.lon, nodeId });
-      } else {
-        missingNodeIds.push(nodeId);
-      }
-    }
 
     const startNodeData = startNode ? this.nodes.get(startNode) : null;
     debug("optimize", {

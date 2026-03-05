@@ -31,6 +31,9 @@ export function shouldIncludeHighway(way: OSMWay): boolean {
     "unclassified",
     "tertiary",
     "secondary",
+    "living_street",
+    "secondary_link",
+    "tertiary_link",
   ];
 
   if (includedTypes.includes(highway)) {

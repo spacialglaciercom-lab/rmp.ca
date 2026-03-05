@@ -13,6 +13,9 @@ const INCLUDED_HIGHWAYS = new Set([
   "unclassified",
   "tertiary",
   "secondary",
+  "living_street",   // low-speed residential; often tagged instead of residential
+  "secondary_link", // link roads for secondary (slip roads, ramps)
+  "tertiary_link",  // link roads for tertiary
 ]);
 
 const EXCLUDED_HIGHWAYS = new Set([
@@ -98,8 +101,8 @@ export class OSMParser {
       if (!highway || EXCLUDED_HIGHWAYS.has(highway)) continue;
       if (INCLUDED_HIGHWAYS.has(highway)) {
         // included
-      } else if (highway === "service" && tags["service"] === "alley") {
-        // service=alley only (matches osm-filter)
+      } else if (highway === "service") {
+        // include service roads; driveway/parking types filtered below
       } else {
         continue;
       }

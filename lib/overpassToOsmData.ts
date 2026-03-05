@@ -15,6 +15,9 @@ const INCLUDED_HIGHWAYS = new Set([
   "unclassified",
   "tertiary",
   "secondary",
+  "living_street",
+  "secondary_link",
+  "tertiary_link",
 ]);
 
 const EXCLUDED_HIGHWAYS = new Set([
