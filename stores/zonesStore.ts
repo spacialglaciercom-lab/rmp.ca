@@ -22,9 +22,13 @@ export interface SavedZoneResult {
 
 interface ZonesState {
   savedZones: SavedZoneResult[];
+  /** When set, the zone with this id is shown on the map (preview). */
+  displayedZoneId: string | null;
   addSavedZone: (item: Omit<SavedZoneResult, "id" | "createdAt">) => void;
   removeSavedZone: (id: string) => void;
+  updateSavedZoneName: (id: string, name: string) => void;
   clearAllSavedZones: () => void;
+  setDisplayedZoneId: (id: string | null) => void;
 }
 
 function generateId(): string {
@@ -35,6 +39,7 @@ export const useZonesStore = create<ZonesState>()(
   persist(
     (set) => ({
       savedZones: [],
+      displayedZoneId: null,
 
       addSavedZone: (item) => {
         const now = new Date().toISOString();
@@ -54,11 +59,23 @@ export const useZonesStore = create<ZonesState>()(
         }));
       },
 
+      updateSavedZoneName: (id, name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        set((state) => ({
+          savedZones: state.savedZones.map((z) =>
+            z.id === id ? { ...z, name: trimmed } : z
+          ),
+        }));
+      },
+
       clearAllSavedZones: () => set({ savedZones: [] }),
+      setDisplayedZoneId: (id) => set({ displayedZoneId: id }),
     }),
     {
       name: "rmp-zones-storage",
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({ savedZones: s.savedZones }),
     }
   )
 );

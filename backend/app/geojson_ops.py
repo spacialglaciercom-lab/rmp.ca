@@ -318,14 +318,24 @@ def _round_key(lon: float, lat: float, decimals: int = 6) -> tuple[float, float]
 
 def geojson_to_partition_graph(
     body: GeoJSONFeatureCollection,
-) -> tuple[list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int, list[tuple[float, float]]]:
     """
-    Build (edges, node_count) from a FeatureCollection of LineStrings.
+    Build (edges, node_count, id_to_coords) from a FeatureCollection of LineStrings.
     Each unique coordinate (rounded to 6 decimals) is a node; each segment is an edge.
-    Returns (list of dicts with u, v, length, intersection_density, cul_de_sac_penalty, width_penalty), node_count.
+    id_to_coords[i] is (lon, lat) for node id i (for drawing zone polygons).
+    Returns (list of dicts with u, v, length, ...), node_count, id_to_coords.
     """
     node_key_to_id: dict[tuple[float, float], int] = {}
+    id_to_coords: list[tuple[float, float]] = []
     edges_raw: list[tuple[int, int, float]] = []  # (u, v, length_km)
+
+    def _ensure_node(lon: float, lat: float) -> int:
+        k = _round_key(lon, lat)
+        if k not in node_key_to_id:
+            nid = len(node_key_to_id)
+            node_key_to_id[k] = nid
+            id_to_coords.append(k)  # k is (lon, lat)
+        return node_key_to_id[k]
 
     for feat in body.features:
         geom = feat.geometry
@@ -344,14 +354,8 @@ def geojson_to_partition_graph(
                 c1 = line_coords[i]
                 lon0, lat0 = c0[0], c0[1]
                 lon1, lat1 = c1[0], c1[1]
-                k0 = _round_key(lon0, lat0)
-                k1 = _round_key(lon1, lat1)
-                if k0 not in node_key_to_id:
-                    node_key_to_id[k0] = len(node_key_to_id)
-                if k1 not in node_key_to_id:
-                    node_key_to_id[k1] = len(node_key_to_id)
-                u = node_key_to_id[k0]
-                v = node_key_to_id[k1]
+                u = _ensure_node(lon0, lat0)
+                v = _ensure_node(lon1, lat1)
                 length_km = _haversine_km(lon0, lat0, lon1, lat1)
                 if length_km <= 0:
                     continue
@@ -359,7 +363,7 @@ def geojson_to_partition_graph(
 
     node_count = len(node_key_to_id)
     if node_count == 0:
-        return [], 0
+        return [], 0, []
 
     edges: list[dict[str, Any]] = [
         {
@@ -372,4 +376,4 @@ def geojson_to_partition_graph(
         }
         for u, v, length_km in edges_raw
     ]
-    return edges, node_count
+    return edges, node_count, id_to_coords

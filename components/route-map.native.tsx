@@ -120,6 +120,10 @@ export interface RouteMapProps {
   navigationSegmentIndex?: number;
   /** GeoJSON overlay (e.g. Overture transport layer) to draw on the map. */
   geojsonOverlay?: GeoJSONFeatureCollection | null;
+  /** Zones panel: preview polygon (boundary of selected zone result) to draw on the map. */
+  zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
+  /** Zones panel: sector division — one polygon per zone (from zone_polygon). Drawn with distinct colors. */
+  zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
 }
 
 const DEFAULT_REGION = {
@@ -163,6 +167,8 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   osmExtractorVisible: _osmExtractorVisible,
   navigationSegmentIndex,
   geojsonOverlay,
+  zonesPreviewPolygon,
+  zonesPreviewPolygons,
 }, ref) {
   const colors = useColors();
   const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -736,6 +742,65 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
             zIndex={2}
           />
         ) : null}
+        {zonesPreviewPolygons && zonesPreviewPolygons.length > 0
+          ? (() => {
+              const zoneFillColors = [
+                "rgba(249, 115, 22, 0.3)",
+                "rgba(59, 130, 246, 0.3)",
+                "rgba(34, 197, 94, 0.3)",
+                "rgba(168, 85, 247, 0.3)",
+                "rgba(234, 179, 8, 0.3)",
+                "rgba(239, 68, 68, 0.3)",
+              ];
+              const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+              return zonesPreviewPolygons.map((poly, idx) => {
+                if (poly.length < 3) return null;
+                const closed = [...poly, poly[0]];
+                const fillColor = zoneFillColors[idx % zoneFillColors.length];
+                const strokeColor = zoneStrokeColors[idx % zoneStrokeColors.length];
+                return (
+                  <React.Fragment key={`zones-preview-${idx}`}>
+                    <Polygon
+                      coordinates={closed}
+                      fillColor={fillColor}
+                      strokeColor="transparent"
+                      strokeWidth={0}
+                      zIndex={1}
+                    />
+                    <Polyline
+                      coordinates={closed}
+                      strokeColor={strokeColor}
+                      strokeWidth={3}
+                      zIndex={1}
+                    />
+                  </React.Fragment>
+                );
+              });
+            })()
+          : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (() => {
+              const closed = [...zonesPreviewPolygon, zonesPreviewPolygon[0]];
+              const fillOrange = "rgba(249, 115, 22, 0.25)";
+              const strokeOrange = "#f97316";
+              return (
+                <>
+                  <Polygon
+                    key="zones-preview-fill"
+                    coordinates={closed}
+                    fillColor={fillOrange}
+                    strokeColor="transparent"
+                    strokeWidth={0}
+                    zIndex={1}
+                  />
+                  <Polyline
+                    key="zones-preview-boundary"
+                    coordinates={closed}
+                    strokeColor={strokeOrange}
+                    strokeWidth={4}
+                    zIndex={1}
+                  />
+                </>
+              );
+            })()}
       </MapView>
       <View style={styles.attribution} pointerEvents="none">
         <Text style={styles.attributionText}>

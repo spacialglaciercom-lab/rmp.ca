@@ -70,6 +70,10 @@ export interface RouteMapProps {
   osmExtractorVisible?: boolean;
   /** Show Overture Maps transportation overlay from PMTiles. */
   showOverture?: boolean;
+  /** Zones panel: preview polygon (boundary of selected zone result). */
+  zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
+  /** Zones panel: sector division — one polygon per zone. */
+  zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
   /** Which city's PMTiles to load (default: auto-detect or "montreal"). */
   overtureCity?: string;
 }
@@ -136,6 +140,8 @@ export const MapLibreRouteMap = React.memo(
       osmExtractorVisible: _osmExtractorVisible,
       showOverture = false,
       overtureCity,
+      zonesPreviewPolygon,
+      zonesPreviewPolygons,
     },
     ref
   ) {
@@ -443,6 +449,38 @@ export const MapLibreRouteMap = React.memo(
                 id="osm-extraction-boundary"
                 style={{
                   lineColor: "#3b82f6",
+                  lineWidth: 4,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
+              />
+            </ShapeSource>
+          )}
+
+          {zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (
+            <ShapeSource
+              id="zones-preview-polygon"
+              shape={{
+                type: "Polygon",
+                coordinates: [
+                  [
+                    ...zonesPreviewPolygon.map((p) => [p.longitude, p.latitude] as [number, number]),
+                    [zonesPreviewPolygon[0].longitude, zonesPreviewPolygon[0].latitude],
+                  ],
+                ],
+              }}
+            >
+              <FillLayer
+                id="zones-preview-fill"
+                style={{
+                  fillColor: "rgba(249, 115, 22, 0.25)",
+                  fillOutlineColor: "#f97316",
+                }}
+              />
+              <LineLayer
+                id="zones-preview-boundary"
+                style={{
+                  lineColor: "#f97316",
                   lineWidth: 4,
                   lineCap: "round",
                   lineJoin: "round",

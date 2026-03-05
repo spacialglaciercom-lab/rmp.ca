@@ -158,6 +158,8 @@ export interface ZoneOutput {
   node_ids: number[];
   estimated_time: number;
   estimated_distance?: number;
+  /** Exterior ring [lon, lat][] for this zone (convex hull). Enables sector division on the map. */
+  zone_polygon?: number[][];
 }
 
 export interface ZonesPartitionResponse {

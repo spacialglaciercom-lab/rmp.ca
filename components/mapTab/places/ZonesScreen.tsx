@@ -1,9 +1,10 @@
 /**
  * Zones screen — list saved zone partition results from the Zones store.
  * Opened from map sidebar (Zones, between Layers and My Places).
+ * Supports preview on map and export (GeoJSON / JSON).
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -13,10 +14,14 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
+  Platform,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
+import * as FileSystem from "expo-file-system/legacy";
 
 import { useColors } from "@/hooks/use-colors";
 import { useDeviceType } from "@/hooks/useDeviceType";
@@ -43,13 +48,43 @@ function formatDate(iso: string): string {
   }
 }
 
+function zoneToGeoJSON(item: SavedZoneResult): string {
+  const coords = item.polygon.map(([lat, lon]) => [lon, lat] as [number, number]);
+  const ring = coords.length >= 3 ? [...coords, coords[0]] : [];
+  const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
+  const feature = {
+    type: "Feature" as const,
+    properties: {
+      name: item.name,
+      zones: item.zones.length,
+      truck_count: item.truck_count,
+      balance_metric: item.balance_metric,
+      total_estimated_time: totalTime,
+      createdAt: item.createdAt,
+    },
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [ring],
+    },
+  };
+  return JSON.stringify({ type: "FeatureCollection" as const, features: [feature] }, null, 2);
+}
+
 function ZoneResultRow({
   item,
   onRemove,
+  onRename,
+  onPreview,
+  onExport,
+  isDisplayed,
   colors,
 }: {
   item: SavedZoneResult;
   onRemove: (id: string) => void;
+  onRename: (item: SavedZoneResult) => void;
+  onPreview: (item: SavedZoneResult) => void;
+  onExport: (item: SavedZoneResult) => void;
+  isDisplayed: boolean;
   colors: ReturnType<typeof useColors>;
 }) {
   const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
@@ -66,8 +101,8 @@ function ZoneResultRow({
   }, [item.id, item.name, onRemove]);
 
   return (
-    <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowMain}>
+    <View style={[styles.row, { borderBottomColor: colors.border }]} pointerEvents="box-none">
+      <View style={styles.rowMain} pointerEvents="box-none">
         <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
           {item.name || "Unnamed zones"}
         </Text>
@@ -78,13 +113,47 @@ function ZoneResultRow({
           Total estimated time: {totalTime.toFixed(1)} · {item.balance_metric}
         </Text>
       </View>
-      <TouchableOpacity
-        onPress={handleRemove}
-        style={styles.deleteButton}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <MaterialCommunityIcons name="delete-outline" size={22} color={colors.muted} />
-      </TouchableOpacity>
+      <View style={styles.rowActions} pointerEvents="box-none">
+        <Pressable
+          onPress={() => {
+            hapticImpact();
+            onRename(item);
+          }}
+          style={({ pressed }) => [
+            styles.rowActionButton,
+            styles.rowActionButtonMinTouch,
+            pressed && { opacity: 0.6 },
+          ]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <MaterialCommunityIcons name="pencil" size={20} color={colors.muted} />
+        </Pressable>
+        <TouchableOpacity
+          onPress={() => onPreview(item)}
+          style={styles.rowActionButton}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons
+            name={isDisplayed ? "map-marker-check" : "map-marker"}
+            size={22}
+            color={isDisplayed ? colors.primary : colors.muted}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => onExport(item)}
+          style={styles.rowActionButton}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="export" size={22} color={colors.muted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleRemove}
+          style={styles.deleteButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialCommunityIcons name="delete-outline" size={22} color={colors.muted} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -95,7 +164,13 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
   const deviceType = useDeviceType();
   const savedZones = useZonesStore((s) => s.savedZones);
   const removeSavedZone = useZonesStore((s) => s.removeSavedZone);
+  const updateSavedZoneName = useZonesStore((s) => s.updateSavedZoneName);
   const clearAllSavedZones = useZonesStore((s) => s.clearAllSavedZones);
+  const displayedZoneId = useZonesStore((s) => s.displayedZoneId);
+  const setDisplayedZoneId = useZonesStore((s) => s.setDisplayedZoneId);
+  const [exporting, setExporting] = useState(false);
+  const [renamingZoneId, setRenamingZoneId] = useState<string | null>(null);
+  const [renamingName, setRenamingName] = useState("");
 
   const handleClose = useCallback(() => {
     hapticImpact();
@@ -114,6 +189,111 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
       ]
     );
   }, [savedZones.length, clearAllSavedZones]);
+
+  const handleRename = useCallback((item: SavedZoneResult) => {
+    hapticImpact();
+    setRenamingZoneId(item.id);
+    setRenamingName(item.name || "");
+  }, []);
+
+  const handleRenameSave = useCallback(() => {
+    const trimmed = renamingName.trim();
+    if (renamingZoneId && trimmed) {
+      updateSavedZoneName(renamingZoneId, trimmed);
+    }
+    setRenamingZoneId(null);
+    setRenamingName("");
+  }, [renamingZoneId, renamingName, updateSavedZoneName]);
+
+  const handleRenameCancel = useCallback(() => {
+    setRenamingZoneId(null);
+    setRenamingName("");
+  }, []);
+
+  const handlePreview = useCallback(
+    (item: SavedZoneResult) => {
+      hapticImpact();
+      setDisplayedZoneId(item.id);
+      onClose();
+    },
+    [setDisplayedZoneId, onClose]
+  );
+
+  const handleExport = useCallback(
+    async (item: SavedZoneResult) => {
+      hapticImpact();
+      if (exporting) return;
+      const baseName = (item.name || "zones").replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
+      Alert.alert(
+        "Export zone",
+        "Choose format to share",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "GeoJSON",
+            onPress: async () => {
+              setExporting(true);
+              try {
+                const Sharing = await import("expo-sharing");
+                const content = zoneToGeoJSON(item);
+                const path = `${FileSystem.cacheDirectory}${baseName}.geojson`;
+                await FileSystem.writeAsStringAsync(path, content, {
+                  encoding: FileSystem.EncodingType.UTF8,
+                });
+                if (await Sharing.isAvailableAsync()) {
+                  await Sharing.shareAsync(path, {
+                    mimeType: "application/geo+json",
+                    dialogTitle: "Share zone (GeoJSON)",
+                  });
+                } else if (Platform.OS === "web") {
+                  const blob = new Blob([content], { type: "application/geo+json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${baseName}.geojson`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }
+              } finally {
+                setExporting(false);
+              }
+            },
+          },
+          {
+            text: "JSON",
+            onPress: async () => {
+              setExporting(true);
+              try {
+                const Sharing = await import("expo-sharing");
+                const content = JSON.stringify(item, null, 2);
+                const path = `${FileSystem.cacheDirectory}${baseName}.json`;
+                await FileSystem.writeAsStringAsync(path, content, {
+                  encoding: FileSystem.EncodingType.UTF8,
+                });
+                if (await Sharing.isAvailableAsync()) {
+                  await Sharing.shareAsync(path, {
+                    mimeType: "application/json",
+                    dialogTitle: "Share zone (JSON)",
+                  });
+                } else if (Platform.OS === "web") {
+                  const blob = new Blob([content], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${baseName}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }
+              } finally {
+                setExporting(false);
+              }
+            },
+          },
+        ]
+      );
+    },
+    [exporting]
+  );
 
   const isIpad = deviceType === "ipad";
   const panelStyle = isIpad
@@ -141,6 +321,7 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
   if (!visible) return null;
 
   return (
+    <>
     <Modal
       visible={visible}
       transparent
@@ -161,17 +342,31 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
             <Text style={[styles.headerTitle, { color: colors.text }]}>
               Zones
             </Text>
-            <TouchableOpacity
-              onPress={handleClose}
-              style={styles.closeButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons
-                name="close"
-                size={24}
-                color={colors.muted}
-              />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              {displayedZoneId ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticImpact();
+                    setDisplayedZoneId(null);
+                  }}
+                  style={[styles.clearPreviewButton, { borderColor: colors.border }]}
+                >
+                  <MaterialCommunityIcons name="map-marker-remove" size={18} color={colors.muted} />
+                  <Text style={[styles.clearPreviewText, { color: colors.muted }]}>Clear preview</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={24}
+                  color={colors.muted}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Text style={[styles.subtitle, { color: colors.muted }]}>
@@ -213,6 +408,10 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
                   <ZoneResultRow
                     item={item}
                     onRemove={removeSavedZone}
+                    onRename={handleRename}
+                    onPreview={handlePreview}
+                    onExport={handleExport}
+                    isDisplayed={displayedZoneId === item.id}
                     colors={colors}
                   />
                 )}
@@ -224,6 +423,46 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
         </View>
       </View>
     </Modal>
+
+    <Modal
+      visible={!!renamingZoneId}
+      transparent
+      animationType="fade"
+      onRequestClose={handleRenameCancel}
+    >
+      <Pressable style={styles.renameBackdrop} onPress={handleRenameCancel}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.renameModalCenter}
+        >
+          <Pressable style={[styles.renameBox, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.renameTitle, { color: colors.text }]}>Rename zone</Text>
+            <TextInput
+              value={renamingName}
+              onChangeText={setRenamingName}
+              placeholder="Zone name"
+              placeholderTextColor={colors.muted}
+              style={[styles.renameInput, { color: colors.text, borderColor: colors.border }]}
+              autoFocus
+              selectTextOnFocus
+              onSubmitEditing={handleRenameSave}
+            />
+            <View style={styles.renameActions}>
+              <TouchableOpacity onPress={handleRenameCancel} style={[styles.renameButton, { borderColor: colors.border }]}>
+                <Text style={[styles.renameButtonText, { color: colors.muted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleRenameSave}
+                style={[styles.renameButton, styles.renameButtonPrimary, { backgroundColor: colors.primary }]}
+              >
+                <Text style={[styles.renameButtonText, styles.renameButtonTextPrimary]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -273,6 +512,24 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  clearPreviewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  clearPreviewText: {
+    fontSize: 13,
+    ...Fonts?.medium,
   },
   closeButton: {
     padding: 4,
@@ -326,9 +583,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 1,
   },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  rowActionButton: {
+    padding: 8,
+  },
+  rowActionButtonMinTouch: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   deleteButton: {
     padding: 8,
-    marginLeft: 8,
+    marginLeft: 4,
   },
   emptyState: {
     flex: 1,
@@ -345,5 +616,55 @@ const styles = StyleSheet.create({
   emptyHint: {
     fontSize: 14,
     textAlign: "center",
+  },
+  renameBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  renameModalCenter: {
+    width: "100%",
+    maxWidth: 340,
+  },
+  renameBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+  },
+  renameTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  renameInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  renameActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  renameButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  renameButtonPrimary: {
+    borderWidth: 0,
+  },
+  renameButtonText: {
+    fontSize: 16,
+    ...Fonts?.medium,
+  },
+  renameButtonTextPrimary: {
+    color: "#fff",
   },
 });

@@ -9,6 +9,7 @@ from typing import Literal
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from shapely.geometry import MultiPoint
 from pydantic import BaseModel, Field
 from scipy import sparse
 from scipy.sparse.linalg import eigsh
@@ -72,6 +73,10 @@ class ZoneOutput(BaseModel):
     estimated_distance: float | None = Field(
         None,
         description='Total raw edge length without complexity. Only set when balance_metric is "distance".',
+    )
+    zone_polygon: list[list[float]] | None = Field(
+        None,
+        description="Exterior ring [lon, lat] for this zone (convex hull of zone nodes). Enables sector division on the map.",
     )
 
 
@@ -320,13 +325,35 @@ def _balance_postprocess(
     return labels
 
 
+def _zone_convex_hull_ring(
+    node_coords: list[tuple[float, float]],
+    node_ids: list[int],
+) -> list[list[float]] | None:
+    """Return exterior ring [lon, lat] for the convex hull of the given nodes, or None if too few points."""
+    if len(node_ids) < 3:
+        return None
+    points = [node_coords[i] for i in node_ids if i < len(node_coords)]
+    if len(points) < 3:
+        return None
+    try:
+        hull = MultiPoint(points).convex_hull
+        if hull.is_empty or hull.geom_type != "Polygon":
+            return None
+        # exterior.coords is (lon, lat) per point; return closed ring as list of [lon, lat]
+        coords = list(hull.exterior.coords)
+        return [[float(c[0]), float(c[1])] for c in coords]
+    except Exception:
+        return None
+
+
 def partition_graph(
     edges: list[EdgeInput],
     node_count: int,
     truck_count: int,
     balance_metric: str,
+    node_coords: list[tuple[float, float]] | None = None,
 ) -> PartitionResponse:
-    """Run spectral clustering and return zones with estimated_time (and optional distance)."""
+    """Run spectral clustering and return zones with estimated_time (and optional distance, zone_polygon)."""
     n = node_count
     # Effective cluster count is capped at n; extra zones are emitted empty.
     k_eff = min(truck_count, n)
@@ -405,16 +432,21 @@ def partition_graph(
             weight_sum, dist_sum = _zone_weight_and_distance(
                 labels, z, edge_weights, edge_lengths,
             )
+            zone_polygon = None
+            if node_coords and len(node_ids) >= 3:
+                zone_polygon = _zone_convex_hull_ring(node_coords, node_ids)
         else:
             # Extra zones beyond node count are empty
             node_ids = []
             weight_sum, dist_sum = 0.0, 0.0
+            zone_polygon = None
         zones_out.append(
             ZoneOutput(
                 zone_id=z,
                 node_ids=node_ids,
                 estimated_time=round(weight_sum, 6),
                 estimated_distance=round(dist_sum, 6) if balance_metric == "distance" else None,
+                zone_polygon=zone_polygon,
             )
         )
 
@@ -481,7 +513,7 @@ def post_zones_partition_from_geojson(body: PartitionFromGeoJSONRequest):
             opts = body.clean_options if body.clean_options is not None else CleanOptions()
             cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
             geojson_to_use = cleaned_fc
-        edges_dict, node_count = geojson_to_partition_graph(geojson_to_use)
+        edges_dict, node_count, id_to_coords = geojson_to_partition_graph(geojson_to_use)
         if node_count == 0:
             raise HTTPException(
                 status_code=400,
@@ -493,6 +525,7 @@ def post_zones_partition_from_geojson(body: PartitionFromGeoJSONRequest):
             node_count,
             body.truck_count,
             body.balance_metric,
+            node_coords=id_to_coords,
         )
     except HTTPException:
         raise

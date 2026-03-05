@@ -65,6 +65,7 @@ import { openMapillaryCapture } from "@/lib/mapillary";
 import { useMapLayerStore } from "@/stores/mapLayerStore";
 import { useMapDisplayStore } from "../stores/mapDisplayStore";
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
+import { useZonesStore } from "@/stores/zonesStore";
 import { useDeviceType } from "@/hooks/useDeviceType";
 import { SIDEBAR_WIDTH_IPAD } from "@/constants/sidebarConfig";
 import { useFavoritesStore } from "@/stores/favoritesStore";
@@ -298,6 +299,8 @@ export default function MapContent() {
   const closeMyPlacesPanel = useMapSidebarStore((s) => s.closeMyPlacesPanel);
   const zonesPanelVisible = useMapSidebarStore((s) => s.zonesPanelVisible);
   const closeZonesPanel = useMapSidebarStore((s) => s.closeZonesPanel);
+  const displayedZoneId = useZonesStore((s) => s.displayedZoneId);
+  const savedZones = useZonesStore((s) => s.savedZones);
   const mapsResourcesVisible = useMapSidebarStore(
     (s) => s.mapsResourcesVisible,
   );
@@ -374,6 +377,28 @@ export default function MapContent() {
     if (!source || source.matchedGeometry.length < 2) return null;
     return matchedRouteToGeoJSON(source);
   }, [cachedMatchedRoute, matchedRoute]);
+
+  const { zonesPreviewPolygon, zonesPreviewPolygons } = useMemo(() => {
+    if (!displayedZoneId || !savedZones.length)
+      return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
+    const result = savedZones.find((z) => z.id === displayedZoneId);
+    if (!result) return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
+    const hasZonePolygons = result.zones?.some((z) => z.zone_polygon?.length >= 3);
+    if (hasZonePolygons && result.zones) {
+      const polygons = result.zones
+        .filter((z) => z.zone_polygon && z.zone_polygon.length >= 3)
+        .map((z) =>
+          (z.zone_polygon!).map(([lon, lat]) => ({ latitude: lat, longitude: lon }))
+        );
+      return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: polygons };
+    }
+    if (result.polygon?.length >= 3)
+      return {
+        zonesPreviewPolygon: result.polygon.map(([lat, lon]) => ({ latitude: lat, longitude: lon })),
+        zonesPreviewPolygons: undefined,
+      };
+    return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
+  }, [displayedZoneId, savedZones]);
 
   // When My Places panel closes after opening a preview, bring map to the track/point
   useEffect(() => {
@@ -1182,6 +1207,8 @@ export default function MapContent() {
         osmExtractedFeatures={osmExtractedData?.features}
         osmExtractorVisible={osmExtractorVisible}
         geojsonOverlay={geojsonOverlay}
+        zonesPreviewPolygon={zonesPreviewPolygon}
+        zonesPreviewPolygons={zonesPreviewPolygons}
       />
     </>
   );

@@ -365,6 +365,10 @@ export interface RouteMapProps {
   geojsonStrokeWidth?: number;
   /** Fill color for GeoJSON polygon features. Defaults to "rgba(33,150,243,0.15)". */
   geojsonFillColor?: string;
+  /** Zones panel: preview polygon (boundary of selected zone result). */
+  zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
+  /** Zones panel: sector division — one polygon per zone. */
+  zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
 }
 
 /** Web: no-op. Native: zoom, locate, compass. */
@@ -535,6 +539,8 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   geojsonStrokeColor = "#2196F3",
   geojsonStrokeWidth = 4,
   geojsonFillColor = "rgba(33,150,243,0.15)",
+  zonesPreviewPolygon,
+  zonesPreviewPolygons,
 }, _ref) {
   const colors = useColors();
   const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -816,6 +822,33 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
               />
             );
           })()}
+
+          {zonesPreviewPolygons && zonesPreviewPolygons.length > 0
+            ? (() => {
+                const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+                return zonesPreviewPolygons.map((poly, idx) => {
+                  if (poly.length < 3) return null;
+                  const closed = [...poly.map((p) => [p.latitude, p.longitude] as [number, number]), [poly[0].latitude, poly[0].longitude]];
+                  const stroke = zoneStrokeColors[idx % zoneStrokeColors.length];
+                  return (
+                    <Polyline
+                      key={`zones-preview-${idx}`}
+                      positions={closed}
+                      pathOptions={{ color: stroke, weight: 3, fill: true, fillOpacity: 0.3, fillColor: stroke, opacity: 1 }}
+                    />
+                  );
+                });
+              })()
+            : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (() => {
+              const closed = [...zonesPreviewPolygon.map((p) => [p.latitude, p.longitude] as [number, number]), [zonesPreviewPolygon[0].latitude, zonesPreviewPolygon[0].longitude]];
+              return (
+                <Polyline
+                  positions={closed}
+                  pathOptions={{ color: "#f97316", weight: 4, fill: true, fillOpacity: 0.25, fillColor: "#f97316", opacity: 1 }}
+                  key="zones-preview-boundary"
+                />
+              );
+            })()}
 
           {useMapHook && geojsonOverlay && geojsonOverlay.features.length > 0 && (
             <LeafletGeoJSONOverlay
