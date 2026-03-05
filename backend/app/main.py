@@ -17,7 +17,11 @@ from sklearn.cluster import KMeans
 app = FastAPI(title="RouteMasterPro Optimizer API", version="1.1.0")
 
 # Register sub-routers for other endpoints
-from .geojson_ops import router as geojson_router
+from .geojson_ops import (
+    GeoJSONFeatureCollection,
+    geojson_to_partition_graph,
+    router as geojson_router,
+)
 from .optimize import router as optimize_router
 from .overture import router as overture_router
 
@@ -406,6 +410,17 @@ def health():
     return {"status": "ok"}
 
 
+class PartitionFromGeoJSONRequest(BaseModel):
+    """Request for partition-from-geojson: use extracted road GeoJSON to build graph and partition."""
+
+    geojson: GeoJSONFeatureCollection
+    truck_count: int = Field(..., gt=0, le=100, description="Number of zones (partitions)")
+    balance_metric: Literal["time", "distance"] = Field(
+        "time",
+        description='"time" or "distance" for zone balance.',
+    )
+
+
 @app.post("/api/zones/partition", response_model=PartitionResponse)
 def post_zones_partition(body: PartitionRequest):
     """
@@ -425,6 +440,34 @@ def post_zones_partition(body: PartitionRequest):
             body.truck_count,
             body.balance_metric,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/zones/partition-from-geojson", response_model=PartitionResponse)
+def post_zones_partition_from_geojson(body: PartitionFromGeoJSONRequest):
+    """
+    Build a graph from road GeoJSON (LineStrings), then partition into truck_count zones.
+    Use this after Extract & Process: fetch GeoJSON from the extract result URL, then POST here.
+    """
+    try:
+        edges_dict, node_count = geojson_to_partition_graph(body.geojson)
+        if node_count == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="GeoJSON produced no nodes (no LineString/MultiLineString features with valid segments).",
+            )
+        edges = [EdgeInput(**d) for d in edges_dict]
+        return partition_graph(
+            edges,
+            node_count,
+            body.truck_count,
+            body.balance_metric,
+        )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:

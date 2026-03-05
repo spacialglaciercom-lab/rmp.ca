@@ -16,7 +16,7 @@
 import Constants from "expo-constants";
 
 // ---------------------------------------------------------------------------
-// Base URL
+// Base URL — optimizer backend (Railway: reasonable-trust-optimizer-dfc3)
 // ---------------------------------------------------------------------------
 
 const OPTIMIZER_BASE_URL =
@@ -349,6 +349,42 @@ export async function partitionZones(
   params: ZonesPartitionRequest,
 ): Promise<ZonesPartitionResponse> {
   return request<ZonesPartitionResponse>("/api/zones/partition", params);
+}
+
+/** Request body for partition-by-polygon (backend may implement this to extract + partition in one step). */
+export interface ZonesPartitionByPolygonRequest {
+  /** Polygon ring as [lat, lon][] (closed ring; first point may repeat at end). */
+  polygon: Array<[number, number]>;
+  truck_count: number;
+  balance_metric: "time" | "distance";
+}
+
+/**
+ * Partition a polygon area into zones (optimizer builds graph from polygon and runs spectral clustering).
+ * Sends the result to the Zones store when used from the Extract page.
+ * Backend must implement POST /api/zones/partition-by-polygon.
+ */
+export async function partitionZonesByPolygon(
+  params: ZonesPartitionByPolygonRequest,
+): Promise<ZonesPartitionResponse> {
+  return request<ZonesPartitionResponse>("/api/zones/partition-by-polygon", params);
+}
+
+/** Request body for partition-from-geojson (use after Extract & Process: send road GeoJSON). */
+export interface ZonesPartitionFromGeoJSONRequest {
+  geojson: GeoJSONFeatureCollection;
+  truck_count: number;
+  balance_metric: "time" | "distance";
+}
+
+/**
+ * Partition road GeoJSON into zones. Use after Extract & Process: fetch GeoJSON from the result URL, then call this.
+ * Backend implements POST /api/zones/partition-from-geojson.
+ */
+export async function partitionZonesFromGeoJSON(
+  params: ZonesPartitionFromGeoJSONRequest,
+): Promise<ZonesPartitionResponse> {
+  return request<ZonesPartitionResponse>("/api/zones/partition-from-geojson", params);
 }
 
 export async function healthCheck(): Promise<boolean> {

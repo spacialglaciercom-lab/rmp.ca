@@ -305,3 +305,71 @@ def _feature_length_km(feat: GeoJSONFeature) -> float:
             total += _haversine_km(c0[0], c0[1], c1[0], c1[1])
 
     return total
+
+
+# ---------------------------------------------------------------------------
+# GeoJSON -> graph for zones partition
+# ---------------------------------------------------------------------------
+
+def _round_key(lon: float, lat: float, decimals: int = 6) -> tuple[float, float]:
+    """Round coordinates for use as node key (avoids duplicate nodes from float noise)."""
+    return (round(lon, decimals), round(lat, decimals))
+
+
+def geojson_to_partition_graph(
+    body: GeoJSONFeatureCollection,
+) -> tuple[list[dict[str, Any]], int]:
+    """
+    Build (edges, node_count) from a FeatureCollection of LineStrings.
+    Each unique coordinate (rounded to 6 decimals) is a node; each segment is an edge.
+    Returns (list of dicts with u, v, length, intersection_density, cul_de_sac_penalty, width_penalty), node_count.
+    """
+    node_key_to_id: dict[tuple[float, float], int] = {}
+    edges_raw: list[tuple[int, int, float]] = []  # (u, v, length_km)
+
+    for feat in body.features:
+        geom = feat.geometry
+        gtype = geom.get("type", "")
+        coords_list: list[list[list[float]]] = []
+        if gtype == "LineString":
+            coords_list = [geom.get("coordinates", [])]
+        elif gtype == "MultiLineString":
+            coords_list = geom.get("coordinates", [])
+        else:
+            continue
+
+        for line_coords in coords_list:
+            for i in range(1, len(line_coords)):
+                c0 = line_coords[i - 1]
+                c1 = line_coords[i]
+                lon0, lat0 = c0[0], c0[1]
+                lon1, lat1 = c1[0], c1[1]
+                k0 = _round_key(lon0, lat0)
+                k1 = _round_key(lon1, lat1)
+                if k0 not in node_key_to_id:
+                    node_key_to_id[k0] = len(node_key_to_id)
+                if k1 not in node_key_to_id:
+                    node_key_to_id[k1] = len(node_key_to_id)
+                u = node_key_to_id[k0]
+                v = node_key_to_id[k1]
+                length_km = _haversine_km(lon0, lat0, lon1, lat1)
+                if length_km <= 0:
+                    continue
+                edges_raw.append((u, v, length_km))
+
+    node_count = len(node_key_to_id)
+    if node_count == 0:
+        return [], 0
+
+    edges: list[dict[str, Any]] = [
+        {
+            "u": u,
+            "v": v,
+            "length": length_km,
+            "intersection_density": 1.0,
+            "cul_de_sac_penalty": 1.0,
+            "width_penalty": 1.0,
+        }
+        for u, v, length_km in edges_raw
+    ]
+    return edges, node_count

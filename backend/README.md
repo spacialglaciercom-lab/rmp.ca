@@ -1,6 +1,11 @@
 # Zones Partition API (Spectral Clustering)
 
-FastAPI service that exposes `POST /api/zones/partition` to partition a graph into truck zones using spectral clustering (no GNN). Balance is by total edge length × complexity factor per zone.
+FastAPI service that exposes:
+
+- **`POST /api/zones/partition`** — partition a graph (edges + node_count) into truck zones.
+- **`POST /api/zones/partition-from-geojson`** — build graph from road GeoJSON (FeatureCollection of LineStrings), then partition. Used by the Extract tab after "Extract & Process".
+
+Balance is by total edge length × complexity factor per zone. **If the app shows "Zone partitioning failed" with 404, redeploy this backend** so the optimizer has the `partition-from-geojson` endpoint.
 
 ## Run locally
 

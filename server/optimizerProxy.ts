@@ -31,6 +31,8 @@ const OPTIMIZER_PATHS = [
   "/api/geojson/validate",
   "/api/geojson/roads",
   "/api/zones/partition",
+  "/api/zones/partition-by-polygon",
+  "/api/zones/partition-from-geojson",
   "/overture/optimize",
 ];
 

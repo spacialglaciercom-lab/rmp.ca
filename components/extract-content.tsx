@@ -17,6 +17,8 @@ import {
   Dimensions,
   Linking,
   ScrollView,
+  Alert,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -35,6 +37,8 @@ import {
   type ElevationStats,
 } from "@/lib/overtureExtractService";
 import { getElevationForPoints } from "@/services/googleElevationService";
+import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
+import { useZonesStore } from "@/stores/zonesStore";
 
 // ---------------------------------------------------------------------------
 // Web-only lazy imports (MapLibre GL JS, mapbox-gl-draw, DuckDB WASM)
@@ -145,6 +149,13 @@ export default function ExtractContent() {
 
   // Dimensions
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Zone partitioning (send to Map → Zones)
+  const [zoneTruckCount, setZoneTruckCount] = useState("2");
+  const [zoneBalanceMetric, setZoneBalanceMetric] = useState<"time" | "distance">("time");
+  const [zoneName, setZoneName] = useState("");
+  const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
+  const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
   const handleContainerLayout = useCallback(
     (e: { nativeEvent: { layout: { width: number; height: number } } }) => {
@@ -438,6 +449,62 @@ export default function ExtractContent() {
   }, [resultHash]);
 
   // -------------------------------------------------------------------------
+  // Zone partitioning: send to Map → Zones dropdown (uses extracted GeoJSON after Extract & Process)
+  // -------------------------------------------------------------------------
+  const sendToZones = useCallback(async () => {
+    if (!polygon) return;
+    const ring = polygon.geometry.coordinates[0];
+    if (!ring || ring.length < 3) {
+      Alert.alert("Zone partitioning", "Polygon must have at least 3 vertices.");
+      return;
+    }
+    if (!resultHash) {
+      Alert.alert(
+        "Run Extract & Process first",
+        "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones."
+      );
+      return;
+    }
+    const truckCount = Math.max(1, Math.min(12, parseInt(zoneTruckCount, 10) || 2));
+    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [lat, lng]);
+    setZonePartitionLoading(true);
+    try {
+      const res = await fetch(httpGeoJSONUrl(resultHash));
+      if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
+      const geojson = (await res.json()) as { type: string; features: unknown[] };
+      if (!geojson?.features?.length) throw new Error("Extract result has no road features.");
+      const { zones } = await partitionZonesFromGeoJSON({
+        geojson: { type: "FeatureCollection", features: geojson.features },
+        truck_count: truckCount,
+        balance_metric: zoneBalanceMetric,
+      });
+      const name = zoneName.trim() || `Zones ${new Date().toLocaleDateString()}`;
+      addSavedZone({
+        name,
+        polygon: polygonLatLon,
+        zones,
+        truck_count: truckCount,
+        balance_metric: zoneBalanceMetric,
+      });
+      Alert.alert(
+        "Sent to Zones",
+        "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map."
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const is404Or503 = /404|503/.test(msg);
+      Alert.alert(
+        "Zone partitioning failed",
+        is404Or503
+          ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
+          : msg
+      );
+    } finally {
+      setZonePartitionLoading(false);
+    }
+  }, [polygon, resultHash, zoneTruckCount, zoneBalanceMetric, zoneName, addSavedZone]);
+
+  // -------------------------------------------------------------------------
   // Clear polygon
   // -------------------------------------------------------------------------
   const clearPolygon = useCallback(() => {
@@ -651,6 +718,57 @@ export default function ExtractContent() {
               )}
             </View>
 
+            {/* Zone partitioning — send to Map → Zones */}
+            <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+              <Text style={[styles.metricsLabel, { color: colors.muted, marginBottom: 8 }]}>
+                Zone partitioning → send to Zones (Map sidebar)
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <Text style={[styles.metricsLabel, { color: colors.muted }]}>Trucks</Text>
+                <TextInput
+                  style={[styles.vehicleInput, { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 48, color: colors.text }]}
+                  value={zoneTruckCount}
+                  onChangeText={setZoneTruckCount}
+                  keyboardType="number-pad"
+                  placeholder="2"
+                  placeholderTextColor={colors.muted}
+                />
+                <TouchableOpacity
+                  style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "time" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                  onPress={() => setZoneBalanceMetric("time")}
+                >
+                  <Text style={{ color: zoneBalanceMetric === "time" ? "#fff" : colors.text, fontSize: 13 }}>Time</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "distance" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                  onPress={() => setZoneBalanceMetric("distance")}
+                >
+                  <Text style={{ color: zoneBalanceMetric === "distance" ? "#fff" : colors.text, fontSize: 13 }}>Distance</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.text, marginBottom: 8 }]}
+                placeholder="Zone name (optional)"
+                placeholderTextColor={colors.muted}
+                value={zoneName}
+                onChangeText={setZoneName}
+              />
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: "#22c55e", opacity: zonePartitionLoading ? 0.7 : 1 }]}
+                onPress={sendToZones}
+                disabled={zonePartitionLoading}
+              >
+                {zonePartitionLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <MaterialCommunityIcons name="vector-polygon" size={16} color="#fff" />
+                )}
+                <Text style={styles.actionBtnText}>
+                  {zonePartitionLoading ? "Partitioning…" : "Partition & send to Zones"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Polygon vertices and segment measurements */}
             {metrics && (
               <View style={{ marginTop: 8, marginBottom: 8 }}>
@@ -737,7 +855,12 @@ function NativeExtractFallback({
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [drawMode, setDrawMode] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [zoneTruckCount, setZoneTruckCount] = useState("2");
+  const [zoneBalanceMetric, setZoneBalanceMetric] = useState<"time" | "distance">("time");
+  const [zoneName, setZoneName] = useState("");
+  const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
+  const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
   const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
 
@@ -823,6 +946,59 @@ function NativeExtractFallback({
     );
     cancelRef.current = handle;
   }, [polygon]);
+
+  const sendToZones = useCallback(async () => {
+    if (!polygon) return;
+    const ring = polygon.geometry.coordinates[0];
+    if (!ring || ring.length < 3) {
+      Alert.alert("Zone partitioning", "Polygon must have at least 3 vertices.");
+      return;
+    }
+    if (!resultHash) {
+      Alert.alert(
+        "Run Extract & Process first",
+        "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones."
+      );
+      return;
+    }
+    const truckCount = Math.max(1, Math.min(12, parseInt(zoneTruckCount, 10) || 2));
+    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [lat, lng]);
+    setZonePartitionLoading(true);
+    try {
+      const res = await fetch(httpGeoJSONUrl(resultHash));
+      if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
+      const geojson = (await res.json()) as { type: string; features: unknown[] };
+      if (!geojson?.features?.length) throw new Error("Extract result has no road features.");
+      const { zones } = await partitionZonesFromGeoJSON({
+        geojson: { type: "FeatureCollection", features: geojson.features },
+        truck_count: truckCount,
+        balance_metric: zoneBalanceMetric,
+      });
+      const name = zoneName.trim() || `Zones ${new Date().toLocaleDateString()}`;
+      addSavedZone({
+        name,
+        polygon: polygonLatLon,
+        zones,
+        truck_count: truckCount,
+        balance_metric: zoneBalanceMetric,
+      });
+      Alert.alert(
+        "Sent to Zones",
+        "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map."
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const is404Or503 = /404|503/.test(msg);
+      Alert.alert(
+        "Zone partitioning failed",
+        is404Or503
+          ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
+          : msg
+      );
+    } finally {
+      setZonePartitionLoading(false);
+    }
+  }, [polygon, resultHash, zoneTruckCount, zoneBalanceMetric, zoneName, addSavedZone]);
 
   const stageColor = progress ? STAGE_COLORS[progress.stage] : "#6b7280";
 
@@ -1029,6 +1205,59 @@ function NativeExtractFallback({
               </View>
             )}
           </>
+        )}
+
+        {/* Zone partitioning — send to Map → Zones */}
+        {polygon && (
+          <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+            <Text style={[styles.metricsLabel, { color: colors.muted, marginBottom: 8 }]}>
+              Zone partitioning → send to Zones (Map sidebar)
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <Text style={[styles.metricsLabel, { color: colors.muted }]}>Trucks</Text>
+              <TextInput
+                style={[styles.vehicleInput, { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 48, color: colors.text }]}
+                value={zoneTruckCount}
+                onChangeText={setZoneTruckCount}
+                keyboardType="number-pad"
+                placeholder="2"
+                placeholderTextColor={colors.muted}
+              />
+              <TouchableOpacity
+                style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "time" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                onPress={() => setZoneBalanceMetric("time")}
+              >
+                <Text style={{ color: zoneBalanceMetric === "time" ? "#fff" : colors.text, fontSize: 13 }}>Time</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "distance" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                onPress={() => setZoneBalanceMetric("distance")}
+              >
+                <Text style={{ color: zoneBalanceMetric === "distance" ? "#fff" : colors.text, fontSize: 13 }}>Distance</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.text, marginBottom: 8 }]}
+              placeholder="Zone name (optional)"
+              placeholderTextColor={colors.muted}
+              value={zoneName}
+              onChangeText={setZoneName}
+            />
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: "#22c55e", opacity: zonePartitionLoading ? 0.7 : 1 }]}
+              onPress={sendToZones}
+              disabled={zonePartitionLoading}
+            >
+              {zonePartitionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <MaterialCommunityIcons name="vector-polygon" size={16} color="#fff" />
+              )}
+              <Text style={styles.actionBtnText}>
+                {zonePartitionLoading ? "Partitioning…" : "Partition & send to Zones"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {extracting && (
@@ -1254,6 +1483,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   actionBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+
+  vehicleInput: { fontSize: 14, minWidth: 48 },
+  input: { fontSize: 14, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
 
   // Native fallback
   nativePanel: {
