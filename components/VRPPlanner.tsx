@@ -48,6 +48,7 @@ const ALGORITHM_OPTIONS = [
 
 const VALHALLA_MATRIX_URL = "https://valhalla1.openstreetmap.de/sources_to_targets";
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
+const nl = "\n";
 
 interface VRPStop {
   lat: number;
@@ -625,7 +626,8 @@ function twoOptVRP(
 function orOptVRP(
   matrix: { distance: number; time: number }[][],
   locations: VRPStop[],
-  numVehicles: number
+  numVehicles: number,
+  balanceLoad: boolean = false
 ): { routes: number[][]; totalDistance: number; totalTime: number } {
   const n = matrix.length;
   if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
@@ -669,9 +671,13 @@ function orOptVRP(
     routes.push(route);
   }
 
+  // Helper: intermediate stop count (exclude depot at start/end)
+  const intermediateCount = (r: number[]) => Math.max(0, r.length - 2);
+
   // ── Or-Opt improvement ──
   // Each pass: find the single best relocate move (chain of k=1/2/3 stops from
   // any route to any gap in any route, forward or reversed). Accept and restart.
+  // When balanceLoad is true, reject inter-route moves that would make load imbalance > 1.
   let improved = true;
   const MAX_PASSES = 100;
   let passes = 0;
@@ -728,6 +734,21 @@ function orOptVRP(
           }
 
           if (bestRj < 0) continue;
+
+          // When balance_load: reject inter-route moves that would make counts differ by more than 1
+          if (balanceLoad && bestRj !== ri) {
+            const routeB = routes[bestRj]!;
+            const newCountA = intermediateCount(routeA) - k;
+            const newCountB = intermediateCount(routeB) + k;
+            const counts = routes.map((r, idx) => {
+              if (idx === ri) return newCountA;
+              if (idx === bestRj) return newCountB;
+              return intermediateCount(r);
+            });
+            const maxC = Math.max(...counts);
+            const minC = Math.min(...counts);
+            if (maxC - minC > 1) continue; // skip this move to keep load balanced
+          }
 
           improved = true;
           const chain = routeA.slice(pos, pos + k);
@@ -814,6 +835,7 @@ function solveVRP(
       totalDistance: totalDistance.toFixed(2),
       totalTime: Math.round(totalTime / 60),
     };
+  }
 
   if (config?.algorithm === "two_opt") {
     const { routes: routeIndices, totalDistance, totalTime } = twoOptVRP(matrix, locations, numVehicles);
@@ -827,7 +849,8 @@ function solveVRP(
     };
   }
   if (config?.algorithm === "or_opt") {
-    const { routes: routeIndices, totalDistance, totalTime } = orOptVRP(matrix, locations, numVehicles);
+    const balanceLoad = config?.objective === "balance_load";
+    const { routes: routeIndices, totalDistance, totalTime } = orOptVRP(matrix, locations, numVehicles, balanceLoad);
     const routes: VRPStop[][] = routeIndices.map((r) => r.map((i) => locations[i]!));
     const stops: VRPStop[] = routes.flatMap((r) => r);
     return {
@@ -836,7 +859,6 @@ function solveVRP(
       totalDistance: totalDistance.toFixed(2),
       totalTime: Math.round(totalTime / 60),
     };
-  }
   }
 
   const numZones = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n))));
@@ -976,6 +998,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   const [maxRouteTimeHours, setMaxRouteTimeHours] = useState(String(DEFAULT_VRP_CONFIG.maxRouteTimeHours));
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [depotAddress, setDepotAddress] = useState("");
+  const [startFromCurrentPosition, setStartFromCurrentPosition] = useState(false);
   const [travelSpeedFactor, setTravelSpeedFactor] = useState(String(DEFAULT_VRP_CONFIG.travelSpeedFactor));
   const [objective, setObjective] = useState<(typeof OBJECTIVE_OPTIONS)[number]["value"]>(DEFAULT_VRP_CONFIG.objective);
   const [algorithm, setAlgorithm] = useState<(typeof ALGORITHM_OPTIONS)[number]["value"]>(DEFAULT_VRP_CONFIG.algorithm);
@@ -989,6 +1012,45 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   const { dispatch } = useRouting();
 
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [exportGpxLoading, setExportGpxLoading] = useState(false);
+
+  /** Get road-matched geometry for each route (for GPX export). Falls back to stop-only if routing unavailable. */
+  const getRoadMatchedGeometries = useCallback(
+    async (routes: VRPStop[][]): Promise<Array<Array<{ lat: number; lon: number }>>> => {
+      const routingConfig = await getRoutingConfigAsync();
+      const canRoute =
+        !!(routingConfig.baseUrl || (routingConfig.provider === "google" && routingConfig.googleApiKey));
+      const geometries: Array<Array<{ lat: number; lon: number }>> = [];
+      for (const stopList of routes) {
+        const pts = stopList.map((s) => ({ lat: s.lat, lon: s.lon }));
+        if (pts.length < 2) {
+          geometries.push(pts);
+          continue;
+        }
+        let matched: { matchedGeometry: Array<{ lat: number; lon: number }> } | null = null;
+        if (canRoute) {
+          try {
+            matched = await routeThroughWaypoints(pts, routingConfig, getRouteOptionsForRouting());
+          } catch {
+            // fall through to offline
+          }
+        }
+        if (matched && matched.matchedGeometry.length >= 2) {
+          geometries.push(matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })));
+        } else {
+          const offline = buildOfflineMatchedRoute(pts);
+          if (offline.matchedGeometry.length >= 2) {
+            geometries.push(offline.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })));
+          } else {
+            geometries.push(pts);
+          }
+        }
+      }
+      return geometries;
+    },
+    []
+  );
+
   const handlePreviewRoute = async () => {
     if (!result?.stops?.length) return;
     hapticImpact();
@@ -1105,15 +1167,21 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   };
 
 
-  const buildGpxForRoute = (routeStops: VRPStop[], routeNum: number, date: string): string => {
+  const buildGpxForRoute = (
+    routeStops: VRPStop[],
+    routeNum: number,
+    date: string,
+    trackPoints?: Array<{ lat: number; lon: number }>
+  ): string => {
     const wpts = routeStops
       .map((s, i) => {
         const name = s.label ? s.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : `Stop ${i + 1}`;
         return `  <wpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"><name>${name}</name></wpt>`;
       })
       .join(nl);
-    const trkpts = routeStops
-      .map((s) => `      <trkpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"/>`)
+    const track = trackPoints && trackPoints.length >= 2 ? trackPoints : routeStops;
+    const trkpts = track
+      .map((p) => `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`)
       .join(nl);
     return [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -1133,33 +1201,38 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     const date = new Date().toISOString().slice(0, 10);
     const routes: VRPStop[][] = result.routes && result.routes.length > 1 ? result.routes : [result.stops];
 
-    const allWpts = result.stops
-      .map((s, i) => {
-        const name = (s.label ?? `Stop ${i + 1}`).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        return `  <wpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"><name>${name}</name></wpt>`;
-      })
-      .join(nl);
-
-    const tracks = routes
-      .map((routeStops, ri) => {
-        const trkpts = routeStops
-          .map((s) => `      <trkpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"/>`)
-          .join(nl);
-        return [`  <trk><name>Vehicle ${ri + 1}</name><trkseg>`, trkpts, '  </trkseg></trk>'].join(nl);
-      })
-      .join(nl);
-
-    const gpx = [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<gpx version="1.1" creator="RMP VRP Planner" xmlns="http://www.topografix.com/GPX/1/1">',
-      `  <metadata><name>VRP Routes – ${date}</name></metadata>`,
-      allWpts,
-      tracks,
-      '</gpx>',
-    ].join(nl);
-
-    const fileName = `vrp_routes_${date}.gpx`;
+    setExportGpxLoading(true);
     try {
+      const roadGeometries = await getRoadMatchedGeometries(routes);
+
+      const allWpts = result.stops
+        .map((s, i) => {
+          const name = (s.label ?? `Stop ${i + 1}`).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          return `  <wpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"><name>${name}</name></wpt>`;
+        })
+        .join(nl);
+
+      const tracks = routes
+        .map((routeStops, ri) => {
+          const trackPoints = roadGeometries[ri];
+          const pts = trackPoints && trackPoints.length >= 2 ? trackPoints : routeStops;
+          const trkpts = pts
+            .map((p) => `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`)
+            .join(nl);
+          return [`  <trk><name>Vehicle ${ri + 1}</name><trkseg>`, trkpts, '  </trkseg></trk>'].join(nl);
+        })
+        .join(nl);
+
+      const gpx = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<gpx version="1.1" creator="RMP VRP Planner" xmlns="http://www.topografix.com/GPX/1/1">',
+        `  <metadata><name>VRP Routes – ${date}</name></metadata>`,
+        allWpts,
+        tracks,
+        '</gpx>',
+      ].join(nl);
+
+      const fileName = `vrp_routes_${date}.gpx`;
       if (Platform.OS === "web") {
         const blob = new Blob([gpx], { type: "application/gpx+xml" });
         const url = URL.createObjectURL(blob);
@@ -1167,7 +1240,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         a.href = url; a.download = fileName;
         document.body.appendChild(a); a.click();
         document.body.removeChild(a); URL.revokeObjectURL(url);
-        Alert.alert("Exported", `GPX saved as ${fileName}`);
+        Alert.alert("Exported", `GPX saved as ${fileName} (snapped to roads)`);
       } else {
         const FileSystem = await import("expo-file-system/legacy");
         const Sharing = (await import("expo-sharing")) as { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: { mimeType?: string; dialogTitle?: string }) => Promise<void> };
@@ -1179,10 +1252,13 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         } else {
           Alert.alert("Saved", `GPX saved to ${fileUri}`);
         }
+        Alert.alert("Exported", `GPX saved as ${fileName} (snapped to roads)`);
       }
     } catch (e) {
       console.error(e);
       Alert.alert("Export failed", "Could not export GPX. Please try again.");
+    } finally {
+      setExportGpxLoading(false);
     }
   };
 
@@ -1194,41 +1270,74 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
     if (routes.length === 1) {
       Alert.alert("Single route", "Only one vehicle – exporting as single GPX file.");
-      return handleExportGpx();
+      try {
+        await handleExportGpx();
+      } catch (e) {
+        console.error(e);
+        Alert.alert("Export failed", "Could not export GPX. Please try again.");
+      }
+      return;
     }
 
+    setExportGpxLoading(true);
     try {
-      const JSZip = (await import("jszip")).default;
+      const roadGeometries = await getRoadMatchedGeometries(routes);
+
+      const jszipMod = await import("jszip");
+      const JSZip = (jszipMod as { default?: typeof jszipMod }).default ?? jszipMod;
+      if (typeof JSZip !== "function") {
+        throw new Error("JSZip not available");
+      }
       const zip = new JSZip();
-      routes.forEach((routeStops, ri) => {
-        const gpx = buildGpxForRoute(routeStops, ri + 1, date);
+      const validRoutes = routes.filter((r) => r?.length > 0);
+      if (validRoutes.length === 0) throw new Error("No routes to export");
+      validRoutes.forEach((routeStops, ri) => {
+        const trackPoints = roadGeometries[ri];
+        const gpx = buildGpxForRoute(routeStops, ri + 1, date, trackPoints);
         zip.file(`vehicle_${ri + 1}.gpx`, gpx);
       });
-      const zipBlob = await zip.generateAsync({ type: Platform.OS === "web" ? "blob" : "base64" });
+      const isWeb = Platform.OS === "web";
+      const zipOutput = await zip.generateAsync({
+        type: isWeb ? "uint8array" : "base64",
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 },
+      });
       const fileName = `vrp_routes_per_vehicle_${date}.zip`;
 
-      if (Platform.OS === "web") {
-        const url = URL.createObjectURL(zipBlob as Blob);
+      if (isWeb) {
+        const blob = new Blob([zipOutput as Uint8Array], { type: "application/zip" });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = fileName;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
-        Alert.alert("Exported", `${routes.length} GPX files saved in ${fileName}`);
+        a.href = url;
+        a.download = fileName;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        Alert.alert("Exported", `${validRoutes.length} GPX files (snapped to roads) saved in ${fileName}`);
       } else {
         const FileSystem = await import("expo-file-system/legacy");
         const Sharing = (await import("expo-sharing")) as { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: { mimeType?: string; dialogTitle?: string }) => Promise<void> };
-        const fileUri = `${FileSystem.cacheDirectory ?? ""}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, zipBlob as string, { encoding: FileSystem.EncodingType.Base64 });
+        const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+        if (!cacheDir) {
+          throw new Error("No cache directory available");
+        }
+        const fileUri = `${cacheDir}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, zipOutput as string, { encoding: FileSystem.EncodingType.Base64 });
         const isAvailable = await Sharing.isAvailableAsync();
         if (isAvailable) {
           await Sharing.shareAsync(fileUri, { mimeType: "application/zip", dialogTitle: "Export GPX per vehicle (ZIP)" });
         } else {
           Alert.alert("Saved", `ZIP saved to ${fileUri}`);
         }
+        Alert.alert("Exported", `${validRoutes.length} GPX files (snapped to roads) saved in ${fileName}`);
       }
     } catch (e) {
       console.error(e);
       Alert.alert("Export failed", "Could not export GPX files. Please try again.");
+    } finally {
+      setExportGpxLoading(false);
     }
   };
 
@@ -1304,18 +1413,29 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     Keyboard.dismiss();
     const coordsValue = useUncontrolledInputs ? coordinatesRef.current : coordinates;
     const addressesValue = useUncontrolledInputs ? addressesTextRef.current : addressesText;
+    const useCurrentAsDepot = startFromCurrentPosition;
+    const minStops = useCurrentAsDepot ? 1 : 2;
     const locations = inputMode === "coordinates"
       ? parseCoordinates(coordsValue)
       : await (async () => {
           const lines = addressesValue.trim().split("\n").map((l) => l.trim()).filter(Boolean);
-          if (lines.length < 2) return [];
+          if (lines.length < minStops) return [];
           setGeocodeProgress({ done: 0, total: lines.length });
           const stops = await geocodeAddressesBatch(lines, (d, t) => setGeocodeProgress({ done: d, total: t }));
           setGeocodeProgress(null);
           return stops;
         })();
-
-    if (!locations || locations.length < 2) {
+    if (useCurrentAsDepot) {
+      if (!locations || locations.length < 1) {
+        Alert.alert(
+          "Error",
+          inputMode === "coordinates"
+            ? "Enter at least 1 coordinate when using Start from current position."
+            : "Enter at least 1 address when using Start from current position."
+        );
+        return;
+      }
+    } else if (!locations || locations.length < 2) {
       Alert.alert(
         "Error",
         inputMode === "coordinates"
@@ -1329,9 +1449,27 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     setLoading(true);
     setResult(null);
     try {
+      let locationsForMatrix = locations;
+      if (useCurrentAsDepot) {
+        const Location = await import("expo-location");
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Location", "Location permission is required to start from current position.");
+          setLoading(false);
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const current: VRPStop = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          label: "Current position",
+        };
+        locationsForMatrix = [current, ...locations];
+      }
+
       const matrix = useValhallaApi
-        ? await getValhallaMatrix(locations)
-        : buildHaversineMatrix(locations);
+        ? await getValhallaMatrix(locationsForMatrix)
+        : buildHaversineMatrix(locationsForMatrix);
       const vehiclesStr = useUncontrolledInputs ? vehiclesRef.current : vehicles;
       const capacityStr = useUncontrolledInputs ? capacityRef.current : capacity;
       const maxRouteTimeHoursStr = useUncontrolledInputs ? maxRouteTimeHoursRef.current : maxRouteTimeHours;
@@ -1346,7 +1484,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         objective,
         algorithm,
       };
-      const solution = solveVRP(matrix, locations, config);
+      const solution = solveVRP(matrix, locationsForMatrix, config);
       setResult(solution);
     } catch (error) {
       Alert.alert(
@@ -1381,6 +1519,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     setCapacity(String(DEFAULT_VRP_CONFIG.capacity));
     setMaxRouteTimeHours(String(DEFAULT_VRP_CONFIG.maxRouteTimeHours));
     setDepotAddress("");
+    setStartFromCurrentPosition(false);
     setTravelSpeedFactor(String(DEFAULT_VRP_CONFIG.travelSpeedFactor));
     setResult(null);
   };
@@ -1650,6 +1789,18 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
                 placeholder="1"
                 placeholderTextColor={colors.muted}
               />
+              <TouchableOpacity
+                style={[styles.valhallaRow, { marginTop: 12, marginBottom: 4 }]}
+                onPress={() => { hapticImpact(); setStartFromCurrentPosition((prev) => !prev); }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkmark, { backgroundColor: startFromCurrentPosition ? colors.success : "transparent", borderWidth: 1, borderColor: startFromCurrentPosition ? colors.success : colors.border }]}>
+                  {startFromCurrentPosition && <Text style={styles.checkmarkText}>✓</Text>}
+                </View>
+                <Text style={[styles.valhallaText, { color: colors.foreground }]}>
+                  Start from current position
+                </Text>
+              </TouchableOpacity>
               <Text style={[styles.helperText, { color: colors.muted, marginTop: 10, marginBottom: 6 }]}>Objective</Text>
               <TouchableOpacity
                 style={[styles.pickerTrigger, { borderColor: colors.border, backgroundColor: colors.background }]}
@@ -1940,20 +2091,32 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
                 style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
                 onPress={handleExportGpx}
                 activeOpacity={0.8}
+                disabled={exportGpxLoading}
               >
-                <Ionicons name="navigate-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
-                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>Export GPX</Text>
+                {exportGpxLoading ? (
+                  <ActivityIndicator size="small" color={colors.foreground} style={{ marginRight: 6 }} />
+                ) : (
+                  <Ionicons name="navigate-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
+                )}
+                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>
+                  {exportGpxLoading ? "Snapping to roads…" : "Export GPX"}
+                </Text>
               </TouchableOpacity>
-              {result?.routes && result.routes.length > 1 && (
-                <TouchableOpacity
-                  style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
-                  onPress={handleExportGpxPerVehicle}
-                  activeOpacity={0.8}
-                >
+              <TouchableOpacity
+                style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
+                onPress={handleExportGpxPerVehicle}
+                activeOpacity={0.8}
+                disabled={exportGpxLoading}
+              >
+                {exportGpxLoading ? (
+                  <ActivityIndicator size="small" color={colors.foreground} style={{ marginRight: 6 }} />
+                ) : (
                   <Ionicons name="archive-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
-                  <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>GPX per vehicle</Text>
-                </TouchableOpacity>
-              )}
+                )}
+                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>
+                  {exportGpxLoading ? "Snapping to roads…" : "GPX per vehicle"}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
                 onPress={handleSaveAsCurrentRoute}
@@ -2342,7 +2505,8 @@ const styles = StyleSheet.create({
   },
   previewButtonRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
     alignItems: "center",
     gap: 10,
     marginTop: 16,
@@ -2356,6 +2520,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 10,
     borderWidth: 1,
+    minWidth: 0,
   },
   previewButtonSecondary: {
     backgroundColor: "transparent",
