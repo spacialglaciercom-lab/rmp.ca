@@ -27,6 +27,7 @@ const OPTIMIZER_BACKEND_URL =
 /** Paths that should be forwarded to the Python optimizer backend. */
 const OPTIMIZER_PATHS = [
   "/api/optimize",
+  "/api/geojson/clean",
   "/api/geojson/filter",
   "/api/geojson/validate",
   "/api/geojson/roads",

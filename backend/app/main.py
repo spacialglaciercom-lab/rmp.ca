@@ -24,10 +24,12 @@ from .geojson_ops import (
 )
 from .optimize import router as optimize_router
 from .overture import router as overture_router
+from .vector_clean import CleanOptions, clean_geojson, router as vector_clean_router
 
 app.include_router(geojson_router)
 app.include_router(optimize_router)
 app.include_router(overture_router)
+app.include_router(vector_clean_router)
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +131,10 @@ def _normalized_laplacian(A: sparse.csr_matrix) -> sparse.csr_matrix:
     return L
 
 
+# Above this node count, skip spectral clustering (eigsh can exceed 30s). Use degree-based.
+_SPECTRAL_MAX_NODES = 8000
+
+
 def _spectral_partition(
     A: sparse.csr_matrix,
     k: int,
@@ -136,16 +142,23 @@ def _spectral_partition(
     """
     Partition nodes into k zones using normalized Laplacian spectral clustering.
     Returns label array of shape (n,) with values in 0..k-1.
+    For very large graphs (n > _SPECTRAL_MAX_NODES) uses degree-based clustering to avoid timeout.
     """
     n = A.shape[0]
     if k >= n:
         return np.arange(n)  # one node per zone, pad with zeros for extra zones
 
+    # Fast path: avoid expensive eigsh on very large graphs (keeps response under ~30s).
+    if n > _SPECTRAL_MAX_NODES:
+        degrees = np.array(A.sum(axis=1)).ravel().reshape(-1, 1)
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        return kmeans.fit_predict(degrees)
+
     L = _normalized_laplacian(A)
     U = None
 
     # Smallest k eigenvalues (excluding 0). Use dense for small n, sparse for large.
-    if n <= 2000:
+    if n <= 1500:
         try:
             L_dense = L.toarray()
             eigenvalues, eigenvectors = np.linalg.eigh(L_dense)
@@ -359,6 +372,10 @@ def partition_graph(
                 if u in idx_map and v in idx_map
             ]
             sub_k = min(k_eff, connected.size)
+            if connected.size > _SPECTRAL_MAX_NODES:
+                warnings.append(
+                    f"Graph has {connected.size} connected nodes; using fast degree-based clustering to avoid timeout."
+                )
             sub_labels = _spectral_partition(A_sub, sub_k)
             sub_labels = _balance_postprocess(sub_labels, sub_edge_weights, sub_k)
 
@@ -373,6 +390,10 @@ def partition_graph(
                 labels[iso_node] = lightest
                 zone_counts[lightest] += 1
         else:
+            if n > _SPECTRAL_MAX_NODES:
+                warnings.append(
+                    f"Graph has {n} nodes; using fast degree-based clustering to avoid timeout."
+                )
             labels = _spectral_partition(A, k_eff)
             labels = _balance_postprocess(labels, edge_weights, k_eff)
 
@@ -419,6 +440,8 @@ class PartitionFromGeoJSONRequest(BaseModel):
         "time",
         description='"time" or "distance" for zone balance.',
     )
+    clean_before_optimize: bool = Field(False, description="Run vector_clean pipeline before building partition graph")
+    clean_options: CleanOptions | None = None
 
 
 @app.post("/api/zones/partition", response_model=PartitionResponse)
@@ -453,7 +476,12 @@ def post_zones_partition_from_geojson(body: PartitionFromGeoJSONRequest):
     Use this after Extract & Process: fetch GeoJSON from the extract result URL, then POST here.
     """
     try:
-        edges_dict, node_count = geojson_to_partition_graph(body.geojson)
+        geojson_to_use = body.geojson
+        if body.clean_before_optimize:
+            opts = body.clean_options if body.clean_options is not None else CleanOptions()
+            cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
+            geojson_to_use = cleaned_fc
+        edges_dict, node_count = geojson_to_partition_graph(geojson_to_use)
         if node_count == 0:
             raise HTTPException(
                 status_code=400,

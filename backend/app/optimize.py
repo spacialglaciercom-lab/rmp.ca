@@ -22,6 +22,7 @@ from .geojson_ops import (
     _haversine_km,
     _get_road_class,
 )
+from .vector_clean import CleanOptions, clean_geojson
 
 router = APIRouter()
 
@@ -45,6 +46,8 @@ class OptimizeRequest(BaseModel):
     service_both_sides: bool | None = None  # when True, traverse each bidirectional segment twice (both curbs)
     road_classes: list[str] | None = None
     turn_penalties: TurnPenalties | None = None
+    clean_before_optimize: bool = False  # run vector_clean pipeline before building graph
+    clean_options: CleanOptions | None = None
 
 
 class RoutePoint(BaseModel):
@@ -302,6 +305,11 @@ def optimize_route(body: OptimizeRequest):
     and returns an ordered route with turn statistics.
     """
     features = body.geojson.features
+
+    if body.clean_before_optimize:
+        opts = body.clean_options if body.clean_options is not None else CleanOptions()
+        cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
+        features = cleaned_fc.features
 
     # Filter by road classes if specified
     if body.road_classes:
