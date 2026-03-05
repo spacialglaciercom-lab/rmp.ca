@@ -209,9 +209,21 @@ function AIChatBubbleInner() {
       });
       clearTimeout(timeoutId);
 
-      const data = (await res.json()) as { ok?: boolean; reply?: string; error?: string };
+      const resText = await res.text();
+      let data: { ok?: boolean; reply?: string; error?: string };
+      try {
+        data = resText ? (JSON.parse(resText) as { ok?: boolean; reply?: string; error?: string }) : {};
+      } catch {
+        data = {};
+      }
       if (!res.ok || !data?.ok) {
-        throw new Error(typeof data?.error === "string" ? data.error : `Server error ${res.status}`);
+        const msg =
+          res.status === 404
+            ? "Voice API not found (404). Redeploy your backend with the latest server code so it includes POST /api/voice/transcribe and /api/voice/chat."
+            : typeof data?.error === "string"
+              ? data.error
+              : `Server error ${res.status}`;
+        throw new Error(msg);
       }
       const reply = typeof data.reply === "string" ? data.reply : "Sorry, I couldn't process that.";
 
@@ -323,19 +335,31 @@ function AIChatBubbleInner() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60_000);
         try {
-          const res = await fetch(`${(await import("@/shared/oauth")).getApiBaseUrl()}/api/voice/transcribe`, {
+          const baseUrl = (await import("@/shared/oauth")).getApiBaseUrl();
+          const res = await fetch(`${baseUrl}/api/voice/transcribe`, {
             method: "POST",
             signal: controller.signal,
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ audioBase64: base64, mimeType: "audio/m4a" }),
           });
           clearTimeout(timeoutId);
-          const data = (await res.json()) as { ok?: boolean; text?: string; error?: string };
+          const text = await res.text();
+          let data: { ok?: boolean; text?: string; error?: string };
+          try {
+            data = text ? (JSON.parse(text) as { ok?: boolean; text?: string; error?: string }) : {};
+          } catch {
+            data = {};
+          }
           if (res.ok && data?.ok && typeof data.text === "string") {
             transcribedText = data.text;
           } else {
-            serverError = typeof data?.error === "string" ? data.error : `Server error ${res.status}`;
-            log.warn("voice/transcribe request error", { error: serverError });
+            if (res.status === 404) {
+              serverError =
+                "Voice API not found (404). Redeploy your backend with the latest server code so it includes POST /api/voice/transcribe and /api/voice/chat.";
+            } else {
+              serverError = typeof data?.error === "string" ? data.error : `Server error ${res.status}`;
+            }
+            log.warn("voice/transcribe request error", { status: res.status, error: serverError, baseUrl });
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
