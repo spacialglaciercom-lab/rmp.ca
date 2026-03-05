@@ -17,7 +17,7 @@ import { registerWsExtractProxy } from "../wsExtractProxy";
 import { registerOptimizerProxyRoutes } from "../optimizerProxy";
 import { createLogger } from "../logger";
 import { ENV } from "./env";
-import { transcribeBase64WithFallback } from "../moonshineTranscription";
+import { transcribeBase64WithFallback } from "./moonshineTranscription";
 import { chatWithCoPilot } from "../genkit/coPilot";
 
 const log = createLogger("api");

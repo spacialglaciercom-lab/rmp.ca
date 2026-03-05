@@ -203,6 +203,8 @@ function formatApiErrorDetail(status: number, detail: unknown): string {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+/** Zone partition (spectral clustering) can be slow on large graphs; allow 2 minutes. */
+const ZONE_PARTITION_TIMEOUT_MS = 120_000;
 
 async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<T> {
   const url = `${OPTIMIZER_BASE_URL}${path}`;
@@ -348,7 +350,7 @@ export async function extractRoads(
 export async function partitionZones(
   params: ZonesPartitionRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition", params);
+  return request<ZonesPartitionResponse>("/api/zones/partition", params, ZONE_PARTITION_TIMEOUT_MS);
 }
 
 /** Request body for partition-by-polygon (backend may implement this to extract + partition in one step). */
@@ -367,7 +369,7 @@ export interface ZonesPartitionByPolygonRequest {
 export async function partitionZonesByPolygon(
   params: ZonesPartitionByPolygonRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition-by-polygon", params);
+  return request<ZonesPartitionResponse>("/api/zones/partition-by-polygon", params, ZONE_PARTITION_TIMEOUT_MS);
 }
 
 /** Request body for partition-from-geojson (use after Extract & Process: send road GeoJSON). */
@@ -384,7 +386,7 @@ export interface ZonesPartitionFromGeoJSONRequest {
 export async function partitionZonesFromGeoJSON(
   params: ZonesPartitionFromGeoJSONRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition-from-geojson", params);
+  return request<ZonesPartitionResponse>("/api/zones/partition-from-geojson", params, ZONE_PARTITION_TIMEOUT_MS);
 }
 
 export async function healthCheck(): Promise<boolean> {
