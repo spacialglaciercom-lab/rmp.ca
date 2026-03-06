@@ -19,10 +19,17 @@ import { createLogger } from "./logger";
 
 const log = createLogger("optimizer-proxy");
 
-const OPTIMIZER_BACKEND_URL =
+const rawOptimizerUrl =
   process.env.OPTIMIZER_BACKEND_URL ||
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ||
   "";
+
+/** Ensure URL has a scheme so fetch() works (env may be set without https://). */
+const OPTIMIZER_BACKEND_URL = rawOptimizerUrl
+  ? rawOptimizerUrl.startsWith("http://") || rawOptimizerUrl.startsWith("https://")
+    ? rawOptimizerUrl.replace(/\/$/, "")
+    : `https://${rawOptimizerUrl.replace(/\/$/, "")}`
+  : "";
 
 /** Paths that should be forwarded to the Python optimizer backend. */
 const OPTIMIZER_PATHS = [
