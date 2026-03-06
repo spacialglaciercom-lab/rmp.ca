@@ -1,0 +1,2 @@
+# Ensure patch files use LF so pnpm lockfile hash matches in Docker (Linux)
+patches/*.patch text eol=lf

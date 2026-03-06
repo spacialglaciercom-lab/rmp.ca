@@ -12,7 +12,8 @@ COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
 
 # Install dependencies (include dev for build). Skip postinstall: patch scripts are for mobile/React Native, not the API.
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Use --no-frozen-lockfile so patchedDependencies hash matches the patch file in this environment (avoids ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
 
 # Copy source and build the API server bundle (not Expo web)
 COPY . .
@@ -27,8 +28,8 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
-# Production install only (skip postinstall – not needed for API runtime)
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+# Production install only (skip postinstall – not needed for API runtime). --no-frozen-lockfile so patchedDependencies hash matches.
+RUN pnpm install --no-frozen-lockfile --prod --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 
