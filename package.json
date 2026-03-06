@@ -135,6 +135,7 @@
     "mysql2": "^3.16.0",
     "nativewind": "^4.2.1",
     "ngrok": "^5.0.0-beta.2",
+    "apache-arrow": "^18.0.0",
     "parquet-wasm": "^0.7.1",
     "pmtiles": "^3.2.0",
     "react": "19.1.0",
