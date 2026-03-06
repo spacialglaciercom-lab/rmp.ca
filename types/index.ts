@@ -41,3 +41,20 @@ export interface RouteStats {
   completionPercentage: number;
   estimatedTimeRemaining: number; // in minutes
 }
+
+/** Waste asset for zone mapping: bin or dumpster. */
+export type WastePointType = "bin" | "dumpster";
+
+export type WastePointCondition = "good" | "overflowing" | "damaged";
+
+export interface WastePoint {
+  id: string;
+  lat: number;
+  lon: number;
+  type: WastePointType;
+  capacityLiters?: number;
+  condition?: WastePointCondition;
+  address?: string;
+  photoUri?: string;
+  createdAt: string;
+}

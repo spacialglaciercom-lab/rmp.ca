@@ -41,7 +41,7 @@ import { useMapDisplayStore } from "@/stores/mapDisplayStore";
 import { useMapType } from "@/lib/map-type-preference";
 import { useMapOrientation } from "@/lib/map-orientation-preference";
 import { useMapLayerStore } from "@/stores/mapLayerStore";
-import type { CollectionPoint } from "@/types";
+import type { CollectionPoint, WastePoint } from "@/types";
 import type { GeoJSONFeatureCollection } from "@/lib/geojson-utils";
 
 // Helpers for cleaning coordinate arrays so we never hand NaNs to the
@@ -128,6 +128,8 @@ export interface RouteMapProps {
   zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
   /** Optional initial bounds to fit map on load (e.g. zone polygons). When set, used when there are no route/collection points. */
   initialBounds?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
+  /** Zones waste mode: bins and dumpsters to show with custom pin colors. */
+  wastePoints?: WastePoint[];
 }
 
 const DEFAULT_REGION = {
@@ -175,6 +177,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   zonesPreviewPolygon,
   zonesPreviewPolygons,
   initialBounds,
+  wastePoints = [],
 }, ref) {
   const colors = useColors();
   const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -826,6 +829,17 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                 </>
               );
             })()}
+        {wastePoints.length > 0 &&
+          wastePoints.map((p) => (
+            <Marker
+              key={p.id}
+              coordinate={{ latitude: p.lat, longitude: p.lon }}
+              pinColor={p.type === "bin" ? "#22c55e" : "#3b82f6"}
+              title={p.type === "bin" ? "Bin" : "Dumpster"}
+              description={[p.address, p.capacityLiters != null ? `${p.capacityLiters} L` : null, p.condition].filter(Boolean).join(" · ") || undefined}
+              zIndex={10}
+            />
+          ))}
       </MapView>
       <View style={styles.attribution} pointerEvents="none">
         <Text style={styles.attributionText}>

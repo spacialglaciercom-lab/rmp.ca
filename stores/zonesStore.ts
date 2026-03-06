@@ -8,6 +8,14 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ZoneOutput } from "@/services/overtureOptimizerService";
 
+/** Snapshot of points used for partition-from-points (for zone capacity/list in UI). */
+export interface SourcePointSnapshot {
+  id: string;
+  lat: number;
+  lon: number;
+  weight?: number;
+}
+
 export interface SavedZoneResult {
   id: string;
   name: string;
@@ -19,6 +27,8 @@ export interface SavedZoneResult {
   /** "time" | "distance" from graph partition; "count" | "weight" | "distance" from partition-from-points */
   balance_metric: "time" | "distance" | "count" | "weight";
   createdAt: string;
+  /** When set, this result was created from waste/points; node_ids index into this array. */
+  sourcePoints?: SourcePointSnapshot[];
 }
 
 interface ZonesState {

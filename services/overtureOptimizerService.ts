@@ -11,18 +11,27 @@
  *   POST /api/geojson/validate — Validate GeoJSON structure
  *   POST /api/geojson/roads    — Extract road features from raw Overture GeoJSON
  *   POST /api/zones/partition  — Spectral clustering zones partition (no GNN)
+ *
+ * On web (including dev server), requests go to the same-origin API (getApiBaseUrl())
+ * so the Node server can proxy to the optimizer and avoid CORS. On native, we call
+ * the optimizer URL directly.
  */
 
 import Constants from "expo-constants";
+import { Platform } from "react-native";
+import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
-// Base URL — optimizer backend (Railway: reasonable-trust-optimizer-dfc3)
+// Base URL — optimizer backend (Railway; same backend can have multiple URLs)
+// On web we use the dev/API server so /api/optimize is proxied (avoids CORS).
 // ---------------------------------------------------------------------------
 
 const OPTIMIZER_BASE_URL =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
   "https://reasonable-trust-optimizer-dfc3.up.railway.app";
+
+// getOptimizerBaseUrl() is defined at bottom; on web it returns getApiBaseUrl() for proxy.
 
 // ---------------------------------------------------------------------------
 // Overture Split-Segment Types
@@ -209,7 +218,8 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const ZONE_PARTITION_TIMEOUT_MS = 120_000;
 
 async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<T> {
-  const url = `${OPTIMIZER_BASE_URL}${path}`;
+  const base = getOptimizerBaseUrl();
+  const url = `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -218,6 +228,7 @@ async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUE
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: controller.signal,
+      ...(Platform.OS === "web" && { credentials: "include" as RequestCredentials }),
     });
     clearTimeout(timeout);
 
@@ -253,7 +264,7 @@ export async function optimizeOvertureRoute(
   baseUrl?: string,
   options?: { timeoutMs?: number },
 ): Promise<OptimizeRouteResponse> {
-  const url = baseUrl ?? OPTIMIZER_BASE_URL;
+  const url = baseUrl ?? getOptimizerBaseUrl();
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -266,6 +277,7 @@ export async function optimizeOvertureRoute(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
         signal: controller.signal,
+        ...(Platform.OS === "web" && { credentials: "include" as RequestCredentials }),
       },
     );
 
@@ -440,7 +452,10 @@ export async function partitionZonesFromPoints(
 
 export async function healthCheck(): Promise<boolean> {
   try {
-    const res = await fetch(`${OPTIMIZER_BASE_URL}/health`);
+    const base = getOptimizerBaseUrl();
+    // Node proxy exposes optimizer health at /optimizer/health
+    const healthPath = Platform.OS === "web" ? "/optimizer/health" : "/health";
+    const res = await fetch(`${base.replace(/\/$/, "")}${healthPath}`);
     if (!res.ok) return false;
     const data = await res.json();
     return data.status === "ok";
@@ -449,6 +464,10 @@ export async function healthCheck(): Promise<boolean> {
   }
 }
 
+/** On web uses API server base (proxy); on native uses optimizer URL directly. */
 export function getOptimizerBaseUrl(): string {
+  if (Platform.OS === "web") {
+    return getApiBaseUrl();
+  }
   return OPTIMIZER_BASE_URL;
 }

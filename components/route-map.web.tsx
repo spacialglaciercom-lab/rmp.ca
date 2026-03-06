@@ -15,7 +15,7 @@ import { useMapType } from "@/lib/map-type-preference";
 import { useMapDisplayStore } from "@/stores/mapDisplayStore";
 import { useMapLayerStore } from "@/stores/mapLayerStore";
 import { useMapWebPluginsStore } from "@/stores/mapWebPluginsStore";
-import type { CollectionPoint } from "@/types";
+import type { CollectionPoint, WastePoint } from "@/types";
 import type { GeoJSONFeatureCollection } from "@/lib/geojson-utils";
 
 // Leaflet is loaded only when window is defined (avoids "window is not defined" during SSR/bundle eval).
@@ -145,6 +145,26 @@ function getSeqIcon(label: string) {
       iconAnchor: [12, 12],
     });
     seqIconCache.set(label, icon);
+  }
+  return icon;
+}
+
+const wasteIconCache = new Map<string, any>();
+function getWasteIcon(type: "bin" | "dumpster") {
+  let icon = wasteIconCache.get(type);
+  if (!icon) {
+    const L = require("leaflet");
+    const isBin = type === "bin";
+    const bg = isBin ? "#22c55e" : "#3b82f6";
+    const size = isBin ? 20 : 26;
+    const label = isBin ? "B" : "D";
+    icon = L.divIcon({
+      html: `<span style="display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:${bg};color:white;font-size:12px;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);">${label}</span>`,
+      className: "waste-marker",
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+    wasteIconCache.set(type, icon);
   }
   return icon;
 }
@@ -375,6 +395,8 @@ export interface RouteMapProps {
   navigationSegmentIndex?: number;
   /** Live user GPS position; when set, a user location marker is shown. */
   userPosition?: { latitude: number; longitude: number } | null;
+  /** Zones waste mode: bins and dumpsters to show with custom icons. */
+  wastePoints?: WastePoint[];
 }
 
 /** Web: no-op. Native: zoom, locate, compass. */
@@ -550,6 +572,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   zonesPreviewPolygon,
   zonesPreviewPolygons,
   initialBounds,
+  wastePoints = [],
 }, _ref) {
   const colors = useColors();
   const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -877,6 +900,33 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                 />
               );
             })()}
+
+          {wastePoints.length > 0 && (() => {
+            const useCluster = wastePoints.length > 20 && MarkerClusterGroup;
+            const list = wastePoints.map((p) => (
+              <Marker
+                key={p.id}
+                position={[p.lat, p.lon]}
+                icon={getWasteIcon(p.type)}
+                zIndexOffset={800}
+              >
+                <Popup>
+                  <div style={{ fontSize: "12px", maxWidth: "200px" }}>
+                    <strong>{p.type === "bin" ? "Bin" : "Dumpster"}</strong>
+                    <br />
+                    {p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`}
+                    {p.capacityLiters != null && <><br />Capacity: {p.capacityLiters} L</>}
+                    {p.condition && <><br />Condition: {p.condition}</>}
+                  </div>
+                </Popup>
+              </Marker>
+            ));
+            return useCluster ? (
+              <MarkerClusterGroup key="waste-points-cluster">{list}</MarkerClusterGroup>
+            ) : (
+              <React.Fragment key="waste-points">{list}</React.Fragment>
+            );
+          })()}
 
           {useMapHook && geojsonOverlay && geojsonOverlay.features.length > 0 && (
             <LeafletGeoJSONOverlay
