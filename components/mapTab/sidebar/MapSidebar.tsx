@@ -143,8 +143,8 @@ export function MapSidebar() {
       )}
       <GestureDetector gesture={panGesture}>
         <Animated.View
-          pointerEvents={isOpen || isPinned ? "auto" : "none"}
           style={[
+            { pointerEvents: isOpen || isPinned ? "auto" : "none" },
             styles.sidebar,
             {
               width: sidebarWidth,

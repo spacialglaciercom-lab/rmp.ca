@@ -143,6 +143,7 @@ async function playAudioBlob(audioBlob: Blob): Promise<boolean> {
     if (Platform.OS === "web") {
       const url = URL.createObjectURL(audioBlob);
       const audio = new Audio(url);
+      audio.volume = 1.0;
       _currentAudio = audio;
       return new Promise<boolean>((resolve) => {
         audio.onended = () => {
@@ -169,6 +170,13 @@ async function playAudioBlob(audioBlob: Blob): Promise<boolean> {
     const uri = await blobToFileUri(audioBlob);
     const player = createAudioPlayer(uri);
     _currentAudio = player;
+    try {
+      if (typeof (player as { volume?: number }).volume === "number") {
+        (player as { volume: number }).volume = 1.0;
+      }
+    } catch {
+      // volume may not exist on all platforms
+    }
     return new Promise<boolean>((resolve) => {
       let resolved = false;
       const onStatus = (status: any) => {
@@ -312,6 +320,7 @@ export async function playVoicePreview(previewUrl: string): Promise<void> {
 
   if (Platform.OS === "web") {
     const audio = new Audio(previewUrl);
+    audio.volume = 1.0;
     _currentAudio = audio;
     _isSpeaking = true;
     audio.onended = () => {
@@ -327,6 +336,11 @@ export async function playVoicePreview(previewUrl: string): Promise<void> {
     const { createAudioPlayer } = await import("expo-audio");
     const player = createAudioPlayer(previewUrl);
     _currentAudio = player;
+    try {
+      if (typeof (player as { volume?: number }).volume === "number") {
+        (player as { volume: number }).volume = 1.0;
+      }
+    } catch {}
     _isSpeaking = true;
     const onStatus = (status: any) => {
       if (status.playing === false && status.currentTime > 0) {

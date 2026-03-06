@@ -781,6 +781,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                 "rgba(239, 68, 68, 0.3)",
               ];
               const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+              const passThroughTouches = !!onMapPress; // when picking location (e.g. Zones Add bin), let map onPress fire
               return zonesPreviewPolygons.map((poly, idx) => {
                 if (poly.length < 3) return null;
                 const closed = [...poly, poly[0]];
@@ -794,18 +795,21 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                       strokeColor="transparent"
                       strokeWidth={0}
                       zIndex={1}
+                      tappable={!passThroughTouches}
                     />
                     <Polyline
                       coordinates={closed}
                       strokeColor={strokeColor}
                       strokeWidth={3}
                       zIndex={1}
+                      tappable={!passThroughTouches}
                     />
                   </React.Fragment>
                 );
               });
             })()
           : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (() => {
+              const passThroughTouches = !!onMapPress;
               const closed = [...zonesPreviewPolygon, zonesPreviewPolygon[0]];
               const fillOrange = "rgba(249, 115, 22, 0.25)";
               const strokeOrange = "#f97316";
@@ -818,6 +822,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                     strokeColor="transparent"
                     strokeWidth={0}
                     zIndex={1}
+                    tappable={!passThroughTouches}
                   />
                   <Polyline
                     key="zones-preview-boundary"
@@ -825,6 +830,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                     strokeColor={strokeOrange}
                     strokeWidth={4}
                     zIndex={1}
+                    tappable={!passThroughTouches}
                   />
                 </>
               );

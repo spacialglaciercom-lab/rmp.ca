@@ -328,40 +328,6 @@ export default function RootLayout() {
                             )}
                           </ErrorBoundary>
                           <ThemedStatusBar />
-                          {__DEV__ && Platform.OS !== "web" && (
-                            <View
-                              style={{
-                                position: "absolute",
-                                top: Platform.OS === "ios" ? 52 : 42,
-                                right: 12,
-                                zIndex: 9999,
-                                backgroundColor: "rgba(0,122,255,0.95)",
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: 8,
-                                pointerEvents: "none",
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  color: "#fff",
-                                  fontSize: 14,
-                                  fontWeight: "700",
-                                }}
-                              >
-                                Bundle v3
-                              </Text>
-                              <Text
-                                style={{
-                                  color: "#fff",
-                                  fontSize: 10,
-                                  marginTop: 2,
-                                }}
-                              >
-                                Feb 6 • fresh
-                              </Text>
-                            </View>
-                          )}
                         </QueryClientProvider>
                       </trpc.Provider>
                     </RoutingProvider>

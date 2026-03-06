@@ -26,7 +26,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useColors } from "@/hooks/use-colors";
 import { useZonesStore, type SavedZoneResult, type SourcePointSnapshot } from "@/stores/zonesStore";
 import { useWastePointsStore } from "@/stores/wastePointsStore";
-import { useDeviceType } from "@/hooks/useDeviceType";
+import { useDeviceType, useIsCompact } from "@/hooks/useDeviceType";
 import { RouteMap } from "@/components/route-map";
 import type { ZoneOutput } from "@/services/overtureOptimizerService";
 import { partitionZonesFromPoints } from "@/services/overtureOptimizerService";
@@ -34,6 +34,7 @@ import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { Fonts } from "@/lib/_core/theme";
 import { WastePointFormModal, type WastePointFormValues } from "@/components/zones/WastePointFormModal";
 import { WasteImportModal } from "@/components/zones/WasteImportModal";
+import { BottomSheet } from "@/components/shared/BottomSheet";
 
 export type ZonesPageMode = "delivery" | "waste";
 
@@ -233,6 +234,7 @@ export function ZonePage() {
   const insets = useSafeAreaInsets();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const deviceType = useDeviceType();
+  const isCompact = useIsCompact();
   const router = useRouter();
 
   const savedZones = useZonesStore((s) => s.savedZones);
@@ -300,10 +302,16 @@ export function ZonePage() {
     return minLat !== Infinity ? { minLat, maxLat, minLon, maxLon } : null;
   }, [wastePoints]);
 
-  const mapWidth = useMemo(() => {
-    const sidebarW = sidebarCollapsed ? 0 : Math.min(SIDEBAR_WIDTH, winWidth * 0.3);
-    return Math.max(200, winWidth - sidebarW);
-  }, [winWidth, sidebarCollapsed]);
+  const { mapWidth, sidebarWidth } = useMemo(() => {
+    if (isCompact) {
+      return { mapWidth: winWidth, sidebarWidth: 0 };
+    }
+    if (sidebarCollapsed) {
+      return { mapWidth: winWidth, sidebarWidth: 0 };
+    }
+    const sidebarW = Math.min(SIDEBAR_WIDTH, Math.max(0, winWidth - 200));
+    return { mapWidth: winWidth - sidebarW, sidebarWidth: sidebarW };
+  }, [winWidth, sidebarCollapsed, isCompact]);
 
   const mapHeight = useMemo(() => {
     const toolbarH = 56 + insets.top;
@@ -389,12 +397,11 @@ export function ZonePage() {
   ]);
 
   const handleMapPressForWastePick = useCallback((lat: number, lon: number) => {
-    if (!pickWasteLocationMode) return;
     hapticImpact();
     setPendingWasteCoords({ lat, lon });
     setPickWasteLocationMode(false);
     setAddWasteModalVisible(true);
-  }, [pickWasteLocationMode]);
+  }, []);
 
   const handleWastePointSave = useCallback(
     (values: WastePointFormValues) => {
@@ -559,6 +566,13 @@ export function ZonePage() {
   const minTime = times.length ? Math.min(...times) : 0;
   const imbalanceRatio = minTime > 0 ? maxTime / minTime : 0;
 
+  const sidebarSheetTitle =
+    pageMode === "waste"
+      ? sidebarTab === "mapping"
+        ? "Waste Mapping"
+        : "Zones List"
+      : "Zones";
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Toolbar */}
@@ -674,11 +688,11 @@ export function ZonePage() {
         </View>
       </View>
 
-      {/* Body: map + sidebar */}
-      <View style={styles.body}>
+      {/* Body: map (+ sidebar on non-compact) */}
+      <View style={[styles.body, isCompact && styles.bodyColumn]}>
         <View style={[styles.mapWrap, { width: mapWidth, height: mapHeight }]}>
           {pageMode === "waste" ? (
-            (selectedResult && zonesPreviewPolygons && zonesPreviewPolygons.length > 0) || wastePoints.length > 0 ? (
+            <>
               <RouteMap
                 collectionPoints={[]}
                 height={mapHeight}
@@ -695,17 +709,18 @@ export function ZonePage() {
                 onMapPress={pickWasteLocationMode ? handleMapPressForWastePick : undefined}
                 onLoad={() => {}}
               />
-            ) : (
-              <View style={[styles.mapPlaceholder, { backgroundColor: colors.surface }]}>
-                <MaterialCommunityIcons name="delete-outline" size={48} color={colors.muted} />
-                <Text style={[styles.mapPlaceholderText, { color: colors.text }]}>
-                  No bins or dumpsters mapped
-                </Text>
-                <Text style={[styles.mapPlaceholderHint, { color: colors.muted }]}>
-                  Tap Add to place a bin or dumpster, or Import CSV/GeoJSON.
-                </Text>
-              </View>
-            )
+              {wastePoints.length === 0 && !pickWasteLocationMode && (
+                <View style={[styles.mapEmptyHint, { backgroundColor: colors.surface + "E6", pointerEvents: "none" }]}>
+                  <MaterialCommunityIcons name="delete-outline" size={32} color={colors.muted} />
+                  <Text style={[styles.mapPlaceholderText, { color: colors.text, fontSize: 14, marginTop: 6 }]}>
+                    No bins or dumpsters mapped
+                  </Text>
+                  <Text style={[styles.mapPlaceholderHint, { color: colors.muted, marginTop: 2 }]}>
+                    Tap Add to place a bin or dumpster, or Import CSV/GeoJSON.
+                  </Text>
+                </View>
+              )}
+            </>
           ) : selectedResult && zonesPreviewPolygons && zonesPreviewPolygons.length > 0 ? (
             <RouteMap
               collectionPoints={[]}
@@ -732,13 +747,12 @@ export function ZonePage() {
           )}
         </View>
 
-        {!sidebarCollapsed && (
+        {!sidebarCollapsed && sidebarWidth > 0 && (
           <View
             style={[
               styles.sidebar,
               {
-                width: Math.min(SIDEBAR_WIDTH, winWidth - mapWidth),
-                minWidth: SIDEBAR_MIN_WIDTH,
+                width: sidebarWidth,
                 borderLeftColor: colors.border,
                 backgroundColor: colors.surface,
               },
@@ -1021,6 +1035,273 @@ export function ZonePage() {
         )}
       </View>
 
+      {isCompact && (
+        <BottomSheet
+          visible={!sidebarCollapsed}
+          onClose={() => setSidebarCollapsed(true)}
+          title={sidebarSheetTitle}
+          maxHeight="85%"
+        >
+          <View style={{ flex: 1, minHeight: 200 }}>
+            {pageMode === "waste" && (
+              <View style={[styles.sidebarTabs, { borderBottomColor: colors.border }]}>
+                <Pressable
+                  onPress={() => { hapticImpact(); setSidebarTab("mapping"); }}
+                  style={[styles.sidebarTab, sidebarTab === "mapping" && { borderBottomColor: colors.primary }]}
+                >
+                  <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "mapping" ? colors.primary : colors.muted }]}>
+                    Waste Mapping
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => { hapticImpact(); setSidebarTab("zones"); }}
+                  style={[styles.sidebarTab, sidebarTab === "zones" && { borderBottomColor: colors.primary }]}
+                >
+                  <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "zones" ? colors.primary : colors.muted }]}>
+                    Zones List
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+            <ScrollView
+              style={styles.sidebarScroll}
+              contentContainerStyle={styles.sidebarContent}
+              showsVerticalScrollIndicator
+            >
+              {pageMode === "waste" && sidebarTab === "mapping" ? (
+                <>
+                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>
+                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters mapped
+                  </Text>
+                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 8 }]}>
+                    Partition settings
+                  </Text>
+                  <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Text style={[styles.statsRow, { color: colors.text }]}>Trucks (zones)</Text>
+                    <TextInput
+                      value={wasteTruckCount}
+                      onChangeText={setWasteTruckCount}
+                      keyboardType="number-pad"
+                      style={[styles.wasteInput, { borderColor: colors.border, color: colors.text }]}
+                      placeholder="2"
+                      placeholderTextColor={colors.muted}
+                    />
+                    <Text style={[styles.statsRow, { color: colors.text, marginTop: 8 }]}>Balance by</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                      {(["count", "weight", "distance"] as const).map((m) => (
+                        <TouchableOpacity
+                          key={m}
+                          onPress={() => setWasteBalanceMetric(m)}
+                          style={[styles.presetChip, { backgroundColor: wasteBalanceMetric === m ? colors.primary : colors.background, borderColor: colors.border }]}
+                        >
+                          <Text style={{ color: wasteBalanceMetric === m ? "#fff" : colors.text, fontSize: 12 }}>
+                            {m === "count" ? "Count" : m === "weight" ? "Volume" : "Distance"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={[styles.statsRow, { color: colors.muted, marginTop: 8 }]}>KNN neighbors: {wasteKnnNeighbors}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>1</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", gap: 4 }}>
+                          {[1, 3, 5, 8, 10, 15, 20].map((k) => (
+                            <TouchableOpacity
+                              key={k}
+                              onPress={() => setWasteKnnNeighbors(k)}
+                              style={[styles.presetChip, { backgroundColor: wasteKnnNeighbors === k ? colors.primary : colors.background, borderColor: colors.border }]}
+                            >
+                              <Text style={{ color: wasteKnnNeighbors === k ? "#fff" : colors.text, fontSize: 12 }}>{k}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </ScrollView>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>20</Text>
+                    </View>
+                    <TextInput
+                      value={wasteZoneName}
+                      onChangeText={setWasteZoneName}
+                      style={[styles.wasteInput, { borderColor: colors.border, color: colors.text, marginTop: 8 }]}
+                      placeholder="Zone name (optional)"
+                      placeholderTextColor={colors.muted}
+                    />
+                  </View>
+                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>
+                    Mapped points
+                  </Text>
+                  {wastePoints.length === 0 ? (
+                    <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
+                      No bins or dumpsters yet. Tap Add in the toolbar or Import CSV/GeoJSON.
+                    </Text>
+                  ) : (
+                    wastePoints.slice(0, 50).map((p) => (
+                      <View key={p.id} style={[styles.resultRow, { borderColor: colors.border, marginBottom: 6 }]}>
+                        <MaterialCommunityIcons
+                          name={p.type === "bin" ? "delete-outline" : "dump-truck"}
+                          size={18}
+                          color={p.type === "bin" ? "#22c55e" : "#3b82f6"}
+                        />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[styles.resultRowName, { color: colors.text }]} numberOfLines={1}>
+                            {p.address || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
+                          </Text>
+                          <Text style={[styles.resultRowMeta, { color: colors.muted }]}>
+                            {p.capacityLiters != null ? `${p.capacityLiters}L` : ""} {p.condition ?? ""}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => { hapticImpact(); setEditingWastePoint(p); setAddWasteModalVisible(true); }}
+                          style={{ padding: 6 }}
+                        >
+                          <MaterialCommunityIcons name="pencil" size={18} color={colors.muted} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            hapticImpact();
+                            Alert.alert("Remove point", "Remove this bin/dumpster from the map?", [
+                              { text: "Cancel", style: "cancel" },
+                              { text: "Remove", style: "destructive", onPress: () => removeWastePoint(p.id) },
+                            ]);
+                          }}
+                          style={{ padding: 6 }}
+                        >
+                          <MaterialCommunityIcons name="delete-outline" size={18} color={colors.muted} />
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  )}
+                  {wastePoints.length > 50 && (
+                    <Text style={[styles.emptySidebarText, { color: colors.muted, marginTop: 8 }]}>
+                      … and {wastePoints.length - 50} more
+                    </Text>
+                  )}
+                </>
+              ) : pageMode === "waste" && sidebarTab === "zones" ? (
+                <>
+                  {savedZones.length > 0 ? (
+                    <>
+                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>Saved results</Text>
+                      {savedZones.map((item) => {
+                        const isSelected = item.id === selectedId;
+                        return (
+                          <Pressable
+                            key={item.id}
+                            onPress={() => selectResult(item.id)}
+                            style={[styles.resultRow, { backgroundColor: isSelected ? colors.primary + "20" : "transparent", borderColor: colors.border }]}
+                          >
+                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                              {item.name || "Unnamed"}
+                            </Text>
+                            <Text style={[styles.resultRowMeta, { color: colors.muted }]}>{item.zones.length} zones</Text>
+                          </Pressable>
+                        );
+                      })}
+                      {selectedResult && (
+                        <>
+                          <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>{selectedResult.name || "Unnamed zones"}</Text>
+                          <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                            <Text style={[styles.statsRow, { color: colors.text }]}>Zones: <Text style={{ fontWeight: "600" }}>{selectedResult.zones.length}</Text></Text>
+                            <Text style={[styles.statsRow, { color: colors.text }]}>Total time: <Text style={{ fontWeight: "600" }}>{totalTime.toFixed(1)} min</Text></Text>
+                            {selectedResult.sourcePoints && selectedResult.sourcePoints.length > 0 && (
+                              <Text style={[styles.statsRow, { color: colors.muted }]}>
+                                Points: {selectedResult.sourcePoints.length} (capacity per zone in list)
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>Zone list</Text>
+                          {selectedResult.zones.sort((a, b) => b.estimated_time - a.estimated_time).map((zone) => (
+                            <ZoneAccordionItem
+                              key={zone.zone_id}
+                              zone={zone}
+                              index={zone.zone_id}
+                              colors={colors}
+                              expanded={expandedZoneIds.has(zone.zone_id)}
+                              onToggle={() => toggleZoneExpanded(zone.zone_id)}
+                              sourcePoints={selectedResult.sourcePoints}
+                            />
+                          ))}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
+                      No zone results yet. Map bins/dumpsters, then tap Partition.
+                    </Text>
+                  )}
+                </>
+              ) : null}
+              {pageMode === "delivery" && (
+                <>
+                  {savedZones.length > 1 && (
+                    <>
+                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>Saved results</Text>
+                      {savedZones.map((item) => {
+                        const isSelected = item.id === selectedId;
+                        return (
+                          <Pressable
+                            key={item.id}
+                            onPress={() => selectResult(item.id)}
+                            style={[styles.resultRow, { backgroundColor: isSelected ? colors.primary + "20" : "transparent", borderColor: colors.border }]}
+                          >
+                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                              {item.name || "Unnamed"}
+                            </Text>
+                            <Text style={[styles.resultRowMeta, { color: colors.muted }]}>{item.zones.length} zones</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </>
+                  )}
+                  {selectedResult ? (
+                    <>
+                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: savedZones.length > 1 ? 16 : 0 }]}>
+                        {selectedResult.name || "Unnamed zones"}
+                      </Text>
+                      <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <Text style={[styles.statsRow, { color: colors.text }]}>
+                          Zones: <Text style={{ fontWeight: "600" }}>{selectedResult.zones.length}</Text>
+                        </Text>
+                        <Text style={[styles.statsRow, { color: colors.text }]}>
+                          Total time: <Text style={{ fontWeight: "600" }}>{totalTime.toFixed(1)} min</Text>
+                        </Text>
+                        <Text style={[styles.statsRow, { color: colors.text }]}>
+                          Avg per zone: <Text style={{ fontWeight: "600" }}>{avgTime.toFixed(1)} min</Text>
+                        </Text>
+                        {imbalanceRatio > 0 && (
+                          <Text style={[styles.statsRow, { color: colors.muted }]}>
+                            Imbalance (max/min): {imbalanceRatio.toFixed(2)}×
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>Zone list</Text>
+                      {selectedResult.zones
+                        .sort((a, b) => b.estimated_time - a.estimated_time)
+                        .map((zone) => (
+                          <ZoneAccordionItem
+                            key={zone.zone_id}
+                            zone={zone}
+                            index={zone.zone_id}
+                            colors={colors}
+                            expanded={expandedZoneIds.has(zone.zone_id)}
+                            onToggle={() => toggleZoneExpanded(zone.zone_id)}
+                            sourcePoints={selectedResult?.sourcePoints}
+                          />
+                        ))}
+                    </>
+                  ) : (
+                    <View style={styles.emptySidebar}>
+                      <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
+                        No saved zone results. Run partition from the Extract tab (Partition → send to Zones).
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </BottomSheet>
+      )}
+
       <WastePointFormModal
         visible={addWasteModalVisible}
         onClose={handleAddWasteModalClose}
@@ -1033,7 +1314,7 @@ export function ZonePage() {
         }}
       />
       {pickWasteLocationMode && pageMode === "waste" && (
-        <View style={[styles.pickHint, { backgroundColor: colors.primary }]} pointerEvents="none">
+        <View style={[styles.pickHint, { backgroundColor: colors.primary, pointerEvents: "none" }]}>
           <Text style={styles.pickHintText}>Tap on the map to place the bin or dumpster</Text>
         </View>
       )}
@@ -1068,15 +1349,18 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     borderBottomWidth: 1,
+    gap: 8,
   },
   toolbarLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 0,
   },
   toolbarTitle: {
     fontSize: 18,
@@ -1175,15 +1459,32 @@ const styles = StyleSheet.create({
   },
   toolbarRight: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
+    flexShrink: 1,
   },
   body: {
     flex: 1,
     flexDirection: "row",
   },
+  bodyColumn: {
+    flexDirection: "column",
+  },
   mapWrap: {
     alignSelf: "stretch",
+    position: "relative",
+  },
+  mapEmptyHint: {
+    position: "absolute",
+    bottom: 24,
+    left: 24,
+    right: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   mapPlaceholder: {
     flex: 1,

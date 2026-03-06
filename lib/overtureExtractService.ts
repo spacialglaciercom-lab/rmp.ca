@@ -252,14 +252,18 @@ export function connectAndExtract(
     ws.onerror = (error) => {
       console.log("[WebSocket] Error:", error);
       if (!cancelled) {
-        onError("WebSocket connection error");
+        onError("WebSocket connection error. If you see 502 in the console, the extract backend or its WebSocket proxy may be down or misconfigured.");
       }
     };
 
     ws.onclose = (event) => {
       console.log("[WebSocket] Closed:", event.code, event.reason);
       if (!cancelled && event.code !== 1000) {
-        onError(`Connection closed unexpectedly (code ${event.code})`);
+        const hint =
+          event.code === 1006
+            ? " Often caused by 502 Bad Gateway: ensure the backend has the /ws/extract proxy enabled and the upstream extract service is running."
+            : "";
+        onError(`Connection closed unexpectedly (code ${event.code}).${hint}`);
       }
     };
   };

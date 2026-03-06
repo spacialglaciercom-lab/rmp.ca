@@ -304,6 +304,61 @@ function MapClickHandler({ onMapPress }: { onMapPress: (lat: number, lon: number
   return null;
 }
 
+/** Transparent overlay rendered *outside* MapContainer so it sits above Leaflet panes and receives clicks (fixes pick-on-map on web). */
+function MapClickOverlaySibling({
+  mapRef,
+  onMapPress,
+}: {
+  mapRef: React.MutableRefObject<any>;
+  onMapPress: (lat: number, lon: number) => void;
+}) {
+  const onPressRef = React.useRef(onMapPress);
+  onPressRef.current = onMapPress;
+  const handleClick = React.useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const map = mapRef.current;
+      if (!map || typeof map.containerPointToLatLng !== "function") return;
+      const container = map.getContainer?.();
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      try {
+        const L = require("leaflet");
+        const point = L.point ? L.point(x, y) : [x, y];
+        const latLng = map.containerPointToLatLng(point);
+        if (latLng && typeof latLng.lat === "number" && typeof latLng.lng === "number") {
+          onPressRef.current(latLng.lat, latLng.lng);
+        }
+      } catch (_) {
+        const latLng = map.containerPointToLatLng([x, y] as [number, number]);
+        if (latLng && typeof latLng.lat === "number" && typeof latLng.lng === "number") {
+          onPressRef.current(latLng.lat, latLng.lng);
+        }
+      }
+    },
+    [mapRef]
+  );
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label="Click map to pick location"
+      onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") e.currentTarget.click();
+      }}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 1000,
+        cursor: "crosshair",
+        pointerEvents: "auto",
+      }}
+    />
+  );
+}
+
 /** Web: contextmenu (right-click) as long-press equivalent for Save to Favorites. */
 function MapContextMenuHandler({
   onMapLongPress,
@@ -766,7 +821,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   const overtureCity = PMTILES_CITIES[0] ?? "montreal";
 
   return (
-    <View style={wrapperStyle} pointerEvents="box-none">
+    <View style={[wrapperStyle, { pointerEvents: "box-none" }]}>
       <div
         style={{
           width: pixelWidth,
@@ -877,6 +932,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
           {zonesPreviewPolygons && zonesPreviewPolygons.length > 0
             ? (() => {
                 const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+                const nonInteractive = !!onMapPress; // when picking location, let map receive clicks
                 return zonesPreviewPolygons.map((poly, idx) => {
                   if (poly.length < 3) return null;
                   const closed = [...poly.map((p) => [p.latitude, p.longitude] as [number, number]), [poly[0].latitude, poly[0].longitude]];
@@ -885,17 +941,18 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
                     <Polyline
                       key={`zones-preview-${idx}`}
                       positions={closed}
-                      pathOptions={{ color: stroke, weight: 3, fill: true, fillOpacity: 0.3, fillColor: stroke, opacity: 1 }}
+                      pathOptions={{ color: stroke, weight: 3, fill: true, fillOpacity: 0.3, fillColor: stroke, opacity: 1, interactive: !nonInteractive }}
                     />
                   );
                 });
               })()
             : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (() => {
+              const nonInteractive = !!onMapPress;
               const closed = [...zonesPreviewPolygon.map((p) => [p.latitude, p.longitude] as [number, number]), [zonesPreviewPolygon[0].latitude, zonesPreviewPolygon[0].longitude]];
               return (
                 <Polyline
                   positions={closed}
-                  pathOptions={{ color: "#f97316", weight: 4, fill: true, fillOpacity: 0.25, fillColor: "#f97316", opacity: 1 }}
+                  pathOptions={{ color: "#f97316", weight: 4, fill: true, fillOpacity: 0.25, fillColor: "#f97316", opacity: 1, interactive: !nonInteractive }}
                   key="zones-preview-boundary"
                 />
               );
@@ -1079,6 +1136,9 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
             city={overtureCity}
           />
         )}
+        {onMapPress ? (
+          <MapClickOverlaySibling mapRef={leafletMapRef} onMapPress={onMapPress} />
+        ) : null}
       </div>
     </View>
   );

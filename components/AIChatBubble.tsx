@@ -240,7 +240,7 @@ function AIChatBubbleInner() {
         // Fallback to expo-speech
         try {
           const Speech = await import("expo-speech");
-          await Speech.speak(reply, { rate: 1.0 });
+          await Speech.speak(reply, { rate: 1.0, volume: 1.0 });
         } catch {}
       }
       setStatus("idle");
