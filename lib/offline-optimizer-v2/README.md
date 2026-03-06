@@ -17,11 +17,15 @@ This module is a **clone** of the optimizer from:
 | `gpxExporter.ts` | ❌ No | — |
 | `LeafletMap.tsx` | ❌ No | — |
 
-So the **exact optimizer** the Videos app runs is `RouteOptimizerSimple` (here: `RouteOptimizerSimpleV2`). Logic and turn costs match; we only add `nodeId` on route points for rmp.ca and use the existing type imports.
+So the **exact optimizer** the Videos app runs is `RouteOptimizerSimple` (here: `RouteOptimizerSimpleV2`). Logic and turn costs must match; we only add `nodeId` on route points for rmp.ca and use the existing type imports.
+
+**Keeping in sync:** The canonical source is `C:\Users\Space\Videos\route-optimizer-mobile-v2\src\routeOptimizerSimple.ts`. When you change that file, copy the same logic into this `routeOptimizerSimple.ts` (class name `RouteOptimizerSimpleV2`, types from `@/lib/route-optimizer-v2/types`, keep `nodeId` on route points). Do not change TURN_COSTS or the Hierholzer/chooseBest logic here without syncing from the Videos app.
 
 ## Usage
 
 On the **Planner** page, turn on **"Use offline optimizer (v2)"** to run this optimizer instead of the default backend/local path.
+
+When v2 is used, the app **does not** run `pruneRouteLoops` on the result. That post-step uses coordinate rounding (precision 4); on a correct Eulerian circuit it can merge distinct segments and produce broken or loop-like routes. The Videos app does not prune, so we match that behavior.
 
 ## GeoJSON support
 

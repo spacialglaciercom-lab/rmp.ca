@@ -14,12 +14,18 @@ const config = getDefaultConfig(__dirname);
 
 // Ensure @/ alias resolves to project root (fixes CI where tsconfig paths may not apply)
 const projectRoot = __dirname;
+
 const codegenStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-codegen-web.js");
 const rnmapboxStubPath = path.join(projectRoot, "lib", "metro-stubs", "rnmapbox-maps-web.js");
 const rnmapsStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-maps-web.js");
 const rnwebviewStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-webview-web.js");
 const extensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
+// Always resolve 'buffer' to our shim (under projectRoot) so Metro never uses module name for SHA-1
+const bufferShimPath = path.resolve(projectRoot, "lib", "buffer-shim.js");
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "buffer") {
+    return { type: "sourceFile", filePath: bufferShimPath };
+  }
   if (platform === "web") {
     // Stub native-only modules so the web bundle never loads them
     if (moduleName === "react-native-codegen" || moduleName.startsWith("react-native-codegen/")) {

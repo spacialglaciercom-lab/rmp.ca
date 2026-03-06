@@ -1,15 +1,10 @@
 /**
- * Exact copy of the optimizer from C:\...\Videos\route-optimizer-mobile-v2\src
+ * Same optimizer as C:\Users\Space\Videos\route-optimizer-mobile-v2\src\routeOptimizerSimple.ts
+ * (RouteOptimizerSimple). Kept in sync so the "Optimizer v2" toggle on planner pages uses the
+ * exact same algorithm as the Videos app.
  *
- * Source files used:
- *   - routeOptimizerSimple.ts (this logic; App.tsx uses this one)
- *   - types.ts (Node, Way, RoutePoint, OptimizationResult — we use @/lib/route-optimizer-v2/types)
- *
- * Other files in that src/ are NOT used by this path:
- *   - routeOptimizer.ts (intersection-collapsing variant; app uses Simple)
- *   - routeOptimizerCPP.ts, osmParser.ts, routeSimplifier.ts, gpxExporter.ts, LeafletMap.tsx
- *
- * Use via "Use offline optimizer (v2)" toggle on the Planner page.
+ * Only adaptations: class name RouteOptimizerSimpleV2, types from @/lib/route-optimizer-v2/types,
+ * and route points include nodeId for rmp.ca compatibility. No console.log.
  */
 
 import type { Node, Way, RoutePoint, OptimizationResult } from "@/lib/route-optimizer-v2/types";
@@ -19,15 +14,14 @@ interface EdgeData {
   oneway: boolean;
 }
 
-// Turn cost penalties (meters equivalent)
-// High U-turn cost forces "loop around the block" instead of hard pivots
+// Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2
 const TURN_COSTS = {
-  U_TURN: 800,      // Strongly discourages U-turns
-  SHARP_LEFT: 150,  // > 120° turn
-  LEFT_TURN: 50,    // 30-120° left
-  STRAIGHT: 0,      // -30° to 30°
-  RIGHT_TURN: -20,  // Prefer right turns (right-side collection)
-  SHARP_RIGHT: -10, // Sharp right still okay
+  U_TURN: 800,
+  SHARP_LEFT: 150,
+  LEFT_TURN: 50,
+  STRAIGHT: 0,
+  RIGHT_TURN: -20,
+  SHARP_RIGHT: -10,
 };
 
 export class RouteOptimizerSimpleV2 {
@@ -41,25 +35,21 @@ export class RouteOptimizerSimpleV2 {
   }
 
   optimize(customLat?: number, customLon?: number): OptimizationResult {
-    // Build graph with all nodes
     this.buildGraph();
     if (this.graph.size === 0) {
       return { route: [], totalDistance: 0, message: "No valid roads found" };
     }
 
-    // Make Eulerian by ensuring both directions exist
     this.makeEulerian();
 
-    // Find start
     const startNode = this.findStartNode(customLat, customLon);
     if (!startNode) {
       return { route: [], totalDistance: 0, message: "Could not find start node" };
     }
 
-    // Run Hierholzer with turn optimization
+    // v2 always uses two-pass (both sides); one-pass causes loops with this graph, so we ignore serviceBothSides
     const circuit = this.hierholzer(startNode);
 
-    // Convert to route points (add nodeId for compatibility)
     const routePoints: RoutePoint[] = circuit
       .map((id) => {
         const n = this.nodes.get(id);
@@ -67,7 +57,6 @@ export class RouteOptimizerSimpleV2 {
       })
       .filter((p): p is RoutePoint => p !== null);
 
-    // Calculate stats
     const stats = this.calculateStats(circuit);
 
     return {
@@ -93,11 +82,9 @@ export class RouteOptimizerSimpleV2 {
 
         const length = this.haversine(fromNode, toNode) * 1000;
 
-        // Forward
         if (!this.graph.has(from)) this.graph.set(from, new Map());
         this.graph.get(from)!.set(to, { length, oneway: isOneway });
 
-        // Reverse (if not oneway)
         if (!isOneway) {
           if (!this.graph.has(to)) this.graph.set(to, new Map());
           this.graph.get(to)!.set(from, { length, oneway: false });
@@ -125,14 +112,20 @@ export class RouteOptimizerSimpleV2 {
 
   private hierholzer(start: string): string[] {
     const g = new Map<string, Map<string, EdgeData>>();
+    let totalEdges = 0;
     for (const [node, edges] of this.graph) {
-      g.set(node, new Map(edges));
+      const copy = new Map(edges);
+      g.set(node, copy);
+      totalEdges += copy.size;
     }
+    const maxIterations = Math.max(3 * totalEdges, 500_000);
 
     const circuit: string[] = [];
     const stack: string[] = [start];
+    let iterations = 0;
 
-    while (stack.length > 0) {
+    while (stack.length > 0 && iterations < maxIterations) {
+      iterations++;
       const current = stack[stack.length - 1]!;
       const edges = g.get(current);
 

@@ -16,7 +16,8 @@ import { CollectionPoint } from "@/types";
 import { readFileAsText } from "@/lib/readFileAsText";
 import { saveOSMFile } from "@/lib/osm-file-library";
 import { parseGeoJSON, importGeoJSONRoute } from "@/lib/geojson-import";
-import { optimizeFromGeoJSON } from "@/lib/offline-optimizer-v2";
+import { optimizeFromGeoJSON, RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
+import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 
 interface OSMImportProps {
   onImportComplete: (
@@ -283,48 +284,62 @@ export function OSMImport({ onImportComplete, useOfflineOptimizerV2 = false }: O
         const turnPenalties = customStartPoint.state.configuration.turnPenalties;
         const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
 
-        const stepLabels: Record<string, string> = {
-          "street-edges": "Converting streets...",
-          "turn-graph": "Building turn graph...",
-          "build-graph": "Building turn graph...",
-          "scc": "Analyzing connectivity...",
-          "bridge": "Connecting components...",
-          "eulerian": "Balancing graph...",
-          "circuit": "Computing optimal circuit...",
-          "route-points": "Generating route points...",
-        };
+        // When "Use offline optimizer (v2)" is on, use same optimizer as Videos app (RouteOptimizerSimpleV2). Do not prune — correct Eulerian output.
+        if (useOfflineOptimizerV2) {
+          try {
+            setProgress({ stage: "parsing", progress: 50, message: "Running offline optimizer (v2)..." });
+            await new Promise<void>((r) => setTimeout(r, 0));
+            const v2 = new RouteOptimizerSimpleV2(nodes, ways);
+            optResult = v2.optimize(startCoords?.latitude, startCoords?.longitude);
+            // Do not run pruneRouteLoops on v2 output; it can merge distinct segments (precision) and create broken routes.
+          } catch (e) {
+            debug("OSMImport.offlineV2", { failed: (e as Error).message });
+            optResult = undefined;
+          }
+        }
 
-        optResult = isExperimentalRoute
-          ? await optimizeRoute(nodes, ways, {
-              customLat: startCoords?.latitude,
-              customLon: startCoords?.longitude,
-              turnPenalties,
-              onewayMode,
-              turnRestrictions: turnRestrictions ?? [],
-              serviceBothSides,
-              onProgress: (step) => {
-                const label = stepLabels[step] ?? "Optimizing...";
-                setProgress({ stage: "parsing", progress: 50, message: label });
-              },
-            })
-          : await new Promise<any>((resolve, reject) => {
-              // Wrap synchronous optimizer in a setTimeout so the browser can
-              // render the progress bar update before we block the thread.
-              setTimeout(() => {
-                try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
-                  resolve(
-                    optimizer.optimize(
-                      startCoords?.latitude,
-                      startCoords?.longitude,
-                      turnPenalties
-                    )
-                  );
-                } catch (err) {
-                  reject(err);
-                }
-              }, 0);
-            });
+        if (optResult === undefined) {
+          const stepLabels: Record<string, string> = {
+            "street-edges": "Converting streets...",
+            "turn-graph": "Building turn graph...",
+            "build-graph": "Building turn graph...",
+            "scc": "Analyzing connectivity...",
+            "bridge": "Connecting components...",
+            "eulerian": "Balancing graph...",
+            "circuit": "Computing optimal circuit...",
+            "route-points": "Generating route points...",
+          };
+
+          optResult = isExperimentalRoute
+            ? await optimizeRoute(nodes, ways, {
+                customLat: startCoords?.latitude,
+                customLon: startCoords?.longitude,
+                turnPenalties,
+                onewayMode,
+                turnRestrictions: turnRestrictions ?? [],
+                serviceBothSides,
+                onProgress: (step) => {
+                  const label = stepLabels[step] ?? "Optimizing...";
+                  setProgress({ stage: "parsing", progress: 50, message: label });
+                },
+              })
+            : await new Promise<any>((resolve, reject) => {
+                setTimeout(() => {
+                  try {
+                    const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
+                    resolve(
+                      optimizer.optimize(
+                        startCoords?.latitude,
+                        startCoords?.longitude,
+                        turnPenalties
+                      )
+                    );
+                  } catch (err) {
+                    reject(err);
+                  }
+                }, 0);
+              });
+        }
       } finally {
         clearInterval(heartbeat);
       }
@@ -398,7 +413,7 @@ export function OSMImport({ onImportComplete, useOfflineOptimizerV2 = false }: O
     } finally {
       setIsImporting(false);
     }
-  }, [onImportComplete, customStartPoint, optimizeRoute, isExperimentalRoute]);
+  }, [onImportComplete, customStartPoint, optimizeRoute, isExperimentalRoute, useOfflineOptimizerV2]);
 
   const getProgressColor = () => {
     switch (progress?.stage) {

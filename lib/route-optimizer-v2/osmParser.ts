@@ -9,34 +9,36 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { Node, Way, TurnRestriction } from "./types";
 import { debug } from "./debug";
 
-/** Align with lib/osm-filter.ts: same allowed tags for trash collection routes. */
+/** Match route-optimizer-mobile-v2 (Videos app) so Optimizer v2 gets the same graph from the same OSM file. */
 const INCLUDED_HIGHWAYS = new Set([
   "residential",
-  "unclassified",
   "tertiary",
   "secondary",
-  "living_street",   // low-speed residential; often tagged instead of residential
-  "secondary_link", // link roads for secondary (slip roads, ramps)
-  "tertiary_link",  // link roads for tertiary
+  "unclassified",
+  "living_street",
+  "tertiary_link",
+  "secondary_link",
+  "service",
+  "track",
 ]);
 
 const EXCLUDED_HIGHWAYS = new Set([
-  "footway",
-  "cycleway",
-  "steps",
-  "path",
-  "track",
-  "bridleway",
-  "pedestrian",
-  "corridor",
-  "elevator",
-  "platform",
   "motorway",
   "motorway_link",
   "trunk",
   "trunk_link",
   "primary",
   "primary_link",
+  "driveway",
+  "footway",
+  "cycleway",
+  "path",
+  "steps",
+  "pedestrian",
+  "bridleway",
+  "corridor",
+  "elevator",
+  "platform",
 ]);
 
 export interface ParseOSMResult {
@@ -101,18 +103,17 @@ export class OSMParser {
 
       const highway = tags["highway"];
       if (!highway || EXCLUDED_HIGHWAYS.has(highway)) continue;
-      if (INCLUDED_HIGHWAYS.has(highway)) {
-        // included
-      } else if (highway === "service") {
-        // include service roads; driveway/parking types filtered below
-      } else {
-        continue;
+      if (!INCLUDED_HIGHWAYS.has(highway)) continue;
+      // Service subtypes to exclude (match Videos app EXCLUDED_SERVICE_TYPES)
+      if (highway === "service") {
+        const service = tags["service"];
+        if (service && ["driveway", "parking_aisle", "parking", "private", "alley", "emergency_access"].includes(service))
+          continue;
       }
-      const service = tags["service"];
-      if (service && ["parking_aisle", "driveway", "parking", "drive-through", "emergency_access"].includes(service))
-        continue;
       if (tags["area"] === "yes" || tags["area"] === "parking") continue;
-      if (tags["access"] === "private") continue;
+      if (tags["access"] === "private" || tags["access"] === "no" || tags["access"] === "customers" || tags["access"] === "permit") continue;
+      if (tags["amenity"] === "parking") continue;
+      if (tags["ownership"] === "private" || tags["private"] === "yes") continue;
 
       const nodeRefs: string[] = [];
       const ndEls = getChildElements(wayEl, "nd");

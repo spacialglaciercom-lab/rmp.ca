@@ -78,9 +78,6 @@ export default function PlannerContent() {
   const [osmLibraryRefreshKey, setOsmLibraryRefreshKey] = useState(0);
   const [showConstraintParser, setShowConstraintParser] = useState(false);
   const [confirmedConstraints, setConfirmedConstraints] = useState<ParsedConstraint[]>([]);
-  const [optimizationOffline, setOptimizationOffline] = useState(false);
-  /** When true, use local optimizer only (avoids backend-induced looping). */
-  const [preferLocalOptimizer, setPreferLocalOptimizer] = useState(false);
   /** When true, use the offline optimizer from route-optimizer-mobile-v2 (Videos app). */
   const [useOfflineOptimizerV2, setUseOfflineOptimizerV2] = useState(false);
 
@@ -225,6 +222,7 @@ export default function PlannerContent() {
       let optimizerDistanceKm: number | undefined;
       let gpxWasSet = false;
       let optResult: any = undefined;
+      let optimizerSource: "backend" | "local" | "offline-v2" | undefined;
     try {
       // Re-optimize with current start point if we have OSM data
       let optimizedPoints = pointsToUse;
@@ -237,8 +235,8 @@ export default function PlannerContent() {
         const serviceBothSides = state.configuration.serviceBothSides ?? false;
         // Yield so React can paint "processing" state before optimisation
         await new Promise<void>((r) => setTimeout(r, 0));
-        // When "Use offline optimizer (v2)" is on, use only the Videos app optimizer (no backend, no existing local).
-        let optimizerSource: "backend" | "local" | "offline-v2" | undefined;
+        // When "Use offline optimizer (v2)" is on, use the same optimizer as the Videos app (RouteOptimizerSimpleV2).
+        // Do not use the full RouteOptimizer here — it uses a different graph and can produce different (loopier) routes.
         if (useOfflineOptimizerV2) {
           try {
             const v2 = new RouteOptimizerSimpleV2(nodes, ways);
@@ -248,7 +246,7 @@ export default function PlannerContent() {
             debug("Planner.generateRoute", { offlineV2Failed: (e as Error).message });
           }
         }
-        if (optResult === undefined && !optimizationOffline && !preferLocalOptimizer) {
+        if (optResult === undefined) {
           try {
             const geojson = osmDataToGeoJSON(nodes, ways);
             const backendResult = await backendOptimizeRoute({
@@ -306,28 +304,29 @@ export default function PlannerContent() {
         }
 
         // Fix #3: post-process to prune excess revisits of the same directed segment.
-        // One pass allows each segment once; two-pass allows twice.
-        // Use coarser precision (4) and more iterations so backend/loopy routes get cleaned.
+        // Skip pruning when source is offline-v2 (Videos app optimizer): its output is a correct Eulerian circuit;
+        // pruning with coarse precision can merge distinct segments and create broken/loopy-looking routes.
         try {
-          const maxSegmentVisits = serviceBothSides ? 2 : 1;
-          const pruned = pruneRouteLoops(optResult.route ?? [], {
-            maxSegmentVisits,
-            precision: 4,
-            maxIterations: 100,
-          });
-          if (pruned.changed) {
-            debug("Planner.generateRoute.deLoop", {
-              source: optimizerSource ?? "local",
+          if (optimizerSource !== "offline-v2") {
+            const maxSegmentVisits = serviceBothSides ? 2 : 1;
+            const pruned = pruneRouteLoops(optResult.route ?? [], {
               maxSegmentVisits,
-              removedPoints: pruned.removedPoints,
-              stats: pruned.stats,
+              precision: 4,
+              maxIterations: 100,
             });
-            optResult = {
-              ...optResult,
-              route: pruned.route,
-              // totalDistance is used as a hint/override later; keep it consistent with the pruned path
-              totalDistance: pruned.stats.approxDistanceKmAfter,
-            };
+            if (pruned.changed) {
+              debug("Planner.generateRoute.deLoop", {
+                source: optimizerSource ?? "local",
+                maxSegmentVisits,
+                removedPoints: pruned.removedPoints,
+                stats: pruned.stats,
+              });
+              optResult = {
+                ...optResult,
+                route: pruned.route,
+                totalDistance: pruned.stats.approxDistanceKmAfter,
+              };
+            }
           }
         } catch (e) {
           debug("Planner.generateRoute.deLoop", { failed: true, error: e });
@@ -335,20 +334,33 @@ export default function PlannerContent() {
 
         if (optResult.route.length > 0) {
           optimizerDistanceKm = optResult.totalDistance;
-          // Diagnostic: which optimizer produced the route and whether route has loop patterns
-          const routeCoords = optResult.route.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`);
+          let routeForPoints = optResult.route as Array<{ latitude: number; longitude: number; nodeId?: string }>;
+          // For v2 (Videos app optimizer): dedupe consecutive identical points so the polyline doesn't draw the same point repeatedly
+          if (optimizerSource === "offline-v2" && routeForPoints.length >= 2) {
+            const deduped: typeof routeForPoints = [routeForPoints[0]!];
+            const prec = 1e-6;
+            for (let i = 1; i < routeForPoints.length; i++) {
+              const prev = deduped[deduped.length - 1]!;
+              const curr = routeForPoints[i]!;
+              if (Math.abs(prev.latitude - curr.latitude) > prec || Math.abs(prev.longitude - curr.longitude) > prec) {
+                deduped.push(curr);
+              }
+            }
+            routeForPoints = deduped;
+            debug("Planner.generateRoute.v2Dedupe", { before: optResult.route.length, after: deduped.length });
+          }
+          const routeCoords = routeForPoints.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`);
           const uniqueCoords = new Set(routeCoords).size;
-          const hasLoopPattern = uniqueCoords < optResult.route.length;
+          const hasLoopPattern = uniqueCoords < routeForPoints.length;
           debug("Planner.generateRoute.optimizer", {
             source: optimizerSource ?? "local",
-            routeLength: optResult.route.length,
+            routeLength: routeForPoints.length,
             uniqueStops: uniqueCoords,
             hasLoopPattern,
           });
-          optimizedPoints = optResult.route.map((p, i) => ({
-            // Use index-based suffix to ensure uniqueness even if visiting the same node twice (loops/returns)
-            id: (p as { nodeId?: string }).nodeId 
-              ? `${(p as { nodeId?: string }).nodeId}_${i}` 
+          optimizedPoints = routeForPoints.map((p, i) => ({
+            id: (p as { nodeId?: string }).nodeId
+              ? `${(p as { nodeId?: string }).nodeId}_${i}`
               : `route-${i}`,
             address: `Stop ${i + 1}`,
             latitude: p.latitude,
@@ -382,43 +394,43 @@ export default function PlannerContent() {
         }
       }
 
-      // Build initial geometry from optimizer (graph nodes → may be off-road). Snap to roads so Map shows road-following path (fixes CPP/optimizer jagged polyline).
+      // Build initial geometry from optimizer. When Optimizer v2 is used, skip map-matching and use
+      // the optimizer's points directly (same as the Videos app). Map-matching with many waypoints
+      // can cause OSRM to produce loop-like paths; skipping it for v2 avoids that.
       let gpxPoints = optimizedPoints.map((p) => ({
         lat: p.latitude,
         lon: p.longitude,
       }));
       let pointsForStorage: CollectionPoint[] = optimizedPoints;
+      const skipSnapToRoads = optimizerSource === "offline-v2";
       try {
-        const routingConfig = await getRoutingConfigAsync();
-        if (routingConfig.baseUrl && gpxPoints.length >= 2) {
-          const matched = await routeThroughWaypoints(gpxPoints, routingConfig, getRouteOptionsForRouting());
-          if (matched && matched.matchedGeometry.length >= 2) {
-            gpxPoints = matched.matchedGeometry;
-            optimizerDistanceKm = matched.totalDistance / 1000;
-            // Repair teleporting gaps (>400 m straight-line jumps) caused by OSRM
-            // chunk-join mismatches or partial failures. Each gap gets a targeted
-            // 2-waypoint re-route so the road-following geometry fills the jump.
-            const gapsBefore = countGaps(gpxPoints);
-            if (gapsBefore > 0) {
-              debug("Planner.generateRoute", { teleportingGapsDetected: gapsBefore });
-              gpxPoints = await repairRouteGaps(gpxPoints, routingConfig, getRouteOptionsForRouting());
-              debug("Planner.generateRoute", { teleportingGapsAfterRepair: countGaps(gpxPoints) });
+        if (!skipSnapToRoads) {
+          const routingConfig = await getRoutingConfigAsync();
+          if (routingConfig.baseUrl && gpxPoints.length >= 2) {
+            const matched = await routeThroughWaypoints(gpxPoints, routingConfig, getRouteOptionsForRouting());
+            if (matched && matched.matchedGeometry.length >= 2) {
+              gpxPoints = matched.matchedGeometry;
+              optimizerDistanceKm = matched.totalDistance / 1000;
+              const gapsBefore = countGaps(gpxPoints);
+              if (gapsBefore > 0) {
+                debug("Planner.generateRoute", { teleportingGapsDetected: gapsBefore });
+                gpxPoints = await repairRouteGaps(gpxPoints, routingConfig, getRouteOptionsForRouting());
+                debug("Planner.generateRoute", { teleportingGapsAfterRepair: countGaps(gpxPoints) });
+              }
+              const allMatchedPoints: CollectionPoint[] = gpxPoints.map((p, i) => ({
+                id: `route-${i}`,
+                address: `Stop ${i + 1}`,
+                latitude: p.lat,
+                longitude: p.lon,
+                collectionType: "residential" as const,
+                status: "pending" as const,
+              }));
+              pointsForStorage = douglasPeucker(allMatchedPoints, 0.005);
+              debug("Planner.generateRoute", { snappedToRoads: true, points: gpxPoints.length });
             }
-
-            // Build collection points from matched geometry so saved route draws on-road on Map tab.
-            // Use Douglas-Peucker simplification (5 m tolerance) to preserve shape without
-            // the "invisible road" teleporting segments caused by uniform stride downsampling.
-            const allMatchedPoints: CollectionPoint[] = gpxPoints.map((p, i) => ({
-              id: `route-${i}`,
-              address: `Stop ${i + 1}`,
-              latitude: p.lat,
-              longitude: p.lon,
-              collectionType: "residential" as const,
-              status: "pending" as const,
-            }));
-            pointsForStorage = douglasPeucker(allMatchedPoints, 0.005); // 5 m tolerance
-            debug("Planner.generateRoute", { snappedToRoads: true, points: gpxPoints.length });
           }
+        } else {
+          debug("Planner.generateRoute", { snappedToRoads: false, reason: "optimizer-v2-use-raw-points" });
         }
       } catch (e) {
         debug("Planner.generateRoute", { snappedToRoads: false, error: e });
@@ -630,7 +642,7 @@ export default function PlannerContent() {
                   // fall through
                 }
               }
-              if (optResult === undefined && !optimizationOffline && !preferLocalOptimizer) {
+              if (optResult === undefined) {
                 try {
                   const geojson = osmDataToGeoJSON(nodes, ways);
                   const backendResult = await backendOptimizeRoute({
@@ -664,28 +676,30 @@ export default function PlannerContent() {
                     })();
               }
 
-              // Fix #3: post-process to prune excess revisits of the same directed segment.
-              const maxSegmentVisits = serviceBothSides ? 2 : 1;
+              // Fix #3: post-process to prune excess revisits. Skip when offline-v2 (Videos app optimizer).
               let route = optResult.route ?? [];
               let totalDistance = optResult.totalDistance;
-              try {
-                const pruned = pruneRouteLoops(route, {
-                  maxSegmentVisits,
-                  precision: 4,
-                  maxIterations: 100,
-                });
-                if (pruned.changed) {
-                  debug("Planner.OSMFileLibrary.deLoop", {
-                    source: libraryOptimizerSource ?? "local",
+              if (libraryOptimizerSource !== "offline-v2") {
+                try {
+                  const maxSegmentVisits = serviceBothSides ? 2 : 1;
+                  const pruned = pruneRouteLoops(route, {
                     maxSegmentVisits,
-                    removedPoints: pruned.removedPoints,
-                    stats: pruned.stats,
+                    precision: 4,
+                    maxIterations: 100,
                   });
-                  route = pruned.route;
-                  totalDistance = pruned.stats.approxDistanceKmAfter;
+                  if (pruned.changed) {
+                    debug("Planner.OSMFileLibrary.deLoop", {
+                      source: libraryOptimizerSource ?? "local",
+                      maxSegmentVisits,
+                      removedPoints: pruned.removedPoints,
+                      stats: pruned.stats,
+                    });
+                    route = pruned.route;
+                    totalDistance = pruned.stats.approxDistanceKmAfter;
+                  }
+                } catch (e) {
+                  debug("Planner.OSMFileLibrary.deLoop", { failed: true, error: e });
                 }
-              } catch (e) {
-                debug("Planner.OSMFileLibrary.deLoop", { failed: true, error: e });
               }
 
               const libRouteCoords = route.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`);
@@ -829,7 +843,7 @@ export default function PlannerContent() {
           </View>
         </View>
 
-        {/* Optimize offline toggle */}
+        {/* Offline optimizer (v2) toggle */}
         <View
           className="bg-surface rounded-2xl p-5 mb-4"
           style={{ backgroundColor: colors.surface }}
@@ -838,60 +852,8 @@ export default function PlannerContent() {
             Optimization
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Off: use backend when available, then fall back to local. On: use local optimizer only (no network). Prefer local: use local first to reduce looping. Offline (v2): use the optimizer from route-optimizer-mobile-v2 (Videos app).
+            Use offline optimizer (v2): same optimizer as route-optimizer-mobile-v2 (Videos app). When v2 is on, route is always two-pass; one-pass applies only when v2 is off. Off: use backend when available, then fall back to local.
           </Text>
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-base text-foreground">Optimize offline</Text>
-            <TouchableOpacity
-              onPress={() => {
-                hapticImpact();
-                setOptimizationOffline((v) => !v);
-              }}
-              style={{
-                width: 52,
-                height: 30,
-                borderRadius: 15,
-                justifyContent: "center",
-                backgroundColor: optimizationOffline ? colors.primary : colors.border,
-              }}
-            >
-              <View
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  marginLeft: optimizationOffline ? 24 : 2,
-                  backgroundColor: "#fff",
-                }}
-              />
-            </TouchableOpacity>
-          </View>
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-base text-foreground">Prefer local (less looping)</Text>
-            <TouchableOpacity
-              onPress={() => {
-                hapticImpact();
-                setPreferLocalOptimizer((v) => !v);
-              }}
-              style={{
-                width: 52,
-                height: 30,
-                borderRadius: 15,
-                justifyContent: "center",
-                backgroundColor: preferLocalOptimizer ? colors.primary : colors.border,
-              }}
-            >
-              <View
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  marginLeft: preferLocalOptimizer ? 24 : 2,
-                  backgroundColor: "#fff",
-                }}
-              />
-            </TouchableOpacity>
-          </View>
           <View className="flex-row items-center justify-between">
             <Text className="text-base text-foreground">Use offline optimizer (v2)</Text>
             <TouchableOpacity
