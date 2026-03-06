@@ -8,7 +8,12 @@
 /// <reference path="../types/expo-navigation.d.ts" />
 
 import { haversineDistance } from "./offlineTurnDetection";
-import { projectOntoLineWindow } from "./turfProjection";
+import {
+  createRouteLine,
+  getRouteLengthMeters,
+  snapToRoute,
+} from "./routeSnap";
+import type { MatchedPoint } from "./routeSnap";
 import type { MatchedRoute, MatchedStep } from "./mapMatching";
 import { PowerSavingManager } from "@/src/powerSaving";
 
@@ -42,6 +47,12 @@ export class NavigationEngine {
   private lastSpokenStreetName: string;
   private lastSpokenText: string;
   private lastSpokenTime: number;
+  /** Turf route line (built once from matchedGeometry). Used for snap and distance remaining. */
+  private _routeLine: ReturnType<typeof createRouteLine> | null;
+  /** Total route length in meters (set when _routeLine is built). */
+  private _routeLengthMeters: number;
+  /** Last MatchedPoint from routeSnap (for backward-jump prevention). */
+  private _previousMatch: MatchedPoint | undefined;
 
   constructor(
     matchedRoute: MatchedRoute,
@@ -66,6 +77,9 @@ export class NavigationEngine {
     this.lastSpokenStreetName = "";
     this.lastSpokenText = "";
     this.lastSpokenTime = 0;
+    this._routeLine = null;
+    this._routeLengthMeters = 0;
+    this._previousMatch = undefined;
   }
 
   async start(): Promise<void> {
@@ -358,37 +372,42 @@ export class NavigationEngine {
     snappedLocation: { lat: number; lon: number };
     segmentIndex: number;
     distanceFromRoute: number;
+    routeProgressMeters?: number;
+    totalRouteLength?: number;
   } {
     const routeCoords = this.route.matchedGeometry;
-    const startIdx = Math.max(0, this.lastSegmentIndex - 5);
-    const endIdx = Math.min(routeCoords.length - 1, this.lastSegmentIndex + 20);
-
-    const projection = projectOntoLineWindow(
-      location,
-      routeCoords,
-      startIdx,
-      endIdx,
-    );
-
-    if (projection) {
+    if (routeCoords.length < 2) {
       return {
-        snappedLocation: {
-          lat: projection.snappedLat,
-          lon: projection.snappedLon,
-        },
-        segmentIndex: projection.segmentIndex,
-        distanceFromRoute: projection.distanceFromRoute,
+        snappedLocation: routeCoords[0] ?? { lat: 0, lon: 0 },
+        segmentIndex: 0,
+        distanceFromRoute: 0,
       };
     }
 
-    // Fallback: return nearest route point
+    if (!this._routeLine) {
+      this._routeLine = createRouteLine(
+        routeCoords.map((p) => [p.lon, p.lat] as [number, number])
+      );
+      this._routeLengthMeters = getRouteLengthMeters(this._routeLine);
+    }
+
+    const matched = snapToRoute(
+      { lon: location.lon, lat: location.lat },
+      this._routeLine!,
+      this._previousMatch,
+      this.offRouteThreshold
+    );
+    this._previousMatch = matched;
+
     return {
-      snappedLocation: routeCoords[this.lastSegmentIndex] ?? routeCoords[0],
-      segmentIndex: this.lastSegmentIndex,
-      distanceFromRoute: haversineDistance(
-        location,
-        routeCoords[this.lastSegmentIndex] ?? routeCoords[0],
-      ),
+      snappedLocation: {
+        lat: matched.snapped[1],
+        lon: matched.snapped[0],
+      },
+      segmentIndex: matched.currentSegmentIndex,
+      distanceFromRoute: matched.distanceToRoute,
+      routeProgressMeters: matched.routeProgressMeters,
+      totalRouteLength: this._routeLengthMeters,
     };
   }
 
@@ -426,7 +445,21 @@ export class NavigationEngine {
   _updateDistanceRemaining(snapped: {
     snappedLocation: { lat: number; lon: number };
     segmentIndex: number;
+    routeProgressMeters?: number;
+    totalRouteLength?: number;
   }): void {
+    if (
+      snapped.routeProgressMeters != null &&
+      snapped.totalRouteLength != null &&
+      snapped.totalRouteLength > 0
+    ) {
+      this.distanceRemaining = Math.max(
+        0,
+        snapped.totalRouteLength - snapped.routeProgressMeters
+      );
+      return;
+    }
+
     const routeCoords = this.route.matchedGeometry;
     if (routeCoords.length < 2) return;
 
