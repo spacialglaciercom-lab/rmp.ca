@@ -40,6 +40,7 @@ import { getRoutingConfigAsync } from "@/lib/routing-config";
 import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
+import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import { optimizeRoute as backendOptimizeRoute } from "@/services/overtureOptimizerService";
 import { osmDataToGeoJSON } from "@/lib/geojsonToOsmData";
@@ -226,12 +227,13 @@ export default function PlannerContent() {
       if (osmData) {
         const { nodes, ways, turnRestrictions } = storedToOsmData(osmData);
         const startCoords = customStartPoint.getStartPoint();
-        const onewayMode = state.configuration.onewayMode ?? "A";
+        const onewayMode = state.configuration.onewayMode ?? "B";
         const turnPenalties = state.configuration.turnPenalties;
         const serviceBothSides = state.configuration.serviceBothSides ?? false;
         // Yield so React can paint "processing" state before optimisation
         await new Promise<void>((r) => setTimeout(r, 0));
         // Use backend optimizer when not offline; otherwise use local only.
+        let optimizerSource: "backend" | "local" | undefined;
         if (!optimizationOffline) {
           try {
             const geojson = osmDataToGeoJSON(nodes, ways);
@@ -252,12 +254,14 @@ export default function PlannerContent() {
               route: backendResult.route,
               totalDistance: backendResult.total_distance_km,
             };
+            optimizerSource = "backend";
           } catch (backendErr) {
             debug("Planner.generateRoute", { backendOptimizerFailed: (backendErr as Error).message });
           }
         }
         if (optResult === undefined) {
           // Offline mode or backend failed: use local optimizer
+          optimizerSource = "local";
           optResult = isExperimentalRoute
             ? await optimizeRouteTurnAware(nodes, ways, {
                 customLat: startCoords?.latitude,
@@ -272,7 +276,6 @@ export default function PlannerContent() {
                   try {
                     const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions, undefined, {
                       serviceBothSides,
-                      antiLoopMode: "strict",
                     });
                     resolve(
                       optimizer.optimize(
@@ -287,8 +290,42 @@ export default function PlannerContent() {
                 }, 0);
               });
         }
+
+        // Fix #3: post-process to prune excess revisits of the same directed segment.
+        // One pass allows each segment once; two-pass allows twice.
+        try {
+          const maxSegmentVisits = serviceBothSides ? 2 : 1;
+          const pruned = pruneRouteLoops(optResult.route ?? [], { maxSegmentVisits });
+          if (pruned.changed) {
+            debug("Planner.generateRoute.deLoop", {
+              source: optimizerSource ?? "local",
+              maxSegmentVisits,
+              removedPoints: pruned.removedPoints,
+              stats: pruned.stats,
+            });
+            optResult = {
+              ...optResult,
+              route: pruned.route,
+              // totalDistance is used as a hint/override later; keep it consistent with the pruned path
+              totalDistance: pruned.stats.approxDistanceKmAfter,
+            };
+          }
+        } catch (e) {
+          debug("Planner.generateRoute.deLoop", { failed: true, error: e });
+        }
+
         if (optResult.route.length > 0) {
           optimizerDistanceKm = optResult.totalDistance;
+          // Diagnostic: which optimizer produced the route and whether route has loop patterns
+          const routeCoords = optResult.route.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`);
+          const uniqueCoords = new Set(routeCoords).size;
+          const hasLoopPattern = uniqueCoords < optResult.route.length;
+          debug("Planner.generateRoute.optimizer", {
+            source: optimizerSource ?? "local",
+            routeLength: optResult.route.length,
+            uniqueStops: uniqueCoords,
+            hasLoopPattern,
+          });
           optimizedPoints = optResult.route.map((p, i) => ({
             // Use index-based suffix to ensure uniqueness even if visiting the same node twice (loops/returns)
             id: (p as { nodeId?: string }).nodeId 
@@ -560,10 +597,11 @@ export default function PlannerContent() {
                 return;
               }
               const startCoords = customStartPoint.getStartPoint();
-              const onewayMode = state.configuration.onewayMode ?? "A";
+              const onewayMode = state.configuration.onewayMode ?? "B";
               const turnPenalties = state.configuration.turnPenalties;
               const serviceBothSides = state.configuration.serviceBothSides ?? false;
               let optResult: { route: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number } | undefined;
+              let libraryOptimizerSource: "backend" | "local" | undefined;
               if (!optimizationOffline) {
                 try {
                   const geojson = osmDataToGeoJSON(nodes, ways);
@@ -576,11 +614,13 @@ export default function PlannerContent() {
                     turn_penalties: { left_turn: turnPenalties.leftTurn, u_turn: turnPenalties.uTurn, right_turn: turnPenalties.rightTurn },
                   });
                   optResult = { route: backendResult.route, totalDistance: backendResult.total_distance_km };
+                  libraryOptimizerSource = "backend";
                 } catch {
                   // fall through to local
                 }
               }
               if (optResult === undefined) {
+                libraryOptimizerSource = "local";
                 optResult = isExperimentalRoute
                   ? await optimizeRouteTurnAware(nodes, ways, {
                       customLat: startCoords?.latitude,
@@ -591,12 +631,39 @@ export default function PlannerContent() {
                       serviceBothSides,
                     })
                   : (() => {
-                      const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
+                      const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
                       return optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties);
                     })();
               }
-              const route = optResult.route ?? [];
-              const totalDistance = optResult.totalDistance;
+
+              // Fix #3: post-process to prune excess revisits of the same directed segment.
+              const maxSegmentVisits = serviceBothSides ? 2 : 1;
+              let route = optResult.route ?? [];
+              let totalDistance = optResult.totalDistance;
+              try {
+                const pruned = pruneRouteLoops(route, { maxSegmentVisits });
+                if (pruned.changed) {
+                  debug("Planner.OSMFileLibrary.deLoop", {
+                    source: libraryOptimizerSource ?? "local",
+                    maxSegmentVisits,
+                    removedPoints: pruned.removedPoints,
+                    stats: pruned.stats,
+                  });
+                  route = pruned.route;
+                  totalDistance = pruned.stats.approxDistanceKmAfter;
+                }
+              } catch (e) {
+                debug("Planner.OSMFileLibrary.deLoop", { failed: true, error: e });
+              }
+
+              const libRouteCoords = route.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`);
+              const libUniqueCoords = new Set(libRouteCoords).size;
+              debug("Planner.OSMFileLibrary.optimizer", {
+                source: libraryOptimizerSource ?? "local",
+                routeLength: route.length,
+                uniqueStops: libUniqueCoords,
+                hasLoopPattern: libUniqueCoords < route.length,
+              });
               const collectionPts: CollectionPoint[] = route.map(
                 (p, i) => ({
                   id: p.nodeId ?? `route-${i}`,

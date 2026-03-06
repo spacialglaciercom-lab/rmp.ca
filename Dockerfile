@@ -7,8 +7,9 @@ WORKDIR /app
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
-# Copy package files
+# Copy package files and patches (lockfile references patchedDependencies)
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 
 # Install dependencies (include dev for build). Skip postinstall: patch scripts are for mobile/React Native, not the API.
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -25,6 +26,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 # Production install only (skip postinstall – not needed for API runtime)
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
