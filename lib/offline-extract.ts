@@ -5,6 +5,7 @@
  */
 
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 import { getDownloadedRegions, getRegionDataDir } from "@/lib/offline-map-download";
 import type { DownloadedRegion } from "@/lib/offline-map-download";
 import type { GeoJSONFeatureCollection } from "@/services/overtureOptimizerService";
@@ -245,8 +246,12 @@ export async function extractFromS3Parquet(
   polygon: Polygon,
   onProgress?: (p: OfflineExtractProgress) => void,
 ): Promise<GeoJSONFeatureCollection> {
-  const { extractFromS3ParquetImpl } = await import("./offline-extract-parquet");
-  return extractFromS3ParquetImpl(region, polygon, onProgress);
+  // Explicit paths so web bundle never includes apache-arrow (offline-extract-parquet.ts)
+  const mod =
+    Platform.OS === "web"
+      ? await import("./offline-extract-parquet.web")
+      : await import("./offline-extract-parquet");
+  return mod.extractFromS3ParquetImpl(region, polygon, onProgress);
 }
 
 /**
