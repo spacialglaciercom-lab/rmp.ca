@@ -79,7 +79,7 @@ export function useRouteOptimization() {
       customLat,
       customLon,
       turnPenalties,
-      onewayMode = "A",
+      onewayMode = "B",
       turnRestrictions = [],
       serviceBothSides = false,
       onProgress,

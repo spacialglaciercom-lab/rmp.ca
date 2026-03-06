@@ -74,6 +74,8 @@ export interface RouteMapProps {
   zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
   /** Zones panel: sector division — one polygon per zone. */
   zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
+  /** Optional initial bounds to fit map on load (e.g. zone polygons). */
+  initialBounds?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
   /** Which city's PMTiles to load (default: auto-detect or "montreal"). */
   overtureCity?: string;
 }
@@ -142,6 +144,7 @@ export const MapLibreRouteMap = React.memo(
       overtureCity,
       zonesPreviewPolygon,
       zonesPreviewPolygons,
+      initialBounds,
     },
     ref
   ) {
@@ -176,15 +179,21 @@ export const MapLibreRouteMap = React.memo(
       return baseStyle;
     }, [showAerial, mapTypePreference, showOverture, resolvedCity]);
 
-    const pointsForBounds = useMemo(
-      () =>
-        collectionPoints.length > 0
-          ? collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }))
-          : (routePoints ?? []).length > 0
-            ? routePoints!
-            : [],
-      [collectionPoints, routePoints]
-    );
+    const pointsForBounds = useMemo(() => {
+      if (collectionPoints.length > 0)
+        return collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+      if ((routePoints ?? []).length > 0) return routePoints!;
+      if (initialBounds) {
+        const { minLat, maxLat, minLon, maxLon } = initialBounds;
+        return [
+          { lat: minLat, lon: minLon },
+          { lat: minLat, lon: maxLon },
+          { lat: maxLat, lon: maxLon },
+          { lat: maxLat, lon: minLon },
+        ];
+      }
+      return [];
+    }, [collectionPoints, routePoints, initialBounds]);
 
     const initialCenter: GeoJSON.Position = useMemo(() => {
       if (pointsForBounds.length === 0) return DEFAULT_CENTER;
@@ -457,37 +466,77 @@ export const MapLibreRouteMap = React.memo(
             </ShapeSource>
           )}
 
-          {zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (
-            <ShapeSource
-              id="zones-preview-polygon"
-              shape={{
-                type: "Polygon",
-                coordinates: [
-                  [
-                    ...zonesPreviewPolygon.map((p) => [p.longitude, p.latitude] as [number, number]),
-                    [zonesPreviewPolygon[0].longitude, zonesPreviewPolygon[0].latitude],
-                  ],
-                ],
-              }}
-            >
-              <FillLayer
-                id="zones-preview-fill"
-                style={{
-                  fillColor: "rgba(249, 115, 22, 0.25)",
-                  fillOutlineColor: "#f97316",
-                }}
-              />
-              <LineLayer
-                id="zones-preview-boundary"
-                style={{
-                  lineColor: "#f97316",
-                  lineWidth: 4,
-                  lineCap: "round",
-                  lineJoin: "round",
-                }}
-              />
-            </ShapeSource>
-          )}
+          {zonesPreviewPolygons && zonesPreviewPolygons.length > 0
+            ? zonesPreviewPolygons.map((poly, idx) => {
+                if (poly.length < 3) return null;
+                const zoneFillColors = [
+                  "rgba(249, 115, 22, 0.3)",
+                  "rgba(59, 130, 246, 0.3)",
+                  "rgba(34, 197, 94, 0.3)",
+                  "rgba(168, 85, 247, 0.3)",
+                  "rgba(234, 179, 8, 0.3)",
+                  "rgba(239, 68, 68, 0.3)",
+                ];
+                const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+                const fillColor = zoneFillColors[idx % zoneFillColors.length];
+                const strokeColor = zoneStrokeColors[idx % zoneStrokeColors.length];
+                const ring = [
+                  ...poly.map((p) => [p.longitude, p.latitude] as [number, number]),
+                  [poly[0].longitude, poly[0].latitude],
+                ];
+                return (
+                  <ShapeSource
+                    key={`zones-preview-${idx}`}
+                    id={`zones-preview-polygon-${idx}`}
+                    shape={{ type: "Polygon", coordinates: [ring] }}
+                  >
+                    <FillLayer
+                      id={`zones-preview-fill-${idx}`}
+                      style={{ fillColor, fillOutlineColor: strokeColor }}
+                    />
+                    <LineLayer
+                      id={`zones-preview-boundary-${idx}`}
+                      style={{
+                        lineColor: strokeColor,
+                        lineWidth: 3,
+                        lineCap: "round",
+                        lineJoin: "round",
+                      }}
+                    />
+                  </ShapeSource>
+                );
+              })
+            : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (
+                <ShapeSource
+                  id="zones-preview-polygon"
+                  shape={{
+                    type: "Polygon",
+                    coordinates: [
+                      [
+                        ...zonesPreviewPolygon.map((p) => [p.longitude, p.latitude] as [number, number]),
+                        [zonesPreviewPolygon[0].longitude, zonesPreviewPolygon[0].latitude],
+                      ],
+                    ],
+                  }}
+                >
+                  <FillLayer
+                    id="zones-preview-fill"
+                    style={{
+                      fillColor: "rgba(249, 115, 22, 0.25)",
+                      fillOutlineColor: "#f97316",
+                    }}
+                  />
+                  <LineLayer
+                    id="zones-preview-boundary"
+                    style={{
+                      lineColor: "#f97316",
+                      lineWidth: 4,
+                      lineCap: "round",
+                      lineJoin: "round",
+                    }}
+                  />
+                </ShapeSource>
+              )}
 
           {osmExtractedFeatures?.map((f) => {
             const geom = f.geometry;

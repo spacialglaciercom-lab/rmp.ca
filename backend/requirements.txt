@@ -6,3 +6,5 @@ scikit-learn>=1.8.0
 pydantic>=2.0.0
 networkx>=3.1
 shapely>=2.0.0
+# Optional: for batch geometry repair when features >= 10k (vector_clean.py)
+geopandas>=0.14.0

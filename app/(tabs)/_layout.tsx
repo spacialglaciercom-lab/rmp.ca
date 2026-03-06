@@ -75,6 +75,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="map" size={20} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="zones"
+        options={{
+          title: "Zones",
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="vector-polygon" size={20} color={color} />,
+        }}
+      />
       {/* map-content is the screen component loaded by map.tsx; hide from tab bar so it doesn't show as a second Map tab. */}
       <Tabs.Screen
         name="map-content"

@@ -41,6 +41,7 @@ import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
+import { RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import { optimizeRoute as backendOptimizeRoute } from "@/services/overtureOptimizerService";
 import { osmDataToGeoJSON } from "@/lib/geojsonToOsmData";
@@ -78,6 +79,10 @@ export default function PlannerContent() {
   const [showConstraintParser, setShowConstraintParser] = useState(false);
   const [confirmedConstraints, setConfirmedConstraints] = useState<ParsedConstraint[]>([]);
   const [optimizationOffline, setOptimizationOffline] = useState(false);
+  /** When true, use local optimizer only (avoids backend-induced looping). */
+  const [preferLocalOptimizer, setPreferLocalOptimizer] = useState(false);
+  /** When true, use the offline optimizer from route-optimizer-mobile-v2 (Videos app). */
+  const [useOfflineOptimizerV2, setUseOfflineOptimizerV2] = useState(false);
 
   const applyRouteFromPoints = useCallback(
     async (points: CollectionPoint[], fileName?: string, options?: { totalDistanceKm?: number }) => {
@@ -232,9 +237,18 @@ export default function PlannerContent() {
         const serviceBothSides = state.configuration.serviceBothSides ?? false;
         // Yield so React can paint "processing" state before optimisation
         await new Promise<void>((r) => setTimeout(r, 0));
-        // Use backend optimizer when not offline; otherwise use local only.
-        let optimizerSource: "backend" | "local" | undefined;
-        if (!optimizationOffline) {
+        // When "Use offline optimizer (v2)" is on, use only the Videos app optimizer (no backend, no existing local).
+        let optimizerSource: "backend" | "local" | "offline-v2" | undefined;
+        if (useOfflineOptimizerV2) {
+          try {
+            const v2 = new RouteOptimizerSimpleV2(nodes, ways);
+            optResult = v2.optimize(startCoords?.latitude, startCoords?.longitude);
+            optimizerSource = "offline-v2";
+          } catch (e) {
+            debug("Planner.generateRoute", { offlineV2Failed: (e as Error).message });
+          }
+        }
+        if (optResult === undefined && !optimizationOffline && !preferLocalOptimizer) {
           try {
             const geojson = osmDataToGeoJSON(nodes, ways);
             const backendResult = await backendOptimizeRoute({
@@ -293,9 +307,14 @@ export default function PlannerContent() {
 
         // Fix #3: post-process to prune excess revisits of the same directed segment.
         // One pass allows each segment once; two-pass allows twice.
+        // Use coarser precision (4) and more iterations so backend/loopy routes get cleaned.
         try {
           const maxSegmentVisits = serviceBothSides ? 2 : 1;
-          const pruned = pruneRouteLoops(optResult.route ?? [], { maxSegmentVisits });
+          const pruned = pruneRouteLoops(optResult.route ?? [], {
+            maxSegmentVisits,
+            precision: 4,
+            maxIterations: 100,
+          });
           if (pruned.changed) {
             debug("Planner.generateRoute.deLoop", {
               source: optimizerSource ?? "local",
@@ -601,8 +620,17 @@ export default function PlannerContent() {
               const turnPenalties = state.configuration.turnPenalties;
               const serviceBothSides = state.configuration.serviceBothSides ?? false;
               let optResult: { route: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number } | undefined;
-              let libraryOptimizerSource: "backend" | "local" | undefined;
-              if (!optimizationOffline) {
+              let libraryOptimizerSource: "backend" | "local" | "offline-v2" | undefined;
+              if (useOfflineOptimizerV2) {
+                try {
+                  const v2 = new RouteOptimizerSimpleV2(nodes, ways);
+                  optResult = v2.optimize(startCoords?.latitude, startCoords?.longitude);
+                  libraryOptimizerSource = "offline-v2";
+                } catch {
+                  // fall through
+                }
+              }
+              if (optResult === undefined && !optimizationOffline && !preferLocalOptimizer) {
                 try {
                   const geojson = osmDataToGeoJSON(nodes, ways);
                   const backendResult = await backendOptimizeRoute({
@@ -641,7 +669,11 @@ export default function PlannerContent() {
               let route = optResult.route ?? [];
               let totalDistance = optResult.totalDistance;
               try {
-                const pruned = pruneRouteLoops(route, { maxSegmentVisits });
+                const pruned = pruneRouteLoops(route, {
+                  maxSegmentVisits,
+                  precision: 4,
+                  maxIterations: 100,
+                });
                 if (pruned.changed) {
                   debug("Planner.OSMFileLibrary.deLoop", {
                     source: libraryOptimizerSource ?? "local",
@@ -700,10 +732,13 @@ export default function PlannerContent() {
         />
 
         {/* OSM Import */}
-        <OSMImport onImportComplete={(points, osmData, options) => {
-          handleOSMImport(points, osmData, options);
-          setOsmLibraryRefreshKey((k) => k + 1);
-        }} />
+        <OSMImport
+          useOfflineOptimizerV2={useOfflineOptimizerV2}
+          onImportComplete={(points, osmData, options) => {
+            handleOSMImport(points, osmData, options);
+            setOsmLibraryRefreshKey((k) => k + 1);
+          }}
+        />
 
         {/* Output File Name */}
         <View
@@ -803,9 +838,9 @@ export default function PlannerContent() {
             Optimization
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Off: use backend when available, then fall back to local. On: use local optimizer only (no network).
+            Off: use backend when available, then fall back to local. On: use local optimizer only (no network). Prefer local: use local first to reduce looping. Offline (v2): use the optimizer from route-optimizer-mobile-v2 (Videos app).
           </Text>
-          <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center justify-between mb-3">
             <Text className="text-base text-foreground">Optimize offline</Text>
             <TouchableOpacity
               onPress={() => {
@@ -826,6 +861,58 @@ export default function PlannerContent() {
                   height: 26,
                   borderRadius: 13,
                   marginLeft: optimizationOffline ? 24 : 2,
+                  backgroundColor: "#fff",
+                }}
+              />
+            </TouchableOpacity>
+          </View>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-base text-foreground">Prefer local (less looping)</Text>
+            <TouchableOpacity
+              onPress={() => {
+                hapticImpact();
+                setPreferLocalOptimizer((v) => !v);
+              }}
+              style={{
+                width: 52,
+                height: 30,
+                borderRadius: 15,
+                justifyContent: "center",
+                backgroundColor: preferLocalOptimizer ? colors.primary : colors.border,
+              }}
+            >
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  marginLeft: preferLocalOptimizer ? 24 : 2,
+                  backgroundColor: "#fff",
+                }}
+              />
+            </TouchableOpacity>
+          </View>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-base text-foreground">Use offline optimizer (v2)</Text>
+            <TouchableOpacity
+              onPress={() => {
+                hapticImpact();
+                setUseOfflineOptimizerV2((v) => !v);
+              }}
+              style={{
+                width: 52,
+                height: 30,
+                borderRadius: 15,
+                justifyContent: "center",
+                backgroundColor: useOfflineOptimizerV2 ? colors.primary : colors.border,
+              }}
+            >
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  marginLeft: useOfflineOptimizerV2 ? 24 : 2,
                   backgroundColor: "#fff",
                 }}
               />

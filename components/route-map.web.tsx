@@ -369,6 +369,8 @@ export interface RouteMapProps {
   zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
   /** Zones panel: sector division — one polygon per zone. */
   zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
+  /** Optional initial bounds to fit map on load (e.g. zone polygons). When set, used when there are no route/collection points. */
+  initialBounds?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
   /** When set (>= 0), highlight current route segment (green) vs completed (gray) vs upcoming (white). */
   navigationSegmentIndex?: number;
   /** Live user GPS position; when set, a user location marker is shown. */
@@ -547,6 +549,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   geojsonFillColor = "rgba(33,150,243,0.15)",
   zonesPreviewPolygon,
   zonesPreviewPolygons,
+  initialBounds,
 }, _ref) {
   const colors = useColors();
   const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -666,6 +669,14 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
     } else if (hasRoutePoints) {
       points = routePoints!.map((p) => [p.lat, p.lon] as [number, number]);
     }
+    if (points.length === 0 && initialBounds) {
+      const padLat = Math.max((initialBounds.maxLat - initialBounds.minLat) * 0.2, 0.01);
+      const padLon = Math.max((initialBounds.maxLon - initialBounds.minLon) * 0.2, 0.01);
+      return [
+        [initialBounds.minLat - padLat, initialBounds.minLon - padLon],
+        [initialBounds.maxLat + padLat, initialBounds.maxLon + padLon],
+      ] as [[number, number], [number, number]];
+    }
     if (points.length === 0) return null;
     const lats = points.map((p) => p[0]);
     const lons = points.map((p) => p[1]);
@@ -679,7 +690,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
       [minLat - latPadding, minLon - lonPadding],
       [maxLat + latPadding, maxLon + lonPadding],
     ] as [[number, number], [number, number]];
-  }, [collectionPoints, hasCollectionPoints, routePoints, hasRoutePoints, routePointsByVehicle, hasRoutePointsByVehicle]);
+  }, [collectionPoints, hasCollectionPoints, routePoints, hasRoutePoints, routePointsByVehicle, hasRoutePointsByVehicle, initialBounds]);
 
   useEffect(() => {
     boundsRef.current = bounds;

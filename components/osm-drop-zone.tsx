@@ -83,7 +83,7 @@ export function OSMDropZone({ onImportComplete, children }: OSMDropZoneProps) {
         // Yield so browser can paint progress before CPU-heavy work
         await new Promise<void>((r) => setTimeout(r, 0));
 
-        const onewayMode = customStartPoint.state.configuration.onewayMode ?? "A";
+        const onewayMode = customStartPoint.state.configuration.onewayMode ?? "B";
         const turnPenalties = customStartPoint.state.configuration.turnPenalties;
         const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
 

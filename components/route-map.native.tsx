@@ -126,6 +126,8 @@ export interface RouteMapProps {
   zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
   /** Zones panel: sector division — one polygon per zone (from zone_polygon). Drawn with distinct colors. */
   zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
+  /** Optional initial bounds to fit map on load (e.g. zone polygons). When set, used when there are no route/collection points. */
+  initialBounds?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
 }
 
 const DEFAULT_REGION = {
@@ -172,6 +174,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   geojsonOverlay,
   zonesPreviewPolygon,
   zonesPreviewPolygons,
+  initialBounds,
 }, ref) {
   const colors = useColors();
   const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -311,8 +314,17 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
       return routePointsByVehicle.flat();
     }
     if (routePoints && routePoints.length > 0) return routePoints;
+    if (initialBounds) {
+      const { minLat, maxLat, minLon, maxLon } = initialBounds;
+      return [
+        { lat: minLat, lon: minLon },
+        { lat: minLat, lon: maxLon },
+        { lat: maxLat, lon: maxLon },
+        { lat: maxLat, lon: minLon },
+      ];
+    }
     return [];
-  }, [collectionPoints, routePoints, routePointsByVehicle]);
+  }, [collectionPoints, routePoints, routePointsByVehicle, initialBounds]);
 
   /** Bounding box from all points so fitToRoute shows the full track (no truncation on long GPX). */
   const boundsBox = useMemo(() => {

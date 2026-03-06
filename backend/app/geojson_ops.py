@@ -9,6 +9,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+import numpy as np
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -276,12 +278,28 @@ def _feature_centroid(feat: GeoJSONFeature) -> tuple[float, float] | None:
 
 
 def _haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
-    """Haversine distance in km."""
+    """Haversine distance in km (scalar)."""
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _haversine_km_vectorized(
+    lon1: np.ndarray, lat1: np.ndarray, lon2: np.ndarray, lat2: np.ndarray
+) -> np.ndarray:
+    """Vectorized haversine distance in km. All args 1D arrays of same length."""
+    R = 6371.0
+    lat1_r = np.radians(lat1)
+    lat2_r = np.radians(lat2)
+    dlat = np.radians(lat2 - lat1)
+    dlon = np.radians(lon2 - lon1)
+    a = (
+        np.sin(dlat / 2) ** 2
+        + np.cos(lat1_r) * np.cos(lat2_r) * np.sin(dlon / 2) ** 2
+    )
+    return R * 2 * np.arctan2(np.sqrt(a), np.sqrt(np.clip(1 - a, 0, 1)))
 
 
 def _feature_length_km(feat: GeoJSONFeature) -> float:

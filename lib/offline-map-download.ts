@@ -7,6 +7,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { Alert } from "react-native";
+import { OVERPASS_API_ENDPOINTS } from "@/lib/overpassService";
 
 // Lazy load MapLibre OfflineManager (native only; may be undefined on web)
 let _offlineManager: typeof import("@maplibre/maplibre-react-native").OfflineManager | null = null;
@@ -618,10 +619,9 @@ export async function resetEverything(): Promise<void> {
 
 // ─── OSM PBF / OSM data download (Overpass API, saved as .osm) ─────────────
 
-const OVERPASS_API = "https://overpass-api.de/api/interpreter";
-
 /**
  * Download OSM data for a city (Overpass API bbox export, saved as .osm XML).
+ * Tries each endpoint in OVERPASS_API_ENDPOINTS until one succeeds.
  * Returns the local file URI. Progress is approximate (fetch has no progress for response body).
  */
 export async function downloadOSMPBF(
@@ -638,20 +638,39 @@ export async function downloadOSMPBF(
     await FileSystem.makeDirectoryAsync(regionDir, { intermediates: true });
   }
 
-  onProgress?.(0, 1, "Requesting OSM data…");
   const { minLat, maxLat, minLon, maxLon } = city.bounds;
-  const query = `[out:xml];nwr(${minLat},${minLon},${maxLat},${maxLon});out;`;
-  const res = await fetch(OVERPASS_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-    signal,
-  });
-  if (!res.ok) {
-    throw new Error(`Overpass API failed: ${res.status} ${res.statusText}`);
+  const query = `[out:xml][timeout:180];way["highway"~"residential|tertiary|secondary|unclassified|living_street|secondary_link|tertiary_link"](${minLat},${minLon},${maxLat},${maxLon});(._;>;);out;`;
+  const body = `data=${encodeURIComponent(query)}`;
+
+  let text: string | null = null;
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < OVERPASS_API_ENDPOINTS.length; i++) {
+    if (signal?.aborted) throw new Error("Cancelled");
+    const endpoint = OVERPASS_API_ENDPOINTS[i];
+    onProgress?.(0, 1, `Requesting OSM data… (endpoint ${i + 1}/${OVERPASS_API_ENDPOINTS.length})`);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        signal,
+      });
+      if (!res.ok) {
+        throw new Error(`Overpass API failed: ${res.status} ${res.statusText}`);
+      }
+      text = await res.text();
+      break;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (signal?.aborted) throw new Error("Cancelled");
+      console.warn(`[OfflineMaps] Overpass endpoint failed: ${endpoint}`, lastError.message);
+    }
   }
-  const text = await res.text();
-  if (signal?.aborted) throw new Error("Cancelled");
+
+  if (text == null) {
+    throw lastError ?? new Error("All Overpass API endpoints failed. Please try again later.");
+  }
 
   onProgress?.(0.5, 1, "Saving…");
   await FileSystem.writeAsStringAsync(localPath, text, {

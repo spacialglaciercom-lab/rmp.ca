@@ -1,6 +1,6 @@
 /**
- * Offline extraction from downloaded R2 PMTiles or S3 Parquet.
- * Uses data already downloaded via Settings → Offline Map Download (R2 Tiles or S3 Parquet).
+ * Offline extraction from downloaded R2 PMTiles, S3 Parquet, or OSM PBF.
+ * Uses data already downloaded via Settings → Offline Map Download.
  * When the webovertureextract WebSocket is unavailable (offline), we fall back to this.
  */
 
@@ -10,6 +10,7 @@ import type { DownloadedRegion } from "@/lib/offline-map-download";
 import type { GeoJSONFeatureCollection } from "@/services/overtureOptimizerService";
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import type { Feature, Polygon } from "geojson";
+import { OSMParser } from "@/lib/route-optimizer-v2/osmParser";
 
 const PMTILES_VERSION = "v2026-02";
 const EXTRACT_MIN_ZOOM = 12;
@@ -149,13 +150,13 @@ export interface OfflineExtractProgress {
 
 export interface OfflineExtractResult {
   geojson: GeoJSONFeatureCollection;
-  source: "r2" | "s3";
+  source: "r2" | "s3" | "osm_pbf";
   regionId: string;
   regionName: string;
 }
 
 /**
- * Find a downloaded region (R2 or S3) whose bounds overlap the polygon.
+ * Find a downloaded region (R2, S3, or OSM PBF) whose bounds overlap the polygon.
  */
 export async function findRegionForPolygon(polygonCoords: [number, number][]): Promise<DownloadedRegion | null> {
   const bbox = bboxFromPolygon(polygonCoords);
@@ -358,8 +359,82 @@ export async function extractFromS3Parquet(
 }
 
 /**
- * Run offline extraction using downloaded data (R2 or S3).
- * Prefer R2 if the region has source "r2"; otherwise try S3 (when implemented).
+ * Extract road GeoJSON from a downloaded OSM PBF (.osm XML) file.
+ * Parses the XML with OSMParser, converts ways to GeoJSON LineString features,
+ * and filters by polygon intersection.
+ */
+export async function extractFromOSMPBF(
+  region: DownloadedRegion,
+  polygon: Polygon,
+  onProgress?: (p: OfflineExtractProgress) => void,
+): Promise<GeoJSONFeatureCollection> {
+  if (region.source !== "osm_pbf") {
+    throw new Error("Region is not OSM PBF");
+  }
+  const cityId = region.cityId ?? region.id.replace(/_osm_pbf$/, "");
+  const regionDir = getRegionDataDir(cityId);
+  const localPath = `${regionDir}/${cityId}.osm`;
+
+  const info = await FileSystem.getInfoAsync(localPath, { size: false });
+  if (!info.exists) {
+    throw new Error(`Offline OSM file not found: ${cityId}.osm. Re-download in Settings.`);
+  }
+
+  onProgress?.({ phase: "Reading OSM file…" });
+  const osmContent = await FileSystem.readAsStringAsync(localPath, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+
+  onProgress?.({ phase: "Parsing OSM data…" });
+  const parser = new OSMParser();
+  const { nodes, ways } = parser.parseOSM(osmContent);
+
+  onProgress?.({ phase: "Building GeoJSON features…", done: 0, total: ways.length });
+
+  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < ways.length; i++) {
+    const way = ways[i];
+    const coords: [number, number][] = [];
+    for (const nodeId of way.nodes) {
+      const node = nodes.get(nodeId);
+      if (node) coords.push([node.lon, node.lat]);
+    }
+    if (coords.length < 2) continue;
+
+    const inside = coords.some((c) => booleanPointInPolygon([c[0], c[1]], polygon));
+    if (!inside) continue;
+
+    const key = way.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    features.push({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: coords },
+      properties: {
+        id: way.id,
+        highway: way.tags.highway,
+        name: way.tags.name,
+        class: way.tags.highway,
+      },
+    });
+
+    if ((i + 1) % 500 === 0 || i === ways.length - 1) {
+      onProgress?.({ phase: "Building GeoJSON features…", done: i + 1, total: ways.length });
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+/**
+ * Run offline extraction using downloaded data (R2, S3, or OSM PBF).
+ * Tries whichever source the matching region was downloaded from.
  */
 export async function extractFromDownloadedData(
   polygon: Polygon,
@@ -385,6 +460,17 @@ export async function extractFromDownloadedData(
       const geojson = await extractFromS3Parquet(region, polygon, onProgress);
       return { geojson, source: "s3", regionId: region.id, regionName: region.name };
     } catch {
+      return null;
+    }
+  }
+
+  if (region.source === "osm_pbf") {
+    try {
+      onProgress?.({ phase: "Using downloaded OSM data…" });
+      const geojson = await extractFromOSMPBF(region, polygon, onProgress);
+      return { geojson, source: "osm_pbf", regionId: region.id, regionName: region.name };
+    } catch (e) {
+      console.warn("[offline-extract] OSM PBF extraction failed:", e);
       return null;
     }
   }

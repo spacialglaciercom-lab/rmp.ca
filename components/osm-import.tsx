@@ -16,6 +16,7 @@ import { CollectionPoint } from "@/types";
 import { readFileAsText } from "@/lib/readFileAsText";
 import { saveOSMFile } from "@/lib/osm-file-library";
 import { parseGeoJSON, importGeoJSONRoute } from "@/lib/geojson-import";
+import { optimizeFromGeoJSON } from "@/lib/offline-optimizer-v2";
 
 interface OSMImportProps {
   onImportComplete: (
@@ -23,9 +24,11 @@ interface OSMImportProps {
     osmData?: StoredOSMData,
     options?: { totalDistanceKm?: number }
   ) => void;
+  /** When true, GeoJSON imports use the offline v2 optimizer instead of the backend. */
+  useOfflineOptimizerV2?: boolean;
 }
 
-export function OSMImport({ onImportComplete }: OSMImportProps) {
+export function OSMImport({ onImportComplete, useOfflineOptimizerV2 = false }: OSMImportProps) {
   const colors = useColors();
   const customStartPoint = useCustomStartPoint();
   const { optimizeRoute } = useRouteOptimization();
@@ -88,22 +91,40 @@ export function OSMImport({ onImportComplete }: OSMImportProps) {
       throw new Error("GeoJSON file contains no features");
     }
 
-    setProgress({ stage: "parsing", progress: 50, message: "Sending to route optimizer..." });
+    setProgress({ stage: "parsing", progress: 50, message: useOfflineOptimizerV2 ? "Running offline optimizer (v2)..." : "Sending to route optimizer..." });
 
     const startCoords = customStartPoint.getStartPoint();
-    const turnPenalties = customStartPoint.state.configuration.turnPenalties;
 
-    const geoJSONResult = await importGeoJSONRoute(geojson, {
-      startLat: startCoords?.latitude,
-      startLon: startCoords?.longitude,
-      turnPenalties: turnPenalties
-        ? {
-            leftTurn: turnPenalties.leftTurn,
-            uTurn: turnPenalties.uTurn,
-            rightTurn: turnPenalties.rightTurn,
-          }
-        : undefined,
-    });
+    const geoJSONResult = useOfflineOptimizerV2
+      ? (() => {
+          const opt = optimizeFromGeoJSON(geojson, {
+            customLat: startCoords?.latitude,
+            customLon: startCoords?.longitude,
+          });
+          return {
+            collectionPoints: opt.route.map((p, i) => ({
+              id: (p as { nodeId?: string }).nodeId ?? `route-${i}`,
+              address: `Stop ${i + 1}`,
+              latitude: p.latitude,
+              longitude: p.longitude,
+              collectionType: "residential" as const,
+              status: "pending" as const,
+            })),
+            totalDistanceKm: opt.totalDistance,
+            stats: { nodesInGraph: 0, edgesInGraph: 0 },
+          };
+        })()
+      : await importGeoJSONRoute(geojson, {
+          startLat: startCoords?.latitude,
+          startLon: startCoords?.longitude,
+          turnPenalties: customStartPoint.state.configuration.turnPenalties
+            ? {
+                leftTurn: customStartPoint.state.configuration.turnPenalties.leftTurn,
+                uTurn: customStartPoint.state.configuration.turnPenalties.uTurn,
+                rightTurn: customStartPoint.state.configuration.turnPenalties.rightTurn,
+              }
+            : undefined,
+        });
 
     setProgress({ stage: "parsing", progress: 80, message: "Building route points..." });
     setProgress({ stage: "complete", progress: 100, message: "Import complete!" });
@@ -258,7 +279,7 @@ export function OSMImport({ onImportComplete }: OSMImportProps) {
 
       let optResult: any;
       try {
-        const onewayMode = customStartPoint.state.configuration.onewayMode ?? "A";
+        const onewayMode = customStartPoint.state.configuration.onewayMode ?? "B";
         const turnPenalties = customStartPoint.state.configuration.turnPenalties;
         const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
 
