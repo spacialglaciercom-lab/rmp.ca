@@ -4,8 +4,9 @@ FastAPI service that exposes:
 
 - **`POST /api/zones/partition`** — partition a graph (edges + node_count) into truck zones.
 - **`POST /api/zones/partition-from-geojson`** — build graph from road GeoJSON (FeatureCollection of LineStrings), then partition. Used by the Extract tab after "Extract & Process".
+- **`POST /api/zones/partition-from-points`** — build a KNN graph from points (lat/lon/weight), then partition into compact, load-balanced zones. Use `balance_metric`: `"count"` (equal points), `"weight"` (by point weight), or `"distance"` (spatial spread). Set `knn_neighbors=0` for pure KMeans (no graph).
 
-Balance is by total edge length × complexity factor per zone. **If the app shows "Zone partitioning failed" with 404, redeploy this backend** so the optimizer has the `partition-from-geojson` endpoint.
+Balance is by total edge length × complexity factor per zone (graph endpoints), or by point count/weight/distance (partition-from-points). **If the app shows "Zone partitioning failed" with 404, redeploy this backend** so the optimizer has the `partition-from-geojson` endpoint.
 
 ## Run locally
 

@@ -16,7 +16,8 @@ export interface SavedZoneResult {
   /** Partition result from POST /api/zones/partition (or partition-by-polygon). */
   zones: ZoneOutput[];
   truck_count: number;
-  balance_metric: "time" | "distance";
+  /** "time" | "distance" from graph partition; "count" | "weight" | "distance" from partition-from-points */
+  balance_metric: "time" | "distance" | "count" | "weight";
   createdAt: string;
 }
 

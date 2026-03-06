@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from shapely.geometry import MultiPoint
 from pydantic import BaseModel, Field
 from scipy import sparse
+from scipy.spatial import KDTree
 from scipy.sparse.linalg import eigsh
 from sklearn.cluster import KMeans
 
@@ -21,6 +22,7 @@ app = FastAPI(title="RouteMasterPro Optimizer API", version="1.1.0")
 from .geojson_ops import (
     GeoJSONFeatureCollection,
     geojson_to_partition_graph,
+    _haversine_km,
     router as geojson_router,
 )
 from .optimize import router as optimize_router
@@ -61,6 +63,34 @@ class PartitionRequest(BaseModel):
             '"distance" balances zones by raw edge length, ignoring complexity.'
         ),
     )
+
+
+class PointInput(BaseModel):
+    """One point (e.g. delivery address or stop)."""
+
+    lat: float = Field(..., description="Latitude")
+    lon: float = Field(..., description="Longitude")
+    weight: float = Field(1.0, gt=0, description="Optional workload, e.g. delivery time or packages; used when balance_metric is 'weight'.")
+
+
+class PartitionFromPointsRequest(BaseModel):
+    """Request for partition-from-points: build KNN graph from points and partition into zones."""
+
+    points: list[PointInput]
+    truck_count: int = Field(..., gt=0, le=100, description="Number of zones (partitions)")
+    balance_metric: Literal["count", "weight", "distance"] = Field(
+        "weight",
+        description=(
+            '"count" = equal number of points per zone; '
+            '"weight" = balance by point weight; '
+            '"distance" = balance by spatial spread (edge length).'
+        ),
+    )
+    knn_neighbors: int = Field(
+        5, ge=0, le=50,
+        description="Neighbors for KNN graph; 0 = pure KMeans (no graph). Higher = denser connections.",
+    )
+    include_polygons: bool = Field(True, description="Include convex hull polygon per zone.")
 
 
 class ZoneOutput(BaseModel):
@@ -224,6 +254,83 @@ def _zone_weights_from_labels(
     return zone_weights
 
 
+def _zone_weights_from_node_weights(
+    labels: np.ndarray,
+    node_weights: list[float],
+    k: int,
+) -> np.ndarray:
+    """Total node weight per zone (for point-based balance)."""
+    zone_weights = np.zeros(k)
+    for i, w in enumerate(node_weights):
+        if i < len(labels):
+            z = labels[i]
+            if 0 <= z < k:
+                zone_weights[z] += w
+    return zone_weights
+
+
+def _balance_postprocess_node_weights(
+    labels: np.ndarray,
+    node_weights: list[float],
+    k: int,
+    max_iters: int = 50,
+    time_limit: float = 5.0,
+) -> np.ndarray:
+    """
+    Greedy node moves for point-based balance: move nodes from heavy to light zones
+    to minimize sum of squared deviations from target node weight per zone.
+    """
+    import time as _time
+
+    n = labels.shape[0]
+    deadline = _time.monotonic() + time_limit
+    weights = np.array(node_weights, dtype=float) if len(node_weights) >= n else np.ones(n)
+
+    zone_weights = _zone_weights_from_node_weights(labels, weights.tolist(), k)
+    target = float(zone_weights.sum()) / k
+
+    def _imbalance() -> float:
+        return float(np.sum((zone_weights - target) ** 2))
+
+    for _ in range(max_iters):
+        if _time.monotonic() >= deadline:
+            break
+        improved = False
+        for u in range(n):
+            if _time.monotonic() >= deadline:
+                break
+            wu = weights[u]
+            if wu <= 0:
+                continue
+            z_old = int(labels[u])
+
+            trial_old = zone_weights[z_old] - wu
+            best_z = z_old
+            best_imb = _imbalance()
+
+            for z_new in range(k):
+                if z_new == z_old:
+                    continue
+                trial_new = zone_weights[z_new] + wu
+                imb = best_imb
+                imb -= (zone_weights[z_old] - target) ** 2
+                imb -= (zone_weights[z_new] - target) ** 2
+                imb += (trial_old - target) ** 2
+                imb += (trial_new - target) ** 2
+                if imb < best_imb:
+                    best_imb = imb
+                    best_z = z_new
+
+            if best_z != z_old:
+                zone_weights[z_old] -= wu
+                zone_weights[best_z] += wu
+                labels[u] = best_z
+                improved = True
+        if not improved:
+            break
+    return labels
+
+
 def _zone_weight_and_distance(
     labels: np.ndarray,
     zone_id: int,
@@ -346,20 +453,120 @@ def _zone_convex_hull_ring(
         return None
 
 
+def points_to_partition_graph(
+    points: list[PointInput],
+    knn_neighbors: int,
+) -> tuple[list[EdgeInput], int, list[tuple[float, float]], list[float]]:
+    """
+    Build (edges, node_count, id_to_coords, node_weights) from a list of points.
+    Uses KNN graph with Haversine edge lengths. id_to_coords[i] = (lon, lat).
+    If knn_neighbors < 1, returns empty edges (caller can use KMeans fallback).
+    """
+    node_count = len(points)
+    if node_count == 0:
+        return [], 0, [], []
+
+    # (lon, lat) for Shapely / output; (lat, lon) for KDTree (x,y ~ lat,lon for neighbor search)
+    id_to_coords: list[tuple[float, float]] = [(p.lon, p.lat) for p in points]
+    node_weights = [p.weight for p in points]
+
+    if knn_neighbors < 1:
+        return [], node_count, id_to_coords, node_weights
+
+    # KDTree on (lat, lon) for neighbor lookup; we'll use Haversine for edge length
+    points_array = np.array([(p.lat, p.lon) for p in points])
+    k_query = min(knn_neighbors + 1, node_count)  # +1 includes self
+    tree = KDTree(points_array)
+
+    edges: list[EdgeInput] = []
+    seen: set[tuple[int, int]] = set()
+
+    for i in range(node_count):
+        dists, indices = tree.query(points_array[i], k=k_query)
+        # Handle single-point or scalar query result
+        if np.isscalar(dists):
+            dists = [dists]
+            indices = [indices]
+        for j, d in zip(indices, dists):
+            j = int(j)
+            if i == j:
+                continue
+            key = (min(i, j), max(i, j))
+            if key in seen:
+                continue
+            seen.add(key)
+            lon_i, lat_i = id_to_coords[i][0], id_to_coords[i][1]
+            lon_j, lat_j = id_to_coords[j][0], id_to_coords[j][1]
+            length_km = _haversine_km(lon_i, lat_i, lon_j, lat_j)
+            if length_km <= 0:
+                continue
+            edges.append(
+                EdgeInput(
+                    u=i, v=j,
+                    length=length_km,
+                    intersection_density=1.0,
+                    cul_de_sac_penalty=1.0,
+                    width_penalty=1.0,
+                )
+            )
+
+    return edges, node_count, id_to_coords, node_weights
+
+
 def partition_graph(
     edges: list[EdgeInput],
     node_count: int,
     truck_count: int,
     balance_metric: str,
     node_coords: list[tuple[float, float]] | None = None,
+    node_weights: list[float] | None = None,
+    include_polygons: bool = True,
 ) -> PartitionResponse:
-    """Run spectral clustering and return zones with estimated_time (and optional distance, zone_polygon)."""
+    """Run spectral clustering and return zones with estimated_time (and optional distance, zone_polygon).
+    When node_weights is provided (e.g. from partition-from-points), zones are balanced by total node weight
+    and estimated_time is the sum of node weights in that zone."""
     n = node_count
-    # Effective cluster count is capped at n; extra zones are emitted empty.
     k_eff = min(truck_count, n)
     warnings: list[str] = []
+    use_node_weights = node_weights is not None and len(node_weights) >= n
 
-    # Validate node coverage: detect nodes never referenced by any edge
+    # Pure points path: no edges -> KMeans on coordinates
+    if not edges and node_coords is not None and len(node_coords) == n:
+        coords_array = np.array(node_coords, dtype=float)
+        kmeans = KMeans(n_clusters=k_eff, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(coords_array)
+        if use_node_weights:
+            labels = _balance_postprocess_node_weights(
+                labels, node_weights or [1.0] * n, k_eff,
+            )
+        # Build output
+        zones_out = []
+        for z in range(truck_count):
+            if z < k_eff:
+                node_ids = np.where(labels == z)[0].tolist()
+                weight_sum = (
+                    sum((node_weights or [1.0])[i] for i in node_ids)
+                    if use_node_weights else float(len(node_ids))
+                )
+                zone_polygon = None
+                if include_polygons and len(node_ids) >= 3 and node_coords:
+                    zone_polygon = _zone_convex_hull_ring(node_coords, node_ids)
+                zones_out.append(
+                    ZoneOutput(
+                        zone_id=z,
+                        node_ids=node_ids,
+                        estimated_time=round(weight_sum, 6),
+                        estimated_distance=None,
+                        zone_polygon=zone_polygon,
+                    )
+                )
+            else:
+                zones_out.append(
+                    ZoneOutput(zone_id=z, node_ids=[], estimated_time=0.0, estimated_distance=None, zone_polygon=None)
+                )
+        return PartitionResponse(zones=zones_out, warnings=warnings)
+
+    # Validate node coverage when we have edges
     referenced: set[int] = set()
     for e in edges:
         referenced.add(e.u)
@@ -375,22 +582,22 @@ def partition_graph(
     A = _build_adjacency(edges, n, balance_metric)
     edge_weights = [(e.u, e.v, _edge_weight(e, balance_metric)) for e in edges]
     edge_lengths = [(e.u, e.v, e.length) for e in edges]
-
     total_weight = sum(w for _, _, w in edge_weights)
 
     if total_weight == 0:
-        # No edges or all-zero weights — round-robin assignment
         labels = np.array([i % k_eff for i in range(n)])
+        if use_node_weights:
+            labels = _balance_postprocess_node_weights(labels, node_weights or [1.0] * n, k_eff)
     else:
-        # Detect isolated nodes (degree 0) and exclude from spectral clustering
         degrees = np.array(A.sum(axis=1)).ravel()
         isolates = np.where(degrees == 0)[0]
         connected = np.where(degrees > 0)[0]
 
         if connected.size == 0:
             labels = np.array([i % k_eff for i in range(n)])
+            if use_node_weights:
+                labels = _balance_postprocess_node_weights(labels, node_weights or [1.0] * n, k_eff)
         elif connected.size < n:
-            # Build a sub-matrix for connected nodes only
             A_sub = A[np.ix_(connected, connected)]
             idx_map = {orig: compact for compact, orig in enumerate(connected)}
             sub_edge_weights = [
@@ -404,15 +611,17 @@ def partition_graph(
                     f"Graph has {connected.size} connected nodes; using fast degree-based clustering to avoid timeout."
                 )
             sub_labels = _spectral_partition(A_sub, sub_k)
-            sub_labels = _balance_postprocess(sub_labels, sub_edge_weights, sub_k)
+            if use_node_weights:
+                sub_node_weights = [node_weights[i] for i in connected]
+                sub_labels = _balance_postprocess_node_weights(sub_labels, sub_node_weights, sub_k)
+            else:
+                sub_labels = _balance_postprocess(sub_labels, sub_edge_weights, sub_k)
 
-            # Map labels back and assign isolates to smallest zones
             labels = np.zeros(n, dtype=int)
             for compact, orig in enumerate(connected):
                 labels[orig] = sub_labels[compact]
-
             zone_counts = np.bincount(labels[connected], minlength=k_eff)
-            for i, iso_node in enumerate(isolates):
+            for iso_node in isolates:
                 lightest = int(np.argmin(zone_counts))
                 labels[iso_node] = lightest
                 zone_counts[lightest] += 1
@@ -422,33 +631,39 @@ def partition_graph(
                     f"Graph has {n} nodes; using fast degree-based clustering to avoid timeout."
                 )
             labels = _spectral_partition(A, k_eff)
-            labels = _balance_postprocess(labels, edge_weights, k_eff)
+            if use_node_weights:
+                labels = _balance_postprocess_node_weights(labels, node_weights or [1.0] * n, k_eff)
+            else:
+                labels = _balance_postprocess(labels, edge_weights, k_eff)
 
-    # Build output for all requested zones (truck_count), not just k_eff
-    zones_out: list[ZoneOutput] = []
+    # Build output
+    zones_out = []
     for z in range(truck_count):
         if z < k_eff:
             node_ids = np.where(labels == z)[0].tolist()
-            weight_sum, dist_sum = _zone_weight_and_distance(
-                labels, z, edge_weights, edge_lengths,
-            )
+            if use_node_weights:
+                weight_sum = sum((node_weights or [1.0])[i] for i in node_ids)
+                dist_sum = None
+                if edges:
+                    _, dist_sum = _zone_weight_and_distance(labels, z, edge_weights, edge_lengths)
+            else:
+                weight_sum, dist_sum = _zone_weight_and_distance(labels, z, edge_weights, edge_lengths)
             zone_polygon = None
-            if node_coords and len(node_ids) >= 3:
+            if include_polygons and node_coords and len(node_ids) >= 3:
                 zone_polygon = _zone_convex_hull_ring(node_coords, node_ids)
-        else:
-            # Extra zones beyond node count are empty
-            node_ids = []
-            weight_sum, dist_sum = 0.0, 0.0
-            zone_polygon = None
-        zones_out.append(
-            ZoneOutput(
-                zone_id=z,
-                node_ids=node_ids,
-                estimated_time=round(weight_sum, 6),
-                estimated_distance=round(dist_sum, 6) if balance_metric == "distance" else None,
-                zone_polygon=zone_polygon,
+            zones_out.append(
+                ZoneOutput(
+                    zone_id=z,
+                    node_ids=node_ids,
+                    estimated_time=round(weight_sum, 6),
+                    estimated_distance=round(dist_sum, 6) if dist_sum is not None and balance_metric == "distance" else None,
+                    zone_polygon=zone_polygon,
+                )
             )
-        )
+        else:
+            zones_out.append(
+                ZoneOutput(zone_id=z, node_ids=[], estimated_time=0.0, estimated_distance=None, zone_polygon=None)
+            )
 
     return PartitionResponse(zones=zones_out, warnings=warnings)
 
@@ -526,6 +741,45 @@ def post_zones_partition_from_geojson(body: PartitionFromGeoJSONRequest):
             body.truck_count,
             body.balance_metric,
             node_coords=id_to_coords,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/zones/partition-from-points", response_model=PartitionResponse)
+def post_zones_partition_from_points(body: PartitionFromPointsRequest):
+    """
+    Build a KNN graph from points (lat/lon/weight), then partition into truck_count zones.
+    balance_metric: "count" = equal points per zone, "weight" = by point weight, "distance" = by spatial spread.
+    Use knn_neighbors=0 for pure KMeans (no graph). Set include_polygons=False to skip convex hulls.
+    """
+    if not body.points:
+        raise HTTPException(status_code=400, detail="At least one point is required.")
+    try:
+        edges, node_count, id_to_coords, node_weights = points_to_partition_graph(
+            body.points, body.knn_neighbors
+        )
+        # For balance: "count" and "weight" use node_weights; "distance" uses edge length (pass node_weights=None).
+        use_node_weights = body.balance_metric in ("count", "weight")
+        if body.balance_metric == "count":
+            weights_for_balance = [1.0] * node_count
+        elif body.balance_metric == "weight":
+            weights_for_balance = node_weights
+        else:
+            weights_for_balance = None
+
+        return partition_graph(
+            edges,
+            node_count,
+            body.truck_count,
+            "distance",  # graph built from Haversine lengths
+            node_coords=id_to_coords,
+            node_weights=weights_for_balance,
+            include_polygons=body.include_polygons,
         )
     except HTTPException:
         raise

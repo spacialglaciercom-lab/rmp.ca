@@ -408,6 +408,36 @@ export async function partitionZonesFromGeoJSON(
   return request<ZonesPartitionResponse>("/api/zones/partition-from-geojson", params, ZONE_PARTITION_TIMEOUT_MS);
 }
 
+/** One point (e.g. delivery address or stop) for partition-from-points. */
+export interface PointInput {
+  lat: number;
+  lon: number;
+  /** Optional workload; used when balance_metric is "weight". Default 1. */
+  weight?: number;
+}
+
+/** Request body for partition-from-points: build KNN graph from points and partition. */
+export interface ZonesPartitionFromPointsRequest {
+  points: PointInput[];
+  truck_count: number;
+  /** "count" = equal points per zone, "weight" = by point weight, "distance" = by spatial spread */
+  balance_metric?: "count" | "weight" | "distance";
+  /** KNN neighbors; 0 = pure KMeans (no graph). Default 5. */
+  knn_neighbors?: number;
+  /** Include convex hull polygon per zone. Default true. */
+  include_polygons?: boolean;
+}
+
+/**
+ * Partition points (lat/lon/weight) into zones. Builds a KNN graph and runs spectral clustering,
+ * or pure KMeans when knn_neighbors=0. Backend: POST /api/zones/partition-from-points.
+ */
+export async function partitionZonesFromPoints(
+  params: ZonesPartitionFromPointsRequest,
+): Promise<ZonesPartitionResponse> {
+  return request<ZonesPartitionResponse>("/api/zones/partition-from-points", params, ZONE_PARTITION_TIMEOUT_MS);
+}
+
 export async function healthCheck(): Promise<boolean> {
   try {
     const res = await fetch(`${OPTIMIZER_BASE_URL}/health`);
