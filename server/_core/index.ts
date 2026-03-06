@@ -258,6 +258,13 @@ async function startServer() {
   server.listen(port, host, () => {
     log.warn(`Server listening on http://${host}:${port}`);
     log.warn('Web app (Expo): run "pnpm run dev" then open http://localhost:19007');
+    if (ENV.moonshineSidecarUrl) {
+      log.warn("Voice STT: Moonshine sidecar configured");
+    } else if (ENV.forgeApiUrl) {
+      log.warn("Voice STT: Whisper (Forge) configured");
+    } else {
+      log.warn("Voice STT: not configured — set MOONSHINE_SIDECAR_URL on this service (main API), or BUILT_IN_FORGE_*");
+    }
   });
 }
 

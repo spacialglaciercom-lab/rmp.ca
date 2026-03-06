@@ -587,6 +587,8 @@ Available environment variables:
 | `OWNER_NAME` | Owner's display name |
 | `BUILT_IN_FORGE_API_URL` | Manus API endpoint |
 | `BUILT_IN_FORGE_API_KEY` | Manus API key |
+| `MOONSHINE_SIDECAR_URL` | Dedicated voice transcription service URL (e.g. Railway Moonshine sidecar). When set, STT uses this instead of Whisper. No trailing slash. |
+| `MOONSHINE_STT_ENABLED` | Set to `"false"` to disable Moonshine STT; when unset or `"true"`, Moonshine is used if `MOONSHINE_SIDECAR_URL` is set. |
 
 Expo runtime variables (prefixed with `EXPO_PUBLIC_`):
 

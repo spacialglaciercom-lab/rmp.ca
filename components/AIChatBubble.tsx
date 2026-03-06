@@ -18,6 +18,8 @@ import {
   ScrollView,
   Platform,
   Keyboard,
+  AppState,
+  InteractionManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/use-colors";
@@ -265,33 +267,53 @@ function AIChatBubbleInner() {
       }
       setStatus("recording");
     } else {
-      try {
-        const { Audio } = await import("expo-av");
-        const existing = (globalThis as any).__aiChatRecording;
-        if (existing) {
-          try {
-            await existing.stopAndUnloadAsync();
-          } catch (_) {}
-          (globalThis as any).__aiChatRecording = null;
-        }
-        const { status: permStatus } = await Audio.requestPermissionsAsync();
-        if (permStatus !== "granted") {
-          setError("Microphone permission denied");
-          return;
-        }
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-        const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        );
-        (globalThis as any).__aiChatRecording = recording;
-        setStatus("recording");
-      } catch (err) {
-        log.warn("startRecording failed", err instanceof Error ? err : new Error(String(err)));
-        setError(err instanceof Error ? err.message : "Could not start recording");
+      // iOS only allows activating the audio session when the app is in the foreground.
+      if (AppState.currentState !== "active") {
+        setError("Bring the app to the foreground to use the microphone.");
+        return;
       }
+      const runRecording = async () => {
+        try {
+          const { Audio } = await import("expo-av");
+          const existing = (globalThis as any).__aiChatRecording;
+          if (existing) {
+            try {
+              await existing.stopAndUnloadAsync();
+            } catch (_) {}
+            (globalThis as any).__aiChatRecording = null;
+          }
+          const { status: permStatus } = await Audio.requestPermissionsAsync();
+          if (permStatus !== "granted") {
+            setError("Microphone permission denied");
+            return;
+          }
+          if (AppState.currentState !== "active") {
+            setError("Bring the app to the foreground to use the microphone.");
+            return;
+          }
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+          });
+          const { recording } = await Audio.Recording.createAsync(
+            Audio.RecordingOptionsPresets.HIGH_QUALITY,
+          );
+          (globalThis as any).__aiChatRecording = recording;
+          setStatus("recording");
+        } catch (err) {
+          log.warn("startRecording failed", err instanceof Error ? err : new Error(String(err)));
+          const msg = err instanceof Error ? err.message : "Could not start recording";
+          if (msg.includes("background") && msg.includes("audio session")) {
+            setError("Bring the app to the foreground to use the microphone.");
+          } else {
+            setError(msg);
+          }
+        }
+      };
+      // Defer so the modal/UI is fully in foreground and iOS treats the experience as active.
+      InteractionManager.runAfterInteractions(() => {
+        runRecording();
+      });
     }
   }, []);
 
@@ -357,7 +379,13 @@ function AIChatBubbleInner() {
               serverError =
                 "Voice API not found (404). Redeploy your backend with the latest server code so it includes POST /api/voice/transcribe and /api/voice/chat.";
             } else {
-              serverError = typeof data?.error === "string" ? data.error : `Server error ${res.status}`;
+              const rawError = typeof data?.error === "string" ? data.error : `Server error ${res.status}`;
+              if (rawError.toLowerCase().includes("transcription") && rawError.toLowerCase().includes("not configured")) {
+                serverError =
+                  "Voice transcription isn’t set up on your backend. On the server (or in Railway), set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY (Whisper API), or MOONSHINE_SIDECAR_URL and MOONSHINE_STT_ENABLED=true.";
+              } else {
+                serverError = rawError;
+              }
             }
             log.warn("voice/transcribe request error", { status: res.status, error: serverError, baseUrl });
           }

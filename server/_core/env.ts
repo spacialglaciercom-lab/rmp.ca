@@ -20,8 +20,13 @@ export const ENV = {
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? "",
   /** Firebase Admin SDK service account JSON (for verifying Firebase Auth ID tokens) */
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT ?? "",
-  /** Moonshine Voice sidecar URL for server-side STT (replaces Whisper). e.g. http://localhost:8090 */
-  moonshineSidecarUrl: process.env.MOONSHINE_SIDECAR_URL ?? "",
-  /** When true, prefer Moonshine sidecar over Whisper for STT. */
-  moonshineSttEnabled: process.env.MOONSHINE_STT_ENABLED === "true",
+  /** Moonshine Voice sidecar URL for server-side STT (e.g. dedicated Railway service). Set to the sidecar's public URL (no trailing slash). */
+  moonshineSidecarUrl: (() => {
+    const raw = (process.env.MOONSHINE_SIDECAR_URL ?? "").trim().replace(/\/$/, "");
+    if (!raw) return "";
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+    return `https://${raw}`;
+  })(),
+  /** Use Moonshine for STT when URL is set. Set to "false" to disable. Defaults to true when MOONSHINE_SIDECAR_URL is set. */
+  moonshineSttEnabled: process.env.MOONSHINE_STT_ENABLED !== "false",
 };

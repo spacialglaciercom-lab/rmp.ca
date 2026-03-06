@@ -90,11 +90,12 @@ export async function transcribeBase64Moonshine(
 
 /**
  * Transcribe using Moonshine with automatic fallback to Whisper.
+ * Uses Moonshine whenever MOONSHINE_SIDECAR_URL is set (e.g. dedicated Railway service).
  */
 export async function transcribeWithFallback(
   options: TranscribeOptions,
 ): Promise<TranscriptionResponse | TranscriptionError> {
-  if (ENV.moonshineSttEnabled && ENV.moonshineSidecarUrl) {
+  if (ENV.moonshineSidecarUrl && ENV.moonshineSttEnabled) {
     const result = await transcribeAudioMoonshine(options);
     if (!("error" in result)) return result;
 
@@ -107,6 +108,7 @@ export async function transcribeWithFallback(
 
 /**
  * Transcribe base64 using Moonshine with automatic fallback to Whisper.
+ * Uses Moonshine whenever MOONSHINE_SIDECAR_URL is set (e.g. dedicated Railway service).
  */
 export async function transcribeBase64WithFallback(
   base64Data: string,
@@ -114,7 +116,7 @@ export async function transcribeBase64WithFallback(
   language?: string,
   prompt?: string,
 ): Promise<TranscriptionResponse | TranscriptionError> {
-  if (ENV.moonshineSttEnabled && ENV.moonshineSidecarUrl) {
+  if (ENV.moonshineSidecarUrl && ENV.moonshineSttEnabled) {
     const result = await transcribeBase64Moonshine(base64Data, mimeType, language);
     if (!("error" in result)) return result;
 
