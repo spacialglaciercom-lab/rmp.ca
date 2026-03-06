@@ -369,6 +369,10 @@ export interface RouteMapProps {
   zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
   /** Zones panel: sector division — one polygon per zone. */
   zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
+  /** When set (>= 0), highlight current route segment (green) vs completed (gray) vs upcoming (white). */
+  navigationSegmentIndex?: number;
+  /** Live user GPS position; when set, a user location marker is shown. */
+  userPosition?: { latitude: number; longitude: number } | null;
 }
 
 /** Web: no-op. Native: zoom, locate, compass. */
@@ -535,6 +539,8 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   osmExtractedFeatures,
   osmExtractorVisible: _osmExtractorVisible,
   showOverture = false,
+  navigationSegmentIndex: _navigationSegmentIndex,
+  userPosition,
   geojsonOverlay,
   geojsonStrokeColor = "#2196F3",
   geojsonStrokeWidth = 4,
@@ -761,6 +767,17 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
           {tapDestination != null && (
             <Marker position={[tapDestination.lat, tapDestination.lon]} title="Directions here" />
           )}
+
+          {userPosition != null && !isNaN(userPosition.latitude) && !isNaN(userPosition.longitude) && (() => {
+            const L = require("leaflet");
+            const icon = L.divIcon({
+              className: "user-position-marker",
+              html: `<div style="width:14px;height:14px;border-radius:50%;background:${colors.primary ?? "#3b82f6"};border:3px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);" />`,
+              iconSize: [14, 14],
+              iconAnchor: [7, 7],
+            });
+            return <Marker position={[userPosition.latitude, userPosition.longitude]} icon={icon} zIndexOffset={25} />;
+          })()}
 
           {osmExtractionPoints?.map((point, index) => (
             <Marker

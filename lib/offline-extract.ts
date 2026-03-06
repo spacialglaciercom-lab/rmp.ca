@@ -1,0 +1,393 @@
+/**
+ * Offline extraction from downloaded R2 PMTiles or S3 Parquet.
+ * Uses data already downloaded via Settings → Offline Map Download (R2 Tiles or S3 Parquet).
+ * When the webovertureextract WebSocket is unavailable (offline), we fall back to this.
+ */
+
+import * as FileSystem from "expo-file-system/legacy";
+import { getDownloadedRegions, getRegionDataDir } from "@/lib/offline-map-download";
+import type { DownloadedRegion } from "@/lib/offline-map-download";
+import type { GeoJSONFeatureCollection } from "@/services/overtureOptimizerService";
+import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
+import type { Feature, Polygon } from "geojson";
+
+const PMTILES_VERSION = "v2026-02";
+const EXTRACT_MIN_ZOOM = 12;
+const EXTRACT_MAX_ZOOM = 14;
+const MVT_EXTENT = 4096;
+
+/** Bbox in lat/lon */
+interface BBox {
+  minLat: number;
+  maxLat: number;
+  minLon: number;
+  maxLon: number;
+}
+
+function bboxFromPolygon(coords: [number, number][]): BBox {
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lon, lat] of coords) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return { minLat, maxLat, minLon, maxLon };
+}
+
+function bboxOverlaps(a: BBox, b: { minLat: number; maxLat: number; minLon: number; maxLon: number }): boolean {
+  return a.minLat <= b.maxLat && a.maxLat >= b.minLat && a.minLon <= b.maxLon && a.maxLon >= b.minLon;
+}
+
+function lonToTileX(lon: number, z: number): number {
+  return Math.floor(((lon + 180) / 360) * (1 << z));
+}
+
+function latToTileY(lat: number, z: number): number {
+  const latRad = (lat * Math.PI) / 180;
+  return Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * (1 << z)
+  );
+}
+
+/** Tile (z,x,y) to lon/lat for a point (xt, yt) in tile coordinates [0..MVT_EXTENT]. */
+function tileToLonLat(z: number, x: number, y: number, xt: number, yt: number): [number, number] {
+  const n = 1 << z;
+  const lon = (x + xt / MVT_EXTENT) / n * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1 - yt / MVT_EXTENT)) / n)));
+  const lat = (latRad * 180) / Math.PI;
+  return [lon, lat];
+}
+
+/** Enumerate tile coords for a bbox at zoom levels [minZ, maxZ]. */
+function enumerateTiles(bbox: BBox, minZ: number, maxZ: number): Array<{ z: number; x: number; y: number }> {
+  const tiles: Array<{ z: number; x: number; y: number }> = [];
+  for (let z = minZ; z <= maxZ; z++) {
+    const xMin = lonToTileX(bbox.minLon, z);
+    const xMax = lonToTileX(bbox.maxLon, z);
+    const yMin = latToTileY(bbox.maxLat, z);
+    const yMax = latToTileY(bbox.minLat, z);
+    for (let x = xMin; x <= xMax; x++) {
+      for (let y = yMin; y <= yMax; y++) {
+        tiles.push({ z, x, y });
+      }
+    }
+  }
+  return tiles;
+}
+
+/** PMTiles Source that reads from an in-memory buffer (for local file). */
+function createBufferSource(buffer: ArrayBuffer): { getBytes: (offset: number, length: number) => Promise<{ data?: ArrayBuffer }>; getKey: () => string } {
+  const u8 = new Uint8Array(buffer);
+  return {
+    getBytes: async (offset: number, length: number) => {
+      const end = Math.min(offset + length, u8.length);
+      if (offset >= u8.length) return {};
+      const len = end - offset;
+      const out = new ArrayBuffer(len);
+      new Uint8Array(out).set(u8.subarray(offset, end));
+      return { data: out };
+    },
+    getKey: () => "local-pmtiles",
+  };
+}
+
+/** Decode MVT tile buffer to GeoJSON features (LineStrings). Layer name varies (transportation, road, etc.). */
+function decodeMvtToFeatures(
+  buffer: ArrayBuffer,
+  z: number,
+  tx: number,
+  ty: number,
+  polygon: Polygon,
+): Array<Feature<GeoJSON.LineString, Record<string, unknown>>> {
+  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const VectorTile = require("@mapbox/vector-tile").VectorTile;
+    const tile = new VectorTile(new Uint8Array(buffer));
+    const layerNames = Object.keys(tile.layers || {});
+    for (const layerName of layerNames) {
+      const layer = tile.layers[layerName];
+      if (!layer) continue;
+      for (let i = 0; i < layer.length; i++) {
+        const feature = layer.feature(i);
+        const geom = feature.loadGeometry();
+        if (!geom || geom.length === 0) continue;
+        for (const ring of geom) {
+          if (ring.length < 2) continue;
+          const coords: [number, number][] = ring.map(
+            (p: { x: number; y: number }) => tileToLonLat(z, tx, ty, p.x, p.y)
+          );
+          // Keep if any vertex is inside the polygon (simple filter; could clip exactly)
+          const inside = coords.some((c) => booleanPointInPolygon([c[0], c[1]], polygon));
+          if (!inside) continue;
+          const props: Record<string, unknown> = {};
+          if (feature.properties) {
+            for (const k of Object.keys(feature.properties)) {
+              props[k] = feature.properties[k];
+            }
+          }
+          features.push({
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: coords },
+            properties: props,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[offline-extract] MVT decode error:", e);
+  }
+  return features;
+}
+
+export interface OfflineExtractProgress {
+  phase: string;
+  done?: number;
+  total?: number;
+}
+
+export interface OfflineExtractResult {
+  geojson: GeoJSONFeatureCollection;
+  source: "r2" | "s3";
+  regionId: string;
+  regionName: string;
+}
+
+/**
+ * Find a downloaded region (R2 or S3) whose bounds overlap the polygon.
+ */
+export async function findRegionForPolygon(polygonCoords: [number, number][]): Promise<DownloadedRegion | null> {
+  const bbox = bboxFromPolygon(polygonCoords);
+  const regions = await getDownloadedRegions();
+  if (!regions || regions.length === 0) return null;
+  for (const r of regions) {
+    if (bboxOverlaps(bbox, r.bounds)) return r;
+  }
+  return null;
+}
+
+/**
+ * Extract road GeoJSON from downloaded R2 PMTiles for the given polygon.
+ * Uses the local .pmtiles file for the region. Returns features that intersect the polygon.
+ */
+export async function extractFromR2Tiles(
+  region: DownloadedRegion,
+  polygon: Polygon,
+  onProgress?: (p: OfflineExtractProgress) => void,
+): Promise<GeoJSONFeatureCollection> {
+  if (region.source !== "r2") {
+    throw new Error("Region is not R2 PMTiles");
+  }
+  const regionDir = getRegionDataDir(region.id);
+  const filename = `${region.id}-${PMTILES_VERSION}.pmtiles`;
+  const localPath = `${regionDir}/${filename}`;
+
+  const info = await FileSystem.getInfoAsync(localPath, { size: false });
+  if (!info.exists) {
+    throw new Error(`Offline R2 file not found: ${filename}. Re-download the region in Settings.`);
+  }
+
+  onProgress?.({ phase: "Reading PMTiles file…" });
+  const base64 = await FileSystem.readAsStringAsync(localPath, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const buffer = bytes.buffer;
+
+  const PMTiles = require("pmtiles").PMTiles;
+  const source = createBufferSource(buffer);
+  const pmtiles = new PMTiles(source);
+
+  const coords = polygon.coordinates[0];
+  const bbox = bboxFromPolygon(coords);
+  const tiles = enumerateTiles(bbox, EXTRACT_MIN_ZOOM, EXTRACT_MAX_ZOOM);
+
+  onProgress?.({ phase: "Extracting tiles…", done: 0, total: tiles.length });
+
+  const allFeatures: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < tiles.length; i++) {
+    const { z, x, y } = tiles[i];
+    const result = await pmtiles.getZxy(z, x, y);
+    if (result?.data && result.data.byteLength > 0) {
+      const feats = decodeMvtToFeatures(result.data, z, x, y, polygon);
+      for (const f of feats) {
+        const key = JSON.stringify(f.geometry.coordinates);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allFeatures.push(f);
+      }
+    }
+    if ((i + 1) % 10 === 0 || i === tiles.length - 1) {
+      onProgress?.({ phase: "Extracting tiles…", done: i + 1, total: tiles.length });
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: allFeatures,
+  };
+}
+
+/**
+ * Extract from S3 Parquet (downloaded). Reads local Parquet files from the region dir,
+ * decodes WKB geometry, filters by polygon and subtype=road, returns GeoJSON.
+ */
+export async function extractFromS3Parquet(
+  region: DownloadedRegion,
+  polygon: Polygon,
+  onProgress?: (p: OfflineExtractProgress) => void,
+): Promise<GeoJSONFeatureCollection> {
+  if (region.source !== "s3") {
+    throw new Error("Region is not S3 Parquet");
+  }
+  const regionDir = getRegionDataDir(region.id);
+  const dirInfo = await FileSystem.getInfoAsync(regionDir, { size: false });
+  if (!dirInfo.exists) {
+    throw new Error(`Offline S3 data directory not found. Re-download the region in Settings.`);
+  }
+
+  const allFiles = await FileSystem.readDirectoryAsync(regionDir);
+  const parquetFiles = allFiles
+    .filter((f) => f.endsWith(".parquet"))
+    .sort((a, b) => {
+      // Prefer segment over connector for road extraction
+      const aSeg = a.includes("segment") ? 0 : 1;
+      const bSeg = b.includes("segment") ? 0 : 1;
+      return aSeg - bSeg;
+    });
+
+  if (parquetFiles.length === 0) {
+    throw new Error("No Parquet files found in offline region. Re-download S3 Parquet in Settings.");
+  }
+
+  const { tableFromIPC } = await import("apache-arrow");
+  const parquetWasm = await import("parquet-wasm");
+  const wkx = await import("wkx");
+  const { Buffer } = await import("buffer");
+
+  let wasmInit: (() => Promise<void>) | null = null;
+  try {
+    wasmInit = parquetWasm.default;
+    if (wasmInit) await wasmInit();
+  } catch (e) {
+    console.warn("[offline-extract] parquet-wasm init:", e);
+  }
+
+  const readParquet = parquetWasm.readParquet;
+  if (!readParquet) {
+    throw new Error("parquet-wasm readParquet not available");
+  }
+
+  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const seen = new Set<string>();
+
+  for (let f = 0; f < parquetFiles.length; f++) {
+    const filename = parquetFiles[f];
+    const filePath = `${regionDir}/${filename}`;
+    onProgress?.({ phase: "Reading Parquet…", done: f, total: parquetFiles.length });
+
+    const base64 = await FileSystem.readAsStringAsync(filePath, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    let table: import("apache-arrow").Table;
+    try {
+      const wasmTable = readParquet(bytes);
+      const ipcStream = wasmTable.intoIPCStream();
+      table = tableFromIPC(ipcStream);
+    } catch (e) {
+      console.warn(`[offline-extract] Parquet read failed for ${filename}:`, e);
+      continue;
+    }
+
+    const geometryCol = table.getChild("geometry");
+    const classCol = table.getChild("class");
+    const subtypeCol = table.getChild("subtype");
+    if (!geometryCol) continue;
+
+    const n = table.length;
+    for (let i = 0; i < n; i++) {
+      if (subtypeCol) {
+        const sub = subtypeCol.get(i);
+        if (sub !== null && sub !== undefined && String(sub) !== "road") continue;
+      }
+      const geomVal = geometryCol.get(i);
+      if (geomVal == null) continue;
+      const wkb = geomVal instanceof Uint8Array ? geomVal : new Uint8Array(geomVal as ArrayBuffer);
+      let geom: { toGeoJSON: () => { type: string; coordinates: number[][] } };
+      try {
+        geom = wkx.Geometry.parse(Buffer.from(wkb)) as unknown as typeof geom;
+      } catch {
+        continue;
+      }
+      const geojsonGeom = geom.toGeoJSON();
+      if (geojsonGeom.type !== "LineString" || !Array.isArray(geojsonGeom.coordinates)) continue;
+      const coords = geojsonGeom.coordinates as [number, number][];
+      if (coords.length < 2) continue;
+      const inside = coords.some((c) => booleanPointInPolygon([c[0], c[1]], polygon));
+      if (!inside) continue;
+      const key = JSON.stringify(coords);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const roadClass = classCol ? classCol.get(i) : null;
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: {
+          class: roadClass != null ? String(roadClass) : undefined,
+          id: table.getChild("id")?.get(i),
+        },
+      });
+    }
+  }
+
+  onProgress?.({ phase: "Done", done: parquetFiles.length, total: parquetFiles.length });
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+/**
+ * Run offline extraction using downloaded data (R2 or S3).
+ * Prefer R2 if the region has source "r2"; otherwise try S3 (when implemented).
+ */
+export async function extractFromDownloadedData(
+  polygon: Polygon,
+  onProgress?: (p: OfflineExtractProgress) => void,
+): Promise<OfflineExtractResult | null> {
+  const coords = polygon.coordinates[0];
+  if (!coords || coords.length < 3) return null;
+
+  const region = await findRegionForPolygon(coords);
+  if (!region) {
+    return null;
+  }
+
+  if (region.source === "r2") {
+    onProgress?.({ phase: "Using R2 tiles…" });
+    const geojson = await extractFromR2Tiles(region, polygon, onProgress);
+    return { geojson, source: "r2", regionId: region.id, regionName: region.name };
+  }
+
+  if (region.source === "s3") {
+    try {
+      onProgress?.({ phase: "Using S3 Parquet…" });
+      const geojson = await extractFromS3Parquet(region, polygon, onProgress);
+      return { geojson, source: "s3", regionId: region.id, regionName: region.name };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}

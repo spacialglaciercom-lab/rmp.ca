@@ -37,6 +37,7 @@ import {
   coordsToPolygonFeature,
   type ExtractionProgress,
 } from "@/lib/overtureExtractService";
+import { extractFromDownloadedData } from "@/lib/offline-extract";
 
 const MIN_POINTS = 3;
 
@@ -139,6 +140,37 @@ export function OvertureExtractorContent({
     return ok;
   }, []);
 
+  const runOfflineExtract = useCallback(
+    async (
+      polygon: GeoJSON.Feature<GeoJSON.Polygon>,
+      polygonForFilter: Array<{ lat: number; lon: number }>,
+    ) => {
+      const result = await extractFromDownloadedData(
+        polygon.geometry,
+        (p) => setExtractProgress(p.total != null ? `${p.phase} (${p.done}/${p.total})` : p.phase),
+      );
+      if (!result) return false;
+      setExtractProgress("Filtering road classes…");
+      const filtered = await filterGeoJSON({
+        geojson: result.geojson,
+        polygon: polygonForFilter,
+        road_classes: effectiveRoadClasses,
+      });
+      setGeoJSONInfo({
+        featureCount: filtered.feature_count,
+        roadClasses: filtered.road_class_counts,
+        valid: filtered.feature_count > 0,
+        warnings:
+          filtered.feature_count === 0
+            ? ["No road features match the selected road classes in this area"]
+            : [`Extracted ${filtered.feature_count} road features from offline ${result.source === "r2" ? "R2 tiles" : "S3 Parquet"} (${result.regionName})`],
+      });
+      setLoadedGeoJSON(filtered.geojson);
+      return true;
+    },
+    [effectiveRoadClasses],
+  );
+
   const handleExtractGeoJSON = useCallback(() => {
     if (safePoints.length < MIN_POINTS) {
       Alert.alert(
@@ -154,6 +186,27 @@ export function OvertureExtractorContent({
 
     setIsLoading(true);
     setExtractProgress("Connecting...");
+
+    const tryOfflineThenAlert = async (error: string) => {
+      setExtractProgress("Trying offline (R2/S3)…");
+      try {
+        const ok = await runOfflineExtract(polygon, polygonForFilter);
+        if (!ok) {
+          Alert.alert(
+            "Extraction Failed",
+            `${error}\n\nTo extract offline, download map data in Settings → Offline Map Download (R2 Tiles or S3 Parquet) for a region that covers this area.`,
+          );
+        }
+      } catch (offlineErr) {
+        Alert.alert(
+          "Extraction Failed",
+          `${error}\n\nOffline fallback failed: ${offlineErr instanceof Error ? offlineErr.message : String(offlineErr)}. Download R2 Tiles in Settings for this region to extract offline.`,
+        );
+      } finally {
+        setIsLoading(false);
+        setExtractProgress(null);
+      }
+    };
 
     const handle = connectAndExtract(
       polygon,
@@ -206,9 +259,7 @@ export function OvertureExtractorContent({
         }
       },
       (error) => {
-        Alert.alert("Extraction Failed", error);
-        setIsLoading(false);
-        setExtractProgress(null);
+        tryOfflineThenAlert(error);
       },
     );
 

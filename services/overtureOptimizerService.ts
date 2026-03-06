@@ -313,6 +313,20 @@ export async function optimizeOvertureRoute(
 // General-Purpose Endpoints
 // ---------------------------------------------------------------------------
 
+/** Optional cleaning options (backend CleanOptions). Used when clean_before_optimize is true. */
+export interface CleanOptions {
+  makevalid?: boolean;
+  drop_invalid?: boolean;
+  remove_selfloops?: boolean;
+  min_length_m?: number;
+  node_snap_m?: number;
+  dedupe_edges?: boolean;
+  remove_isolates?: boolean;
+  max_components?: number;
+  required_attrs?: string[] | null;
+  merge_parallel_edges?: boolean;
+}
+
 export async function optimizeRoute(params: {
   geojson: GeoJSONFeatureCollection;
   start_lat?: number;
@@ -321,6 +335,9 @@ export async function optimizeRoute(params: {
   service_both_sides?: boolean;
   road_classes?: string[];
   turn_penalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
+  /** Run vector_clean pipeline before building graph (dedupe edges, etc.). Recommended for planner OSM-derived GeoJSON. */
+  clean_before_optimize?: boolean;
+  clean_options?: CleanOptions;
 }): Promise<OptimizeResponse> {
   return request<OptimizeResponse>("/api/optimize", params);
 }

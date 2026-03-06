@@ -2,11 +2,11 @@
  * Custom environment loader that prioritizes system environment variables
  * over .env file values. This ensures that Manus platform-injected variables
  * are not overridden by placeholder values in .env
- * Note: Uses process.cwd() only (no import.meta) so this file is safe when
- * bundled for web by Metro; import.meta is not valid in non-module scripts.
+ * Note: Uses CommonJS so this file can be required from app.config.ts when
+ * Expo/Node loads config; ESM import here causes "Cannot use import outside a module".
  */
-import fs from "fs";
-import path from "path";
+const fs = require("fs");
+const path = require("path");
 
 const envPath = path.resolve(process.cwd(), ".env");
 

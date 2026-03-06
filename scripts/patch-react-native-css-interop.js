@@ -38,17 +38,32 @@ if (!fs.existsSync(metroPath)) {
   console.warn("patch-react-native-css-interop: metro/index.js not found, skipping Metro patch");
 } else {
   let metroContent = fs.readFileSync(metroPath, "utf8");
+  let changed = false;
 
-  // Only patch if we haven't already (guard for graph._fileSystem)
+  // 2a. Call-site guard: only call ensureFileSystemPatched when graph._fileSystem has getSha1
   if (!metroContent.includes("graph._fileSystem && typeof graph._fileSystem.getSha1")) {
     const unsafe = "ensureFileSystemPatched(graph._fileSystem);";
     const safe =
       "if (graph._fileSystem && typeof graph._fileSystem.getSha1 === \"function\") { ensureFileSystemPatched(graph._fileSystem); }";
-
     if (metroContent.includes(unsafe)) {
       metroContent = metroContent.replace(unsafe, safe);
-      fs.writeFileSync(metroPath, metroContent, "utf8");
-      console.log("patch-react-native-css-interop: applied Metro getSha1 guard");
+      changed = true;
     }
+  }
+
+  // 2b. ensureFileSystemPatched: guard when fs or fs.getSha1 is undefined (Metro API change)
+  const ensureFileSystemPatchedOpen =
+    "function ensureFileSystemPatched(fs) {\n    if (!fs.getSha1.__css_interop_patched) {";
+  if (metroContent.includes(ensureFileSystemPatchedOpen) && !metroContent.includes("if (!fs || !fs.getSha1")) {
+    metroContent = metroContent.replace(
+      ensureFileSystemPatchedOpen,
+      "function ensureFileSystemPatched(fs) {\n    if (!fs || !fs.getSha1 || typeof fs.getSha1 !== \"function\") {\n        return fs;\n    }\n    if (fs.getSha1.__css_interop_patched) {\n        return fs;\n    }\n    if (!fs.getSha1.__css_interop_patched) {"
+    );
+    changed = true;
+  }
+
+  if (changed) {
+    fs.writeFileSync(metroPath, metroContent, "utf8");
+    console.log("patch-react-native-css-interop: applied Metro getSha1 guard(s)");
   }
 }

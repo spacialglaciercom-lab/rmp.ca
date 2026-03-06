@@ -1,9 +1,11 @@
 /**
  * OSM Parser v2 (from route-optimizer-mobile-v2)
- * Uses @xmldom/xmldom (already in project) to parse OSM XML
+ * Uses @xmldom/xmldom (already in project) to parse OSM XML.
+ * parseOSMFromFile supports local .osm/.xml (UTF-8) and .pbf (via tiny-osmpbf).
  */
 
 import { DOMParser } from "@xmldom/xmldom";
+import * as FileSystem from "expo-file-system/legacy";
 import type { Node, Way, TurnRestriction } from "./types";
 import { debug } from "./debug";
 
@@ -184,5 +186,148 @@ export class OSMParser {
 
   getTurnRestrictions(): TurnRestriction[] {
     return this.turnRestrictions;
+  }
+
+  /**
+   * Parse OSM from a local file (Expo FileSystem URI).
+   * Supports .osm / .xml (UTF-8) and .pbf (binary, via tiny-osmpbf).
+   */
+  async parseOSMFromFile(uri: string): Promise<ParseOSMResult> {
+    const lower = uri.toLowerCase();
+    if (lower.endsWith(".pbf")) {
+      return this.parsePBFFromFile(uri);
+    }
+    const content = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return this.parseOSM(content);
+  }
+
+  private async parsePBFFromFile(uri: string): Promise<ParseOSMResult> {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const binary = typeof Buffer !== "undefined"
+      ? Buffer.from(base64, "base64")
+      : base64ToUint8Array(base64);
+    const osmJson = parsePBFToOSMJson(binary);
+    return this.buildParseResultFromOSMJson(osmJson);
+  }
+
+  private buildParseResultFromOSMJson(osmJson: OSMJsonRoot): ParseOSMResult {
+    this.nodes.clear();
+    this.ways = [];
+    this.turnRestrictions = [];
+
+    const elements = osmJson.elements ?? [];
+    for (const el of elements) {
+      if (el.type === "node" && "lat" in el && "lon" in el) {
+        const id = String(el.id ?? "");
+        const lat = Number(el.lat);
+        const lon = Number(el.lon);
+        if (id && !Number.isNaN(lat) && !Number.isNaN(lon)) {
+          this.nodes.set(id, { id, lat, lon });
+        }
+      }
+    }
+
+    for (const el of elements) {
+      if (el.type !== "way" || !("nodes" in el)) continue;
+      const tags = (el.tags as Record<string, string>) ?? {};
+      const highway = tags.highway;
+      if (!highway || EXCLUDED_HIGHWAYS.has(highway)) continue;
+      if (!INCLUDED_HIGHWAYS.has(highway) && highway !== "service") continue;
+      const service = tags.service;
+      if (service && ["parking_aisle", "driveway", "parking", "drive-through", "emergency_access"].includes(service))
+        continue;
+      if (tags.area === "yes" || tags.area === "parking") continue;
+      if (tags.access === "private") continue;
+
+      const nodeRefs = (el.nodes ?? []).map(String);
+      if (nodeRefs.length >= 2) {
+        this.ways.push({
+          id: String(el.id ?? ""),
+          nodes: nodeRefs,
+          tags,
+        });
+      }
+    }
+
+    for (const el of elements) {
+      if (el.type !== "relation") continue;
+      const tags = (el.tags as Record<string, string>) ?? {};
+      if (tags.type !== "restriction") continue;
+      const restriction = tags.restriction ?? tags["restriction:hgv"];
+      if (restriction !== "no_u_turn") continue;
+
+      const members = (el.members as Array<{ type?: string; role?: string; ref?: number }>) ?? [];
+      let fromWayId = "";
+      let viaNodeId = "";
+      let toWayId = "";
+      for (const m of members) {
+        if (m.role === "from" && m.type === "way") fromWayId = String(m.ref ?? "");
+        if (m.role === "via" && m.type === "node") viaNodeId = String(m.ref ?? "");
+        if (m.role === "to" && m.type === "way") toWayId = String(m.ref ?? "");
+      }
+      if (fromWayId && viaNodeId && toWayId) {
+        this.turnRestrictions.push({
+          fromWayId,
+          viaNodeId,
+          toWayId,
+          restriction: "no_u_turn",
+          hgv: tags["restriction:hgv"] === "no_u_turn",
+        });
+      }
+    }
+
+    debug("OSMParser.buildParseResultFromOSMJson", {
+      nodesCount: this.nodes.size,
+      waysCount: this.ways.length,
+      turnRestrictionsCount: this.turnRestrictions.length,
+    });
+    return { nodes: this.nodes, ways: this.ways, turnRestrictions: this.turnRestrictions };
+  }
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+interface OSMJsonNode {
+  type: "node";
+  id?: number;
+  lat?: number;
+  lon?: number;
+  tags?: Record<string, string>;
+}
+
+interface OSMJsonWay {
+  type: "way";
+  id?: number;
+  nodes?: number[];
+  tags?: Record<string, string>;
+}
+
+interface OSMJsonRelation {
+  type: "relation";
+  id?: number;
+  members?: Array<{ type?: string; role?: string; ref?: number }>;
+  tags?: Record<string, string>;
+}
+
+interface OSMJsonRoot {
+  elements?: Array<OSMJsonNode | OSMJsonWay | OSMJsonRelation>;
+}
+
+function parsePBFToOSMJson(binary: Buffer | Uint8Array): OSMJsonRoot {
+  try {
+    const tinyOsmpbf = require("tiny-osmpbf");
+    return tinyOsmpbf(binary) as OSMJsonRoot;
+  } catch (e) {
+    debug("OSMParser.parsePBF", { error: e });
+    throw new Error("Failed to parse OSM PBF file. Is tiny-osmpbf installed?");
   }
 }

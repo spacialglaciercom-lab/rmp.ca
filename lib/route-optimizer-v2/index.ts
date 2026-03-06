@@ -7,7 +7,7 @@
  */
 
 export { RouteOptimizer } from "./routeOptimizer";
-export { OSMParser } from "./osmParser";
+export { OSMParser, type ParseOSMResult } from "./osmParser";
 export { GeoJSONParser } from "./geojsonParser";
 export { debug, warn } from "./debug";
 export type {

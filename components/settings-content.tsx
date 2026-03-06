@@ -15,6 +15,7 @@ import { ExportButton } from "@/components/export-button";
 import { BetaFeaturesSection } from "@/components/settings/BetaFeaturesSection";
 import { OpenRouterApiKeySection } from "@/components/settings/OpenRouterApiKeySection";
 import { OfflineMapDownloadSection } from "@/components/settings/OfflineMapDownloadSection";
+import { OfflineTilePackSection } from "@/components/settings/OfflineTilePackSection";
 import { MinimalCard, SectionLabel } from "@/components/minimal";
 import { MapOrientationSection } from "@/components/settings/MapOrientationSection";
 import { MapWebPluginsSection } from "@/components/settings/MapWebPluginsSection";
@@ -191,6 +192,17 @@ export default function SettingsContent() {
                 label: "",
                 value: "",
                 component: OfflineMapDownloadSection,
+                isComponent: true,
+              },
+            ],
+          },
+          {
+            title: "Offline map tiles (MapLibre)",
+            items: [
+              {
+                label: "",
+                value: "",
+                component: OfflineTilePackSection,
                 isComponent: true,
               },
             ],

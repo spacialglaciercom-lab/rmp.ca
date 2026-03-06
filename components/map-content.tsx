@@ -93,6 +93,7 @@ import { FlatList, Animated } from "react-native";
 // --- Optimized store selectors ---
 import { useMapStateStore, useMapActions } from "@/stores/mapStateStore";
 import { sanitizeLatLonArray, sanitizeByVehicle } from "@/lib/coord-utils";
+import { projectOntoLine } from "@/lib/turfProjection";
 
 const ExtractContent = lazy(() => import("@/components/extract-content"));
 
@@ -399,6 +400,41 @@ export default function MapContent() {
       };
     return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
   }, [displayedZoneId, savedZones]);
+
+  const gpsAndMatch = useMemo(() => {
+    const userPosition =
+      isRecActive && recorder.currentPosition
+        ? { latitude: recorder.currentPosition.lat, longitude: recorder.currentPosition.lon }
+        : null;
+    const routePointsForMap = isRecActive
+      ? recorder.points.map((p) => ({ lat: p.lat, lon: p.lon }))
+      : sanitizeLatLonArray(
+          previewRoutePointsByVehicle && previewRoutePointsByVehicle.length === 1
+            ? previewRoutePointsByVehicle[0]
+            : previewRoutePointsByVehicle && previewRoutePointsByVehicle.length > 1
+              ? undefined
+              : displayRoutePoints,
+        );
+    let matchedSegmentIndex: number | undefined;
+    if (userPosition && routePointsForMap && routePointsForMap.length >= 2) {
+      try {
+        const proj = projectOntoLine(
+          { lat: userPosition.latitude, lon: userPosition.longitude },
+          routePointsForMap,
+        );
+        if (proj != null) matchedSegmentIndex = proj.segmentIndex;
+      } catch {
+        // ignore projection errors
+      }
+    }
+    return { userPosition, matchedSegmentIndex };
+  }, [
+    isRecActive,
+    recorder.currentPosition,
+    recorder.points,
+    previewRoutePointsByVehicle,
+    displayRoutePoints,
+  ]);
 
   // When My Places panel closes after opening a preview, bring map to the track/point
   useEffect(() => {
@@ -1206,6 +1242,8 @@ export default function MapContent() {
         osmExtractionPoints={osmExtractionPoints}
         osmExtractedFeatures={osmExtractedData?.features}
         osmExtractorVisible={osmExtractorVisible}
+        userPosition={gpsAndMatch.userPosition}
+        navigationSegmentIndex={gpsAndMatch.matchedSegmentIndex}
         geojsonOverlay={geojsonOverlay}
         zonesPreviewPolygon={zonesPreviewPolygon}
         zonesPreviewPolygons={zonesPreviewPolygons}

@@ -118,6 +118,8 @@ export interface RouteMapProps {
    *   segments after this index  → white (upcoming)
    */
   navigationSegmentIndex?: number;
+  /** Live user GPS position; when set, a user location marker is shown. */
+  userPosition?: { latitude: number; longitude: number } | null;
   /** GeoJSON overlay (e.g. Overture transport layer) to draw on the map. */
   geojsonOverlay?: GeoJSONFeatureCollection | null;
   /** Zones panel: preview polygon (boundary of selected zone result) to draw on the map. */
@@ -166,6 +168,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   osmExtractedFeatures,
   osmExtractorVisible: _osmExtractorVisible,
   navigationSegmentIndex,
+  userPosition,
   geojsonOverlay,
   zonesPreviewPolygon,
   zonesPreviewPolygons,
@@ -667,6 +670,16 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
             zIndex={10}
           />
         )}
+        {userPosition && !isNaN(userPosition.latitude) && !isNaN(userPosition.longitude) && (
+          <Marker
+            coordinate={userPosition}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={Platform.OS === "android"}
+            zIndex={20}
+          >
+            <View style={[styles.userPositionDot, { backgroundColor: colors.primary ?? "#3b82f6" }]} />
+          </Marker>
+        )}
         {osmExtractionPoints
             ?.filter((point) => !isNaN(point.latitude) && !isNaN(point.longitude))
             .map((point, index) => (
@@ -849,6 +862,17 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
+  },
+  userPositionDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
+    borderColor: "#fff",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.3, shadowRadius: 2 },
+      android: { elevation: 4 },
+    }),
   },
   attribution: {
     position: "absolute",

@@ -1,11 +1,25 @@
 /**
- * Offline map data — download Overture Maps transportation segments from AWS S3.
- * Uses the public Overture Maps bucket (no auth required).
- * Data is stored locally as GeoParquet files for offline routing and display.
+ * Offline map data:
+ * 1) Overture Maps — download transportation segments from AWS S3 / R2 (Parquet/PMTiles).
+ * 2) MapLibre tile packs — download style + tiles for offline map viewing (native only).
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
+import { Alert } from "react-native";
+
+// Lazy load MapLibre OfflineManager (native only; may be undefined on web)
+let _offlineManager: typeof import("@maplibre/maplibre-react-native").OfflineManager | null = null;
+function getOfflineManager(): typeof import("@maplibre/maplibre-react-native").OfflineManager | null {
+  if (_offlineManager != null) return _offlineManager;
+  try {
+    const ML = require("@maplibre/maplibre-react-native");
+    _offlineManager = ML?.OfflineManager ?? ML?.default?.OfflineManager ?? null;
+  } catch {
+    _offlineManager = null;
+  }
+  return _offlineManager;
+}
 
 const OFFLINE_MAPS_KEY = "trashroute_offline_maps";
 const MAPS_DIR = "overture";
@@ -56,7 +70,7 @@ export interface OfflineCity {
   layers?: OvertureLayerKey[];
 }
 
-export type DownloadSource = "r2" | "s3";
+export type DownloadSource = "r2" | "s3" | "osm_pbf";
 
 export interface DownloadedRegion {
   id: string;
@@ -70,6 +84,8 @@ export interface DownloadedRegion {
   layers: string[];
   /** Which source this was downloaded from. Older entries may lack this field. */
   source?: DownloadSource;
+  /** For source "osm_pbf", the city id used for the directory (file is {cityId}.osm). */
+  cityId?: string;
 }
 
 /** Predefined cities and regions (Canadian cities only). */
@@ -404,16 +420,25 @@ export async function getDownloadedRegions(): Promise<DownloadedRegion[]> {
 
 /** Delete a downloaded region and its data files. */
 export async function deleteDownloadedRegion(regionId: string): Promise<void> {
-  const dir = getRegionDir(regionId);
-  try {
-    const info = await FileSystem.getInfoAsync(dir, { size: false });
-    if (info.exists) {
-      await FileSystem.deleteAsync(dir, { idempotent: true });
-    }
-  } catch (err) {
-    console.warn(`[OvertureMaps] Failed to delete data for ${regionId}:`, err);
-  }
   const existing = await getDownloadedRegions();
+  const region = existing.find((r) => r.id === regionId);
+  if (region?.source === "osm_pbf" && region.cityId) {
+    const osmPath = `${getRegionDir(region.cityId)}/${region.cityId}.osm`;
+    try {
+      const info = await FileSystem.getInfoAsync(osmPath, { size: false });
+      if (info.exists) await FileSystem.deleteAsync(osmPath, { idempotent: true });
+    } catch (err) {
+      console.warn(`[OfflineMaps] Failed to delete OSM file for ${regionId}:`, err);
+    }
+  } else {
+    const dir = getRegionDir(regionId);
+    try {
+      const info = await FileSystem.getInfoAsync(dir, { size: false });
+      if (info.exists) await FileSystem.deleteAsync(dir, { idempotent: true });
+    } catch (err) {
+      console.warn(`[OvertureMaps] Failed to delete data for ${regionId}:`, err);
+    }
+  }
   const filtered = existing.filter((r) => r.id !== regionId);
   regionsCache = filtered;
   await AsyncStorage.setItem(OFFLINE_MAPS_KEY, JSON.stringify(filtered));
@@ -430,4 +455,233 @@ export function formatBytes(bytes: number): string {
 /** Get the local directory path for a downloaded region (for reading Parquet files). */
 export function getRegionDataDir(regionId: string): string {
   return getRegionDir(regionId);
+}
+
+// ─── MapLibre tile packs (native only) ─────────────────────────────────────
+// Download map style + tiles for offline viewing via @maplibre/maplibre-react-native.
+
+export type OfflineProgress = {
+  percentage: number;
+  completedResourceCount: number;
+  completedResourceSize: number;
+  requiredResourceCount: number;
+};
+
+/**
+ * Download an offline tile pack for the given bounds and zoom range.
+ * styleURL must match the styleURL used in <MapView styleURL={...}>.
+ * Bounds: [[NE_LNG, NE_LAT], [SW_LNG, SW_LAT]].
+ */
+export async function downloadOfflineRegion(
+  name: string,
+  styleURL: string,
+  bounds: [[number, number], [number, number]],
+  minZoom: number = 10,
+  maxZoom: number = 16,
+  onProgress: (progress: OfflineProgress) => void,
+  onComplete: () => void,
+  onError: (error: unknown) => void
+): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) {
+    onError(new Error("MapLibre OfflineManager not available on this platform"));
+    return;
+  }
+  try {
+    await OfflineManager.createPack(
+      { name, styleURL, minZoom, maxZoom, bounds },
+      (_offlineRegion: unknown, status: { completedResourceCount: number; completedResourceSize: number; requiredResourceCount: number }) => {
+        const required = status.requiredResourceCount || 1;
+        const progress: OfflineProgress = {
+          percentage: Math.round((status.completedResourceCount / required) * 100),
+          completedResourceCount: status.completedResourceCount,
+          completedResourceSize: status.completedResourceSize,
+          requiredResourceCount: status.requiredResourceCount,
+        };
+        onProgress(progress);
+      },
+      (_offlineRegion: unknown, err: unknown) => {
+        console.error("Offline download error:", err);
+        onError(err);
+      }
+    );
+    onComplete();
+  } catch (err) {
+    onError(err);
+  }
+}
+
+export async function getAllOfflinePacks(): Promise<unknown[]> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return [];
+  return await OfflineManager.getPacks();
+}
+
+export async function getOfflinePack(name: string): Promise<unknown | null> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return null;
+  return await OfflineManager.getPack(name);
+}
+
+export async function deleteOfflinePack(name: string): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.deletePack(name);
+  Alert.alert("Pack deleted", name);
+}
+
+/** Delete a MapLibre offline pack by name (no alert; for use from settings UI). */
+export async function deleteMapLibrePack(name: string): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.deletePack(name);
+}
+
+/** Info returned by getPacks() for display in settings. */
+export interface MapLibrePackInfo {
+  name: string;
+  bounds?: [[number, number], [number, number]];
+  metadata?: Record<string, unknown>;
+}
+
+/** Get all MapLibre offline packs (native only). */
+export async function getMapLibrePacks(): Promise<MapLibrePackInfo[]> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return [];
+  const packs = (await OfflineManager.getPacks()) as Array<{ name?: string; bounds?: [[number, number], [number, number]]; metadata?: Record<string, unknown> }>;
+  return (packs ?? []).map((p) => ({
+    name: p.name ?? "unknown",
+    bounds: p.bounds,
+    metadata: p.metadata,
+  }));
+}
+
+/**
+ * Create a MapLibre offline tile pack for a city (native only).
+ * Bounds are taken from the city; use the same styleURL as the map (e.g. MAPLIBRE_STYLE_OSM).
+ */
+export async function createMapLibrePack(
+  city: OfflineCity,
+  styleURL: string,
+  minZoom: number,
+  maxZoom: number,
+  onProgress: (progress: OfflineProgress) => void,
+  onError: (error: unknown) => void
+): Promise<void> {
+  const name = `pack_${city.id}`;
+  const { minLat, maxLat, minLon, maxLon } = city.bounds;
+  const bounds: [[number, number], [number, number]] = [
+    [maxLon, maxLat],
+    [minLon, minLat],
+  ];
+  return downloadOfflineRegion(
+    name,
+    styleURL,
+    bounds,
+    minZoom,
+    maxZoom,
+    onProgress,
+    () => {},
+    onError
+  );
+}
+
+export async function invalidatePack(name: string): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.invalidatePack(name);
+}
+
+export async function clearAmbientCache(): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.clearAmbientCache();
+}
+
+export async function invalidateAmbientCache(): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.invalidateAmbientCache();
+}
+
+export async function setMaxCacheSize(bytes: number): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.setMaximumAmbientCacheSize(bytes);
+}
+
+export async function resetEverything(): Promise<void> {
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
+  await OfflineManager.resetDatabase();
+}
+
+// ─── OSM PBF / OSM data download (Overpass API, saved as .osm) ─────────────
+
+const OVERPASS_API = "https://overpass-api.de/api/interpreter";
+
+/**
+ * Download OSM data for a city (Overpass API bbox export, saved as .osm XML).
+ * Returns the local file URI. Progress is approximate (fetch has no progress for response body).
+ */
+export async function downloadOSMPBF(
+  city: OfflineCity,
+  onProgress?: (done: number, total: number, phase: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const regionDir = getRegionDir(city.id);
+  const filename = `${city.id}.osm`;
+  const localPath = `${regionDir}/${filename}`;
+
+  const dirInfo = await FileSystem.getInfoAsync(regionDir, { size: false });
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(regionDir, { intermediates: true });
+  }
+
+  onProgress?.(0, 1, "Requesting OSM data…");
+  const { minLat, maxLat, minLon, maxLon } = city.bounds;
+  const query = `[out:xml];nwr(${minLat},${minLon},${maxLat},${maxLon});out;`;
+  const res = await fetch(OVERPASS_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `data=${encodeURIComponent(query)}`,
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Overpass API failed: ${res.status} ${res.statusText}`);
+  }
+  const text = await res.text();
+  if (signal?.aborted) throw new Error("Cancelled");
+
+  onProgress?.(0.5, 1, "Saving…");
+  await FileSystem.writeAsStringAsync(localPath, text, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+
+  const fileInfo = await FileSystem.getInfoAsync(localPath, { size: true });
+  const sizeBytes = (fileInfo as { size?: number }).size ?? 0;
+
+  const regionId = `${city.id}_osm_pbf`;
+  const region: DownloadedRegion = {
+    id: regionId,
+    name: city.name,
+    country: city.country,
+    bounds: city.bounds,
+    fileCount: 1,
+    sizeBytes,
+    downloadedAt: Date.now(),
+    layers: ["osm"],
+    source: "osm_pbf",
+    cityId: city.id,
+  };
+  await saveDownloadedRegion(region);
+  onProgress?.(1, 1, "Done");
+  return localPath;
+}
+
+/** Get the local path to a downloaded OSM file for a city, if it exists. */
+export async function getOSMPBFFilePath(cityId: string): Promise<string | null> {
+  const path = `${getRegionDir(cityId)}/${cityId}.osm`;
+  const info = await FileSystem.getInfoAsync(path, { size: false });
+  return info.exists ? path : null;
 }

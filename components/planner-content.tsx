@@ -76,6 +76,7 @@ export default function PlannerContent() {
   const [osmLibraryRefreshKey, setOsmLibraryRefreshKey] = useState(0);
   const [showConstraintParser, setShowConstraintParser] = useState(false);
   const [confirmedConstraints, setConfirmedConstraints] = useState<ParsedConstraint[]>([]);
+  const [optimizationOffline, setOptimizationOffline] = useState(false);
 
   const applyRouteFromPoints = useCallback(
     async (points: CollectionPoint[], fileName?: string, options?: { totalDistanceKm?: number }) => {
@@ -230,28 +231,33 @@ export default function PlannerContent() {
         const serviceBothSides = state.configuration.serviceBothSides ?? false;
         // Yield so React can paint "processing" state before optimisation
         await new Promise<void>((r) => setTimeout(r, 0));
-        // Use same backend optimizer as map page (POST /api/optimize). Fall back to local optimizer if backend fails.
-        try {
-          const geojson = osmDataToGeoJSON(nodes, ways);
-          const backendResult = await backendOptimizeRoute({
-            geojson,
-            start_lat: startCoords?.latitude,
-            start_lon: startCoords?.longitude,
-            oneway_mode: onewayMode,
-            service_both_sides: serviceBothSides,
-            turn_penalties: {
-              left_turn: turnPenalties.leftTurn,
-              u_turn: turnPenalties.uTurn,
-              right_turn: turnPenalties.rightTurn,
-            },
-          });
-          optResult = {
-            route: backendResult.route,
-            totalDistance: backendResult.total_distance_km,
-          };
-        } catch (backendErr) {
-          debug("Planner.generateRoute", { backendOptimizerFailed: (backendErr as Error).message });
-          // Fallback to local optimizer (same as before) when backend is unavailable
+        // Use backend optimizer when not offline; otherwise use local only.
+        if (!optimizationOffline) {
+          try {
+            const geojson = osmDataToGeoJSON(nodes, ways);
+            const backendResult = await backendOptimizeRoute({
+              geojson,
+              start_lat: startCoords?.latitude,
+              start_lon: startCoords?.longitude,
+              oneway_mode: onewayMode,
+              service_both_sides: serviceBothSides,
+              turn_penalties: {
+                left_turn: turnPenalties.leftTurn,
+                u_turn: turnPenalties.uTurn,
+                right_turn: turnPenalties.rightTurn,
+              },
+              clean_before_optimize: true,
+            });
+            optResult = {
+              route: backendResult.route,
+              totalDistance: backendResult.total_distance_km,
+            };
+          } catch (backendErr) {
+            debug("Planner.generateRoute", { backendOptimizerFailed: (backendErr as Error).message });
+          }
+        }
+        if (optResult === undefined) {
+          // Offline mode or backend failed: use local optimizer
           optResult = isExperimentalRoute
             ? await optimizeRouteTurnAware(nodes, ways, {
                 customLat: startCoords?.latitude,
@@ -557,19 +563,24 @@ export default function PlannerContent() {
               const onewayMode = state.configuration.onewayMode ?? "A";
               const turnPenalties = state.configuration.turnPenalties;
               const serviceBothSides = state.configuration.serviceBothSides ?? false;
-              let optResult: { route: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number };
-              try {
-                const geojson = osmDataToGeoJSON(nodes, ways);
-                const backendResult = await backendOptimizeRoute({
-                  geojson,
-                  start_lat: startCoords?.latitude,
-                  start_lon: startCoords?.longitude,
-                  oneway_mode: onewayMode,
-                  service_both_sides: serviceBothSides,
-                  turn_penalties: { left_turn: turnPenalties.leftTurn, u_turn: turnPenalties.uTurn, right_turn: turnPenalties.rightTurn },
-                });
-                optResult = { route: backendResult.route, totalDistance: backendResult.total_distance_km };
-              } catch {
+              let optResult: { route: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number } | undefined;
+              if (!optimizationOffline) {
+                try {
+                  const geojson = osmDataToGeoJSON(nodes, ways);
+                  const backendResult = await backendOptimizeRoute({
+                    geojson,
+                    start_lat: startCoords?.latitude,
+                    start_lon: startCoords?.longitude,
+                    oneway_mode: onewayMode,
+                    service_both_sides: serviceBothSides,
+                    turn_penalties: { left_turn: turnPenalties.leftTurn, u_turn: turnPenalties.uTurn, right_turn: turnPenalties.rightTurn },
+                  });
+                  optResult = { route: backendResult.route, totalDistance: backendResult.total_distance_km };
+                } catch {
+                  // fall through to local
+                }
+              }
+              if (optResult === undefined) {
                 optResult = isExperimentalRoute
                   ? await optimizeRouteTurnAware(nodes, ways, {
                       customLat: startCoords?.latitude,
@@ -712,6 +723,45 @@ export default function PlannerContent() {
               >
                 Two pass (both sides)
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Optimize offline toggle */}
+        <View
+          className="bg-surface rounded-2xl p-5 mb-4"
+          style={{ backgroundColor: colors.surface }}
+        >
+          <Text className="text-lg font-semibold text-foreground mb-1">
+            Optimization
+          </Text>
+          <Text className="text-sm text-muted mb-3">
+            Off: use backend when available, then fall back to local. On: use local optimizer only (no network).
+          </Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-base text-foreground">Optimize offline</Text>
+            <TouchableOpacity
+              onPress={() => {
+                hapticImpact();
+                setOptimizationOffline((v) => !v);
+              }}
+              style={{
+                width: 52,
+                height: 30,
+                borderRadius: 15,
+                justifyContent: "center",
+                backgroundColor: optimizationOffline ? colors.primary : colors.border,
+              }}
+            >
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  marginLeft: optimizationOffline ? 24 : 2,
+                  backgroundColor: "#fff",
+                }}
+              />
             </TouchableOpacity>
           </View>
         </View>
