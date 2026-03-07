@@ -7,12 +7,13 @@ GeoJSON/OSM cleaning pipeline before optimizer.
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 from typing import Any, Literal
 
 import networkx as nx
 import numpy as np
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, HTTPException, Depends
 from pydantic import BaseModel, Field
 from shapely.geometry import LineString, Point, Polygon, box, shape
 from shapely import make_valid
@@ -33,6 +34,23 @@ _M_PER_DEG = 111_320.0
 
 # Use GeoPandas for geometry repair when feature count >= this (batch/vectorized path)
 BATCH_GEOJSON_THRESHOLD = 10_000
+
+# Max request body size for POST /api/geojson/clean (DoS protection)
+CLEAN_MAX_BODY_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+async def limit_geojson_clean_body_size(request: Request) -> None:
+    """Reject request if Content-Length exceeds CLEAN_MAX_BODY_BYTES."""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > CLEAN_MAX_BODY_BYTES:
+                raise HTTPException(
+                    413,
+                    detail=f"Request body too large. Max {CLEAN_MAX_BODY_BYTES // (1024*1024)} MB for /api/geojson/clean.",
+                )
+        except ValueError:
+            pass
 
 
 def _haversine_m(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
@@ -770,12 +788,33 @@ class CleanRequest(BaseModel):
 class CleanResponse(BaseModel):
     geojson: GeoJSONFeatureCollection
     stats: CleanStats
+    warnings: list[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. high invalid-drop ratio)")
 
 
-@router.post("/api/geojson/clean", response_model=CleanResponse)
+@router.post(
+    "/api/geojson/clean",
+    response_model=CleanResponse,
+    dependencies=[Depends(limit_geojson_clean_body_size)],
+    summary="Clean GeoJSON",
+    description="Repair geometry, remove self-loops/short edges/duplicates, keep largest component. Request body limit: 50 MB.",
+)
 def post_geojson_clean(body: CleanRequest) -> CleanResponse:
     """Clean GeoJSON: repair geometry, remove self-loops/short edges/duplicates, keep largest component."""
     geojson_dict = body.geojson.model_dump()
     options = body.options
     cleaned_fc, clean_stats = clean_geojson(geojson_dict, options)
-    return CleanResponse(geojson=cleaned_fc, stats=clean_stats)
+    warnings: list[str] = []
+    n_in = clean_stats.input_features
+    if n_in > 0 and clean_stats.invalid_dropped / n_in > 0.10:
+        msg = (
+            "Over 10% of features were dropped as invalid; consider checking CRS and geometry validity."
+        )
+        warnings.append(msg)
+        logging.warning(
+            "geojson/clean: high invalid ratio (invalid_dropped=%s, input_features=%s, ratio=%.2f). %s",
+            clean_stats.invalid_dropped,
+            n_in,
+            clean_stats.invalid_dropped / n_in,
+            msg,
+        )
+    return CleanResponse(geojson=cleaned_fc, stats=clean_stats, warnings=warnings)

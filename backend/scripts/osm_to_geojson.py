@@ -2,6 +2,9 @@
 """
 Convert OSM XML to GeoJSON using ogr2ogr (GDAL), with optional geometry repair.
 
+Output is GeoJSON in WGS84 (EPSG:4326). Input is assumed to be OSM (typically WGS84).
+For other source CRSs you can add -s_srs to the ogr2ogr command.
+
 Usage:
   python -m scripts.osm_to_geojson input.osm output.json
   python -m scripts.osm_to_geojson input.osm output.json --no-makevalid
@@ -50,7 +53,7 @@ def main() -> int:
     cmd = [ogr2ogr]
     if not args.no_makevalid:
         cmd.append("-makevalid")
-    cmd.extend(["-f", "GeoJSON", str(args.output), str(args.input), args.layer])
+    cmd.extend(["-t_srs", "EPSG:4326", "-f", "GeoJSON", str(args.output), str(args.input), args.layer])
 
     try:
         subprocess.run(cmd, check=True)

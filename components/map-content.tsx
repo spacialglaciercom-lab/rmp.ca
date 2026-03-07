@@ -1405,6 +1405,8 @@ export default function MapContent() {
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onCompass={handleCompass}
+        onStartRecording={handleRecStart}
+        isRecordingActive={isRecActive}
       />
 
       <AIChatBubble />
