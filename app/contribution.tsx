@@ -57,7 +57,9 @@ export default function ContributionScreen() {
     );
   }, []);
 
+  // Magnetometer is not supported on web (_nativeModule.addListener is not a function)
   useEffect(() => {
+    if (Platform.OS === "web") return;
     Magnetometer.setUpdateInterval(200);
     const sub = Magnetometer.addListener((data) => {
       const { x, y } = data;

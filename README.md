@@ -15,7 +15,7 @@
 
 - **Node server** — Express + tRPC API, Firebase auth, optional MySQL (Drizzle), AI/LLM and storage integrations. See [server/README.md](server/README.md).
 - **Optimizer** — Chinese Postman and zone partitioning; can run on Railway or another host. See [backend/README.md](backend/README.md) for the Python FastAPI zone-partition service.
-- **Overture extract** — WebSocket service for polygon → GeoJSON extraction (Extract tab). Can be hosted separately; see `.env.example` for URLs.
+- **Overture extract** — WebSocket service for polygon → GeoJSON extraction (Extract tab). Web and native connect **directly** to the extract service by default; set `EXPO_PUBLIC_OVERTURE_WS_BASE` to your main API URL to use the backend proxy instead. See `.env.example` for URLs.
 
 ## Tech stack
 
@@ -127,6 +127,13 @@ rmp.ca/
 - [backend/README.md](backend/README.md) — Zone partition API and deployment (e.g. Cloud Run).
 - [scripts/README.md](scripts/README.md) — Local run scripts and ports.
 - [backend/docs/GEOJSON-OSM-CLEANING-PLAN.md](backend/docs/GEOJSON-OSM-CLEANING-PLAN.md) — GeoJSON/OSM cleaning pipeline plan.
+- [backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md](backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md) — GeoJSON clean implementation review and prioritized changes.
+
+## Recent changes
+
+- **GeoJSON clean (backend)** — `POST /api/geojson/clean` now enforces a **50 MB** request body limit to reduce DoS risk; responses include a **`warnings`** array (e.g. when over 10% of features are dropped as invalid, with a suggestion to check CRS and geometry validity). Invalid-drop ratio is logged at warning level. See [backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md](backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md).
+- **OSM → GeoJSON script** — `backend/scripts/osm_to_geojson.py` outputs GeoJSON in **WGS84 (EPSG:4326)** via `-t_srs EPSG:4326`; docstring updated accordingly.
+- **Map** — Record (GPS) button wired in map floating controls; tap map to add bin in Zones/waste mode; pointer-events and empty-state handling improved on web.
 
 ## License
 

@@ -1,19 +1,18 @@
 /**
  * Overture Extract WebSocket client + helpers.
  * Connects to the web extractor backend to extract & process road networks from Overture Maps data.
- * On web, uses the main API URL so the browser hits the backend's /ws/extract proxy (avoids cross-origin
- * WebSocket failures to webovertureextract from Vercel). The backend proxies to webovertureextract.
+ * By default the app connects directly to the extract service (EXPO_PUBLIC_OVERTURE_EXTRACT_URL).
+ * To route WebSocket via the main backend proxy instead (e.g. if the extract service blocks browser origins),
+ * set EXPO_PUBLIC_OVERTURE_WS_BASE to your main API URL (e.g. https://proactive-adaptation-backend.up.railway.app).
  */
 
 import Constants from "expo-constants";
-import { Platform } from "react-native";
 import { area as turfArea } from "@turf/area";
 import { length as turfLength } from "@turf/length";
-import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
 // Extract backend URL. HTTP_BASE used for /geojson/, /download/ (after extract).
-// On web, WS goes to main API so the server can proxy to webovertureextract (avoids CORS/origin issues).
+// WS_BASE: direct to extract service by default; set EXPO_PUBLIC_OVERTURE_WS_BASE to use main backend proxy.
 // ---------------------------------------------------------------------------
 const DEFAULT_EXTRACT_BASE = "https://webovertureextract-webovertureextract.up.railway.app";
 const defaultHttpBase =
@@ -25,10 +24,7 @@ const defaultHttpBase =
 const defaultWsBase = defaultHttpBase.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
 const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? defaultHttpBase;
-const WS_BASE =
-  Platform.OS === "web"
-    ? (getApiBaseUrl().replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://"))
-    : (process.env.EXPO_PUBLIC_OVERTURE_WS_BASE ?? defaultWsBase);
+const WS_BASE = process.env.EXPO_PUBLIC_OVERTURE_WS_BASE ?? defaultWsBase;
 
 export const WS_EXTRACT_URL = `${WS_BASE}/ws/extract`;
 export const httpGeoJSONUrl = (hash: string) => `${HTTP_BASE}/geojson/${hash}`;

@@ -1,9 +1,9 @@
 /**
- * Extract tab content: draw polygon on CartoDB basemap → preview roads (DuckDB WASM)
- * → extract & process via WebSocket → download GeoJSON / graph.
+ * Extract tab content: draw polygon on CartoDB basemap → preview roads / extract & process
+ * via webovertureextract WebSocket → download GeoJSON / graph.
  *
- * Web: full MapLibre GL JS + @mapbox/mapbox-gl-draw + DuckDB WASM preview.
- * Native: simplified polygon drawing + WebSocket extraction (no DuckDB).
+ * Web: full MapLibre GL JS + @mapbox/mapbox-gl-draw; Preview Roads uses same backend as Extract.
+ * Native: simplified polygon drawing + WebSocket extraction.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -328,81 +328,65 @@ export default function ExtractContent() {
   }, []);
 
   // -------------------------------------------------------------------------
-  // Preview roads via DuckDB WASM
+  // Preview roads via same backend as Extract (webovertureextract WebSocket)
   // -------------------------------------------------------------------------
-  const previewRoads = useCallback(async () => {
+  const previewRoads = useCallback(() => {
     if (!polygon || Platform.OS !== "web") return;
+    if (extracting) return; // already running
     setPreviewLoading(true);
     setPreviewRoadCount(null);
     setPreviewPointCount(null);
-    try {
-      const conn = await initDuckDB();
-      if (!conn) {
-        console.warn("[Preview] DuckDB not available in this environment; preview skipped. Extract via WebSocket still works.");
-        return;
+    setExtracting(true);
+    setProgress({ stage: "connecting", message: "Connecting..." });
+
+    const handle = connectAndExtract(
+      polygon,
+      (p) => setProgress(p),
+      (hash, stats) => {
+        setResultHash(hash);
+        setResultStats(stats);
+        setExtracting(false);
+        setProgress(null);
+        setPreviewRoadCount(stats.roads);
+        setPreviewPointCount(stats.points ?? stats.nodes ?? 0);
+        // Fetch GeoJSON from backend and draw on map
+        fetch(httpGeoJSONUrl(hash))
+          .then((res) => {
+            if (!res.ok) throw new Error(`GeoJSON fetch failed: ${res.status}`);
+            return res.json();
+          })
+          .then((geojson: GeoJSON.FeatureCollection) => {
+            const map = mapRef.current;
+            if (map && geojson?.features?.length) {
+              clearPreviewLayer();
+              map.addSource("preview-roads", {
+                type: "geojson",
+                data: geojson,
+              });
+              map.addLayer({
+                id: "preview-roads",
+                type: "line",
+                source: "preview-roads",
+                paint: {
+                  "line-color": "#ef4444",
+                  "line-width": 1.5,
+                  "line-opacity": 0.7,
+                },
+              });
+            }
+          })
+          .catch((e) => console.error("[Preview] Fetch/draw failed:", e))
+          .finally(() => setPreviewLoading(false));
+      },
+      (err) => {
+        setExtracting(false);
+        setProgress(null);
+        setPreviewLoading(false);
+        console.error("[Preview]", err);
       }
-
-      const bbox = getBBox(polygon);
-      const query = `
-        SELECT
-          id,
-          ST_AsGeoJSON(geometry) as geojson,
-          JSON_EXTRACT_STRING(names, '$.primary') as name,
-          class
-        FROM read_parquet('s3://overturemaps-us-west-2/release/2024-11-13.0/theme=transportation/type=segment/*', filename=true, hive_partitioning=1)
-        WHERE bbox.xmin >= ${bbox[0]}
-          AND bbox.ymin >= ${bbox[1]}
-          AND bbox.xmax <= ${bbox[2]}
-          AND bbox.ymax <= ${bbox[3]}
-          AND subtype = 'road'
-        LIMIT 50000
-      `;
-
-      const result = await conn.query(query);
-      const rows = result.toArray();
-
-      const features: GeoJSON.Feature[] = [];
-      let pointCount = 0;
-      for (const row of rows) {
-        try {
-          const geom = JSON.parse(row.geojson);
-          if (geom.coordinates) pointCount += geom.coordinates.length;
-          features.push({
-            type: "Feature",
-            geometry: geom,
-            properties: { name: row.name, class: row.class },
-          });
-        } catch {}
-      }
-
-      setPreviewRoadCount(features.length);
-      setPreviewPointCount(pointCount);
-
-      // Add to map
-      const map = mapRef.current;
-      if (map) {
-        clearPreviewLayer();
-        map.addSource("preview-roads", {
-          type: "geojson",
-          data: { type: "FeatureCollection", features },
-        });
-        map.addLayer({
-          id: "preview-roads",
-          type: "line",
-          source: "preview-roads",
-          paint: {
-            "line-color": "#ef4444",
-            "line-width": 1.5,
-            "line-opacity": 0.7,
-          },
-        });
-      }
-    } catch (e: any) {
-      console.error("[Preview]", e);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [polygon, clearPreviewLayer]);
+    );
+    cancelRef.current = handle;
+  }, [polygon, extracting, clearPreviewLayer]);
 
   // -------------------------------------------------------------------------
   // Extract & process via WebSocket
@@ -689,7 +673,7 @@ export default function ExtractContent() {
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: "#3b82f6", opacity: previewLoading ? 0.6 : 1 }]}
                   onPress={previewRoads}
-                  disabled={previewLoading}
+                  disabled={previewLoading || extracting}
                 >
                   {previewLoading ? (
                     <ActivityIndicator size="small" color="#fff" />

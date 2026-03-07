@@ -52,6 +52,7 @@ import { AIChatBubble } from "@/components/AIChatBubble";
 import { HelpPrompt } from "@/components/help/HelpPrompt";
 import { NavigationPanel } from "@/components/mapTab/navigation/NavigationPanel";
 import { MyPlacesScreen } from "@/components/mapTab/places/MyPlacesScreen";
+import { RecordingScreen } from "@/components/mapTab/places/RecordingScreen";
 import { ZonesScreen } from "@/components/mapTab/places/ZonesScreen";
 import { MapsAndResourcesScreen } from "@/components/mapTab/resources/MapsAndResourcesScreen";
 import { ConfigureScreenSheet } from "@/components/mapTab/resources/ConfigureScreenSheet";
@@ -300,6 +301,12 @@ export default function MapContent() {
   const closeMyPlacesPanel = useMapSidebarStore((s) => s.closeMyPlacesPanel);
   const zonesPanelVisible = useMapSidebarStore((s) => s.zonesPanelVisible);
   const closeZonesPanel = useMapSidebarStore((s) => s.closeZonesPanel);
+  const recordingPanelVisible = useMapSidebarStore(
+    (s) => s.recordingPanelVisible,
+  );
+  const closeRecordingPanel = useMapSidebarStore(
+    (s) => s.closeRecordingPanel,
+  );
   const displayedZoneId = useZonesStore((s) => s.displayedZoneId);
   const savedZones = useZonesStore((s) => s.savedZones);
   const mapsResourcesVisible = useMapSidebarStore(
@@ -1439,6 +1446,10 @@ export default function MapContent() {
       <ZonesScreen
         visible={zonesPanelVisible}
         onClose={closeZonesPanel}
+      />
+      <RecordingScreen
+        visible={recordingPanelVisible}
+        onClose={closeRecordingPanel}
       />
       <MapsAndResourcesScreen
         visible={mapsResourcesVisible}

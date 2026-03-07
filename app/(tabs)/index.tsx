@@ -200,7 +200,12 @@ export default function HomeScreen() {
     return (
       <ScreenContainer style={{ backgroundColor: theme.bg }}>
         {Platform.OS === "web" ? (
-          <View style={styles.webFillLayout}>
+          <ScrollView
+            style={styles.webScroll}
+            contentContainerStyle={styles.webScrollContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.webHeader}>
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
@@ -211,12 +216,12 @@ export default function HomeScreen() {
               </View>
               <HomeWeatherSection />
             </View>
-            <View style={styles.webContentFill}>
+            <View style={styles.webContentWrap}>
               <MinimalCard style={styles.webCardFill}>
                 <VRPPlanner nestedInScrollView={true} />
               </MinimalCard>
             </View>
-          </View>
+          </ScrollView>
         ) : !useKeyboardAware ? (
           <ScrollView {...scrollProps}>{header}</ScrollView>
         ) : (
@@ -281,24 +286,23 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingTop: 20, paddingBottom: 24, paddingHorizontal: 16 },
-  webFillLayout: {
+  webScroll: {
     flex: 1,
-    flexDirection: "column",
-    minHeight: 0,
+  },
+  webScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   webHeader: {
     paddingTop: 20,
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
-  webContentFill: {
-    flex: 1,
-    minHeight: 0,
+  webContentWrap: {
     paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   webCardFill: {
-    flex: 1,
-    minHeight: 0,
     marginBottom: 0,
   },
   headerRow: {

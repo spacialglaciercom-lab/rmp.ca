@@ -3,7 +3,7 @@
  * Metro resolves @/components/route-map to this file on web and to route-map.native.tsx on native.
  * Do not import react-native-maps here; use leaflet + react-leaflet only.
  */
-import React, { useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from "react";
+import React, { useRef, useMemo, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { View, Text } from "react-native";
 import { buildOvertureOverlayStyle, PMTILES_CITIES } from "@/components/maplibre/overture-style";
 import { useColors } from "@/hooks/use-colors";
@@ -304,7 +304,7 @@ function MapClickHandler({ onMapPress }: { onMapPress: (lat: number, lon: number
   return null;
 }
 
-/** Transparent overlay rendered *outside* MapContainer so it sits above Leaflet panes and receives clicks (fixes pick-on-map on web). */
+/** Transparent overlay rendered *outside* MapContainer so it sits above Leaflet panes and receives clicks (fixes pick-on-map on web). Forwards wheel to the map so scroll zoom works. */
 function MapClickOverlaySibling({
   mapRef,
   onMapPress,
@@ -339,12 +339,24 @@ function MapClickOverlaySibling({
     },
     [mapRef]
   );
+  const handleWheel = React.useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      const map = mapRef.current;
+      if (!map || typeof map.getZoom !== "function" || typeof map.setZoom !== "function") return;
+      e.preventDefault();
+      const zoom = map.getZoom();
+      const delta = e.deltaY > 0 ? -1 : 1;
+      map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
+    },
+    [mapRef]
+  );
   return (
     <div
       role="button"
       tabIndex={0}
       aria-label="Click map to pick location"
       onClick={handleClick}
+      onWheel={handleWheel}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") e.currentTarget.click();
       }}
@@ -820,6 +832,19 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
 
   const overtureCity = PMTILES_CITIES[0] ?? "montreal";
 
+  const handleWrapperWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      const map = leafletMapRef.current;
+      if (!map || typeof map.getZoom !== "function" || typeof map.setZoom !== "function") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const zoom = map.getZoom();
+      const delta = e.deltaY > 0 ? -1 : 1;
+      map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
+    },
+    []
+  );
+
   return (
     <View style={[wrapperStyle, onMapPress ? { pointerEvents: "auto" } : { pointerEvents: "box-none" }]}>
       <div
@@ -831,6 +856,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
           position: "relative",
           pointerEvents: "auto",
         }}
+        onWheel={handleWrapperWheel}
       >
         <MapContainer
           ref={mapRef}
@@ -1136,9 +1162,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
             city={overtureCity}
           />
         )}
-        {onMapPress ? (
-          <MapClickOverlaySibling mapRef={leafletMapRef} onMapPress={onMapPress} />
-        ) : null}
+        {/* No overlay on web: map must receive pointer events for pan and click. MapClickHandler inside MapContainer handles onMapPress. */}
       </div>
     </View>
   );

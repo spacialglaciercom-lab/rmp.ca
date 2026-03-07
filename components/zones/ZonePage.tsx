@@ -755,6 +755,8 @@ export function ZonePage() {
                 width: sidebarWidth,
                 borderLeftColor: colors.border,
                 backgroundColor: colors.surface,
+                alignSelf: "stretch",
+                minHeight: mapHeight,
               },
             ]}
           >
@@ -1003,6 +1005,9 @@ export function ZonePage() {
                             Imbalance (max/min): {imbalanceRatio.toFixed(2)}×
                           </Text>
                         )}
+                        <Text style={[styles.statsRow, { color: colors.muted, fontSize: 11, marginTop: 6 }]}>
+                          Balanced by workload (time/distance), not map area—sizes may look unequal.
+                        </Text>
                       </View>
                       <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>
                         Zone list
@@ -1474,6 +1479,7 @@ const styles = StyleSheet.create({
   mapWrap: {
     alignSelf: "stretch",
     position: "relative",
+    overflow: "hidden",
   },
   mapEmptyHint: {
     position: "absolute",
@@ -1505,9 +1511,11 @@ const styles = StyleSheet.create({
   sidebar: {
     borderLeftWidth: 1,
     flex: 0,
+    flexDirection: "column",
   },
   sidebarScroll: {
     flex: 1,
+    minHeight: 0,
   },
   sidebarContent: {
     padding: 16,
