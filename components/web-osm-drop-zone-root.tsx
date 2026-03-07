@@ -148,7 +148,9 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
           wayCount: ways.length,
           nodeCount: nodes.size,
           bounds: fileBounds,
-        }).catch(() => {}); // Silently ignore save errors
+        }).catch((err) => {
+          console.warn("[OSMLibrary] Save to library failed:", err instanceof Error ? err.message : err);
+        });
 
         const startCoords = customStartPoint.getStartPoint();
 
@@ -188,7 +190,7 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
           : await new Promise<any>((resolve, reject) => {
               setTimeout(() => {
                 try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
+                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
                   resolve(optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties));
                 } catch (err) { reject(err); }
               }, 0);

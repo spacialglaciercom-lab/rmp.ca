@@ -804,6 +804,20 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
     if (leafletReady && MapContainer) onLoad?.();
   }, [leafletReady, onLoad]);
 
+  // Must be before early return so hook count is stable every render (Rules of Hooks).
+  const handleWrapperWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      const map = leafletMapRef.current;
+      if (!map || typeof map.getZoom !== "function" || typeof map.setZoom !== "function") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const zoom = map.getZoom();
+      const delta = e.deltaY > 0 ? -1 : 1;
+      map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
+    },
+    []
+  );
+
   if (!leafletReady || !MapContainer) {
     return (
       <View
@@ -831,19 +845,6 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   };
 
   const overtureCity = PMTILES_CITIES[0] ?? "montreal";
-
-  const handleWrapperWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
-      const map = leafletMapRef.current;
-      if (!map || typeof map.getZoom !== "function" || typeof map.setZoom !== "function") return;
-      e.preventDefault();
-      e.stopPropagation();
-      const zoom = map.getZoom();
-      const delta = e.deltaY > 0 ? -1 : 1;
-      map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
-    },
-    []
-  );
 
   return (
     <View style={[wrapperStyle, onMapPress ? { pointerEvents: "auto" } : { pointerEvents: "box-none" }]}>

@@ -234,6 +234,20 @@ export default function SettingsContent() {
       ],
     },
     {
+      title: "Support",
+      items: [
+        {
+          label: "Help and Support",
+          value: "→",
+          onPress: () => {
+            hapticImpact();
+            router.push("/(tabs)/help");
+          },
+          description: "Topics, battery modes, contact support",
+        },
+      ],
+    },
+    {
       title: "About",
       items: [
         {

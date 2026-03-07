@@ -249,10 +249,16 @@ export default function RootLayout() {
       try {
         await AsyncStorage.setItem(IMPORTED_POINTS_KEY, JSON.stringify(points));
         if (osmData) {
-          await AsyncStorage.setItem(
-            OSM_DATA_STORAGE_KEY,
-            JSON.stringify(osmData),
-          );
+          try {
+            await AsyncStorage.setItem(
+              OSM_DATA_STORAGE_KEY,
+              JSON.stringify(osmData),
+            );
+          } catch (osmErr) {
+            // OSM data can exceed AsyncStorage per-key limit (~2MB); avoid leaving partial/corrupt data
+            await AsyncStorage.removeItem(OSM_DATA_STORAGE_KEY);
+            console.warn("OSM data too large for storage; re-optimize will require re-import:", osmErr);
+          }
         } else {
           await AsyncStorage.removeItem(OSM_DATA_STORAGE_KEY);
         }

@@ -249,7 +249,9 @@ export function OSMImport({ onImportComplete, useOfflineOptimizerV2 = false }: O
         wayCount: ways.length,
         nodeCount: nodes.size,
         bounds: fileBounds,
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn("[OSMLibrary] Save to library failed:", err instanceof Error ? err.message : err);
+      });
 
       const startCoords = customStartPoint.getStartPoint();
 
@@ -326,7 +328,7 @@ export function OSMImport({ onImportComplete, useOfflineOptimizerV2 = false }: O
             : await new Promise<any>((resolve, reject) => {
                 setTimeout(() => {
                   try {
-                    const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
+                    const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
                     resolve(
                       optimizer.optimize(
                         startCoords?.latitude,

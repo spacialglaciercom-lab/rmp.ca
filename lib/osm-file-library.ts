@@ -41,6 +41,9 @@ function estimateByteLength(str: string): number {
 /** Max stored files to prevent unbounded storage growth. */
 const MAX_FILES = 20;
 
+/** AsyncStorage has ~2MB per-key limit on Android; web often similar. Avoid truncation/corruption by rejecting oversize content on web. */
+const MAX_CONTENT_BYTES_WEB = 1.5 * 1024 * 1024;
+
 export interface OSMFileEntry {
   /** Unique identifier (timestamp-based). */
   id: string;
@@ -74,7 +77,7 @@ export async function listOSMFiles(): Promise<OSMFileEntry[]> {
   }
 }
 
-/** Save a new OSM file to the library. Returns the new entry. */
+/** Save a new OSM file to the library. Returns the new entry. Throws if content cannot be stored (e.g. too large on web). */
 export async function saveOSMFile(
   xmlContent: string,
   options: {
@@ -85,11 +88,12 @@ export async function saveOSMFile(
   }
 ): Promise<OSMFileEntry> {
   const id = `osm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const sizeBytes = estimateByteLength(xmlContent);
   const entry: OSMFileEntry = {
     id,
     name: options.name,
     importedAt: new Date().toISOString(),
-    sizeBytes: estimateByteLength(xmlContent),
+    sizeBytes,
     wayCount: options.wayCount,
     nodeCount: options.nodeCount,
     bounds: options.bounds,
@@ -104,18 +108,26 @@ export async function saveOSMFile(
     manifest.pop();
   }
 
-  // Prepend new entry
-  manifest.unshift(entry);
-
-  await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
+  // Write content first so we never add a manifest entry for content that failed to write (avoids corrupted/missing segments on load).
   await writeOSMContent(id, xmlContent);
+
+  // Then update manifest so the new entry is only listed after content is safely stored.
+  manifest.unshift(entry);
+  await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
 
   return entry;
 }
 
-/** Write OSM content to FileSystem (native) or AsyncStorage (web fallback). */
+/** Write OSM content to FileSystem (native) or AsyncStorage (web fallback). Throws if content is too large (web) or write fails. */
 async function writeOSMContent(id: string, content: string): Promise<void> {
   if (Platform.OS === "web") {
+    const bytes = estimateByteLength(content);
+    if (bytes > MAX_CONTENT_BYTES_WEB) {
+      throw new Error(
+        `OSM file is too large to save in the library on this device (${(bytes / 1024 / 1024).toFixed(1)} MB). ` +
+          `Maximum is about ${(MAX_CONTENT_BYTES_WEB / 1024 / 1024).toFixed(1)} MB. Use a smaller extract or open the file directly each time.`
+      );
+    }
     await AsyncStorage.setItem(CONTENT_PREFIX + id, content);
     return;
   }

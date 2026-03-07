@@ -262,8 +262,20 @@ export function parseGpxTrackPoints(gpxData: string): PreviewRoutePoint[] {
   return points;
 }
 
+/** Escape string for safe use inside GPX XML attributes and text. */
+function escapeGpxXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
- * Generate GPX string from route points with optional simplification
+ * Generate GPX string from route points with optional simplification.
+ * Export uses the full point list (no simplification) unless simplify=true.
+ * All call sites currently pass only (name, points), so no segments are dropped at serialization.
+ *
  * @param routeName Name of the route
  * @param points Array of latitude/longitude points
  * @param simplify Whether to simplify the route using Douglas-Peucker algorithm
@@ -319,6 +331,7 @@ export function generateGPXString(
   }
 
   const timestamp = new Date().toISOString();
+  const safeName = escapeGpxXml(routeName);
   const trackPoints = processedPoints
     .map((p: any) => `      <trkpt lat="${p.lat}" lon="${p.lon}"><time>${timestamp}</time></trkpt>`)
     .join("\n");
@@ -331,11 +344,11 @@ export function generateGPXString(
 <gpx version="1.1" creator="RouteMasterPro"
   xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${routeName}</name>
+    <name>${safeName}</name>
     <time>${timestamp}</time>${simplificationNote}
   </metadata>
   <trk>
-    <name>${routeName}</name>
+    <name>${safeName}</name>
     <trkseg>
 ${trackPoints}
     </trkseg>
@@ -352,6 +365,7 @@ export function generateMultiTrackGPXString(
   routes: Array<{ name: string; points: Array<{ lat: number; lon: number }> }>
 ): string {
   const timestamp = new Date().toISOString();
+  const safeBase = escapeGpxXml(routeNameBase);
   const trackParts = routes
     .filter((r) => r.points.length >= 2)
     .map((r) => {
@@ -359,7 +373,7 @@ export function generateMultiTrackGPXString(
         .map((p) => `      <trkpt lat="${p.lat}" lon="${p.lon}"><time>${timestamp}</time></trkpt>`)
         .join("\n");
       return `  <trk>
-    <name>${r.name}</name>
+    <name>${escapeGpxXml(r.name)}</name>
     <trkseg>
 ${trackPoints}
     </trkseg>
@@ -371,7 +385,7 @@ ${trackPoints}
 <gpx version="1.1" creator="RouteMasterPro"
   xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${routeNameBase}</name>
+    <name>${safeBase}</name>
     <time>${timestamp}</time>
     <desc>VRP multi-vehicle routes (${routes.length} tracks)</desc>
   </metadata>

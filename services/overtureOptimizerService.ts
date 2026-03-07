@@ -339,7 +339,15 @@ export interface CleanOptions {
   merge_parallel_edges?: boolean;
 }
 
-export async function optimizeRoute(params: {
+/** App-side routing config shape (onewayMode, serviceBothSides, turnPenalties). */
+export interface OvertureOptimizerRoutingConfig {
+  onewayMode?: string;
+  serviceBothSides?: boolean;
+  turnPenalties?: { leftTurn?: number; uTurn?: number; rightTurn?: number };
+}
+
+/** Params accepted by optimizeRoute (API shape). Used by buildOvertureOptimizeRequest. */
+export type OptimizeRouteParams = {
   geojson: GeoJSONFeatureCollection;
   start_lat?: number;
   start_lon?: number;
@@ -347,10 +355,57 @@ export async function optimizeRoute(params: {
   service_both_sides?: boolean;
   road_classes?: string[];
   turn_penalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
-  /** Run vector_clean pipeline before building graph (dedupe edges, etc.). Recommended for planner OSM-derived GeoJSON. */
   clean_before_optimize?: boolean;
   clean_options?: CleanOptions;
-}): Promise<OptimizeResponse> {
+};
+
+/**
+ * Build the same request params used by the Map's Overture Route Optimizer.
+ * Use from both the Map (OSM Extractor) and the Planner (v2 off) so both paths are identical.
+ * By default does not include clean_before_optimize so the request matches the Map Extractor.
+ * Planner can pass cleanBeforeOptimize: true for OSM-derived GeoJSON so the backend runs
+ * vector_clean before building the graph (dedupe edges, etc.), which often reduces looping.
+ */
+export function buildOvertureOptimizeRequest(params: {
+  geojson: GeoJSONFeatureCollection;
+  start_lat?: number;
+  start_lon?: number;
+  config?: OvertureOptimizerRoutingConfig | null;
+  /** When true, backend runs clean pipeline before optimizing. Omit for Map (Overture GeoJSON); set true for Planner (OSM-derived GeoJSON) to reduce looping. */
+  cleanBeforeOptimize?: boolean;
+  overrides?: {
+    oneway_mode?: string;
+    service_both_sides?: boolean;
+    turn_penalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
+    road_classes?: string[];
+  };
+}): OptimizeRouteParams {
+  const c = params.config;
+  const turnPenalties = c?.turnPenalties;
+  const result: OptimizeRouteParams = {
+    geojson: params.geojson,
+    start_lat: params.start_lat,
+    start_lon: params.start_lon,
+    oneway_mode: params.overrides?.oneway_mode ?? c?.onewayMode ?? "A",
+    service_both_sides: params.overrides?.service_both_sides ?? c?.serviceBothSides ?? false,
+    turn_penalties:
+      params.overrides?.turn_penalties ??
+      (turnPenalties
+        ? {
+            left_turn: turnPenalties.leftTurn ?? 50,
+            u_turn: turnPenalties.uTurn ?? 100,
+            right_turn: turnPenalties.rightTurn ?? 0,
+          }
+        : undefined),
+    road_classes: params.overrides?.road_classes,
+  };
+  if (params.cleanBeforeOptimize === true) {
+    result.clean_before_optimize = true;
+  }
+  return result;
+}
+
+export async function optimizeRoute(params: OptimizeRouteParams): Promise<OptimizeResponse> {
   return request<OptimizeResponse>("/api/optimize", params);
 }
 

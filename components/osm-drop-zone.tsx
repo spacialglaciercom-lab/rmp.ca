@@ -114,7 +114,7 @@ export function OSMDropZone({ onImportComplete, children }: OSMDropZoneProps) {
           : await new Promise<any>((resolve, reject) => {
               setTimeout(() => {
                 try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
+                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
                   resolve(optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties));
                 } catch (err) { reject(err); }
               }, 0);

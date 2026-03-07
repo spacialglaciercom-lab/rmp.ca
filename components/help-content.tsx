@@ -103,6 +103,20 @@ const helpSections: HelpSection[] = [
     ]
   },
   {
+    id: "zones-csv-geojson",
+    title: "Zones: CSV / GeoJSON import",
+    icon: "file-upload-outline",
+    content: [
+      "On the Zones page you can import waste points (bins or dumpsters) from a CSV or GeoJSON file. Use the toolbar Import button, then choose your file.",
+      "CSV format — Use a header row with column names (case-insensitive). Required: lat and lon (or latitude/longitude, or lng for longitude). Optional: type, capacity, condition, address. Separate columns with comma, semicolon, or tab.",
+      "CSV columns: lat (or latitude), lon (or lng, longitude), type (bin or dumpster), capacity (liters), condition (good, overflowing, damaged), address (for geocoding if lat/lon missing).",
+      "CSV example: lat,lon,type,capacity,address then one row per point, e.g. 45.5017,-73.5673,bin,240,123 Main St.",
+      "GeoJSON format — A FeatureCollection of Point features. Each feature must have geometry.type \"Point\" and geometry.coordinates as [longitude, latitude] (GeoJSON order). Use properties for type, capacity, condition, address.",
+      "GeoJSON example: {\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[-73.5673,45.5017]},\"properties\":{\"type\":\"bin\",\"capacity\":240,\"address\":\"123 Main St\"}}]}.",
+      "After import, rows with an address but no coordinates can be geocoded using the Geocode addresses button. You need at least lat/lon or address for each row. Then run Partition to split points into zones."
+    ]
+  },
+  {
     id: "add-constraints",
     title: "Add constraints",
     icon: "format-list-checks",

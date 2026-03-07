@@ -759,8 +759,8 @@ export class RouteOptimizer {
       ? null
       : new CycleDetector({
           maxSccRevisits: strict ? 1 : 2,
-          maxNodeRevisits: strict ? 2 : 3,
-          recentWindowSize: strict ? 20 : 30,
+          maxNodeRevisits: strict ? 1 : 3,
+          recentWindowSize: strict ? 14 : 30,
           debug: false,
         });
     this.cycleDiagnostics = { loopsDetected: 0, escapeAttempts: 0 };
@@ -795,7 +795,7 @@ export class RouteOptimizer {
           loopEscapeMode = true;
           
           // If severely stuck, force backtrack to break circular patterns earlier
-          const backtrackThreshold = strict ? 25 : 35;
+          const backtrackThreshold = strict ? 12 : 35;
           if (detection.stagnantIterations > backtrackThreshold && stack.length > 3) {
             // Force backtrack by treating current as having no edges
             if (this.cycleDetector) {
@@ -808,7 +808,7 @@ export class RouteOptimizer {
       }
 
       // Detect simple oscillation in the recent stack and mark culprit tabu
-      const osc = detectSimpleOscillation(stack, strict ? 10 : 12, strict ? 2 : 3);
+      const osc = detectSimpleOscillation(stack, strict ? 6 : 12, strict ? 2 : 3);
       if (osc.isOscillating && osc.culprit) {
         this.localTabuNodes.add(osc.culprit);
         loopEscapeMode = true;
@@ -918,8 +918,8 @@ export class RouteOptimizer {
     // In loop escape mode, build a set of nodes to strongly avoid
     const recentStackNodes = new Set<string>();
     if (loopEscapeMode && stack.length > 5) {
-      // Avoid the last 20 nodes on the stack when escaping
-      for (let i = Math.max(0, stack.length - 20); i < stack.length; i++) {
+      const avoidDepth = this.options.antiLoopMode === "strict" ? 35 : 20;
+      for (let i = Math.max(0, stack.length - avoidDepth); i < stack.length; i++) {
         recentStackNodes.add(stack[i]!);
       }
     }
@@ -959,12 +959,12 @@ export class RouteOptimizer {
       // Apply local tabu and edge traversal quota penalties (after base score exists)
       const edgeTraversalCount = this.edgeTraversalCounts.get(entry.edgeId) ?? 0;
       const strict = this.options.antiLoopMode === "strict";
-      if (edgeTraversalCount > (strict ? 2 : 3)) {
-        // Heavily discourage repeatedly traversed edges
+      if (edgeTraversalCount > (strict ? 1 : 3)) {
+        // Heavily discourage repeatedly traversed edges (strict: after first revisit)
         score += 5000;
       }
       if (this.localTabuNodes.has(neighbor)) {
-        score += strict ? 3000 : 2000;
+        score += strict ? 4000 : 2000;
       }
 
       // Dead-end handling: prefer to complete dead-ends when we're already there

@@ -15,6 +15,7 @@ import { useMapSidebarStore } from "@/stores/mapSidebarStore";
 import { useDisplayModeStore } from "@/stores/displayModeStore";
 import {
   optimizeRoute as callOptimizer,
+  buildOvertureOptimizeRequest,
   type GeoJSONFeatureCollection,
   type OptimizeResponse,
 } from "@/services/overtureOptimizerService";
@@ -45,21 +46,19 @@ export function useOvertureOptimizeRoute() {
       setOptimizing(true);
       setOptimizationStatus("Sending to route optimizer...");
       try {
-        const config = state?.configuration;
-
-        const result = await callOptimizer({
+        const requestParams = buildOvertureOptimizeRequest({
           geojson,
           start_lat: options.startLat,
           start_lon: options.startLon,
-          oneway_mode: options.onewayMode ?? (config?.onewayMode as string) ?? "A",
-          service_both_sides: options.serviceBothSides ?? config?.serviceBothSides ?? false,
-          road_classes: options.roadClasses,
-          turn_penalties: options.turnPenalties ?? {
-            left_turn: config?.turnPenalties?.leftTurn ?? 50,
-            u_turn: config?.turnPenalties?.uTurn ?? 100,
-            right_turn: config?.turnPenalties?.rightTurn ?? 0,
+          config: state?.configuration,
+          overrides: {
+            oneway_mode: options.onewayMode,
+            service_both_sides: options.serviceBothSides,
+            road_classes: options.roadClasses,
+            turn_penalties: options.turnPenalties,
           },
         });
+        const result = await callOptimizer(requestParams);
 
         if (!result.route?.length) {
           Alert.alert(

@@ -43,7 +43,7 @@ import { debug } from "@/lib/route-optimizer-v2/debug";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 import { RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
-import { optimizeRoute as backendOptimizeRoute } from "@/services/overtureOptimizerService";
+import { optimizeRoute as backendOptimizeRoute, buildOvertureOptimizeRequest } from "@/services/overtureOptimizerService";
 import { osmDataToGeoJSON } from "@/lib/geojsonToOsmData";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { isMockCollectionPoints } from "@/lib/is-mock-route";
@@ -230,7 +230,7 @@ export default function PlannerContent() {
       if (osmData) {
         const { nodes, ways, turnRestrictions } = storedToOsmData(osmData);
         const startCoords = customStartPoint.getStartPoint();
-        const onewayMode = state.configuration.onewayMode ?? "B";
+        const onewayMode = state.configuration.onewayMode ?? "A";
         const turnPenalties = state.configuration.turnPenalties;
         const serviceBothSides = state.configuration.serviceBothSides ?? false;
         // Yield so React can paint "processing" state before optimisation
@@ -249,19 +249,14 @@ export default function PlannerContent() {
         if (optResult === undefined) {
           try {
             const geojson = osmDataToGeoJSON(nodes, ways);
-            const backendResult = await backendOptimizeRoute({
-              geojson,
-              start_lat: startCoords?.latitude,
-              start_lon: startCoords?.longitude,
-              oneway_mode: onewayMode,
-              service_both_sides: serviceBothSides,
-              turn_penalties: {
-                left_turn: turnPenalties.leftTurn,
-                u_turn: turnPenalties.uTurn,
-                right_turn: turnPenalties.rightTurn,
-              },
-              clean_before_optimize: true,
-            });
+            const backendResult = await backendOptimizeRoute(
+              buildOvertureOptimizeRequest({
+                geojson,
+                start_lat: startCoords?.latitude,
+                start_lon: startCoords?.longitude,
+                config: state.configuration,
+              }),
+            );
             optResult = {
               route: backendResult.route,
               totalDistance: backendResult.total_distance_km,
@@ -272,8 +267,15 @@ export default function PlannerContent() {
           }
         }
         if (optResult === undefined) {
-          // Offline mode or backend failed: use local optimizer
+          // Offline mode or backend failed: use local optimizer (route may be loopier)
           optimizerSource = "local";
+          dispatch({
+            type: "ADD_LOG_ENTRY",
+            payload: generateLogEntry(
+              "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
+              "warning"
+            ),
+          });
           optResult = isExperimentalRoute
             ? await optimizeRouteTurnAware(nodes, ways, {
                 customLat: startCoords?.latitude,
@@ -288,6 +290,7 @@ export default function PlannerContent() {
                   try {
                     const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions, undefined, {
                       serviceBothSides,
+                      antiLoopMode: "strict",
                     });
                     resolve(
                       optimizer.optimize(
@@ -304,10 +307,9 @@ export default function PlannerContent() {
         }
 
         // Fix #3: post-process to prune excess revisits of the same directed segment.
-        // Skip pruning when source is offline-v2 (Videos app optimizer): its output is a correct Eulerian circuit;
-        // pruning with coarse precision can merge distinct segments and create broken/loopy-looking routes.
+        // Skip pruning when source is offline-v2 or backend (Overture): use optimizer output as-is, same as Map's Overture extractor.
         try {
-          if (optimizerSource !== "offline-v2") {
+          if (optimizerSource !== "offline-v2" && optimizerSource !== "backend") {
             const maxSegmentVisits = serviceBothSides ? 2 : 1;
             const pruned = pruneRouteLoops(optResult.route ?? [], {
               maxSegmentVisits,
@@ -394,15 +396,14 @@ export default function PlannerContent() {
         }
       }
 
-      // Build initial geometry from optimizer. When Optimizer v2 is used, skip map-matching and use
-      // the optimizer's points directly (same as the Videos app). Map-matching with many waypoints
-      // can cause OSRM to produce loop-like paths; skipping it for v2 avoids that.
+      // Build initial geometry from optimizer. When backend (Overture) or v2 is used, skip map-matching
+      // and use the optimizer's points directly — same as Map's Overture extractor and the Videos app.
       let gpxPoints = optimizedPoints.map((p) => ({
         lat: p.latitude,
         lon: p.longitude,
       }));
       let pointsForStorage: CollectionPoint[] = optimizedPoints;
-      const skipSnapToRoads = optimizerSource === "offline-v2";
+      const skipSnapToRoads = optimizerSource === "offline-v2" || optimizerSource === "backend";
       try {
         if (!skipSnapToRoads) {
           const routingConfig = await getRoutingConfigAsync();
@@ -482,12 +483,21 @@ export default function PlannerContent() {
       }
 
       // Cosmetic log animation (non-blocking — doesn't delay GPX availability)
+      const optimizerLabel =
+        optimizerSource === "backend"
+          ? "Overture route optimizer (same as Map Extractor)"
+          : optimizerSource === "offline-v2"
+            ? "Offline optimizer (v2)"
+            : optimizerSource === "local"
+              ? "Local optimizer (backend unavailable)"
+              : null;
       const logMessages = [
         { msg: "Starting route generation...", type: "info" as const },
         { msg: `Processing ${pointsToUse.length} collection points...`, type: "info" as const },
         { msg: "Building directed graph from OSM extract", type: "info" as const },
         { msg: "Filtering highway types: residential, unclassified, tertiary, secondary, living_street, secondary_link, tertiary_link, service=alley", type: "info" as const },
         { msg: "Identifying Largest Strongly Connected Component (LSCC)", type: "info" as const },
+        ...(optimizerLabel ? [{ msg: `Optimizer: ${optimizerLabel}`, type: "info" as const }] : []),
         { msg: `Applying turn penalties: Left=${state.configuration.turnPenalties.leftTurn}, U-Turn=${state.configuration.turnPenalties.uTurn}`, type: "info" as const },
         { msg: "Route generation complete!", type: "success" as const },
       ];
@@ -628,7 +638,7 @@ export default function PlannerContent() {
                 return;
               }
               const startCoords = customStartPoint.getStartPoint();
-              const onewayMode = state.configuration.onewayMode ?? "B";
+              const onewayMode = state.configuration.onewayMode ?? "A";
               const turnPenalties = state.configuration.turnPenalties;
               const serviceBothSides = state.configuration.serviceBothSides ?? false;
               let optResult: { route: Array<{ latitude: number; longitude: number; nodeId?: string }>; totalDistance?: number } | undefined;
@@ -645,14 +655,14 @@ export default function PlannerContent() {
               if (optResult === undefined) {
                 try {
                   const geojson = osmDataToGeoJSON(nodes, ways);
-                  const backendResult = await backendOptimizeRoute({
-                    geojson,
-                    start_lat: startCoords?.latitude,
-                    start_lon: startCoords?.longitude,
-                    oneway_mode: onewayMode,
-                    service_both_sides: serviceBothSides,
-                    turn_penalties: { left_turn: turnPenalties.leftTurn, u_turn: turnPenalties.uTurn, right_turn: turnPenalties.rightTurn },
-                  });
+                  const backendResult = await backendOptimizeRoute(
+                    buildOvertureOptimizeRequest({
+                      geojson,
+                      start_lat: startCoords?.latitude,
+                      start_lon: startCoords?.longitude,
+                      config: state.configuration,
+                    }),
+                  );
                   optResult = { route: backendResult.route, totalDistance: backendResult.total_distance_km };
                   libraryOptimizerSource = "backend";
                 } catch {
@@ -661,6 +671,13 @@ export default function PlannerContent() {
               }
               if (optResult === undefined) {
                 libraryOptimizerSource = "local";
+                dispatch({
+                  type: "ADD_LOG_ENTRY",
+                  payload: generateLogEntry(
+                    "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
+                    "warning"
+                  ),
+                });
                 optResult = isExperimentalRoute
                   ? await optimizeRouteTurnAware(nodes, ways, {
                       customLat: startCoords?.latitude,
@@ -671,15 +688,15 @@ export default function PlannerContent() {
                       serviceBothSides,
                     })
                   : (() => {
-                      const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides });
+                      const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
                       return optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties);
                     })();
               }
 
-              // Fix #3: post-process to prune excess revisits. Skip when offline-v2 (Videos app optimizer).
+              // Fix #3: post-process to prune excess revisits. Skip when offline-v2 or backend (same as Map's Overture extractor).
               let route = optResult.route ?? [];
               let totalDistance = optResult.totalDistance;
-              if (libraryOptimizerSource !== "offline-v2") {
+              if (libraryOptimizerSource !== "offline-v2" && libraryOptimizerSource !== "backend") {
                 try {
                   const maxSegmentVisits = serviceBothSides ? 2 : 1;
                   const pruned = pruneRouteLoops(route, {
@@ -852,7 +869,7 @@ export default function PlannerContent() {
             Optimization
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Use offline optimizer (v2): same optimizer as route-optimizer-mobile-v2 (Videos app). When v2 is on, route is always two-pass; one-pass applies only when v2 is off. Off: use backend when available, then fall back to local.
+            Use offline optimizer (v2): same optimizer as route-optimizer-mobile-v2 (Videos app). When v2 is on, route is always two-pass; one-pass applies only when v2 is off. Off: use Overture route optimizer (same as Map Extractor), then fall back to local if unavailable.
           </Text>
           <View className="flex-row items-center justify-between">
             <Text className="text-base text-foreground">Use offline optimizer (v2)</Text>
