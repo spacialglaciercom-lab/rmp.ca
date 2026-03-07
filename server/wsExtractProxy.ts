@@ -2,8 +2,17 @@
  * WebSocket proxy for /ws/extract — forwards to the Overture extract backend.
  * Used so the web app can connect same-origin (avoids browser CORS/Origin issues).
  * Set EXTRACT_WS_UPSTREAM or OPTIMIZER_WS_UPSTREAM to override the extract backend URL.
+ *
+ * Why extraction works on mobile but not web:
+ * - Mobile connects directly from the device to the extract service (webovertureextract).
+ * - Web connects to this backend (/ws/extract), which then proxies to the extract service.
+ * - ECONNREFUSED means the backend cannot reach the upstream (e.g. Railway networking,
+ *   or IPv6 vs IPv4). We force IPv4 for the upstream connection to avoid IPv6 issues.
+ * - If both apps are in the same Railway project, set EXTRACT_WS_UPSTREAM to the
+ *   internal URL: http://webovertureextract.railway.internal:PORT (replace PORT with the service port).
  */
 import type { Server } from "http";
+import https from "https";
 import httpProxy from "http-proxy";
 import { createLogger } from "./logger";
 
@@ -18,13 +27,23 @@ const UPSTREAM_HTTP =
   DEFAULT_EXTRACT_UPSTREAM;
 const UPSTREAM_WS = UPSTREAM_HTTP.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
 
+/** Force IPv4 for upstream connection; avoids ECONNREFUSED when upstream only listens on IPv4 (e.g. some Railway setups). */
+const UPSTREAM_IS_WSS = /^wss:\/\//i.test(UPSTREAM_WS);
+const upstreamAgent = UPSTREAM_IS_WSS ? new https.Agent({ family: 4 }) : undefined;
+
 export function registerWsExtractProxy(server: Server): void {
+  log.info("WebSocket /ws/extract proxy will forward to upstream", { target: UPSTREAM_WS });
+
   const proxy = httpProxy.createProxyServer({ ws: true });
 
   proxy.on("error", (err: NodeJS.ErrnoException, req, _res) => {
     const code = err.code ?? "";
     const msg = (err.message || String(err) || code || "Unknown WebSocket proxy error").trim() || "Unknown WebSocket proxy error";
-    log.warn("WebSocket proxy error", {
+    const hint =
+      code === "ECONNREFUSED"
+        ? " Upstream extract service is not running or unreachable. Start it on Railway or set EXTRACT_WS_UPSTREAM (use Railway internal URL if same project: http://servicename.railway.internal:PORT)."
+        : "";
+    log.warn("WebSocket proxy error" + hint, {
       error: msg,
       code: code || undefined,
       target: UPSTREAM_WS,
@@ -37,8 +56,9 @@ export function registerWsExtractProxy(server: Server): void {
       socket.destroy();
       return;
     }
-    // target = origin only; http-proxy forwards req.url (e.g. /ws/extract) to that origin
+    const proxyOptions: Record<string, unknown> = { target: UPSTREAM_WS };
+    if (upstreamAgent) proxyOptions.agent = upstreamAgent;
     log.info("Proxying WebSocket /ws/extract to upstream", { target: UPSTREAM_WS, path: req.url });
-    proxy.ws(req, socket, head, { target: UPSTREAM_WS });
+    proxy.ws(req, socket, head, proxyOptions);
   });
 }

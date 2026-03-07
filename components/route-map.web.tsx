@@ -821,7 +821,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
   const overtureCity = PMTILES_CITIES[0] ?? "montreal";
 
   return (
-    <View style={[wrapperStyle, { pointerEvents: "box-none" }]}>
+    <View style={[wrapperStyle, onMapPress ? { pointerEvents: "auto" } : { pointerEvents: "box-none" }]}>
       <div
         style={{
           width: pixelWidth,

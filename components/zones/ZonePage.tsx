@@ -706,17 +706,17 @@ export function ZonePage() {
                       : undefined
                 }
                 wastePoints={wastePoints}
-                onMapPress={pickWasteLocationMode ? handleMapPressForWastePick : undefined}
+                onMapPress={pageMode === "waste" ? handleMapPressForWastePick : undefined}
                 onLoad={() => {}}
               />
-              {wastePoints.length === 0 && !pickWasteLocationMode && (
+              {wastePoints.length === 0 && !(Platform.OS === "web" && pageMode === "waste") && (
                 <View style={[styles.mapEmptyHint, { backgroundColor: colors.surface + "E6", pointerEvents: "none" }]}>
                   <MaterialCommunityIcons name="delete-outline" size={32} color={colors.muted} />
                   <Text style={[styles.mapPlaceholderText, { color: colors.text, fontSize: 14, marginTop: 6 }]}>
                     No bins or dumpsters mapped
                   </Text>
                   <Text style={[styles.mapPlaceholderHint, { color: colors.muted, marginTop: 2 }]}>
-                    Tap Add to place a bin or dumpster, or Import CSV/GeoJSON.
+                    Tap the map to add a bin or dumpster, or use Add / Import.
                   </Text>
                 </View>
               )}
@@ -1313,9 +1313,9 @@ export function ZonePage() {
           setPickWasteLocationMode(true);
         }}
       />
-      {pickWasteLocationMode && pageMode === "waste" && (
+      {pageMode === "waste" && !addWasteModalVisible && (
         <View style={[styles.pickHint, { backgroundColor: colors.primary, pointerEvents: "none" }]}>
-          <Text style={styles.pickHintText}>Tap on the map to place the bin or dumpster</Text>
+          <Text style={styles.pickHintText}>Tap the map to add a bin or dumpster</Text>
         </View>
       )}
       <WasteImportModal
