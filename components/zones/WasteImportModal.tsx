@@ -27,6 +27,7 @@ interface WasteImportModalProps {
 }
 
 const NOMINATIM_RATE_MS = 1100;
+const MAX_PREVIEW_ROWS = 5;
 
 export function WasteImportModal({ visible, onClose, onImport }: WasteImportModalProps) {
   const colors = useColors();
@@ -34,16 +35,19 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   const [loading, setLoading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const needGeocode = rows.filter((r) => (r.lat == null || r.lon == null) && r.address?.trim()).length;
   const readyCount = rows.filter((r) => r.lat != null && r.lon != null && !Number.isNaN(r.lat) && !Number.isNaN(r.lon)).length;
+  const invalidCount = rows.length - readyCount - needGeocode;
 
   const handlePickFile = useCallback(async () => {
     setError(null);
     setLoading(true);
+    setFileName(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/csv", "application/csv", "application/geo+json", "application/json", "text/plain"],
+        type: ["text/csv", "application/csv", "application/geo+json", "application/json", "text/plain", "*/*"],
         copyToCacheDirectory: true,
       });
       if (result.canceled) {
@@ -51,10 +55,17 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
         return;
       }
       const uri = result.assets[0].uri;
+      const name = result.assets[0].name || "file";
+      setFileName(name);
       const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
-      const parsed = parseWasteFile(text, result.assets[0].name);
+      const parsed = parseWasteFile(text, name);
       if (parsed.length === 0) {
-        setError("No valid rows found. CSV needs columns: lat, lon, type, capacity, address. GeoJSON needs Point features with properties.");
+        setError(
+          "No valid rows found.\n\n" +
+          "CSV format: columns named lat/latitude, lon/longitude (or x/y, coords, location)\n" +
+          "GeoJSON format: FeatureCollection with Point features\n\n" +
+          "Example CSV:\nlat,lon,type\n45.5087,-73.5540,bin"
+        );
         setRows([]);
       } else {
         setRows(parsed);
@@ -93,20 +104,25 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   const handleImport = useCallback(() => {
     const valid = rows.filter((r) => r.lat != null && r.lon != null && !Number.isNaN(r.lat!) && !Number.isNaN(r.lon!));
     if (valid.length === 0) {
-      Alert.alert("No valid points", "Geocode rows with only an address, or ensure lat/lon are present.");
+      Alert.alert("No valid points", "Geocode rows with only an address, or ensure lat/lon columns are present in your CSV.");
       return;
     }
     onImport(valid);
     onClose();
     setRows([]);
     setError(null);
+    setFileName(null);
   }, [rows, onImport, onClose]);
 
   const handleClose = useCallback(() => {
     onClose();
     setRows([]);
     setError(null);
+    setFileName(null);
   }, [onClose]);
+
+  // Preview rows with coordinates
+  const previewRows = rows.slice(0, MAX_PREVIEW_ROWS);
 
   if (!visible) return null;
 
@@ -117,10 +133,15 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
           <Text style={[styles.title, { color: colors.text }]}>Import CSV / GeoJSON</Text>
 
           {rows.length === 0 && !loading && (
-            <TouchableOpacity onPress={handlePickFile} style={[styles.primaryBtn, { backgroundColor: colors.primary }]}>
-              <MaterialCommunityIcons name="file-upload-outline" size={20} color="#fff" />
-              <Text style={styles.primaryBtnLabel}>Choose file</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity onPress={handlePickFile} style={[styles.primaryBtn, { backgroundColor: colors.primary }]}>
+                <MaterialCommunityIcons name="file-upload-outline" size={20} color="#fff" />
+                <Text style={styles.primaryBtnLabel}>Choose file</Text>
+              </TouchableOpacity>
+              <Text style={[styles.formatHint, { color: colors.muted }]}>
+                Supported: CSV with lat/lon columns, GeoJSON with Point features
+              </Text>
+            </>
           )}
 
           {loading && (
@@ -132,19 +153,69 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
 
           {rows.length > 0 && (
             <ScrollView style={styles.preview} showsVerticalScrollIndicator>
-              <Text style={[styles.hint, { color: colors.muted }]}>
-                {rows.length} row(s). {readyCount} with coordinates. {needGeocode > 0 ? `${needGeocode} need geocoding.` : ""}
-              </Text>
+              {fileName && (
+                <Text style={[styles.fileName, { color: colors.text }]}>{fileName}</Text>
+              )}
+
+              {/* Summary */}
+              <View style={[styles.summaryBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.summaryText, { color: colors.text }]}>
+                  <Text style={{ fontWeight: "700" }}>{rows.length}</Text> rows parsed
+                </Text>
+                {readyCount > 0 && (
+                  <Text style={[styles.summaryText, { color: "#22c55e" }]}>
+                    <Text style={{ fontWeight: "700" }}>{readyCount}</Text> with valid coordinates
+                  </Text>
+                )}
+                {needGeocode > 0 && (
+                  <Text style={[styles.summaryText, { color: colors.primary }]}>
+                    <Text style={{ fontWeight: "700" }}>{needGeocode}</Text> need geocoding (have address only)
+                  </Text>
+                )}
+                {invalidCount > 0 && (
+                  <Text style={[styles.summaryText, { color: colors.error ?? "#ef4444" }]}>
+                    <Text style={{ fontWeight: "700" }}>{invalidCount}</Text> invalid (no coords or address)
+                  </Text>
+                )}
+              </View>
+
+              {/* Preview table */}
+              {previewRows.length > 0 && (
+                <View style={[styles.previewTable, { borderColor: colors.border }]}>
+                  <Text style={[styles.previewHeader, { color: colors.muted }]}>Preview (first {previewRows.length}):</Text>
+                  {previewRows.map((row, i) => (
+                    <View key={i} style={[styles.previewRow, { borderTopColor: colors.border }]}>
+                      <Text style={[styles.previewCoord, { color: row.lat != null ? colors.text : colors.muted }]}>
+                        {row.lat != null && row.lon != null
+                          ? `${row.lat.toFixed(4)}, ${row.lon.toFixed(4)}`
+                          : row.address
+                            ? `📍 ${row.address.slice(0, 25)}${row.address.length > 25 ? "…" : ""}`
+                            : "❌ No coords"}
+                      </Text>
+                      <Text style={[styles.previewType, { color: colors.muted }]}>
+                        {row.type === "dumpster" ? "D" : "B"}
+                      </Text>
+                    </View>
+                  ))}
+                  {rows.length > MAX_PREVIEW_ROWS && (
+                    <Text style={[styles.previewMore, { color: colors.muted }]}>
+                      … and {rows.length - MAX_PREVIEW_ROWS} more
+                    </Text>
+                  )}
+                </View>
+              )}
+
               {needGeocode > 0 && (
                 <TouchableOpacity
                   onPress={handleGeocode}
                   disabled={geocoding}
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 8, opacity: geocoding ? 0.7 : 1 }]}
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 12, opacity: geocoding ? 0.7 : 1 }]}
                 >
                   {geocoding ? <ActivityIndicator size="small" color="#fff" /> : <MaterialCommunityIcons name="map-marker-radius" size={20} color="#fff" />}
-                  <Text style={styles.primaryBtnLabel}>{geocoding ? "Geocoding…" : "Geocode addresses"}</Text>
+                  <Text style={styles.primaryBtnLabel}>{geocoding ? "Geocoding…" : `Geocode ${needGeocode} address(es)`}</Text>
                 </TouchableOpacity>
               )}
+
               <TouchableOpacity
                 onPress={handleImport}
                 disabled={readyCount === 0}
@@ -153,6 +224,7 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
                 <MaterialCommunityIcons name="check" size={20} color="#fff" />
                 <Text style={styles.primaryBtnLabel}>Import {readyCount} point(s)</Text>
               </TouchableOpacity>
+
               <TouchableOpacity onPress={handlePickFile} style={[styles.secondaryBtn, { borderColor: colors.border }]}>
                 <Text style={[styles.secondaryBtnLabel, { color: colors.muted }]}>Choose another file</Text>
               </TouchableOpacity>
@@ -182,7 +254,7 @@ const styles = StyleSheet.create({
   },
   box: {
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 440,
     borderRadius: 12,
     borderWidth: 1,
     padding: 20,
@@ -212,6 +284,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 8,
+    alignItems: "center",
   },
   secondaryBtnLabel: {
     fontSize: 14,
@@ -234,11 +307,68 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   preview: {
-    maxHeight: 200,
+    maxHeight: 320,
   },
   hint: {
     fontSize: 13,
     marginBottom: 4,
+  },
+  formatHint: {
+    fontSize: 12,
+    marginTop: 12,
+    textAlign: "center",
+  },
+  fileName: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  summaryBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 12,
+    gap: 2,
+  },
+  summaryText: {
+    fontSize: 13,
+  },
+  previewTable: {
+    borderWidth: 1,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  previewHeader: {
+    fontSize: 11,
+    fontWeight: "600",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    textTransform: "uppercase",
+  },
+  previewRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+  },
+  previewCoord: {
+    fontSize: 12,
+    fontFamily: "monospace",
+    flex: 1,
+  },
+  previewType: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+  previewMore: {
+    fontSize: 11,
+    fontStyle: "italic",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderTopWidth: 1,
   },
   error: {
     fontSize: 13,
