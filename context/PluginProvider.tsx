@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { createPluginContext, loadAndRegisterPlugins } from "@/lib/plugins/load";
+import {
+  createPluginContext,
+  loadAndRegisterPlugins,
+} from "@/lib/plugins/load";
 import { usePluginStore } from "@/stores/pluginStore";
 
 interface PluginProviderProps {
@@ -16,11 +19,15 @@ interface PluginProviderProps {
  */
 export function PluginProvider({ children, trpcClient }: PluginProviderProps) {
   const enabledPlugins = usePluginStore((s) => s.enabledPlugins);
-  const contextRef = useRef<ReturnType<typeof createPluginContext> | null>(null);
+  const contextRef = useRef<ReturnType<typeof createPluginContext> | null>(
+    null,
+  );
+  const trpcClientRef = useRef<unknown>(trpcClient);
 
   useEffect(() => {
-    if (!contextRef.current) {
+    if (!contextRef.current || trpcClientRef.current !== trpcClient) {
       contextRef.current = createPluginContext(trpcClient);
+      trpcClientRef.current = trpcClient;
     }
     const ctx = contextRef.current;
     loadAndRegisterPlugins(ctx).catch((err) => {

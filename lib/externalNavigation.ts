@@ -225,7 +225,10 @@ export async function openOsmAndViewer(options?: {
       try {
         const FileSystem = await import("expo-file-system/legacy");
         const Sharing = await import("expo-sharing");
-        if (FileSystem.documentDirectory && typeof Sharing.shareAsync === "function") {
+        if (
+          FileSystem.documentDirectory &&
+          typeof Sharing.shareAsync === "function"
+        ) {
           const filename = `trashroute_osmand_${Date.now()}.gpx`;
           const path = `${FileSystem.documentDirectory}${filename}`;
           await FileSystem.writeAsStringAsync(path, gpxString);
@@ -259,6 +262,11 @@ export async function openOsmAndViewer(options?: {
     const canOpen = await Linking.canOpenURL(url).catch(() => false);
     if (canOpen) {
       await Linking.openURL(url);
+    } else {
+      Alert.alert(
+        "Unable to open OsmAnd",
+        "Could not launch OsmAnd. You can install it from the app store or open https://osmand.net in a browser.",
+      );
     }
   } catch {
     Alert.alert(
@@ -291,7 +299,11 @@ export async function openGoogleMapsViewer(options?: {
       });
 
       webUrl = `https://www.google.com/maps/dir/${coordStrings.join("/")}`;
-      console.log("[openGoogleMapsViewer] Generated route URL with", waypoints.length, "waypoints");
+      console.log(
+        "[openGoogleMapsViewer] Generated route URL with",
+        waypoints.length,
+        "waypoints",
+      );
     } else if (center) {
       webUrl = `https://www.google.com/maps/@${center.lat.toFixed(6)},${center.lon.toFixed(6)},14z`;
       console.log("[openGoogleMapsViewer] Generated center URL:", webUrl);
@@ -322,7 +334,9 @@ export async function openGoogleMapsViewer(options?: {
     // Try native first, fall back to web
     if (nativeUrl) {
       try {
-        const canOpenNative = await Linking.canOpenURL(nativeUrl).catch(() => false);
+        const canOpenNative = await Linking.canOpenURL(nativeUrl).catch(
+          () => false,
+        );
         if (canOpenNative) {
           await Linking.openURL(nativeUrl);
           return;
