@@ -30,6 +30,7 @@ interface MapFloatingControlsProps {
   onDownloadGPX?: () => void;
   onDrivePreview?: () => void;
   onOpenInGoogle?: () => void;
+  onOpenInOsmAnd?: () => void;
   directionsLoading?: boolean;
   streetViewLoading?: boolean;
   navLoading?: boolean;
@@ -105,6 +106,7 @@ function MapFloatingControlsInner({
   onDownloadGPX,
   onDrivePreview,
   onOpenInGoogle,
+  onOpenInOsmAnd,
   directionsLoading = false,
   streetViewLoading = false,
   navLoading = false,
@@ -135,15 +137,17 @@ function MapFloatingControlsInner({
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      {/* Top-left: Hamburger + Search */}
+      {/* Top-left: Hamburger + Search (search only when onSearch provided, e.g. Navigation plugin on) */}
       <View style={[styles.topLeft, { top: topPad, left: leftPad }]}>
         <FloatingIconButton icon="menu" onPress={openSidebar} size={44} style={widgetStyle} />
-        <FloatingIconButton
-          icon="magnify"
-          onPress={onSearch ?? (() => {})}
-          size={44}
-          style={widgetStyle}
-        />
+        {onSearch && (
+          <FloatingIconButton
+            icon="magnify"
+            onPress={onSearch}
+            size={44}
+            style={widgetStyle}
+          />
+        )}
       </View>
 
       {/* Bottom center: Route action chips (Directions here, Start Navigation, Fix to roads, Download GPX) */}
@@ -169,6 +173,7 @@ function MapFloatingControlsInner({
             onDownloadGPX={onDownloadGPX}
             onDrivePreview={onDrivePreview}
             onOpenInGoogle={onOpenInGoogle}
+            onOpenInOsmAnd={onOpenInOsmAnd}
             directionsLoading={directionsLoading}
             streetViewLoading={streetViewLoading}
             navLoading={navLoading}

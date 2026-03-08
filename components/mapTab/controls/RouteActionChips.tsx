@@ -21,6 +21,7 @@ interface RouteActionChipsProps {
   onDownloadGPX?: () => void;
   onDrivePreview?: () => void;
   onOpenInGoogle?: () => void;
+  onOpenInOsmAnd?: () => void;
   directionsLoading?: boolean;
   streetViewLoading?: boolean;
   navLoading?: boolean;
@@ -63,6 +64,7 @@ function RouteActionChipsInner({
   onDownloadGPX,
   onDrivePreview,
   onOpenInGoogle,
+  onOpenInOsmAnd,
   directionsLoading = false,
   streetViewLoading = false,
   navLoading = false,
@@ -122,20 +124,22 @@ function RouteActionChipsInner({
       )}
       {canStartNavigation && (
         <>
-          <TouchableOpacity
-            style={[
-              chipStyles.chip,
-              { backgroundColor: colors.primary, marginLeft: hasTapDestination ? 0 : 0 },
-            ]}
-            onPress={() => handlePress(onStartNavigation)}
-            disabled={navLoading}
-          >
-            {navLoading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={chipStyles.chipText}>Start Navigation</Text>
-            )}
-          </TouchableOpacity>
+          {onStartNavigation && (
+            <TouchableOpacity
+              style={[
+                chipStyles.chip,
+                { backgroundColor: colors.primary, marginLeft: hasTapDestination ? 0 : 0 },
+              ]}
+              onPress={() => handlePress(onStartNavigation)}
+              disabled={navLoading}
+            >
+              {navLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={chipStyles.chipText}>Start Navigation</Text>
+              )}
+            </TouchableOpacity>
+          )}
           {onStartCollectionRoute && (
             <TouchableOpacity
               style={[chipStyles.chip, { backgroundColor: "#F97316" }]}
@@ -175,6 +179,14 @@ function RouteActionChipsInner({
               onPress={() => handlePress(onOpenInGoogle)}
             >
               <Text style={chipStyles.chipText}>Open in Google</Text>
+            </TouchableOpacity>
+          )}
+          {onOpenInOsmAnd && (
+            <TouchableOpacity
+              style={[chipStyles.chip, { backgroundColor: "#2D7D46" }]}
+              onPress={() => handlePress(onOpenInOsmAnd)}
+            >
+              <Text style={chipStyles.chipText}>Open in OsmAnd</Text>
             </TouchableOpacity>
           )}
           {Platform.OS !== "web" && onDrivePreview && (

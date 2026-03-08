@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -19,6 +20,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useColors } from "@/hooks/use-colors";
 import { parseWasteFile, type WasteImportRow } from "@/lib/waste-import";
 import { searchAddress } from "@/lib/geocode";
+import { readFileAsText } from "@/lib/readFileAsText";
 
 interface WasteImportModalProps {
   visible: boolean;
@@ -41,6 +43,21 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   const readyCount = rows.filter((r) => r.lat != null && r.lon != null && !Number.isNaN(r.lat) && !Number.isNaN(r.lon)).length;
   const invalidCount = rows.length - readyCount - needGeocode;
 
+  const processFileContent = useCallback((text: string, name: string) => {
+    const parsed = parseWasteFile(text, name);
+    if (parsed.length === 0) {
+      setError(
+        "No valid rows found.\n\n" +
+        "CSV format: columns named lat/latitude, lon/longitude (or x/y, coords, location)\n" +
+        "GeoJSON format: FeatureCollection with Point features\n\n" +
+        "Example CSV:\nlat,lon,type\n45.5087,-73.5540,bin"
+      );
+      setRows([]);
+    } else {
+      setRows(parsed);
+    }
+  }, []);
+
   const handlePickFile = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -48,35 +65,44 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ["text/csv", "application/csv", "application/geo+json", "application/json", "text/plain", "*/*"],
-        copyToCacheDirectory: true,
+        copyToCacheDirectory: Platform.OS !== "web",
       });
       if (result.canceled) {
         setLoading(false);
         return;
       }
-      const uri = result.assets[0].uri;
-      const name = result.assets[0].name || "file";
+      const file = result.assets[0];
+      const uri = file.uri;
+      const name = file.name || "file";
       setFileName(name);
-      const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
-      const parsed = parseWasteFile(text, name);
-      if (parsed.length === 0) {
-        setError(
-          "No valid rows found.\n\n" +
-          "CSV format: columns named lat/latitude, lon/longitude (or x/y, coords, location)\n" +
-          "GeoJSON format: FeatureCollection with Point features\n\n" +
-          "Example CSV:\nlat,lon,type\n45.5087,-73.5540,bin"
-        );
-        setRows([]);
+
+      let text: string;
+      if (Platform.OS === "web") {
+        const assetWithFile = file as { file?: File; uri?: string };
+        if (assetWithFile.file && typeof (assetWithFile.file as Blob).slice === "function") {
+          text = await readFileAsText(assetWithFile.file);
+        } else if (uri) {
+          const response = await fetch(uri);
+          if (typeof (response as { blob?: () => Promise<Blob> }).blob !== "function") {
+            throw new Error("Cannot read file: response.blob is not available");
+          }
+          const blob = await (response as { blob: () => Promise<Blob> }).blob();
+          text = await readFileAsText(blob);
+        } else {
+          throw new Error("No file or URI available to read");
+        }
       } else {
-        setRows(parsed);
+        text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
       }
+
+      processFileContent(text, name);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to read file.");
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [processFileContent]);
 
   const handleGeocode = useCallback(async () => {
     const toGeocode = rows.map((r, i) => ({ row: r, index: i })).filter(({ row }) => (row.lat == null || row.lon == null) && row.address?.trim());

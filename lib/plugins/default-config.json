@@ -1,0 +1,14 @@
+{
+  "plugins": {
+    "weather": { "enabled": true, "apiKey": "" },
+    "routeOptimization": { "enabled": true },
+    "overture": { "enabled": true },
+    "overture-extraction": { "enabled": true },
+    "zones": { "enabled": true },
+    "ai-chat": { "enabled": true },
+    "drive-preview": { "enabled": true },
+    "collection-route": { "enabled": true },
+    "navigation": { "enabled": true },
+    "dev": { "enabled": false }
+  }
+}

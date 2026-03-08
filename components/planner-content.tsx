@@ -44,6 +44,7 @@ import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 import { RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import { optimizeRoute as backendOptimizeRoute, buildOvertureOptimizeRequest } from "@/services/overtureOptimizerService";
+import { getPlugin } from "@/lib/plugins/registry";
 import { osmDataToGeoJSON } from "@/lib/geojsonToOsmData";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { isMockCollectionPoints } from "@/lib/is-mock-route";
@@ -253,23 +254,42 @@ export default function PlannerContent() {
           }
         }
         if (optResult === undefined && !useOfflineOptimizerV2) {
-          try {
-            const geojson = osmDataToGeoJSON(nodes, ways);
-            const backendResult = await backendOptimizeRoute(
-              buildOvertureOptimizeRequest({
-                geojson,
-                start_lat: startCoords?.latitude,
-                start_lon: startCoords?.longitude,
-                config: state.configuration,
-              }),
-            );
-            optResult = {
-              route: backendResult.route,
-              totalDistance: backendResult.total_distance_km,
-            };
-            optimizerSource = "backend";
-          } catch (backendErr) {
-            debug("Planner.generateRoute", { backendOptimizerFailed: (backendErr as Error).message });
+          const geojson = osmDataToGeoJSON(nodes, ways);
+          const requestParams = buildOvertureOptimizeRequest({
+            geojson,
+            start_lat: startCoords?.latitude,
+            start_lon: startCoords?.longitude,
+            config: state.configuration,
+            cleanBeforeOptimize: true,
+          });
+          const routeOpt = getPlugin("routeOptimization")?.getFeatures?.() as
+            | { routeOptimizer?: { optimizer?: (geojson: unknown, options?: unknown) => Promise<{ route: unknown[]; total_distance_km: number; stats?: unknown }> } }
+            | undefined;
+          if (routeOpt?.routeOptimizer?.optimizer) {
+            try {
+              const pluginResult = await routeOpt.routeOptimizer.optimizer(geojson, requestParams);
+              optResult = {
+                route: pluginResult.route ?? [],
+                totalDistance: pluginResult.total_distance_km,
+                stats: pluginResult.stats,
+              };
+              optimizerSource = "backend";
+            } catch (pluginErr) {
+              debug("Planner.generateRoute", { pluginOptimizerFailed: (pluginErr as Error).message });
+            }
+          }
+          if (optResult === undefined) {
+            try {
+              const backendResult = await backendOptimizeRoute(requestParams);
+              optResult = {
+                route: backendResult.route,
+                totalDistance: backendResult.total_distance_km,
+                stats: backendResult.stats,
+              };
+              optimizerSource = "backend";
+            } catch (backendErr) {
+              debug("Planner.generateRoute", { backendOptimizerFailed: (backendErr as Error).message });
+            }
           }
         }
         if (optResult === undefined) {

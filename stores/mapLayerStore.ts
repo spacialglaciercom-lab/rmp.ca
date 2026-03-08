@@ -18,8 +18,11 @@ export interface MapLayerState {
   // Active overlay layers
   activeOverlays: string[];
   
-  // Available layers
+  // Available layers (default + plugin-contributed)
   availableLayers: MapLayer[];
+  
+  // Plugin-contributed layer IDs (not persisted; recomputed on init)
+  pluginLayerIds: string[];
   
   // Layer visibility settings
   layerOpacity: Record<string, number>;
@@ -29,6 +32,8 @@ export interface MapLayerState {
   toggleOverlay: (layerId: string) => void;
   setLayerOpacity: (layerId: string, opacity: number) => void;
   resetLayerSettings: () => void;
+  addLayer: (layer: MapLayer) => void;
+  removeLayer: (layerId: string) => void;
 }
 
 // Default map layers
@@ -100,6 +105,7 @@ export const useMapLayerStore = create<MapLayerState>()(
       activeBaseLayer: "google-maps",
       activeOverlays: ["collection-points"],
       availableLayers: DEFAULT_LAYERS,
+      pluginLayerIds: [],
       layerOpacity: {},
 
       setActiveBaseLayer: (layerId) => {
@@ -123,6 +129,27 @@ export const useMapLayerStore = create<MapLayerState>()(
             [layerId]: opacity
           }
         }));
+      },
+
+      addLayer: (layer) => {
+        set((state) => {
+          if (state.pluginLayerIds.includes(layer.id)) return state;
+          return {
+            pluginLayerIds: [...state.pluginLayerIds, layer.id],
+            availableLayers: [...state.availableLayers, layer],
+          };
+        });
+      },
+
+      removeLayer: (layerId) => {
+        set((state) => {
+          if (!state.pluginLayerIds.includes(layerId)) return state;
+          return {
+            pluginLayerIds: state.pluginLayerIds.filter((id) => id !== layerId),
+            availableLayers: state.availableLayers.filter((l) => l.id !== layerId),
+            activeOverlays: state.activeOverlays.filter((id) => id !== layerId),
+          };
+        });
       },
 
       resetLayerSettings: () => {

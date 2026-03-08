@@ -43,7 +43,7 @@ import NavigationView, {
   type OffRoutePayload,
 } from "@/components/NavigationView";
 import CollectionNavigator from "@/components/CollectionNavigator";
-import { navigateExternally, openGoogleMapsViewer } from "@/lib/externalNavigation";
+import { navigateExternally, openGoogleMapsViewer, openOsmAndViewer } from "@/lib/externalNavigation";
 import type { NormalNavDestination } from "@/types/navigation";
 import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
 import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingControls";
@@ -66,6 +66,7 @@ import { openMapillaryCapture } from "@/lib/mapillary";
 import { useMapLayerStore } from "@/stores/mapLayerStore";
 import { useMapDisplayStore } from "../stores/mapDisplayStore";
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
+import { usePluginStore } from "@/stores/pluginStore";
 import { useZonesStore } from "@/stores/zonesStore";
 import { useDeviceType } from "@/hooks/useDeviceType";
 import { SIDEBAR_WIDTH_IPAD } from "@/constants/sidebarConfig";
@@ -339,6 +340,11 @@ export default function MapContent() {
   const closeOSMExtractor = useMapSidebarStore((s) => s.closeOSMExtractor);
   const isPinned = useMapSidebarStore((s) => s.isPinned);
   const deviceType = useDeviceType();
+  const aiChatEnabled = usePluginStore((s) => s.isPluginEnabled("ai-chat", true));
+  const drivePreviewEnabled = usePluginStore((s) => s.isPluginEnabled("drive-preview", true));
+  const collectionRouteEnabled = usePluginStore((s) => s.isPluginEnabled("collection-route", true));
+  const navigationEnabled = usePluginStore((s) => s.isPluginEnabled("navigation", true));
+  const overturePluginEnabled = usePluginStore((s) => s.isPluginEnabled("overture", true));
 
   const previewPoints = state?.previewRoutePoints ?? null;
   const previewRoutePointsByVehicle = state?.previewRoutePointsByVehicle ?? null;
@@ -355,6 +361,22 @@ export default function MapContent() {
     actions.loadRoute();
     actions.loadImportedPoints();
   }, [actions]);
+
+  // Exit collection navigator when Collection Route plugin is disabled
+  useEffect(() => {
+    if (!collectionRouteEnabled) {
+      setCollectionNavMode(false);
+      collectionNavReset();
+    }
+  }, [collectionRouteEnabled, collectionNavReset]);
+
+  // Close Navigation panel and Route parameters when Navigation plugin is disabled
+  useEffect(() => {
+    if (!navigationEnabled) {
+      closeNavigationPanel();
+      closeRouteParametersPanel();
+    }
+  }, [navigationEnabled, closeNavigationPanel, closeRouteParametersPanel]);
 
   const displayRoutePoints = useMemo(() => {
     if (previewRoutePointsByVehicle?.length === 1) {
@@ -1112,6 +1134,60 @@ export default function MapContent() {
     await openGoogleMapsViewer({ center, waypoints });
   }, [displayRoutePoints, collectionPoints, tapDestination]);
 
+  const handleOpenInOsmAnd = useCallback(async () => {
+    let center: { lat: number; lon: number } | undefined;
+    let waypoints: Array<{ lat: number; lon: number }> | undefined;
+    let gpxString: string | undefined;
+
+    const byVehicle = state?.previewRoutePointsByVehicle;
+    if (byVehicle && byVehicle.length >= 1) {
+      if (byVehicle.length > 1) {
+        const routes = byVehicle
+          .filter((r) => r.length >= 2)
+          .map((r, i) => ({
+            name: `Vehicle ${i + 1}`,
+            points: r.map((p) => ({ lat: p.lat, lon: p.lon })),
+          }));
+        if (routes.length > 0) {
+          gpxString = generateMultiTrackGPXString("trashroute_osmand", routes);
+          const first = routes[0].points;
+          center = first[0];
+          waypoints = first.length > 20
+            ? first.filter((_, i) => i % Math.ceil(first.length / 15) === 0 || i === first.length - 1)
+            : first;
+        }
+      } else if (byVehicle[0].length >= 2) {
+        const points = byVehicle[0].map((p) => ({ lat: p.lat, lon: p.lon }));
+        gpxString = generateGPXString("trashroute_osmand", points);
+        center = points[0];
+        waypoints = points.length > 20
+          ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
+          : points;
+      }
+    } else if (displayRoutePoints && displayRoutePoints.length >= 2) {
+      const points = displayRoutePoints.map((p) => ({
+        lat: "lat" in p ? p.lat : (p as { latitude: number }).latitude,
+        lon: "lon" in p ? p.lon : (p as { longitude: number }).longitude,
+      }));
+      gpxString = generateGPXString("trashroute_osmand", points);
+      center = points[0];
+      waypoints = points.length > 20
+        ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
+        : points;
+    } else if (collectionPoints && collectionPoints.length >= 2) {
+      const points = collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+      gpxString = generateGPXString("trashroute_osmand", points);
+      center = points[0];
+      waypoints = points.length > 15
+        ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
+        : points;
+    } else if (tapDestination) {
+      center = { lat: tapDestination.lat, lon: tapDestination.lon };
+    }
+
+    await openOsmAndViewer({ center, waypoints, gpxString });
+  }, [displayRoutePoints, collectionPoints, tapDestination, state?.previewRoutePointsByVehicle]);
+
   const handleStreetView = useCallback(() => {
     const coords = tapDestination
       ? { lat: tapDestination.lat, lon: tapDestination.lon }
@@ -1242,7 +1318,7 @@ export default function MapContent() {
         userBearing={isRecActive ? (recorder.currentHeading ?? userBearing) : userBearing}
         showAerial={showAerial}
         showTraffic={showTraffic}
-        showOverture={showOverture}
+        showOverture={showOverture && overturePluginEnabled}
         osmExtractionPolygon={
           osmExtractionPoints.length >= 3 ? osmExtractionPoints : undefined
         }
@@ -1288,7 +1364,7 @@ export default function MapContent() {
     );
   }
 
-  if (collectionNavMode) {
+  if (collectionRouteEnabled && collectionNavMode) {
     const collRoutePoints =
       (previewPoints?.length ?? 0) >= 2
         ? previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }))
@@ -1394,18 +1470,19 @@ export default function MapContent() {
         hasTapDestination={!osmExtractorVisible && !!tapDestination}
         hasSelectedLocation={!osmExtractorVisible && hasSelectedLocation}
         canStartNavigation={canStartNavigation}
-        onSearch={openNavigationPanel}
+        onSearch={navigationEnabled ? openNavigationPanel : undefined}
         onDirectionsHere={handleDirectionsHere}
         onStreetView={handleStreetView}
         onContributeImages={handleContributeImages}
-        onStartNavigation={startNavigation}
-        onStartCollectionRoute={canStartNavigation ? startCollectionNavigation : undefined}
+        onStartNavigation={navigationEnabled ? startNavigation : undefined}
+        onStartCollectionRoute={collectionRouteEnabled && canStartNavigation ? startCollectionNavigation : undefined}
         onNavigateExternal={startExternalNavigation}
         onFixToRoads={handleFixToRoads}
         onClearRoute={canStartNavigation ? handleClearRouteMarkers : undefined}
         onDownloadGPX={handleDownloadGPX}
-        onDrivePreview={handleDrivePreview}
+        onDrivePreview={drivePreviewEnabled ? handleDrivePreview : undefined}
         onOpenInGoogle={handleOpenInGoogle}
+        onOpenInOsmAnd={handleOpenInOsmAnd}
         directionsLoading={directionsLoading}
         navLoading={navLoading}
         fixToRoadsLoading={fixToRoadsLoading}
@@ -1416,15 +1493,17 @@ export default function MapContent() {
         isRecordingActive={isRecActive}
       />
 
-      <AIChatBubble />
+      {aiChatEnabled && <AIChatBubble />}
 
       <MapSidebar />
 
-      <NavigationPanel
-        visible={navigationPanelVisible}
-        onClose={closeNavigationPanel}
-        tapDestination={tapDestination}
-      />
+      {navigationEnabled && (
+        <NavigationPanel
+          visible={navigationPanelVisible}
+          onClose={closeNavigationPanel}
+          tapDestination={tapDestination}
+        />
+      )}
       {tapDestination && (
         <PlaceInfoSheet
           visible={placeInfoSheetVisible}
@@ -1459,10 +1538,12 @@ export default function MapContent() {
         visible={configureScreenVisible}
         onClose={closeConfigureScreen}
       />
-      <RouteParametersSheet
-        visible={routeParametersPanelVisible}
-        onClose={closeRouteParametersPanel}
-      />
+      {navigationEnabled && (
+        <RouteParametersSheet
+          visible={routeParametersPanelVisible}
+          onClose={closeRouteParametersPanel}
+        />
+      )}
       <MapMarkersScreen
         visible={mapMarkersPanelVisible}
         onClose={closeMapMarkersPanel}
@@ -1481,7 +1562,7 @@ export default function MapContent() {
         }}
       />
 
-      {Platform.OS !== "web" && displayRoutePoints && displayRoutePoints.length >= 2 && (
+      {drivePreviewEnabled && Platform.OS !== "web" && displayRoutePoints && displayRoutePoints.length >= 2 && (
         <StreetViewPreview
           points={displayRoutePoints.map((p) => ({ lat: p.lat, lon: p.lon }))}
           isVisible={drivePreviewVisible}

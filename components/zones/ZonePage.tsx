@@ -235,6 +235,7 @@ export function ZonePage() {
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const deviceType = useDeviceType();
   const isCompact = useIsCompact();
+  const effectiveCompact = isCompact && Platform.OS !== "web";
   const router = useRouter();
 
   const savedZones = useZonesStore((s) => s.savedZones);
@@ -305,7 +306,7 @@ export function ZonePage() {
   }, [wastePoints]);
 
   const { mapWidth, sidebarWidth } = useMemo(() => {
-    if (isCompact) {
+    if (effectiveCompact) {
       return { mapWidth: winWidth, sidebarWidth: 0 };
     }
     if (sidebarCollapsed) {
@@ -313,7 +314,7 @@ export function ZonePage() {
     }
     const sidebarW = Math.min(SIDEBAR_WIDTH, Math.max(0, winWidth - 200));
     return { mapWidth: winWidth - sidebarW, sidebarWidth: sidebarW };
-  }, [winWidth, sidebarCollapsed, isCompact]);
+  }, [winWidth, sidebarCollapsed, effectiveCompact]);
 
   const mapHeight = useMemo(() => {
     const toolbarH = 56 + insets.top;
@@ -689,8 +690,8 @@ export function ZonePage() {
         </View>
       </View>
 
-      {/* Body: waste = left sidebar (Map contents) + map; delivery = map + right sidebar */}
-      <View style={[styles.body, isCompact && styles.bodyColumn]}>
+      {/* Body: waste = left sidebar (Map contents) + map; delivery = map + right sidebar. On web always show sidebar in row. */}
+      <View style={[styles.body, effectiveCompact && styles.bodyColumn]}>
         {pageMode === "waste" && !sidebarCollapsed && sidebarWidth > 0 && (
           <View
             style={[
@@ -1086,7 +1087,7 @@ export function ZonePage() {
         )}
       </View>
 
-      {isCompact && (
+      {effectiveCompact && (
         <BottomSheet
           visible={!sidebarCollapsed}
           onClose={() => setSidebarCollapsed(true)}
@@ -1566,9 +1567,11 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   mapWrap: {
+    flex: 1,
     alignSelf: "stretch",
     position: "relative",
     overflow: "hidden",
+    minWidth: 0,
   },
   mapEmptyHint: {
     position: "absolute",

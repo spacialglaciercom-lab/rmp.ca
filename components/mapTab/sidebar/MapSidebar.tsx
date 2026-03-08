@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, TouchableOpacity, useWindowDimensions } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
+import { usePluginStore } from "@/stores/pluginStore";
 import { useDeviceType } from "@/hooks/useDeviceType";
 import { useIsLandscape } from "@/hooks/useDeviceType";
 import { SIDEBAR_MENU_ITEMS, SIDEBAR_WIDTH_IPHONE, SIDEBAR_WIDTH_IPAD } from "@/constants/sidebarConfig";
@@ -37,9 +38,28 @@ export function MapSidebar() {
   const openMapStylePicker = useMapSidebarStore((s) => s.openMapStylePicker);
   const openRouteParametersPanel = useMapSidebarStore((s) => s.openRouteParametersPanel);
   const openOSMExtractor = useMapSidebarStore((s) => s.openOSMExtractor);
+  const closeOSMExtractor = useMapSidebarStore((s) => s.closeOSMExtractor);
   const openRecordingPanel = useMapSidebarStore((s) => s.openRecordingPanel);
   const isPinned = useMapSidebarStore((s) => s.isPinned);
   const togglePin = useMapSidebarStore((s) => s.togglePin);
+  const overtureExtractionEnabled = usePluginStore((s) => s.isPluginEnabled("overture-extraction", true));
+  const zonesEnabled = usePluginStore((s) => s.isPluginEnabled("zones", true));
+  const navigationEnabled = usePluginStore((s) => s.isPluginEnabled("navigation", true));
+
+  useEffect(() => {
+    if (!overtureExtractionEnabled) closeOSMExtractor();
+  }, [overtureExtractionEnabled, closeOSMExtractor]);
+
+  const visibleMenuItems = useMemo(
+    () =>
+      SIDEBAR_MENU_ITEMS.filter((item) => {
+        if (item.id === "osmExtractor") return overtureExtractionEnabled;
+        if (item.id === "zones") return zonesEnabled;
+        if (item.id === "navigation" || item.id === "routeParameters") return navigationEnabled;
+        return true;
+      }),
+    [overtureExtractionEnabled, zonesEnabled, navigationEnabled]
+  );
 
   const isLandscape = useIsLandscape();
   const isCompact = useWindowDimensions().width < 600;
@@ -177,7 +197,7 @@ export function MapSidebar() {
             )}
           </View>
           <View style={styles.menuList}>
-            {SIDEBAR_MENU_ITEMS.map((item) =>
+            {visibleMenuItems.map((item) =>
               item.isSeparator ? (
                 <SidebarMenuItemRow key={item.id} item={item} />
               ) : (

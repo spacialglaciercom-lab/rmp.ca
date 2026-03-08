@@ -207,6 +207,76 @@ export async function navigateExternally(
 }
 
 /**
+ * Open OsmAnd with the current route.
+ * - On native with gpxString: writes full GPX to a temp file and shares it (application/gpx+xml)
+ *   so the user can open in OsmAnd and get the whole track.
+ * - Otherwise: uses https://osmand.net/map/ with start/finish only (OsmAnd will compute its own route).
+ */
+export async function openOsmAndViewer(options?: {
+  center?: { lat: number; lon: number };
+  waypoints?: Array<{ lat: number; lon: number }>;
+  /** Full GPX track XML. When provided on native, the file is shared so OsmAnd can open the whole track. */
+  gpxString?: string;
+}): Promise<void> {
+  const { center, waypoints, gpxString } = options ?? {};
+
+  try {
+    if (Platform.OS !== "web" && gpxString && gpxString.trim().length > 0) {
+      try {
+        const FileSystem = await import("expo-file-system/legacy");
+        const Sharing = await import("expo-sharing");
+        if (
+          FileSystem.documentDirectory &&
+          typeof Sharing.shareAsync === "function"
+        ) {
+          const filename = `trashroute_osmand_${Date.now()}.gpx`;
+          const path = `${FileSystem.documentDirectory}${filename}`;
+          await FileSystem.writeAsStringAsync(path, gpxString);
+          await Sharing.shareAsync(path, {
+            mimeType: "application/gpx+xml",
+            dialogTitle: "Open in OsmAnd",
+          });
+          return;
+        }
+      } catch {
+        // Fall through to URL-based open
+      }
+    }
+
+    let url: string;
+    if (waypoints && waypoints.length >= 2) {
+      const start = waypoints[0];
+      const finish = waypoints[waypoints.length - 1];
+      const midLat =
+        waypoints.reduce((s, w) => s + w.lat, 0) / waypoints.length;
+      const midLon =
+        waypoints.reduce((s, w) => s + w.lon, 0) / waypoints.length;
+      const z = 12;
+      url = `https://osmand.net/map/?start=${start.lat.toFixed(6)},${start.lon.toFixed(6)}&finish=${finish.lat.toFixed(6)},${finish.lon.toFixed(6)}&profile=car#${z}/${midLat.toFixed(4)}/${midLon.toFixed(4)}`;
+    } else if (center) {
+      url = `https://osmand.net/map/?pin=${center.lat.toFixed(6)},${center.lon.toFixed(6)}#14/${center.lat.toFixed(4)}/${center.lon.toFixed(4)}`;
+    } else {
+      url = "https://osmand.net/map/";
+    }
+
+    const canOpen = await Linking.canOpenURL(url).catch(() => false);
+    if (canOpen) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert(
+        "Unable to open OsmAnd",
+        "Could not launch OsmAnd. You can install it from the app store or open https://osmand.net in a browser.",
+      );
+    }
+  } catch {
+    Alert.alert(
+      "Unable to open OsmAnd",
+      "Could not launch OsmAnd. You can install it from the app store or open https://osmand.net in a browser.",
+    );
+  }
+}
+
+/**
  * Open Google Maps centered on a specific location with optional waypoints.
  * Used to view the current route in Google Maps without navigation.
  */
@@ -229,7 +299,11 @@ export async function openGoogleMapsViewer(options?: {
       });
 
       webUrl = `https://www.google.com/maps/dir/${coordStrings.join("/")}`;
-      console.log("[openGoogleMapsViewer] Generated route URL with", waypoints.length, "waypoints");
+      console.log(
+        "[openGoogleMapsViewer] Generated route URL with",
+        waypoints.length,
+        "waypoints",
+      );
     } else if (center) {
       webUrl = `https://www.google.com/maps/@${center.lat.toFixed(6)},${center.lon.toFixed(6)},14z`;
       console.log("[openGoogleMapsViewer] Generated center URL:", webUrl);
@@ -260,7 +334,9 @@ export async function openGoogleMapsViewer(options?: {
     // Try native first, fall back to web
     if (nativeUrl) {
       try {
-        const canOpenNative = await Linking.canOpenURL(nativeUrl).catch(() => false);
+        const canOpenNative = await Linking.canOpenURL(nativeUrl).catch(
+          () => false,
+        );
         if (canOpenNative) {
           await Linking.openURL(nativeUrl);
           return;

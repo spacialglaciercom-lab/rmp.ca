@@ -80,6 +80,10 @@ export async function getResumableDownloadInfo(): Promise<{
 const S3_BUCKET = "https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com";
 const RELEASE = "2026-02-18.0";
 
+/** R2 public bucket base and PMTiles version (must match build-pmtiles.sh). */
+const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
+const PMTILES_VERSION = "v2026-02";
+
 /** Available Overture themes/types to download. */
 export const OVERTURE_LAYERS = {
   transportation_segment: `release/${RELEASE}/theme=transportation/type=segment/`,
@@ -441,7 +445,11 @@ export async function downloadCityData(
 
     try {
       const s3Url = `${S3_BUCKET}/${obj.key}`;
-      await FileSystem.downloadAsync(s3Url, localPath);
+      const dlResult = await FileSystem.downloadAsync(s3Url, localPath);
+      if (dlResult.status < 200 || dlResult.status >= 300) {
+        console.warn(`[OvertureMaps] HTTP ${dlResult.status} for ${obj.key}, skipping`);
+        continue;
+      }
       downloaded++;
       totalBytes += obj.size;
       completedFiles.add(obj.key);
@@ -491,9 +499,6 @@ export async function downloadCityData(
 }
 
 // ─── R2 PMTiles download ──────────────────────────────────────────
-
-const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
-const PMTILES_VERSION = "v2026-02";
 
 /**
  * Download a single pre-built PMTiles file for a city from our R2 bucket.
@@ -598,6 +603,16 @@ export async function downloadCityFromR2(
     if (!result) {
       await clearDownloadState();
       return { success: false, fileCount: 0, sizeBytes: 0, error: "Download returned no result" };
+    }
+    if (result.status < 200 || result.status >= 300) {
+      await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+      await clearDownloadState();
+      return {
+        success: false,
+        fileCount: 0,
+        sizeBytes: 0,
+        error: `Server returned ${result.status}. The tile file may not exist yet for this region.`,
+      };
     }
 
     // Get actual file size
@@ -759,23 +774,32 @@ export async function downloadOfflineRegion(
     return;
   }
   try {
-    await OfflineManager.createPack(
-      { name, styleURL, minZoom, maxZoom, bounds },
-      (_offlineRegion: unknown, status: { completedResourceCount: number; completedResourceSize: number; requiredResourceCount: number }) => {
-        const required = status.requiredResourceCount || 1;
-        const progress: OfflineProgress = {
-          percentage: Math.round((status.completedResourceCount / required) * 100),
-          completedResourceCount: status.completedResourceCount,
-          completedResourceSize: status.completedResourceSize,
-          requiredResourceCount: status.requiredResourceCount,
-        };
-        onProgress(progress);
-      },
-      (_offlineRegion: unknown, err: unknown) => {
-        console.error("Offline download error:", err);
-        onError(err);
-      }
-    );
+    await new Promise<void>((resolve, reject) => {
+      OfflineManager.createPack(
+        { name, styleURL, minZoom, maxZoom, bounds },
+        (_offlineRegion: unknown, status: { completedResourceCount: number; completedResourceSize: number; requiredResourceCount: number }) => {
+          const required = status.requiredResourceCount || 1;
+          const progress: OfflineProgress = {
+            percentage: Math.round((status.completedResourceCount / required) * 100),
+            completedResourceCount: status.completedResourceCount,
+            completedResourceSize: status.completedResourceSize,
+            requiredResourceCount: status.requiredResourceCount,
+          };
+          onProgress(progress);
+          // Resolve when all required resources are downloaded
+          if (
+            status.requiredResourceCount > 0 &&
+            status.completedResourceCount >= status.requiredResourceCount
+          ) {
+            resolve();
+          }
+        },
+        (_offlineRegion: unknown, err: unknown) => {
+          console.error("Offline download error:", err);
+          reject(err);
+        }
+      ).catch(reject);
+    });
     onComplete();
   } catch (err) {
     onError(err);
