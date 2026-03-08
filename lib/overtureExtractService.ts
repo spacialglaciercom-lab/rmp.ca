@@ -307,23 +307,6 @@ const EXTRACT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 /** Max cached GeoJSON string length (AsyncStorage ~2MB limit per key). */
 const EXTRACT_CACHE_MAX_BYTES = 1.5 * 1024 * 1024;
 
-function bboxFromPolygon(
-  polygon: GeoJSON.Feature<GeoJSON.Polygon>,
-): [number, number, number, number] {
-  const ring = polygon.geometry.coordinates[0];
-  let minLng = Infinity,
-    minLat = Infinity,
-    maxLng = -Infinity,
-    maxLat = -Infinity;
-  for (const [lng, lat] of ring) {
-    if (lng < minLng) minLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lng > maxLng) maxLng = lng;
-    if (lat > maxLat) maxLat = lat;
-  }
-  return [minLng, minLat, maxLng, maxLat];
-}
-
 function simpleHash(str: string): string {
   let h = 5381;
   for (let i = 0; i < str.length; i++) h = (h << 5) + h + str.charCodeAt(i);
