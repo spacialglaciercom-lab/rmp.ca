@@ -237,16 +237,22 @@ export default function PlannerContent() {
         await new Promise<void>((r) => setTimeout(r, 0));
         // When "Use offline optimizer (v2)" is on, use the same optimizer as the Videos app (RouteOptimizerSimpleV2).
         // Do not use the full RouteOptimizer here — it uses a different graph and can produce different (loopier) routes.
+        // When v2 is on, we never use the backend (Overture); we only try v2 then local fallback.
         if (useOfflineOptimizerV2) {
           try {
             const v2 = new RouteOptimizerSimpleV2(nodes, ways);
             optResult = v2.optimize(startCoords?.latitude, startCoords?.longitude);
-            optimizerSource = "offline-v2";
+            if (optResult?.route?.length === 0) {
+              debug("Planner.generateRoute", { offlineV2EmptyRoute: optResult?.message });
+              optResult = undefined;
+            } else {
+              optimizerSource = "offline-v2";
+            }
           } catch (e) {
             debug("Planner.generateRoute", { offlineV2Failed: (e as Error).message });
           }
         }
-        if (optResult === undefined) {
+        if (optResult === undefined && !useOfflineOptimizerV2) {
           try {
             const geojson = osmDataToGeoJSON(nodes, ways);
             const backendResult = await backendOptimizeRoute(
@@ -267,12 +273,14 @@ export default function PlannerContent() {
           }
         }
         if (optResult === undefined) {
-          // Offline mode or backend failed: use local optimizer (route may be loopier)
+          // Offline mode, backend failed, or v2 failed/empty: use local optimizer (route may be loopier)
           optimizerSource = "local";
           dispatch({
             type: "ADD_LOG_ENTRY",
             payload: generateLogEntry(
-              "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
+              useOfflineOptimizerV2
+                ? "Offline optimizer (v2) could not produce a route; using local optimizer."
+                : "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
               "warning"
             ),
           });
@@ -394,6 +402,14 @@ export default function PlannerContent() {
             pointsLength: optimizedPoints.length,
           });
         }
+      } else if (useOfflineOptimizerV2 && pointsToUse.length > 0) {
+        dispatch({
+          type: "ADD_LOG_ENTRY",
+          payload: generateLogEntry(
+            "Offline optimizer (v2) requires OSM data. Import an OSM/GeoJSON file or load from library, then click Generate Route.",
+            "warning"
+          ),
+        });
       }
 
       // Build initial geometry from optimizer. When backend (Overture) or v2 is used, skip map-matching
@@ -647,12 +663,13 @@ export default function PlannerContent() {
                 try {
                   const v2 = new RouteOptimizerSimpleV2(nodes, ways);
                   optResult = v2.optimize(startCoords?.latitude, startCoords?.longitude);
-                  libraryOptimizerSource = "offline-v2";
+                  if (optResult?.route?.length === 0) optResult = undefined;
+                  else libraryOptimizerSource = "offline-v2";
                 } catch {
-                  // fall through
+                  // fall through to local (never backend when v2 is on)
                 }
               }
-              if (optResult === undefined) {
+              if (optResult === undefined && !useOfflineOptimizerV2) {
                 try {
                   const geojson = osmDataToGeoJSON(nodes, ways);
                   const backendResult = await backendOptimizeRoute(
@@ -674,7 +691,9 @@ export default function PlannerContent() {
                 dispatch({
                   type: "ADD_LOG_ENTRY",
                   payload: generateLogEntry(
-                    "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
+                    useOfflineOptimizerV2
+                      ? "Offline optimizer (v2) could not produce a route; using local optimizer."
+                      : "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
                     "warning"
                   ),
                 });

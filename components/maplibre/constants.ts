@@ -1,6 +1,7 @@
 /**
  * MapLibre style URLs (no API token required).
  * OSM Liberty is a good default; dark variant for dark mode.
+ * Offline packs must use these exact URLs so the map uses cached tiles when loading the same style.
  */
 export const MAPLIBRE_STYLE_OSM =
   "https://demotiles.maplibre.org/styles/osm-liberty/style.json";

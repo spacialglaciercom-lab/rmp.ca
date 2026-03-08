@@ -758,6 +758,9 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
       points = routePointsByVehicle!.flat().map((p) => [p.lat, p.lon] as [number, number]);
     } else if (hasRoutePoints) {
       points = routePoints!.map((p) => [p.lat, p.lon] as [number, number]);
+    } else if (wastePoints && wastePoints.length > 0) {
+      // Zones page: use waste points so map fits and bins/dumpsters are visible after CSV import
+      points = wastePoints.map((p) => [p.lat, p.lon] as [number, number]);
     }
     if (points.length === 0 && initialBounds) {
       const padLat = Math.max((initialBounds.maxLat - initialBounds.minLat) * 0.2, 0.01);
@@ -780,7 +783,7 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
       [minLat - latPadding, minLon - lonPadding],
       [maxLat + latPadding, maxLon + lonPadding],
     ] as [[number, number], [number, number]];
-  }, [collectionPoints, hasCollectionPoints, routePoints, hasRoutePoints, routePointsByVehicle, hasRoutePointsByVehicle, initialBounds]);
+  }, [collectionPoints, hasCollectionPoints, routePoints, hasRoutePoints, routePointsByVehicle, hasRoutePointsByVehicle, wastePoints, initialBounds]);
 
   useEffect(() => {
     boundsRef.current = bounds;

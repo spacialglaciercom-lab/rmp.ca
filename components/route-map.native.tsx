@@ -317,6 +317,10 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
       return routePointsByVehicle.flat();
     }
     if (routePoints && routePoints.length > 0) return routePoints;
+    // Zones page: use waste points for bounds so map fits and markers are visible after CSV import
+    if (wastePoints && wastePoints.length > 0) {
+      return wastePoints.map((p) => ({ lat: p.lat, lon: p.lon }));
+    }
     if (initialBounds) {
       const { minLat, maxLat, minLon, maxLon } = initialBounds;
       return [
@@ -327,17 +331,24 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
       ];
     }
     return [];
-  }, [collectionPoints, routePoints, routePointsByVehicle, initialBounds]);
+  }, [collectionPoints, routePoints, routePointsByVehicle, wastePoints, initialBounds]);
 
-  /** Bounding box from all points so fitToRoute shows the full track (no truncation on long GPX). */
+  /** Bounding box from all points so fitToRoute shows the full track (no truncation on long GPX). For a single point (e.g. one waste bin), use a small padding so the map still fits. */
   const boundsBox = useMemo(() => {
-    if (pointsForBounds.length < 2) return null;
+    if (pointsForBounds.length === 0) return null;
     const lats = pointsForBounds.map((p) => p.lat);
     const lons = pointsForBounds.map((p) => p.lon);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons);
-    const maxLon = Math.max(...lons);
+    let minLat = Math.min(...lats);
+    let maxLat = Math.max(...lats);
+    let minLon = Math.min(...lons);
+    let maxLon = Math.max(...lons);
+    if (pointsForBounds.length === 1) {
+      const pad = 0.005;
+      minLat = minLat - pad;
+      maxLat = maxLat + pad;
+      minLon = minLon - pad;
+      maxLon = maxLon + pad;
+    }
     return { minLat, maxLat, minLon, maxLon };
   }, [pointsForBounds]);
 
@@ -385,8 +396,8 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
     : null;
 
   const fitToRoute = useCallback(() => {
-    if (pointsForBounds.length < 2 || !mapRef.current || !boundsBox) return;
-    // Use bbox corners so the full track extent is always fitted (native fitToCoordinates can truncate large arrays).
+    if (!boundsBox || !mapRef.current) return;
+    // Use bbox corners so the full track extent is always fitted (native fitToCoordinates can truncate large arrays). boundsBox can be from 1+ points (single waste point uses padded box).
     const b = boundsBox;
     const coords = [
       { latitude: b.minLat, longitude: b.minLon },

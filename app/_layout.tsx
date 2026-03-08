@@ -46,7 +46,8 @@ import { FirebaseProvider } from "@/context/FirebaseContext";
 import { MapTypeProvider } from "@/lib/map-type-preference";
 import { MapOrientationProvider } from "@/lib/map-orientation-preference";
 import { initMapbox } from "@/lib/mapbox-config";
-import { initMapCache, resetMapCache } from "@/lib/map-cache";
+import { initMapCache, clearMapCache } from "@/lib/map-cache";
+import { initMapLibreCacheCap } from "@/lib/maplibre-cache";
 import { PowerSavingProvider } from "@/src/powerSaving";
 import { WebOSMDropZoneRoot } from "@/components/web-osm-drop-zone-root";
 import { OSM_DATA_STORAGE_KEY } from "@/lib/osm-storage";
@@ -98,19 +99,19 @@ export default function RootLayout() {
     initMapbox();
   }, []);
 
-  // On first launch, wipe the MapLibre tile database to remove any stale
-  // PMTiles references that can crash the native PMTilesFileSource thread.
-  // Then cap the ambient cache to 50MB to prevent cache bloat.
+  // On first launch, clear only the ambient tile cache (not offline packs) to avoid
+  // stale PMTiles references. Then cap ambient cache and ensure MapLibre offline is ready.
   useEffect(() => {
     (async () => {
       try {
-        const key = "trashroute_maplibre_cache_reset_v1";
-        const alreadyReset = await AsyncStorage.getItem(key);
-        if (!alreadyReset) {
-          await resetMapCache();
+        const key = "trashroute_maplibre_ambient_clear_v1";
+        const alreadyCleared = await AsyncStorage.getItem(key);
+        if (!alreadyCleared) {
+          await clearMapCache();
           await AsyncStorage.setItem(key, "1");
         }
         await initMapCache(50);
+        await initMapLibreCacheCap();
       } catch (e) {
         console.warn("Map cache init failed:", e);
       }

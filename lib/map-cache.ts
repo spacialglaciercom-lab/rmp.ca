@@ -1,12 +1,12 @@
 import { Platform } from "react-native";
 
-let MapLibreGL: any;
-
-if (Platform.OS === "ios" || Platform.OS === "android") {
+function getOfflineManager(): import("@maplibre/maplibre-react-native").OfflineManager | null {
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return null;
   try {
-    MapLibreGL = require("@maplibre/maplibre-react-native").default;
-  } catch (e) {
-    console.warn("MapLibre GL not available:", e);
+    const ML = require("@maplibre/maplibre-react-native");
+    return ML.OfflineManager ?? ML.default?.OfflineManager ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -22,31 +22,33 @@ const MB = 1024 * 1024;
  * thread and crash (mach_msg2_trap in mbgl::resourceURL).
  */
 export async function initMapCache(sizeMB = 50): Promise<void> {
-  if (!MapLibreGL?.offlineManager) return;
-  // Small delay to let native threads settle after SDK init
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
   await new Promise((r) => setTimeout(r, 500));
   try {
-    await MapLibreGL.offlineManager.setMaximumAmbientCacheSize(sizeMB * MB);
+    await OfflineManager.setMaximumAmbientCacheSize(sizeMB * MB);
   } catch (e) {
     console.warn("Failed to set map cache size:", e);
   }
 }
 
-/** Evict stale entries from the ambient cache. */
+/** Evict stale entries from the ambient cache. Does not delete offline packs. */
 export async function clearMapCache(): Promise<void> {
-  if (!MapLibreGL?.offlineManager) return;
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
   try {
-    await MapLibreGL.offlineManager.clearAmbientCache();
+    await OfflineManager.clearAmbientCache();
   } catch (e) {
     console.warn("Failed to clear map cache:", e);
   }
 }
 
-/** Delete and recreate the entire tile database. */
+/** Delete and recreate the entire tile database. Wipes offline packs too — use clearMapCache() to keep packs. */
 export async function resetMapCache(): Promise<void> {
-  if (!MapLibreGL?.offlineManager) return;
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
   try {
-    await MapLibreGL.offlineManager.resetDatabase();
+    await OfflineManager.resetDatabase();
   } catch (e) {
     console.warn("Failed to reset map database:", e);
   }
@@ -54,9 +56,10 @@ export async function resetMapCache(): Promise<void> {
 
 /** Mark all cached tiles as stale so they refresh on next load. */
 export async function invalidateMapCache(): Promise<void> {
-  if (!MapLibreGL?.offlineManager) return;
+  const OfflineManager = getOfflineManager();
+  if (!OfflineManager) return;
   try {
-    await MapLibreGL.offlineManager.invalidateAmbientCache();
+    await OfflineManager.invalidateAmbientCache();
   } catch (e) {
     console.warn("Failed to invalidate map cache:", e);
   }

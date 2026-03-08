@@ -46,7 +46,7 @@ class OptimizeRequest(BaseModel):
     service_both_sides: bool | None = None  # when True, traverse each bidirectional segment twice (both curbs)
     road_classes: list[str] | None = None
     turn_penalties: TurnPenalties | None = None
-    clean_before_optimize: bool = False  # run vector_clean pipeline before building graph
+    clean_before_optimize: bool = True  # run vector_clean before building graph (reduces loops from duplicate/self-loop edges)
     clean_options: CleanOptions | None = None
 
 
@@ -193,8 +193,7 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
             pass
 
     if len(odd_nodes) >= 2:
-        # Compute shortest path lengths between all pairs of odd nodes
-        # Using a simple approach suitable for moderate-sized graphs
+        # Compute shortest path lengths and paths between all pairs of odd nodes
         odd_pairs_dist: dict[tuple[str, str], float] = {}
         odd_pairs_path: dict[tuple[str, str], list[str]] = {}
 
@@ -209,20 +208,38 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
             except nx.NetworkXError:
                 continue
 
-        # Greedy minimum weight matching (approximation)
-        # For exact matching, would use Blossom algorithm
-        matched: set[str] = set()
+        # Exact minimum-weight perfect matching (Blossom) to minimize deadhead distance.
+        # Greedy matching can pair distant odd nodes and add unnecessary loops.
         augment_paths: list[list[str]] = []
-
-        # Sort pairs by distance
-        sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
-
-        for (u, v), dist in sorted_pairs:
-            if u not in matched and v not in matched:
-                matched.add(u)
-                matched.add(v)
-                path = odd_pairs_path.get((u, v), [u, v])
-                augment_paths.append(path)
+        if not is_directed:
+            # Build complete graph on odd nodes with edge weight = shortest path distance
+            odd_G = nx.Graph()
+            for (u, v), dist in odd_pairs_dist.items():
+                odd_G.add_edge(u, v, weight=dist)
+            try:
+                matching = nx.min_weight_matching(odd_G, weight="weight")
+                for u, v in matching:
+                    key = (u, v) if (u, v) in odd_pairs_path else (v, u)
+                    path = odd_pairs_path.get(key, [u, v])
+                    augment_paths.append(path)
+            except (nx.NetworkXError, nx.NetworkXPointlessConcept):
+                # Fallback to greedy if Blossom fails (e.g. empty or odd-sized)
+                sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
+                matched: set[str] = set()
+                for (u, v), _ in sorted_pairs:
+                    if u not in matched and v not in matched:
+                        matched.add(u)
+                        matched.add(v)
+                        augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
+        else:
+            # Directed: keep greedy pairing for unbalanced nodes (exact would need min-cost flow)
+            sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
+            matched: set[str] = set()
+            for (u, v), _ in sorted_pairs:
+                if u not in matched and v not in matched:
+                    matched.add(u)
+                    matched.add(v)
+                    augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
 
         # Augment graph with matching edges
         G_aug = G.copy()
@@ -245,12 +262,21 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
         except nx.NetworkXError:
             pass
 
-    # Fallback: DFS traversal if Eulerian circuit fails
+    # If we have exactly 2 odd nodes, graph is semi-Eulerian — try eulerian_path
+    if len(odd_nodes) == 2 and not is_directed:
+        try:
+            path_edges = list(nx.eulerian_path(G))
+            if path_edges:
+                return [path_edges[0][0]] + [e[1] for e in path_edges]
+        except nx.NetworkXError:
+            pass
+
+    # Last resort: DFS traversal (can produce suboptimal loops; prefer failing with clear error for debugging)
     start_node = list(G.nodes())[0]
     visited_edges: set[tuple[str, str, int]] = set()
     route: list[str] = [start_node]
 
-    def _dfs(node: str):
+    def _dfs(node: str) -> None:
         for u, v, key in G.edges(node, keys=True):
             edge_key = (u, v, key) if is_directed else (min(u, v), max(u, v), key)
             if edge_key not in visited_edges:
@@ -307,7 +333,16 @@ def optimize_route(body: OptimizeRequest):
     features = body.geojson.features
 
     if body.clean_before_optimize:
-        opts = body.clean_options if body.clean_options is not None else CleanOptions()
+        if body.clean_options is not None:
+            opts = body.clean_options
+        else:
+            # Default: aggressive cleaning to reduce loops (dedupe, self-loops, short edges, parallel edges)
+            opts = CleanOptions(
+                remove_selfloops=True,
+                dedupe_edges=True,
+                merge_parallel_edges=True,
+                min_length_m=10.0,
+            )
         cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
         features = cleaned_fc.features
 

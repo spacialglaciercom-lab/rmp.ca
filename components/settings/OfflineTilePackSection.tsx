@@ -159,7 +159,7 @@ export const OfflineTilePackSection: React.FC = () => {
   return (
     <View style={{ paddingVertical: 4 }}>
       <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 12 }}>
-        Download map tiles for offline viewing (MapLibre). Uses the same style as the map tab. Montreal region, zooms 10–16.
+        Download map tiles for offline viewing (MapLibre). Uses the same style as the map tab. Montreal region, zooms 10–16. For offline to work on the map, turn off the "Overture" overlay (base map only); otherwise the map uses a different style and cached tiles are not used.
       </Text>
 
       {/* List of downloaded packs */}

@@ -10,6 +10,7 @@
     "preview": {
       "distribution": "internal",
       "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://proactive-adaptation-backend.up.railway.app" },
+      "android": { "buildType": "apk" },
       "ios": { "buildConfiguration": "Release" }
     },
     "production": {
