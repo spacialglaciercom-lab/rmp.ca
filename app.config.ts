@@ -244,6 +244,13 @@ const config = {
     typedRoutes: true,
     reactCompiler: true,
   },
+  // Android: exclude moonshine-voice native module so the build does not resolve ai.moonshine:moonshine-voice
+  // from JitPack (avoids timeouts). On Android we use server Whisper for STT; Moonshine remains available on iOS.
+  autolinking: {
+    android: {
+      exclude: ["moonshine-voice"],
+    },
+  },
   // Set after creating a new Expo project (expo.dev or `eas init`). Required for EAS Build/Submit and OTA updates.
   extra: {
     eas: {
