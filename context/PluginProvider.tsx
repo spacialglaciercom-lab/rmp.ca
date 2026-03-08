@@ -23,21 +23,22 @@ export function PluginProvider({ children, trpcClient }: PluginProviderProps) {
     null,
   );
   const trpcClientRef = useRef<unknown>(trpcClient);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!contextRef.current || trpcClientRef.current !== trpcClient) {
       contextRef.current = createPluginContext(trpcClient);
       trpcClientRef.current = trpcClient;
     }
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     const ctx = contextRef.current;
-    let stale = false;
-    loadAndRegisterPlugins(ctx, () => stale).catch((err) => {
-      if (!stale) {
-        console.warn("Plugin load failed:", err);
-      }
+    loadAndRegisterPlugins(ctx, ac.signal).catch((err) => {
+      if (!ac.signal.aborted) console.warn("Plugin load failed:", err);
     });
     return () => {
-      stale = true;
+      ac.abort();
     };
   }, [trpcClient, enabledPlugins]);
 

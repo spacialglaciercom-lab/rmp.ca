@@ -71,23 +71,25 @@ export function unloadAllPlugins(): void {
 /**
  * Load config, merge with plugin store, and register all enabled plugins.
  * Call after createPluginContext when the app starts and when user toggles plugins.
- * @param context Plugin context with API and stores
- * @param isCancelled Optional callback to check if loading should be aborted (for race condition prevention)
+ *
+ * Pass an AbortSignal to cancel stale calls: all plugin mutations (unload +
+ * register) are deferred until after the async config load, so an aborted
+ * signal causes an early return with no side effects.
  */
 export async function loadAndRegisterPlugins(
   context: PluginContext,
-  isCancelled?: () => boolean,
+  signal?: AbortSignal,
 ): Promise<void> {
-  unloadAllPlugins();
   const config = await loadPluginConfig();
-  if (isCancelled?.()) return;
+  if (signal?.aborted) return;
+  unloadAllPlugins();
   const store = usePluginStore.getState();
   const enabledIds = new Set<string>();
   for (const [id, entry] of Object.entries(config.plugins)) {
     if (store.isPluginEnabled(id, entry.enabled)) enabledIds.add(id);
   }
   for (const id of enabledIds) {
-    if (isCancelled?.()) return;
+    if (signal?.aborted) return;
     const plugin = BUILTIN_PLUGINS[id];
     if (!plugin) continue;
     plugin.dependencies?.forEach((dep) => {
