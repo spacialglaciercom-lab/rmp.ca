@@ -326,6 +326,17 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
   const mapTilesAsOverlay = useMapDisplayStore((s) => s.mapTilesAsOverlay);
   const toggleMapTilesAsOverlay = useMapDisplayStore((s) => s.toggleMapTilesAsOverlay);
 
+  const availableLayers = useMapLayerStore((s) => s.availableLayers);
+  const pluginLayerIds = useMapLayerStore((s) => s.pluginLayerIds);
+  const pluginOverlayOptions: LayerOption[] = availableLayers
+    .filter((l) => l.type === "overlay" && pluginLayerIds.includes(l.id))
+    .map((l) => ({
+      id: l.id,
+      label: l.name,
+      icon: l.id === "weather-overlay" ? "weather-partly-cloudy" : "layers",
+      description: l.id === "weather-overlay" ? "Current conditions on map" : undefined,
+    }));
+
   const handleOverlayToggle = (overlayId: string) => {
     if (Platform.OS !== "web") hapticImpact();
     // Traffic is driven by mapDisplayStore (native traffic layer); others use mapLayerStore
@@ -458,7 +469,7 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
           Overlays
         </Text>
-        {OVERLAY_LAYERS.map((overlay) => {
+        {[...OVERLAY_LAYERS, ...pluginOverlayOptions].map((overlay) => {
           const isActive = overlay.id === "traffic" ? showTraffic : overlay.id === "overture" ? showOverture : activeOverlays.includes(overlay.id);
           return (
             <TouchableOpacity

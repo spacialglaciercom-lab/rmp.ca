@@ -58,7 +58,7 @@ if (Platform.OS === "web" && typeof window !== "undefined") {
       const drawLink = document.createElement("link");
       drawLink.rel = "stylesheet";
       drawLink.href =
-        "https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css";
+        "https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.1/mapbox-gl-draw.css";
       document.head.appendChild(drawLink);
     }
   } catch {}

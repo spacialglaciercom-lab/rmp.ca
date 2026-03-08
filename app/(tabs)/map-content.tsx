@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { Suspense, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,9 @@ import { RouteMap } from "@/components/route-map";
 import NavigationView, { type OffRoutePayload } from "@/components/NavigationView";
 import { useOSMMapPress } from "@/hooks/useOSMMapPress";
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
+import { getPlugin } from "@/lib/plugins/registry";
+import { useMapLayerStore } from "@/stores/mapLayerStore";
+import { usePluginStore } from "@/stores/pluginStore";
 
 // --- Optimized store selectors ---
 import {
@@ -63,6 +66,8 @@ export default function MapScreen() {
   const osmExtractionPoints = useMapStateStore((s) => s.osmExtractionPoints);
   const osmExtractedData = useMapStateStore((s) => s.osmExtractedData);
   const osmExtractorVisible = useMapSidebarStore((s) => s.osmExtractorVisible);
+  const activeOverlays = useMapLayerStore((s) => s.activeOverlays);
+  const weatherPluginEnabled = usePluginStore((s) => s.isPluginEnabled("weather", true));
 
   const fixToRoadsJustRan = useRef(false);
   const previewPoints = state?.previewRoutePoints ?? null;
@@ -470,6 +475,17 @@ export default function MapScreen() {
           </Text>
         )}
       </View>
+
+      {/* Weather overlay when plugin enabled and layer toggled on */}
+      {weatherPluginEnabled && activeOverlays.includes("weather-overlay") && (() => {
+        const wp = getPlugin("weather");
+        const MapOverlay = wp?.getFeatures().mapOverlay as React.ComponentType | undefined;
+        return MapOverlay ? (
+          <Suspense fallback={null}>
+            <MapOverlay />
+          </Suspense>
+        ) : null;
+      })()}
     </View>
   );
 }

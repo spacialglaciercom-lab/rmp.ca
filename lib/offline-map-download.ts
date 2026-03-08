@@ -80,6 +80,10 @@ export async function getResumableDownloadInfo(): Promise<{
 const S3_BUCKET = "https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com";
 const RELEASE = "2026-02-18.0";
 
+/** R2 public bucket base and PMTiles version (must match build-pmtiles.sh). */
+const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
+const PMTILES_VERSION = "v2026-02";
+
 /** Available Overture themes/types to download. */
 export const OVERTURE_LAYERS = {
   transportation_segment: `release/${RELEASE}/theme=transportation/type=segment/`,
@@ -491,9 +495,6 @@ export async function downloadCityData(
 }
 
 // ─── R2 PMTiles download ──────────────────────────────────────────
-
-const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
-const PMTILES_VERSION = "v2026-02";
 
 /**
  * Download a single pre-built PMTiles file for a city from our R2 bucket.

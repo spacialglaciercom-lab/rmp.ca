@@ -100,6 +100,8 @@
 | `pnpm test` | Vitest |
 | `pnpm check` | TypeScript check |
 | `pnpm lint` | Expo lint |
+| `pnpm mobile:android` | Expo start + Android (dev client for hot reload) |
+| `pnpm build:android` | EAS build for Android |
 
 See [scripts/README.md](scripts/README.md) for Windows batch/PowerShell scripts (start app + backends, kill ports, startup).
 
@@ -111,7 +113,8 @@ rmp.ca/
 ├── components/             # Shared UI, map components, planner, Overture extract
 ├── server/                 # Node API: Express, tRPC, auth, DB (server/README.md)
 ├── backend/                # Python FastAPI zone partition service (backend/README.md)
-├── lib/                    # TRPC, theme, maps, storage, Firebase, etc.
+├── lib/                    # TRPC, theme, maps, storage, Firebase, plugins, etc.
+│   └── plugins/           # Plugin system: registry, config, built-ins (see docs/PLUGIN-DEVELOPMENT.md)
 ├── hooks/                  # useAuth, useColors, etc.
 ├── stores/                 # Zustand stores
 ├── drizzle/               # DB schema and migrations
@@ -121,8 +124,13 @@ rmp.ca/
 └── package.json
 ```
 
+### Plugin setup
+
+Plugins are toggled in **Settings → Plugins** and configured via `lib/plugins/default-config.json` and per-plugin `lib/plugins/[id]/config.json` (apiKeys, endpoints). See [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) for adding plugins, testing, and deployment.
+
 ## Documentation
 
+- [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — Plugin system: config, registry, testing, deployment.
 - [server/README.md](server/README.md) — Backend development (auth, tRPC, DB, LLM, storage).
 - [backend/README.md](backend/README.md) — Zone partition API and deployment (e.g. Cloud Run).
 - [scripts/README.md](scripts/README.md) — Local run scripts and ports.
@@ -131,6 +139,7 @@ rmp.ca/
 
 ## Recent changes
 
+- **Plugins** — Plugin system (OsmAnd-style): toggles in Settings, per-plugin `config.json` (apiKeys, endpoints), dev plugin for logging in development. See [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md).
 - **GeoJSON clean (backend)** — `POST /api/geojson/clean` now enforces a **50 MB** request body limit to reduce DoS risk; responses include a **`warnings`** array (e.g. when over 10% of features are dropped as invalid, with a suggestion to check CRS and geometry validity). Invalid-drop ratio is logged at warning level. See [backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md](backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md).
 - **OSM → GeoJSON script** — `backend/scripts/osm_to_geojson.py` outputs GeoJSON in **WGS84 (EPSG:4326)** via `-t_srs EPSG:4326`; docstring updated accordingly.
 - **Map** — Record (GPS) button wired in map floating controls; tap map to add bin in Zones/waste mode; pointer-events and empty-state handling improved on web.

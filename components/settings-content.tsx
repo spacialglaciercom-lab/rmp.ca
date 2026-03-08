@@ -14,6 +14,7 @@ import { confirmDestructive } from "@/lib/confirmDestructive";
 import { ExportButton } from "@/components/export-button";
 import { BetaFeaturesSection } from "@/components/settings/BetaFeaturesSection";
 import { OpenRouterApiKeySection } from "@/components/settings/OpenRouterApiKeySection";
+import { PluginsSection } from "@/components/settings/PluginsSection";
 import { OfflineMapDownloadSection } from "@/components/settings/OfflineMapDownloadSection";
 import { OfflineTilePackSection } from "@/components/settings/OfflineTilePackSection";
 import { MinimalCard, SectionLabel } from "@/components/minimal";
@@ -89,6 +90,17 @@ export default function SettingsContent() {
           onPress: handleRouteOptimization,
           highlight: true,
           description: "CPP, MC-CARP, temporal, multi-objective",
+        },
+      ],
+    },
+    {
+      title: "Plugins",
+      items: [
+        {
+          label: "",
+          value: "",
+          component: PluginsSection,
+          isComponent: true,
         },
       ],
     },

@@ -41,13 +41,14 @@ function InputBarWrapper({
   onSubmit?: () => void;
 }) {
   if (Platform.OS === "web") {
+    const flatStyle = StyleSheet.flatten([styles.inputBar, style]) as React.CSSProperties;
     return (
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit?.();
         }}
-        style={[styles.inputBar, style] as React.CSSProperties}
+        style={flatStyle}
       >
         {children}
       </form>
@@ -522,12 +523,12 @@ function AIChatBubbleInner() {
               messages.map((msg, i) => (
                 <View
                   key={i}
-                  style={[
+                  style={StyleSheet.flatten([
                     styles.bubble,
                     msg.role === "user"
                       ? [styles.userBubble, { backgroundColor: colors.primary }]
                       : [styles.assistantBubble, { backgroundColor: colors.surface }],
-                  ]}
+                  ])}
                 >
                   <Text style={{ color: msg.role === "user" ? "#fff" : colors.foreground, fontSize: 14 }}>
                     {msg.content}

@@ -1,0 +1,9 @@
+{
+  "plugins": {
+    "weather": { "enabled": true, "apiKey": "" },
+    "routeOptimization": { "enabled": true },
+    "overture": { "enabled": true },
+    "overture-extraction": { "enabled": true },
+    "dev": { "enabled": false }
+  }
+}

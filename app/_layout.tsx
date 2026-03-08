@@ -41,6 +41,7 @@ import { trackScreen } from "@/lib/analytics";
 import { reportErrorToServer } from "@/lib/error-report";
 import { BetaFeaturesProvider } from "@/context/BetaFeaturesContext";
 import { DeliveryInstructionsProvider } from "@/context/DeliveryInstructionsContext";
+import { PluginProvider } from "@/context/PluginProvider";
 
 import { FirebaseProvider } from "@/context/FirebaseContext";
 import { MapTypeProvider } from "@/lib/map-type-preference";
@@ -328,20 +329,22 @@ export default function RootLayout() {
                         client={trpcClient}
                         queryClient={queryClient}
                       >
-                        <QueryClientProvider client={queryClient}>
-                          <ErrorBoundary>
-                            {Platform.OS === "web" ? (
-                              <WebOSMDropZoneRoot
-                                onImportComplete={handleWebOSMImport}
-                              >
-                                {navigationStack}
-                              </WebOSMDropZoneRoot>
-                            ) : (
-                              navigationStack
-                            )}
-                          </ErrorBoundary>
-                          <ThemedStatusBar />
-                        </QueryClientProvider>
+                        <PluginProvider trpcClient={trpcClient}>
+                          <QueryClientProvider client={queryClient}>
+                            <ErrorBoundary>
+                              {Platform.OS === "web" ? (
+                                <WebOSMDropZoneRoot
+                                  onImportComplete={handleWebOSMImport}
+                                >
+                                  {navigationStack}
+                                </WebOSMDropZoneRoot>
+                              ) : (
+                                navigationStack
+                              )}
+                            </ErrorBoundary>
+                            <ThemedStatusBar />
+                          </QueryClientProvider>
+                        </PluginProvider>
                       </trpc.Provider>
                     </RoutingProvider>
                   </FirebaseProvider>

@@ -42,6 +42,7 @@ import {
   findRegionForPolygon,
   filterGeoJSONLocal,
 } from "@/lib/offline-extract";
+import { getPlugin } from "@/lib/plugins/registry";
 
 const MIN_POINTS = 3;
 
@@ -223,6 +224,63 @@ export function OvertureExtractorContent({
     }
 
     setExtractProgress("Connecting...");
+
+    // Use overture-extraction plugin when available (cached extracts, same GeoJSON path).
+    const plugin = getPlugin("overture-extraction");
+    const extractor = plugin?.getFeatures()?.extractor as
+      | ((polygon: GeoJSON.Feature<GeoJSON.Polygon>, theme?: string) => Promise<{ geojson: GeoJSONFeatureCollection; warnings: string[] }>)
+      | undefined;
+    if (extractor) {
+      try {
+        setExtractProgress("Extracting…");
+        const result = await extractor(polygon, "roads");
+        setExtractProgress("Loading road data...");
+        const rawGeojson = result.geojson as GeoJSONFeatureCollection;
+        if (!rawGeojson?.features?.length) {
+          setGeoJSONInfo({
+            featureCount: 0,
+            roadClasses: {},
+            valid: false,
+            warnings: result.warnings.length ? result.warnings : ["No road features found in the extraction area"],
+          });
+          setLoadedGeoJSON({ type: "FeatureCollection", features: [] });
+          setIsLoading(false);
+          setExtractProgress(null);
+          return () => {};
+        }
+        let filtered: { geojson: GeoJSONFeatureCollection; feature_count: number; road_class_counts: Record<string, number> };
+        try {
+          filtered = await filterGeoJSON({
+            geojson: rawGeojson,
+            polygon: polygonForFilter,
+            road_classes: effectiveRoadClasses,
+          });
+        } catch {
+          filtered = filterGeoJSONLocal({
+            geojson: rawGeojson,
+            polygon: polygonForFilter,
+            road_classes: effectiveRoadClasses,
+          });
+        }
+        setGeoJSONInfo({
+          featureCount: filtered.feature_count,
+          roadClasses: filtered.road_class_counts,
+          valid: filtered.feature_count > 0,
+          warnings:
+            filtered.feature_count === 0
+              ? ["No road features match the selected road classes in this area"]
+              : [...result.warnings, `Extracted ${filtered.feature_count} road features from Overture Maps`].filter(Boolean),
+        });
+        setLoadedGeoJSON(filtered.geojson);
+      } catch (err) {
+        tryOfflineThenAlert(err instanceof Error ? err.message : "Extraction failed.");
+        return () => {};
+      } finally {
+        setIsLoading(false);
+        setExtractProgress(null);
+      }
+      return () => {};
+    }
 
     const tryOfflineThenAlert = async (error: string) => {
       setExtractProgress("Trying offline (R2/S3/OSM PBF)…");

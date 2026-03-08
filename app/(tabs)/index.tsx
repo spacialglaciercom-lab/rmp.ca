@@ -1,7 +1,7 @@
 /**
  * Home tab — Minimalist Route OS. No cyberpunk styling.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import Constants from "expo-constants";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -23,18 +24,40 @@ import { ScreenContainer } from "@/components/screen-container";
 import { VRPPlanner } from "@/components/VRPPlanner";
 import { MinimalCard, MinimalButton, SectionLabel } from "@/components/minimal";
 import { HeaderWeather } from "@/components/HeaderWeather";
-import { HomeWeatherSection } from "@/components/HomeWeatherSection";
 import type { Route, CollectionPoint } from "@/types";
 import { storage } from "@/lib/storage";
 import { isMockRoute } from "@/lib/is-mock-route";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { MapillaryAuthService } from "@/lib/mapillary-auth";
+import { getPlugin } from "@/lib/plugins/registry";
+import { usePluginStore } from "@/stores/pluginStore";
 
 const useKeyboardAwareScroll = () =>
   Platform.OS !== "web" && Constants.appOwnership !== "expo";
 
 /** Max stops shown in the Processing Queue list to avoid UI/performance issues. Use Map tab for the rest. */
 const MAX_PROCESSING_QUEUE_DISPLAY = 500;
+
+/** Renders the weather dashboard section only when the weather plugin is enabled. */
+function HomeWeatherSectionIfPlugin() {
+  const { theme } = useTheme();
+  const weatherPlugin = getPlugin("weather");
+  const enabled = usePluginStore((s) => s.isPluginEnabled("weather", true));
+  if (!weatherPlugin || !enabled) return null;
+  const Widget = weatherPlugin.getFeatures().widget as React.ComponentType | undefined;
+  if (!Widget) return null;
+  return (
+    <Suspense
+      fallback={
+        <MinimalCard style={{ marginHorizontal: 16, marginBottom: 16, padding: 16 }}>
+          <ActivityIndicator size="small" color={theme.text} />
+        </MinimalCard>
+      }
+    >
+      <Widget />
+    </Suspense>
+  );
+}
 
 export default function HomeScreen() {
   const { theme } = useTheme();
@@ -147,7 +170,7 @@ export default function HomeScreen() {
       </View>
 
 
-      <HomeWeatherSection />
+      <HomeWeatherSectionIfPlugin />
 
       <MinimalCard style={styles.card}>
         <VRPPlanner nestedInScrollView={Platform.OS !== "web"} />
@@ -214,7 +237,7 @@ export default function HomeScreen() {
                 </View>
                 <HeaderWeather textColor={theme.text} />
               </View>
-              <HomeWeatherSection />
+              <HomeWeatherSectionIfPlugin />
             </View>
             <View style={styles.webContentWrap}>
               <MinimalCard style={styles.webCardFill}>
