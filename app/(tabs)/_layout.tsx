@@ -8,11 +8,16 @@ import { Platform, View, StyleSheet } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 import { useTheme } from "@/lib/theme-provider";
+import { usePluginStore } from "@/stores/pluginStore";
 import { OvertureExtractorGlobalSheet } from "@/components/mapTab/overture/OvertureExtractorGlobalSheet";
 
 export default function TabLayout() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const routeOptimizerEnabled = usePluginStore((s) => s.isPluginEnabled("routeOptimization", true));
+  const overtureExtractionEnabled = usePluginStore((s) => s.isPluginEnabled("overture-extraction", true));
+  const zonesEnabled = usePluginStore((s) => s.isPluginEnabled("zones", true));
+  const collectionRouteEnabled = usePluginStore((s) => s.isPluginEnabled("collection-route", true));
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
   const tabBarHeight = 64 + bottomPadding;
 
@@ -56,17 +61,31 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="route"
-        options={{
-          title: "Route",
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="truck-delivery-outline" size={20} color={color} />,
-        }}
+        options={
+          collectionRouteEnabled
+            ? {
+                title: "Route",
+                tabBarIcon: ({ color }) => <MaterialCommunityIcons name="truck-delivery-outline" size={20} color={color} />,
+              }
+            : {
+                href: null,
+                tabBarItemStyle: { display: "none" },
+              }
+        }
       />
       <Tabs.Screen
         name="planner"
-        options={{
-          title: "Planner",
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="map-marker-path" size={20} color={color} />,
-        }}
+        options={
+          routeOptimizerEnabled
+            ? {
+                title: "Planner",
+                tabBarIcon: ({ color }) => <MaterialCommunityIcons name="map-marker-path" size={20} color={color} />,
+              }
+            : {
+                href: null,
+                tabBarItemStyle: { display: "none" },
+              }
+        }
       />
       <Tabs.Screen
         name="map"
@@ -77,10 +96,17 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="zones"
-        options={{
-          title: "Zones",
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="vector-polygon" size={20} color={color} />,
-        }}
+        options={
+          zonesEnabled
+            ? {
+                title: "Zones",
+                tabBarIcon: ({ color }) => <MaterialCommunityIcons name="vector-polygon" size={20} color={color} />,
+              }
+            : {
+                href: null,
+                tabBarItemStyle: { display: "none" },
+              }
+        }
       />
       {/* map-content is the screen component loaded by map.tsx; hide from tab bar so it doesn't show as a second Map tab. */}
       <Tabs.Screen
@@ -92,10 +118,17 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="record"
-        options={{
-          title: "Extract",
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="earth" size={20} color={color} />,
-        }}
+        options={
+          overtureExtractionEnabled
+            ? {
+                title: "Extract",
+                tabBarIcon: ({ color }) => <MaterialCommunityIcons name="earth" size={20} color={color} />,
+              }
+            : {
+                href: null,
+                tabBarItemStyle: { display: "none" },
+              }
+        }
       />
       <Tabs.Screen
         name="settings"

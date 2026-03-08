@@ -41,12 +41,15 @@ lib/plugins/
      version: "1.0.0",
      initialize(context) { /* optional */ },
      destroy() { /* optional */ },
-     getFeatures() { return { … }; },
+     getFeatures() {
+       // Return a record of feature keys → implementations. Known keys: mapLayer, dataProvider, widget, routeOptimizer, extractService (see types.ts).
+       return { /* e.g. widget: { ... } */ };
+     },
    };
    ```
 
 2. **Register** in `lib/plugins/load.ts`: add to `BUILTIN_PLUGINS` and ensure the plugin id is present in `default-config.json` (and optionally in a per-plugin `config.json`).
-3. **Config** (optional): add `lib/plugins/[id]/config.json` with `enabled`, `apiKey`, endpoints, etc. Add the id to the merge map in `config.ts` so it’s loaded and merged.
+3. **Config** (optional): add `lib/plugins/[id]/config.json` with `enabled`, `apiKey`, endpoints, etc. If you add a per-plugin config, add the id to `PLUGIN_CONFIG_MAP` in `config.ts` and add the corresponding import so it’s loaded and merged.
 
 ## Configuration (OsmAnd-style)
 
@@ -56,7 +59,7 @@ lib/plugins/
 
 ## Cross-platform run
 
-- **Web**: `pnpm dev` or `pnpm web` (if defined); `pnpm build` for production export.
+- **Web**: `pnpm dev` (starts Expo for web on port 19007); `pnpm build` or `pnpm build:web` for production export.
 - **Android**: `pnpm mobile:android` (Expo start + Android). Use Expo dev client for hot reload.
 - **iOS**: `pnpm mobile:ios` or `pnpm mobile`.
 - **Full stack**: `pnpm dev:all` runs Expo and the Node server together.
@@ -81,7 +84,7 @@ lib/plugins/
 
 - **Web**: `pnpm build` (or `pnpm build:web`) → output in `dist/`; deploy to **Vercel** (see `vercel.json`: buildCommand, outputDirectory, rewrites).
 - **Server**: `pnpm build:server` → `dist/`; run with `pnpm start`. Deploy to your Node host (e.g. Vercel serverless or a Node server).
-- **Mobile (EAS)**: Use EAS Build for Android/iOS: `eas build --platform android` or `eas build --platform ios`. The repo has `eas:ios`; add a script `build:android` / `eas:android` if you want (e.g. `eas build --platform android --non-interactive`). Use Expo dev client for hot reload during development.
+- **Mobile (EAS)**: Use EAS Build for Android/iOS: `pnpm eas:ios` or `pnpm eas:android` (or `pnpm build:android`). Use Expo dev client for hot reload during development.
 - **GCP**: `cloudbuild.yaml` at repo root builds and deploys the API to Cloud Run; update image name and region if needed.
 
 ## Security and performance

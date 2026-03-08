@@ -67,6 +67,7 @@ export default function MapScreen() {
   const osmExtractedData = useMapStateStore((s) => s.osmExtractedData);
   const osmExtractorVisible = useMapSidebarStore((s) => s.osmExtractorVisible);
   const activeOverlays = useMapLayerStore((s) => s.activeOverlays);
+  usePluginStore((s) => s.enabledPlugins); // subscribe so we re-render when plugin toggles change
   const weatherPluginEnabled = usePluginStore((s) => s.isPluginEnabled("weather", true));
 
   const fixToRoadsJustRan = useRef(false);

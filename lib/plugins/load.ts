@@ -7,6 +7,11 @@ import { weatherPlugin } from "./weather";
 import { routeOptimizationPlugin } from "./route-optimization";
 import { overturePlugin } from "./overture";
 import { overtureExtractionPlugin } from "./overture-extraction";
+import { zonesPlugin } from "./zones";
+import { aiChatPlugin } from "./ai-chat";
+import { drivePreviewPlugin } from "./drive-preview";
+import { collectionRoutePlugin } from "./collection-route";
+import { navigationPlugin } from "./navigation";
 import { devPlugin } from "./dev";
 
 const BUILTIN_PLUGINS: Record<string, Plugin> = {
@@ -14,6 +19,11 @@ const BUILTIN_PLUGINS: Record<string, Plugin> = {
   routeOptimization: routeOptimizationPlugin,
   overture: overturePlugin,
   "overture-extraction": overtureExtractionPlugin,
+  zones: zonesPlugin,
+  "ai-chat": aiChatPlugin,
+  "drive-preview": drivePreviewPlugin,
+  "collection-route": collectionRoutePlugin,
+  navigation: navigationPlugin,
   ...(typeof __DEV__ !== "undefined" && __DEV__ ? { dev: devPlugin } : {}),
 };
 

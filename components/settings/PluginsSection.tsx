@@ -3,8 +3,8 @@
  * State is stored in Zustand (persisted to AsyncStorage). Optional Firestore sync
  * can be added for cross-device sync (see docs/PLUGIN-DEVELOPMENT.md).
  */
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useTheme } from "@/lib/theme-provider";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { usePluginStore } from "@/stores/pluginStore";
@@ -13,18 +13,13 @@ import { loadPluginConfig } from "@/lib/plugins/config";
 
 export const PluginsSection: React.FC = () => {
   const theme = useTheme();
-  const [, forceUpdate] = useState(0);
-  const setPluginEnabled = usePluginStore((s) => s.setPluginEnabled);
-  const isPluginEnabled = usePluginStore((s) => s.isPluginEnabled);
   const [configDefaults, setConfigDefaults] = useState<Record<string, boolean>>({});
+  /** Local copy of enabled state so the toggle updates immediately on press (avoids persist/subscribe timing). */
+  const [localEnabled, setLocalEnabled] = useState<Record<string, boolean>>({});
 
-  // Subscribe to store so toggles re-render when enabledPlugins changes (persist can delay ref updates)
-  useEffect(() => {
-    return usePluginStore.subscribe(() => {
-      forceUpdate((n) => n + 1);
-    });
-  }, []);
+  const descriptors = getBuiltinPluginDescriptors();
 
+  // Load config defaults and sync local state from store (including after rehydration)
   useEffect(() => {
     loadPluginConfig().then((config) => {
       const defaults: Record<string, boolean> = {};
@@ -32,15 +27,37 @@ export const PluginsSection: React.FC = () => {
         defaults[id] = entry.enabled;
       }
       setConfigDefaults(defaults);
+      const store = usePluginStore.getState();
+      const next: Record<string, boolean> = {};
+      descriptors.forEach((d) => {
+        next[d.id] = store.isPluginEnabled(d.id, defaults[d.id] ?? true);
+      });
+      setLocalEnabled(next);
     });
   }, []);
 
-  const descriptors = getBuiltinPluginDescriptors();
+  // Keep local state in sync when store changes (e.g. rehydration)
+  useEffect(() => {
+    return usePluginStore.subscribe(() => {
+      const store = usePluginStore.getState();
+      const list = getBuiltinPluginDescriptors();
+      setLocalEnabled((prev) => {
+        const next = { ...prev };
+        list.forEach((d) => {
+          const defaultEnabled = configDefaults[d.id] ?? true;
+          next[d.id] = store.isPluginEnabled(d.id, defaultEnabled);
+        });
+        return next;
+      });
+    });
+  }, [configDefaults]);
 
-  const onToggle = (id: string, current: boolean) => {
+  const onToggle = useCallback((id: string, current: boolean) => {
     hapticImpact();
-    setPluginEnabled(id, !current);
-  };
+    const next = !current;
+    setLocalEnabled((prev) => ({ ...prev, [id]: next }));
+    usePluginStore.getState().setPluginEnabled(id, next);
+  }, []);
 
   return (
     <View style={[styles.section, { borderTopColor: theme.borderLight }]}>
@@ -51,13 +68,14 @@ export const PluginsSection: React.FC = () => {
       <View style={styles.rows}>
         {descriptors.map((d) => {
           const defaultEnabled = configDefaults[d.id] ?? true;
-          const enabled = isPluginEnabled(d.id, defaultEnabled);
+          const enabled = d.id in localEnabled ? localEnabled[d.id] : defaultEnabled;
           return (
-            <TouchableOpacity
+            <Pressable
               key={d.id}
               style={[styles.row, { borderTopColor: theme.borderLight }]}
               onPress={() => onToggle(d.id, enabled)}
-              activeOpacity={0.7}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: enabled }}
             >
               <View style={{ flex: 1 }}>
                 <Text style={[styles.label, { color: theme.text }]}>{d.name}</Text>
@@ -71,14 +89,14 @@ export const PluginsSection: React.FC = () => {
                   { backgroundColor: enabled ? theme.accent : theme.border },
                 ]}
               >
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    { marginLeft: enabled ? 22 : 2 },
-                  ]}
-                />
+              <View
+                style={[
+                  styles.toggleThumb,
+                  { marginLeft: enabled ? 22 : 2 },
+                ]}
+              />
               </View>
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>

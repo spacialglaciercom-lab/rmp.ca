@@ -21,6 +21,7 @@ import { MapillaryViewer } from "@/components/MapillaryViewer";
 import { StreetViewPreview } from "@/components/StreetViewPreview";
 import { openMapillaryCapture } from "@/lib/mapillary";
 import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
+import { usePluginStore } from "@/stores/pluginStore";
 
 export default function PointDetailScreen() {
   const colors = useColors();
@@ -29,6 +30,7 @@ export default function PointDetailScreen() {
   const storeSegments = useCollectionNavigationStore((s) => s.segments);
   const storeComplete = useCollectionNavigationStore((s) => s.completeSegment);
   const storeSkip = useCollectionNavigationStore((s) => s.skipSegmentByIndex);
+  const drivePreviewEnabled = usePluginStore((s) => s.isPluginEnabled("drive-preview", true));
   const [point, setPoint] = useState<CollectionPoint | null>(null);
   const [notes, setNotes] = useState("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -39,6 +41,10 @@ export default function PointDetailScreen() {
   useEffect(() => {
     loadPoint();
   }, [pointId]);
+
+  useEffect(() => {
+    if (!drivePreviewEnabled) setGoogleStreetViewVisible(false);
+  }, [drivePreviewEnabled]);
 
   const loadPoint = async () => {
     const route = await storage.loadRoute();
@@ -486,18 +492,20 @@ export default function PointDetailScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => {
-              hapticImpact();
-              setGoogleStreetViewVisible(true);
-            }}
-            style={{ backgroundColor: "#4285F4" }}
-            className="py-4 rounded-xl items-center active:opacity-70"
-          >
-            <Text className="text-white text-base font-semibold">
-              Street View
-            </Text>
-          </TouchableOpacity>
+          {drivePreviewEnabled && (
+            <TouchableOpacity
+              onPress={() => {
+                hapticImpact();
+                setGoogleStreetViewVisible(true);
+              }}
+              style={{ backgroundColor: "#4285F4" }}
+              className="py-4 rounded-xl items-center active:opacity-70"
+            >
+              <Text className="text-white text-base font-semibold">
+                Street View
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             onPress={() => {
@@ -530,12 +538,14 @@ export default function PointDetailScreen() {
         isVisible={streetViewVisible}
         onClose={() => setStreetViewVisible(false)}
       />
-      <StreetViewPreview
-        points={[{ lat: point.latitude, lon: point.longitude }]}
-        isVisible={googleStreetViewVisible}
-        onClose={() => setGoogleStreetViewVisible(false)}
-        trackName={point.address ?? "Stop"}
-      />
+      {drivePreviewEnabled && (
+        <StreetViewPreview
+          points={[{ lat: point.latitude, lon: point.longitude }]}
+          isVisible={googleStreetViewVisible}
+          onClose={() => setGoogleStreetViewVisible(false)}
+          trackName={point.address ?? "Stop"}
+        />
+      )}
     </ScreenContainer>
   );
 }

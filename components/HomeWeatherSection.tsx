@@ -1,7 +1,7 @@
 /**
- * Home page weather block — Google Weather API (same key as Maps).
- * Shows: current conditions, hourly forecast (next 24h), daily forecast (10 days),
- * hourly history (last 24h), and weather alerts.
+ * Home page weather block — Google Weather API (same key as Maps), with OpenWeatherMap fallback.
+ * When Google is configured: current conditions, hourly (24h), daily (10 days), history (24h), alerts.
+ * When only OpenWeather is configured: current conditions (temp, condition, feels like, humidity, wind).
  */
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -31,6 +31,8 @@ import type {
   GoogleHistoryHour,
   GoogleWeatherAlert,
 } from "@/services/googleWeatherService";
+import { getCurrentWeather, isWeatherConfigured } from "@/services/weatherService";
+import type { CurrentWeather } from "@/services/weatherService";
 
 const DEFAULT_LAT = 45.5017;
 const DEFAULT_LON = -73.5673;
@@ -121,10 +123,14 @@ function windShort(w?: { speed?: { value?: number; unit?: string }; direction?: 
   return `${dir ? dir + " " : ""}${spd}${unit}`;
 }
 
+type WeatherSource = "google" | "openweather";
+
 export function HomeWeatherSection() {
   const { theme } = useTheme();
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [source, setSource] = useState<WeatherSource | null>(null);
   const [current, setCurrent] = useState<GoogleCurrentConditions | null>(null);
+  const [openWeatherCurrent, setOpenWeatherCurrent] = useState<CurrentWeather | null>(null);
   const [hourly, setHourly] = useState<GoogleForecastHour[]>([]);
   const [daily, setDaily] = useState<GoogleForecastDay[]>([]);
   const [history, setHistory] = useState<GoogleHistoryHour[]>([]);
@@ -135,9 +141,11 @@ export function HomeWeatherSection() {
   const hasFetchedOnce = useRef(false);
 
   const fetchAll = useCallback(async (isRefresh = false) => {
-    const ok = await isGoogleWeatherConfigured();
-    setConfigured(ok);
-    if (!ok) {
+    const googleOk = await isGoogleWeatherConfigured();
+    const openWeatherOk = isWeatherConfigured();
+    const anyOk = googleOk || openWeatherOk;
+    setConfigured(anyOk);
+    if (!anyOk) {
       setLoading(false);
       return;
     }
@@ -146,21 +154,35 @@ export function HomeWeatherSection() {
     setError(false);
     try {
       const coords = Platform.OS === "web" ? await getLocation() : await getLocationNative();
-      const [cur, hourRes, dayRes, histRes, alertList] = await Promise.all([
-        getGoogleCurrentConditions(coords.lat, coords.lon),
-        getGoogleHourlyForecast(coords.lat, coords.lon, 24),
-        getGoogleDailyForecast(coords.lat, coords.lon, 10),
-        getGoogleHourlyHistory(coords.lat, coords.lon, 24),
-        getGoogleWeatherAlerts(coords.lat, coords.lon),
-      ]);
-      setCurrent(cur ?? null);
-      setHourly(hourRes?.forecastHours ?? []);
-      setDaily(dayRes?.forecastDays ?? []);
-      setHistory(histRes?.historyHours ?? []);
-      setAlerts(alertList ?? []);
+      if (googleOk) {
+        const [cur, hourRes, dayRes, histRes, alertList] = await Promise.all([
+          getGoogleCurrentConditions(coords.lat, coords.lon),
+          getGoogleHourlyForecast(coords.lat, coords.lon, 24),
+          getGoogleDailyForecast(coords.lat, coords.lon, 10),
+          getGoogleHourlyHistory(coords.lat, coords.lon, 24),
+          getGoogleWeatherAlerts(coords.lat, coords.lon),
+        ]);
+        setSource("google");
+        setCurrent(cur ?? null);
+        setOpenWeatherCurrent(null);
+        setHourly(hourRes?.forecastHours ?? []);
+        setDaily(dayRes?.forecastDays ?? []);
+        setHistory(histRes?.historyHours ?? []);
+        setAlerts(alertList ?? []);
+      } else {
+        const ow = await getCurrentWeather(coords.lat, coords.lon);
+        setSource("openweather");
+        setCurrent(null);
+        setOpenWeatherCurrent(ow ?? null);
+        setHourly([]);
+        setDaily([]);
+        setHistory([]);
+        setAlerts([]);
+      }
     } catch {
       setError(true);
       setCurrent(null);
+      setOpenWeatherCurrent(null);
       setHourly([]);
       setDaily([]);
       setHistory([]);
@@ -231,6 +253,30 @@ export function HomeWeatherSection() {
               )}
               {windStr(current.wind) && (
                 <Text style={[styles.detail, { color: colors.muted, marginTop: 4 }]}>{windStr(current.wind)}</Text>
+              )}
+            </View>
+          </View>
+        )}
+        {openWeatherCurrent && (
+          <View style={[styles.currentRow, { borderBottomColor: colors.border }]}>
+            <View>
+              <Text style={[styles.tempBig, { color: colors.text }]}>{Math.round(openWeatherCurrent.temp)}°</Text>
+              <Text style={[styles.condition, { color: colors.muted }]}>
+                {openWeatherCurrent.condition?.description ?? openWeatherCurrent.condition?.main ?? "—"}
+              </Text>
+              <Text style={[styles.feelsLike, { color: colors.muted }]}>
+                Feels like {Math.round(openWeatherCurrent.feelsLike)}°
+              </Text>
+            </View>
+            <View>
+              <Text style={[styles.detail, { color: colors.muted }]}>Humidity {openWeatherCurrent.humidity}%</Text>
+              {openWeatherCurrent.windSpeed != null && openWeatherCurrent.windSpeed > 0 && (
+                <Text style={[styles.detail, { color: colors.muted, marginTop: 4 }]}>
+                  Wind {Math.round(openWeatherCurrent.windSpeed * 3.6)} km/h
+                  {openWeatherCurrent.visibility != null && openWeatherCurrent.visibility < 10000
+                    ? ` · Vis. ${(openWeatherCurrent.visibility / 1000).toFixed(1)} km`
+                    : ""}
+                </Text>
               )}
             </View>
           </View>

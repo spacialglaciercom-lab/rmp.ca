@@ -41,6 +41,7 @@ const MAX_PROCESSING_QUEUE_DISPLAY = 500;
 /** Renders the weather dashboard section only when the weather plugin is enabled. */
 function HomeWeatherSectionIfPlugin() {
   const { theme } = useTheme();
+  usePluginStore((s) => s.enabledPlugins); // subscribe so we re-render when plugin toggles change
   const weatherPlugin = getPlugin("weather");
   const enabled = usePluginStore((s) => s.isPluginEnabled("weather", true));
   if (!weatherPlugin || !enabled) return null;
@@ -57,6 +58,14 @@ function HomeWeatherSectionIfPlugin() {
       <Widget />
     </Suspense>
   );
+}
+
+/** Renders header weather only when the weather plugin is enabled. */
+function HeaderWeatherIfPlugin({ textColor }: { textColor: string }) {
+  usePluginStore((s) => s.enabledPlugins); // subscribe so we re-render when plugin toggles change
+  const enabled = usePluginStore((s) => s.isPluginEnabled("weather", true));
+  if (!enabled) return null;
+  return <HeaderWeather textColor={textColor} />;
 }
 
 export default function HomeScreen() {
@@ -166,7 +175,7 @@ export default function HomeScreen() {
           <Text style={[styles.title, { color: theme.text }]}>Route OS</Text>
           {subtitle ? <Text style={[styles.subtitle, { color: theme.textTertiary }]}>{subtitle}</Text> : null}
         </View>
-        <HeaderWeather textColor={theme.text} />
+        <HeaderWeatherIfPlugin textColor={theme.text} />
       </View>
 
 
@@ -235,7 +244,7 @@ export default function HomeScreen() {
                   <Text style={[styles.title, { color: theme.text }]}>Route OS</Text>
                   {subtitle ? <Text style={[styles.subtitle, { color: theme.textTertiary }]}>{subtitle}</Text> : null}
                 </View>
-                <HeaderWeather textColor={theme.text} />
+                <HeaderWeatherIfPlugin textColor={theme.text} />
               </View>
               <HomeWeatherSectionIfPlugin />
             </View>

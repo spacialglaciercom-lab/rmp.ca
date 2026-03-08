@@ -122,20 +122,22 @@ function RouteActionChipsInner({
       )}
       {canStartNavigation && (
         <>
-          <TouchableOpacity
-            style={[
-              chipStyles.chip,
-              { backgroundColor: colors.primary, marginLeft: hasTapDestination ? 0 : 0 },
-            ]}
-            onPress={() => handlePress(onStartNavigation)}
-            disabled={navLoading}
-          >
-            {navLoading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={chipStyles.chipText}>Start Navigation</Text>
-            )}
-          </TouchableOpacity>
+          {onStartNavigation && (
+            <TouchableOpacity
+              style={[
+                chipStyles.chip,
+                { backgroundColor: colors.primary, marginLeft: hasTapDestination ? 0 : 0 },
+              ]}
+              onPress={() => handlePress(onStartNavigation)}
+              disabled={navLoading}
+            >
+              {navLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={chipStyles.chipText}>Start Navigation</Text>
+              )}
+            </TouchableOpacity>
+          )}
           {onStartCollectionRoute && (
             <TouchableOpacity
               style={[chipStyles.chip, { backgroundColor: "#F97316" }]}
