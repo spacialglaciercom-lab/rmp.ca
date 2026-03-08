@@ -9,11 +9,20 @@ const plugins = new Map<string, Plugin>();
 export function registerPlugin(plugin: Plugin, context: PluginContext): void {
   if (plugins.has(plugin.id)) {
     const existing = plugins.get(plugin.id)!;
-    existing.destroy();
+    try {
+      existing.destroy();
+    } catch (e) {
+      console.error(`[Plugin:${existing.id}] destroy error on replace:`, e);
+    }
     plugins.delete(plugin.id);
   }
   plugins.set(plugin.id, plugin);
-  plugin.initialize(context);
+  try {
+    plugin.initialize(context);
+  } catch (e) {
+    console.error(`[Plugin:${plugin.id}] initialize error:`, e);
+    plugins.delete(plugin.id);
+  }
 }
 
 export function getPlugin(id: string): Plugin | undefined {
@@ -23,7 +32,11 @@ export function getPlugin(id: string): Plugin | undefined {
 export function unloadPlugin(id: string): void {
   const plugin = plugins.get(id);
   if (plugin) {
-    plugin.destroy();
+    try {
+      plugin.destroy();
+    } catch (e) {
+      console.error(`[Plugin:${id}] destroy error:`, e);
+    }
     plugins.delete(id);
   }
 }

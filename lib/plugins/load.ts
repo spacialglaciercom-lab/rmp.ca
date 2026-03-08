@@ -74,10 +74,18 @@ export async function loadAndRegisterPlugins(context: PluginContext): Promise<vo
   unloadAllPlugins();
   const config = await loadPluginConfig();
   const store = usePluginStore.getState();
+  const enabledIds = new Set<string>();
   for (const [id, entry] of Object.entries(config.plugins)) {
-    const enabled = store.isPluginEnabled(id, entry.enabled);
-    if (!enabled) continue;
+    if (store.isPluginEnabled(id, entry.enabled)) enabledIds.add(id);
+  }
+  for (const id of enabledIds) {
     const plugin = BUILTIN_PLUGINS[id];
-    if (plugin) registerPlugin(plugin, context);
+    if (!plugin) continue;
+    plugin.dependencies?.forEach((dep) => {
+      if (!enabledIds.has(dep)) {
+        console.warn(`[Plugin:${id}] dependency "${dep}" is not enabled`);
+      }
+    });
+    registerPlugin(plugin, context);
   }
 }

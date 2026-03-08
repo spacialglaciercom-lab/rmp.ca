@@ -33,6 +33,8 @@ export const PluginsSection: React.FC = () => {
         next[d.id] = store.isPluginEnabled(d.id, defaults[d.id] ?? true);
       });
       setLocalEnabled(next);
+    }).catch((err) => {
+      console.warn("[PluginsSection] Failed to load plugin config:", err);
     });
   }, []);
 

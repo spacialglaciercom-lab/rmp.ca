@@ -4,7 +4,7 @@
  * for swappable optimization (e.g. add alternative algorithms later).
  */
 
-import type { Plugin, PluginContext } from "../types";
+import type { Plugin } from "../types";
 import { getPlugin } from "../registry";
 import {
   optimizeRoute as backendOptimize,
@@ -18,22 +18,16 @@ import {
 /** Max features per chunk when processing large GeoJSON (backend may still limit body size). */
 const CHUNK_FEATURE_LIMIT = 5000;
 
-/** Stored context set in initialize for getFeatures and optional weather integration. */
-let pluginContext: PluginContext | null = null;
-
 export const routeOptimizationPlugin: Plugin = {
   id: "routeOptimization",
   name: "Route Optimizer",
   description: "CPP, turn-aware optimization, Overture/OSM route generation, zone partitioning",
   version: "1.0.0",
+  dependencies: ["weather"],
 
-  initialize(context: PluginContext) {
-    pluginContext = context;
-  },
+  initialize() {},
 
-  destroy() {
-    pluginContext = null;
-  },
+  destroy() {},
 
   getFeatures() {
 
