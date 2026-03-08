@@ -75,6 +75,9 @@ export function unloadAllPlugins(): void {
  * Pass an AbortSignal to cancel stale calls: all plugin mutations (unload +
  * register) are deferred until after the async config load, so an aborted
  * signal causes an early return with no side effects.
+ *
+ * Only unloads plugins that are being disabled and only registers plugins
+ * that are being enabled, to avoid unnecessary side effects on unchanged plugins.
  */
 export async function loadAndRegisterPlugins(
   context: PluginContext,
@@ -82,13 +85,25 @@ export async function loadAndRegisterPlugins(
 ): Promise<void> {
   const config = await loadPluginConfig();
   if (signal?.aborted) return;
-  unloadAllPlugins();
+
   const store = usePluginStore.getState();
   const enabledIds = new Set<string>();
   for (const [id, entry] of Object.entries(config.plugins)) {
     if (store.isPluginEnabled(id, entry.enabled)) enabledIds.add(id);
   }
-  for (const id of enabledIds) {
+
+  const currentlyRegistered = new Set(getAllPlugins().map((p) => p.id));
+
+  const toUnload = [...currentlyRegistered].filter((id) => !enabledIds.has(id));
+  for (const id of toUnload) {
+    if (signal?.aborted) return;
+    unloadPlugin(id);
+  }
+
+  const toRegister = [...enabledIds].filter(
+    (id) => !currentlyRegistered.has(id),
+  );
+  for (const id of toRegister) {
     if (signal?.aborted) return;
     const plugin = BUILTIN_PLUGINS[id];
     if (!plugin) continue;

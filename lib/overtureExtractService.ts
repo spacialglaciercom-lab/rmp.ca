@@ -144,9 +144,6 @@ export function coordsToPolygonFeature(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Helper functions
-// ---------------------------------------------------------------------------
 function getStageMessage(stage: string): string {
   switch (stage) {
     case "downloading":
@@ -315,9 +312,7 @@ function simpleHash(str: string): string {
 
 const EXTRACT_CACHE_PREFIX = "overture_extract_";
 
-async function getCachedExtract(
-  key: string,
-): Promise<{
+async function getCachedExtract(key: string): Promise<{
   geojson: GeoJSON.FeatureCollection;
   stats?: ExtractionStats;
 } | null> {
@@ -379,17 +374,35 @@ export interface ExtractOvertureResult {
   warnings: string[];
 }
 
+/** Default extraction timeout (5 minutes). */
+const DEFAULT_EXTRACT_TIMEOUT_MS = 5 * 60 * 1000;
+
+export interface ExtractOvertureOptions {
+  theme?: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 /**
  * Extract road network GeoJSON for a polygon via WebSocket backend.
  * - CRS: Coordinates are EPSG:4326 (WGS84). Other CRS must be converted before/after.
  * - Invalid features: collectWarnings() reports invalid or missing geometry; downstream clean has 50MB body limit.
  * - Large datasets: consider background processing (e.g. expo-task-manager) to avoid blocking the UI.
  * Uses AsyncStorage cache when result size is under ~1.5MB (24h TTL).
+ *
+ * @param polygon - The polygon to extract data for
+ * @param options - Optional configuration: theme, AbortSignal for cancellation, timeoutMs
  */
 export async function extractOverture(
   polygon: GeoJSON.Feature<GeoJSON.Polygon>,
-  theme: string = "roads",
+  options?: ExtractOvertureOptions | string,
 ): Promise<ExtractOvertureResult> {
+  const opts: ExtractOvertureOptions =
+    typeof options === "string" ? { theme: options } : (options ?? {});
+  const theme = opts.theme ?? "roads";
+  const signal = opts.signal;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_EXTRACT_TIMEOUT_MS;
+
   const cacheKey =
     EXTRACT_CACHE_PREFIX +
     simpleHash(JSON.stringify(polygon.geometry.coordinates) + theme);
@@ -404,13 +417,18 @@ export async function extractOverture(
   }
 
   return new Promise<ExtractOvertureResult>((resolve, reject) => {
+    let settled = false;
+
     const handle = connectAndExtract(
       polygon,
       () => {},
       async (hash, stats) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         try {
           const url = httpGeoJSONUrl(hash);
-          const res = await fetch(url);
+          const res = await fetch(url, { signal });
           if (!res.ok) throw new Error(`Failed to load GeoJSON: ${res.status}`);
           const rawGeojson = (await res.json()) as GeoJSON.FeatureCollection;
           const sizeBytes = res.headers.get("content-length")
@@ -432,7 +450,40 @@ export async function extractOverture(
           reject(err);
         }
       },
-      (error) => reject(new Error(error)),
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(new Error(error));
+      },
     );
+
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      handle.cancel();
+      reject(new Error(`Extraction timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    if (signal) {
+      if (signal.aborted) {
+        settled = true;
+        clearTimeout(timeoutId);
+        handle.cancel();
+        reject(new Error("Extraction aborted"));
+      } else {
+        signal.addEventListener(
+          "abort",
+          () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            handle.cancel();
+            reject(new Error("Extraction aborted"));
+          },
+          { once: true },
+        );
+      }
+    }
   });
 }
