@@ -1,7 +1,9 @@
 /**
- * Overture extraction plugin (stub for Step 1). Step 4 will add extract UI and overlay.
+ * Overture plugin: gates the Overture Maps transportation overlay (PMTiles).
+ * When disabled, clears the overlay from the map display store.
  */
 import type { Plugin } from "../types";
+import { useMapDisplayStore } from "@/stores/mapDisplayStore";
 
 export const overturePlugin: Plugin = {
   id: "overture",
@@ -9,7 +11,9 @@ export const overturePlugin: Plugin = {
   description: "Overture map overlay and road network extraction",
   version: "1.0.0",
   initialize() {},
-  destroy() {},
+  destroy() {
+    useMapDisplayStore.getState().setShowOverture(false);
+  },
   getFeatures() {
     return {};
   },

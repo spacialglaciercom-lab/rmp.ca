@@ -13,11 +13,13 @@ const ExtractContent = lazy(() => import("@/components/extract-content"));
 
 export default function RecordScreen() {
   const router = useRouter();
-  const overtureExtractionEnabled = usePluginStore((s) => s.isPluginEnabled("overture-extraction", true));
+  const overtureExtractionEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("overture-extraction", true)
+  );
 
   useEffect(() => {
     if (!overtureExtractionEnabled) {
-      router.replace("/(tabs)");
+      router.replace("/");
     }
   }, [overtureExtractionEnabled, router]);
 
@@ -29,10 +31,7 @@ export default function RecordScreen() {
     <ErrorBoundary>
       <Suspense
         fallback={
-          <TabScreenSkeleton
-            title="Extract"
-            subtitle="Loading extractor..."
-          />
+          <TabScreenSkeleton title="Extract" subtitle="Loading extractor..." />
         }
       >
         <ExtractContent />

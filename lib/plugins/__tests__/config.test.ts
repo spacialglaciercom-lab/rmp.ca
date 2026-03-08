@@ -21,4 +21,13 @@ describe("loadPluginConfig", () => {
     expect(config.plugins["overture-extraction"].enabled).toBe(true);
     expect(config.plugins.dev).toBeDefined();
   });
+
+  it("includes gate plugins (zones, ai-chat, navigation, drive-preview, collection-route) all enabled by default", async () => {
+    const config = await loadPluginConfig();
+    const gatePlugins = ["zones", "ai-chat", "navigation", "drive-preview", "collection-route"];
+    for (const id of gatePlugins) {
+      expect(config.plugins[id], `${id} should be in config`).toBeDefined();
+      expect(config.plugins[id].enabled, `${id} should be enabled by default`).toBe(true);
+    }
+  });
 });

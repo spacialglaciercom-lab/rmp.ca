@@ -344,6 +344,7 @@ export default function MapContent() {
   const drivePreviewEnabled = usePluginStore((s) => s.isPluginEnabled("drive-preview", true));
   const collectionRouteEnabled = usePluginStore((s) => s.isPluginEnabled("collection-route", true));
   const navigationEnabled = usePluginStore((s) => s.isPluginEnabled("navigation", true));
+  const overturePluginEnabled = usePluginStore((s) => s.isPluginEnabled("overture", true));
 
   const previewPoints = state?.previewRoutePoints ?? null;
   const previewRoutePointsByVehicle = state?.previewRoutePointsByVehicle ?? null;
@@ -1317,7 +1318,7 @@ export default function MapContent() {
         userBearing={isRecActive ? (recorder.currentHeading ?? userBearing) : userBearing}
         showAerial={showAerial}
         showTraffic={showTraffic}
-        showOverture={showOverture}
+        showOverture={showOverture && overturePluginEnabled}
         osmExtractionPolygon={
           osmExtractionPoints.length >= 3 ? osmExtractionPoints : undefined
         }

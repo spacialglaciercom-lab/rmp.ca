@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(bash:*)",
-      "Bash(export:*)"
+      "Bash(export:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

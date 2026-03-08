@@ -20,7 +20,7 @@
 ## Tech stack
 
 | Layer | Technologies |
-|-------|--------------|
+| :--- | :--- |
 | App | **Expo** (SDK 54), **React Native**, **expo-router**, **NativeWind** (Tailwind), **Zustand** |
 | Maps | MapLibre GL, Leaflet, react-leaflet, OSM, Overture, PMTiles, DuckDB-WASM |
 | API | **tRPC**, **TanStack Query**, **Firebase** (Auth, Firestore, Storage, Analytics) |
@@ -87,14 +87,14 @@
    pnpm build:server && pnpm start
    ```
 
-## Scripts (Windows / repo scripts)
+## Scripts
 
 | Script | Description |
-|--------|-------------|
+| :--- | :--- |
 | `pnpm dev` | Expo web on port 19007 |
 | `pnpm dev:server` | Node tRPC server (watch) |
 | `pnpm dev:all` | Expo + server concurrently |
-| `pnpm build` / `pnpm build:web` | Export Expo web |
+| `pnpm build` | Export Expo web |
 | `pnpm build:server` | Bundle server to `dist/` |
 | `pnpm db:push` | Drizzle generate + migrate |
 | `pnpm test` | Vitest |
@@ -102,8 +102,6 @@
 | `pnpm lint` | Expo lint |
 | `pnpm mobile:android` | Expo start + Android (dev client for hot reload) |
 | `pnpm build:android` | EAS build for Android |
-
-See [scripts/README.md](scripts/README.md) for Windows batch/PowerShell scripts (start app + backends, kill ports, startup).
 
 ## Project structure
 
