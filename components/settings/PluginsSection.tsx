@@ -12,7 +12,7 @@ import { getBuiltinPluginDescriptors } from "@/lib/plugins/load";
 import { loadPluginConfig } from "@/lib/plugins/config";
 
 export const PluginsSection: React.FC = () => {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const [configDefaults, setConfigDefaults] = useState<Record<string, boolean>>({});
   /** Local copy of enabled state so the toggle updates immediately on press (avoids persist/subscribe timing). */
   const [localEnabled, setLocalEnabled] = useState<Record<string, boolean>>({});

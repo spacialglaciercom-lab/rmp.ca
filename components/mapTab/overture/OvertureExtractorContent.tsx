@@ -225,6 +225,27 @@ export function OvertureExtractorContent({
 
     setExtractProgress("Connecting...");
 
+    const tryOfflineThenAlert = async (error: string) => {
+      setExtractProgress("Trying offline (R2/S3/OSM PBF)…");
+      try {
+        const ok = await runOfflineExtract(polygon, polygonForFilter);
+        if (!ok) {
+          Alert.alert(
+            "Extraction Failed",
+            `${error}\n\nTo extract offline, download map data in Settings → Offline Map Download (R2 Tiles, S3 Parquet, or OSM PBF) for a region that covers this area.`,
+          );
+        }
+      } catch (offlineErr) {
+        Alert.alert(
+          "Extraction Failed",
+          `${error}\n\nOffline fallback failed: ${offlineErr instanceof Error ? offlineErr.message : String(offlineErr)}. Download R2 Tiles, S3 Parquet, or OSM PBF in Settings for this region to extract offline.`,
+        );
+      } finally {
+        setIsLoading(false);
+        setExtractProgress(null);
+      }
+    };
+
     // Use overture-extraction plugin when available (cached extracts, same GeoJSON path).
     const plugin = getPlugin("overture-extraction");
     const extractor = plugin?.getFeatures()?.extractor as
@@ -281,27 +302,6 @@ export function OvertureExtractorContent({
       }
       return () => {};
     }
-
-    const tryOfflineThenAlert = async (error: string) => {
-      setExtractProgress("Trying offline (R2/S3/OSM PBF)…");
-      try {
-        const ok = await runOfflineExtract(polygon, polygonForFilter);
-        if (!ok) {
-          Alert.alert(
-            "Extraction Failed",
-            `${error}\n\nTo extract offline, download map data in Settings → Offline Map Download (R2 Tiles, S3 Parquet, or OSM PBF) for a region that covers this area.`,
-          );
-        }
-      } catch (offlineErr) {
-        Alert.alert(
-          "Extraction Failed",
-          `${error}\n\nOffline fallback failed: ${offlineErr instanceof Error ? offlineErr.message : String(offlineErr)}. Download R2 Tiles, S3 Parquet, or OSM PBF in Settings for this region to extract offline.`,
-        );
-      } finally {
-        setIsLoading(false);
-        setExtractProgress(null);
-      }
-    };
 
     const handle = connectAndExtract(
       polygon,
