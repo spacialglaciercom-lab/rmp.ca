@@ -8,7 +8,10 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import { getDownloadedRegions, getRegionDataDir } from "@/lib/offline-map-download";
 import type { DownloadedRegion } from "@/lib/offline-map-download";
-import type { GeoJSONFeatureCollection } from "@/services/overtureOptimizerService";
+import type {
+  GeoJSONFeatureCollection,
+  FilterResponse,
+} from "@/services/overtureOptimizerService";
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import type { Feature, Polygon } from "geojson";
 import { OSMParser } from "@/lib/route-optimizer-v2/osmParser";
@@ -154,6 +157,61 @@ export interface OfflineExtractResult {
   source: "r2" | "s3" | "osm_pbf";
   regionId: string;
   regionName: string;
+}
+
+/**
+ * Get road class from a GeoJSON feature (OSM/Overture property names).
+ */
+function getRoadClass(props: Record<string, unknown> | undefined): string {
+  if (!props) return "";
+  const v =
+    props.highway ?? props.class ?? props.road_class ?? props.category;
+  return typeof v === "string" ? v.toLowerCase().trim() : "";
+}
+
+/**
+ * Filter GeoJSON road features by road class (and optionally polygon) locally.
+ * Use when backend filterGeoJSON is unavailable (offline). Matches FilterResponse shape.
+ */
+export function filterGeoJSONLocal(params: {
+  geojson: GeoJSONFeatureCollection;
+  polygon?: Array<{ lat: number; lon: number }>;
+  road_classes: string[];
+}): FilterResponse {
+  const allow = new Set(
+    params.road_classes.map((c) => c.toLowerCase().trim()),
+  );
+  const polygon =
+    params.polygon && params.polygon.length >= 3
+      ? ({
+          type: "Polygon" as const,
+          coordinates: [
+            params.polygon.map((p) => [p.lon, p.lat] as [number, number]),
+          ],
+        } as Polygon)
+      : null;
+
+  const features = (params.geojson.features ?? []).filter((f) => {
+    const cls = getRoadClass(f.properties);
+    if (!allow.has(cls)) return false;
+    if (polygon && f.geometry?.type === "LineString" && f.geometry.coordinates?.[0]) {
+      const [lon, lat] = f.geometry.coordinates[0];
+      if (!booleanPointInPolygon([lon, lat], polygon)) return false;
+    }
+    return true;
+  });
+
+  const road_class_counts: Record<string, number> = {};
+  for (const f of features) {
+    const cls = getRoadClass(f.properties) || "unknown";
+    road_class_counts[cls] = (road_class_counts[cls] ?? 0) + 1;
+  }
+
+  return {
+    geojson: { type: "FeatureCollection", features },
+    feature_count: features.length,
+    road_class_counts,
+  };
 }
 
 /**

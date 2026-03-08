@@ -37,7 +37,11 @@ import {
   coordsToPolygonFeature,
   type ExtractionProgress,
 } from "@/lib/overtureExtractService";
-import { extractFromDownloadedData } from "@/lib/offline-extract";
+import {
+  extractFromDownloadedData,
+  findRegionForPolygon,
+  filterGeoJSONLocal,
+} from "@/lib/offline-extract";
 
 const MIN_POINTS = 3;
 
@@ -151,11 +155,26 @@ export function OvertureExtractorContent({
       );
       if (!result) return false;
       setExtractProgress("Filtering road classes…");
-      const filtered = await filterGeoJSON({
-        geojson: result.geojson,
-        polygon: polygonForFilter,
-        road_classes: effectiveRoadClasses,
-      });
+      let filtered: { geojson: GeoJSONFeatureCollection; feature_count: number; road_class_counts: Record<string, number> };
+      try {
+        filtered = await filterGeoJSON({
+          geojson: result.geojson,
+          polygon: polygonForFilter,
+          road_classes: effectiveRoadClasses,
+        });
+      } catch {
+        filtered = filterGeoJSONLocal({
+          geojson: result.geojson,
+          polygon: polygonForFilter,
+          road_classes: effectiveRoadClasses,
+        });
+      }
+      const sourceLabel =
+        result.source === "r2"
+          ? "R2 tiles"
+          : result.source === "s3"
+            ? "S3 Parquet"
+            : "OSM PBF";
       setGeoJSONInfo({
         featureCount: filtered.feature_count,
         roadClasses: filtered.road_class_counts,
@@ -163,7 +182,7 @@ export function OvertureExtractorContent({
         warnings:
           filtered.feature_count === 0
             ? ["No road features match the selected road classes in this area"]
-            : [`Extracted ${filtered.feature_count} road features from offline ${result.source === "r2" ? "R2 tiles" : "S3 Parquet"} (${result.regionName})`],
+            : [`Extracted ${filtered.feature_count} road features from offline ${sourceLabel} (${result.regionName})`],
       });
       setLoadedGeoJSON(filtered.geojson);
       return true;
@@ -171,13 +190,13 @@ export function OvertureExtractorContent({
     [effectiveRoadClasses],
   );
 
-  const handleExtractGeoJSON = useCallback(() => {
+  const handleExtractGeoJSON = useCallback(async () => {
     if (safePoints.length < MIN_POINTS) {
       Alert.alert(
         "Polygon Required",
         `Draw at least ${MIN_POINTS} points on the map to define the extraction area.`,
       );
-      return;
+      return () => {};
     }
 
     const polygonCoords: [number, number][] = safePoints.map((p) => [p.longitude, p.latitude]);
@@ -185,22 +204,40 @@ export function OvertureExtractorContent({
     const polygonForFilter = safePoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
 
     setIsLoading(true);
+
+    // Offline-first: if we have downloaded data (R2, S3, or OSM PBF) for this area, use it so extract works offline.
+    setExtractProgress("Checking for offline data…");
+    const region = await findRegionForPolygon(polygonCoords);
+    if (region) {
+      setExtractProgress("Using offline data (R2/S3/OSM PBF)…");
+      try {
+        const ok = await runOfflineExtract(polygon, polygonForFilter);
+        if (ok) {
+          setIsLoading(false);
+          setExtractProgress(null);
+          return () => {};
+        }
+      } catch {
+        // Fall through to try online
+      }
+    }
+
     setExtractProgress("Connecting...");
 
     const tryOfflineThenAlert = async (error: string) => {
-      setExtractProgress("Trying offline (R2/S3)…");
+      setExtractProgress("Trying offline (R2/S3/OSM PBF)…");
       try {
         const ok = await runOfflineExtract(polygon, polygonForFilter);
         if (!ok) {
           Alert.alert(
             "Extraction Failed",
-            `${error}\n\nTo extract offline, download map data in Settings → Offline Map Download (R2 Tiles or S3 Parquet) for a region that covers this area.`,
+            `${error}\n\nTo extract offline, download map data in Settings → Offline Map Download (R2 Tiles, S3 Parquet, or OSM PBF) for a region that covers this area.`,
           );
         }
       } catch (offlineErr) {
         Alert.alert(
           "Extraction Failed",
-          `${error}\n\nOffline fallback failed: ${offlineErr instanceof Error ? offlineErr.message : String(offlineErr)}. Download R2 Tiles in Settings for this region to extract offline.`,
+          `${error}\n\nOffline fallback failed: ${offlineErr instanceof Error ? offlineErr.message : String(offlineErr)}. Download R2 Tiles, S3 Parquet, or OSM PBF in Settings for this region to extract offline.`,
         );
       } finally {
         setIsLoading(false);
@@ -232,12 +269,20 @@ export function OvertureExtractorContent({
             setLoadedGeoJSON({ type: "FeatureCollection", features: [] });
             return;
           }
-          const filtered = await filterGeoJSON({
-            geojson: rawGeojson,
-            polygon: polygonForFilter,
-            road_classes: effectiveRoadClasses,
-          });
-          const geojson = filtered.geojson;
+          let filtered: { geojson: GeoJSONFeatureCollection; feature_count: number; road_class_counts: Record<string, number> };
+          try {
+            filtered = await filterGeoJSON({
+              geojson: rawGeojson,
+              polygon: polygonForFilter,
+              road_classes: effectiveRoadClasses,
+            });
+          } catch {
+            filtered = filterGeoJSONLocal({
+              geojson: rawGeojson,
+              polygon: polygonForFilter,
+              road_classes: effectiveRoadClasses,
+            });
+          }
           setGeoJSONInfo({
             featureCount: filtered.feature_count,
             roadClasses: filtered.road_class_counts,
@@ -247,7 +292,7 @@ export function OvertureExtractorContent({
                 ? ["No road features match the selected road classes in this area"]
                 : [`Extracted ${filtered.feature_count} road features from Overture Maps`],
           });
-          setLoadedGeoJSON(geojson);
+          setLoadedGeoJSON(filtered.geojson);
         } catch (err) {
           Alert.alert(
             "Extraction Failed",
@@ -265,7 +310,7 @@ export function OvertureExtractorContent({
 
     // Allow cancel on unmount or user action if we add a cancel button
     return () => handle.cancel();
-  }, [checkBackend, safePoints, effectiveRoadClasses]);
+  }, [checkBackend, safePoints, effectiveRoadClasses, runOfflineExtract]);
 
   const toggleRoadClass = (key: string) => {
     setSelectedRoadClasses((prev) =>

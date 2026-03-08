@@ -19,6 +19,8 @@ export interface MapDisplayState {
   showRouteMarkers: boolean;
   /** When true, show Overture Maps transportation overlay (PMTiles). */
   showOverture: boolean;
+  /** When true (and showOverture), draw map tiles on top of R2 so tiles are an overlay to R2/OSM PBF. */
+  mapTilesAsOverlay: boolean;
   /** When true, show route polylines on the map. */
   showRouteLine: boolean;
 }
@@ -36,8 +38,10 @@ interface MapDisplayStore extends MapDisplayState {
   setTransparentWidgets: (v: boolean) => void;
   setShowRouteMarkers: (v: boolean) => void;
   setShowOverture: (v: boolean) => void;
+  setMapTilesAsOverlay: (v: boolean) => void;
   setShowRouteLine: (v: boolean) => void;
   toggleOverture: () => void;
+  toggleMapTilesAsOverlay: () => void;
   toggleRouteLine: () => void;
   toggleScaleBar: () => void;
   toggleCompass: () => void;
@@ -59,6 +63,7 @@ const initialState: MapDisplayState = {
   transparentWidgets: false,
   showRouteMarkers: true,
   showOverture: false,
+  mapTilesAsOverlay: false,
   showRouteLine: true,
 };
 
@@ -78,8 +83,10 @@ export const useMapDisplayStore = create<MapDisplayStore>()(
       setTransparentWidgets: (v) => set({ transparentWidgets: v }),
       setShowRouteMarkers: (v) => set({ showRouteMarkers: v }),
       setShowOverture: (v) => set({ showOverture: v }),
+      setMapTilesAsOverlay: (v) => set({ mapTilesAsOverlay: v }),
       setShowRouteLine: (v) => set({ showRouteLine: v }),
       toggleOverture: () => set((s) => ({ showOverture: !s.showOverture })),
+      toggleMapTilesAsOverlay: () => set((s) => ({ mapTilesAsOverlay: !s.mapTilesAsOverlay })),
       toggleRouteLine: () => set((s) => ({ showRouteLine: !s.showRouteLine })),
       toggleScaleBar: () => set((s) => ({ showScaleBar: !s.showScaleBar })),
       toggleCompass: () => set((s) => ({ showCompass: !s.showCompass })),
@@ -104,6 +111,7 @@ export const useMapDisplayStore = create<MapDisplayStore>()(
         transparentWidgets: s.transparentWidgets,
         showRouteMarkers: s.showRouteMarkers,
         showOverture: s.showOverture,
+        mapTilesAsOverlay: s.mapTilesAsOverlay,
         showRouteLine: s.showRouteLine,
       }),
     }

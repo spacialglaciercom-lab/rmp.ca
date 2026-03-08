@@ -4,6 +4,7 @@
  */
 import React, {
   useRef,
+  useState,
   useMemo,
   useCallback,
   useEffect,
@@ -19,6 +20,9 @@ import {
   FillLayer,
   PointAnnotation,
   UserLocation,
+  VectorSource,
+  RasterSource,
+  RasterLayer,
   type MapViewRef,
   type CameraRef,
 } from "@maplibre/maplibre-react-native";
@@ -27,8 +31,10 @@ import { useMapType } from "@/lib/map-type-preference";
 import { useMapDisplayStore } from "@/stores/mapDisplayStore";
 import { useMapOrientation } from "@/lib/map-orientation-preference";
 import type { CollectionPoint } from "@/types";
-import { MAPLIBRE_STYLE_OSM, MAPLIBRE_STYLE_OSM_DARK, MAPLIBRE_RENDER_CONFIG } from "./constants";
-import { buildOvertureStyleUri, PMTILES_CITIES } from "./overture-style";
+import { MAPLIBRE_STYLE_OSM, MAPLIBRE_STYLE_OSM_DARK, MAPLIBRE_RENDER_CONFIG, MAP_TILES_OVERLAY_TEMPLATE } from "./constants";
+import { getPMTilesUrl, PMTILES_CITIES, OVERTURE_ROAD_LAYERS } from "./overture-style";
+import { getOverturePmtilesUrl } from "@/lib/offline-map-download";
+import { registerLocalPmtilesPath } from "@/lib/maplibre-pmtiles-protocol";
 
 export interface RouteMapRef {
   zoomIn: () => void;
@@ -158,26 +164,41 @@ export const MapLibreRouteMap = React.memo(
     const prevStyleUrlRef = useRef<string>("");
     const [mapTypePreference] = useMapType();
     const [orientation] = useMapOrientation();
+    const mapTilesAsOverlay = useMapDisplayStore((s) => s.mapTilesAsOverlay);
+    const [overturePmtilesUrl, setOverturePmtilesUrl] = useState<string | null>(null);
 
     const resolvedCity = overtureCity ?? PMTILES_CITIES[0] ?? "montreal";
 
-    const styleUrl = useMemo(() => {
-      const baseStyle =
+    // Base style URL so offline pack applies when user has downloaded tiles (full offline overlay).
+    const baseStyleUrl = useMemo(
+      () =>
         showAerial
           ? MAPLIBRE_STYLE_OSM
           : mapTypePreference === "dark"
             ? MAPLIBRE_STYLE_OSM_DARK
-            : MAPLIBRE_STYLE_OSM;
+            : MAPLIBRE_STYLE_OSM,
+      [showAerial, mapTypePreference]
+    );
 
-      if (showOverture && PMTILES_CITIES.includes(resolvedCity)) {
-        return buildOvertureStyleUri({
-          baseStyleUrl: baseStyle,
-          city: resolvedCity,
-          showRoads: true,
-        });
+    const styleUrl = baseStyleUrl;
+
+    // Resolve Overture PMTiles URL (local when downloaded for offline, else remote) and register local path for protocol.
+    useEffect(() => {
+      if (!showOverture || !PMTILES_CITIES.includes(resolvedCity)) {
+        setOverturePmtilesUrl(null);
+        return;
       }
-      return baseStyle;
-    }, [showAerial, mapTypePreference, showOverture, resolvedCity]);
+      setOverturePmtilesUrl(getPMTilesUrl(resolvedCity));
+      let cancelled = false;
+      getOverturePmtilesUrl(resolvedCity).then(({ url, localPath }) => {
+        if (cancelled) return;
+        if (localPath) registerLocalPmtilesPath(resolvedCity, localPath);
+        setOverturePmtilesUrl(url);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [showOverture, resolvedCity]);
 
     const pointsForBounds = useMemo(() => {
       if (collectionPoints.length > 0)
@@ -398,6 +419,48 @@ export const MapLibreRouteMap = React.memo(
             maxZoomLevel={20}
           />
           <UserLocation visible={true} />
+
+          {showOverture && PMTILES_CITIES.includes(resolvedCity) && overturePmtilesUrl && (
+            <VectorSource
+              id="overture-transportation"
+              url={overturePmtilesUrl}
+              minZoomLevel={8}
+              maxZoomLevel={14}
+            >
+              {OVERTURE_ROAD_LAYERS.filter((l) => l.type === "line").map((layer) => {
+                const paint = layer.paint as Record<string, unknown>;
+                const lineWidth = typeof paint["line-width"] === "number" ? paint["line-width"] : 2;
+                return (
+                  <LineLayer
+                    key={layer.id}
+                    id={layer.id}
+                    sourceLayerID="transportation"
+                    filter={layer.filter}
+                    minZoomLevel={layer.minzoom}
+                    style={{
+                      lineColor: (paint["line-color"] as string) ?? "rgba(200,200,200,0.6)",
+                      lineWidth: lineWidth as number,
+                      lineOpacity: (paint["line-opacity"] as number) ?? 1,
+                      lineCap: "round",
+                      lineJoin: "round",
+                    }}
+                  />
+                );
+              })}
+            </VectorSource>
+          )}
+
+          {showOverture && mapTilesAsOverlay && (
+            <RasterSource
+              id="osm-overlay"
+              tileUrlTemplates={[MAP_TILES_OVERLAY_TEMPLATE]}
+              tileSize={256}
+              minZoomLevel={0}
+              maxZoomLevel={19}
+            >
+              <RasterLayer id="osm-overlay-layer" style={{ rasterOpacity: 0.55 }} />
+            </RasterSource>
+          )}
 
           {showRouteLine && routeLineString && !segmentLines && (
             <ShapeSource id="route-line" shape={routeLineString}>

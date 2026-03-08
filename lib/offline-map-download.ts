@@ -458,6 +458,37 @@ export function getRegionDataDir(regionId: string): string {
   return getRegionDir(regionId);
 }
 
+/** Local path for a city's R2 PMTiles file (when downloaded). */
+export function getLocalOverturePmtilesPath(cityId: string): string {
+  return `${getRegionDir(cityId)}/${cityId}-${PMTILES_VERSION}.pmtiles`;
+}
+
+/**
+ * Resolve Overture PMTiles URL for the map: use local file when downloaded, otherwise remote R2.
+ * Returns url for VectorSource (pmtiles://local-{cityId}/ or pmtiles://https://...)
+ * and optional localPath so the caller can register it with the pmtiles protocol.
+ */
+export async function getOverturePmtilesUrl(cityId: string): Promise<{
+  url: string;
+  localPath?: string;
+}> {
+  const localPath = getLocalOverturePmtilesPath(cityId);
+  try {
+    const info = await FileSystem.getInfoAsync(localPath, { size: false });
+    if (info?.exists) {
+      return {
+        url: `pmtiles://local-${cityId}/`,
+        localPath,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return {
+    url: `pmtiles://${R2_PUBLIC_BASE}/tiles/${cityId}-${PMTILES_VERSION}.pmtiles`,
+  };
+}
+
 // ─── MapLibre tile packs (native only) ─────────────────────────────────────
 // Download map style + tiles for offline viewing via @maplibre/maplibre-react-native.
 

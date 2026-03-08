@@ -323,6 +323,8 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
 
   const showOverture = useMapDisplayStore((s) => s.showOverture);
   const toggleOverture = useMapDisplayStore((s) => s.toggleOverture);
+  const mapTilesAsOverlay = useMapDisplayStore((s) => s.mapTilesAsOverlay);
+  const toggleMapTilesAsOverlay = useMapDisplayStore((s) => s.toggleMapTilesAsOverlay);
 
   const handleOverlayToggle = (overlayId: string) => {
     if (Platform.OS !== "web") hapticImpact();
@@ -493,6 +495,48 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
             </TouchableOpacity>
           );
         })}
+        {/* When Overture is on: option to draw map tiles on top of R2 (overlay to R2/OSM PBF) */}
+        {showOverture && (
+          <TouchableOpacity
+            style={[
+              styles.overlayOption,
+              {
+                backgroundColor: colors.surface,
+                borderColor: mapTilesAsOverlay ? colors.primary : colors.border,
+                borderWidth: 1,
+                marginTop: 8,
+                marginLeft: 12,
+              },
+            ]}
+            onPress={() => {
+              if (Platform.OS !== "web") hapticImpact();
+              toggleMapTilesAsOverlay?.();
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.overlayLeft}>
+              <MaterialCommunityIcons
+                name="layers-outline"
+                size={20}
+                color={mapTilesAsOverlay ? colors.primary : colors.muted}
+              />
+              <View>
+                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "500" }}>
+                  Map tiles on top
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>
+                  Draw base map tiles over R2/Overture (overlay to R2 or OSM PBF)
+                </Text>
+                {mapTilesAsOverlay && (
+                  <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
+                    Download offline tiles + R2 for full offline.
+                  </Text>
+                )}
+              </View>
+            </View>
+            {renderSwitch(mapTilesAsOverlay)}
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Display Options */}

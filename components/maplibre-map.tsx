@@ -14,49 +14,10 @@ if (Platform.OS !== "web") {
   }
 }
 
-// PMTiles protocol adapter — registered once
-let pmtilesProtocolRegistered = false;
+import { registerPMTilesProtocol as registerPMTilesProtocolShared } from "@/lib/maplibre-pmtiles-protocol";
 
 function registerPMTilesProtocol() {
-  if (pmtilesProtocolRegistered || !MapLibreGL) return;
-  try {
-    const { PMTiles } = require("pmtiles");
-
-    // Cache of PMTiles instances keyed by URL
-    const cache = new Map<string, InstanceType<typeof PMTiles>>();
-
-    MapLibreGL.addCustomProtocol("pmtiles", async (params: { url: string }) => {
-      try {
-        // Strip the pmtiles:// prefix to get the real URL
-        const url = params.url.replace("pmtiles://", "");
-        const pmtilesUrl = url.split("/").slice(0, -1).join("/") + ".pmtiles";
-        // Remaining path parts encode z/x/y
-        const parts = url.split("/");
-        const y = parseInt(parts.pop()!, 10);
-        const x = parseInt(parts.pop()!, 10);
-        const z = parseInt(parts.pop()!, 10);
-
-        if (isNaN(z) || isNaN(x) || isNaN(y)) {
-          return { data: new ArrayBuffer(0) };
-        }
-
-        if (!cache.has(pmtilesUrl)) {
-          cache.set(pmtilesUrl, new PMTiles(pmtilesUrl));
-        }
-        const tile = await cache.get(pmtilesUrl)!.getZxy(z, x, y);
-        if (!tile?.data) return { data: new ArrayBuffer(0) };
-        return { data: tile.data };
-      } catch (e) {
-        // Return empty tile instead of letting the rejection crash native code
-        console.warn("[pmtiles] Tile fetch failed:", e);
-        return { data: new ArrayBuffer(0) };
-      }
-    });
-
-    pmtilesProtocolRegistered = true;
-  } catch (e) {
-    console.warn("[maplibre-map] Failed to register pmtiles protocol:", e);
-  }
+  registerPMTilesProtocolShared();
 }
 
 export interface MapLibreMapProps {

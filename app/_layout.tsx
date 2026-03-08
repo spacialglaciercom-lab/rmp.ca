@@ -48,6 +48,7 @@ import { MapOrientationProvider } from "@/lib/map-orientation-preference";
 import { initMapbox } from "@/lib/mapbox-config";
 import { initMapCache, clearMapCache } from "@/lib/map-cache";
 import { initMapLibreCacheCap } from "@/lib/maplibre-cache";
+import { registerPMTilesProtocol } from "@/lib/maplibre-pmtiles-protocol";
 import { PowerSavingProvider } from "@/src/powerSaving";
 import { WebOSMDropZoneRoot } from "@/components/web-osm-drop-zone-root";
 import { OSM_DATA_STORAGE_KEY } from "@/lib/osm-storage";
@@ -97,6 +98,11 @@ export default function RootLayout() {
   // Mapbox Maps SDK: set access token at startup (native only; token from EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN)
   useEffect(() => {
     initMapbox();
+  }, []);
+
+  // Register PMTiles protocol (remote + local) so Overture overlay works and R2 works offline when downloaded.
+  useEffect(() => {
+    registerPMTilesProtocol();
   }, []);
 
   // On first launch, clear only the ambient tile cache (not offline packs) to avoid

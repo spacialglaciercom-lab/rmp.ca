@@ -14,6 +14,15 @@ export const MAPLIBRE_STYLE_STREETS =
 export const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
 
 /**
+ * Tile URL template for the "map tiles overlay" (raster on top of R2).
+ * Same as OSM raster in buildOvertureStyle so behavior is consistent.
+ * For full offline overlay, create an offline pack for MAPLIBRE_STYLE_OSM;
+ * the pack caches demotiles; if the base style uses different URLs, prefer those here for pack reuse.
+ */
+export const MAP_TILES_OVERLAY_TEMPLATE =
+  "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+/**
  * Rendering and behaviour tweaks.
  * - preferredFramesPerSecond: 60 for smoother pan/zoom; lower (e.g. 30) to save battery.
  * - localizeLabels: use device language for map labels (recommended).

@@ -26,8 +26,8 @@ export const PMTILES_CITIES: string[] = [
   "ottawa", "calgary", "edmonton", "quebec_city", "halifax",
 ];
 
-/** Overture road layers only (for overlay on web). Reused between buildOvertureStyle and buildOvertureOverlayStyle. */
-const OVERTURE_ROAD_LAYERS = [
+/** Overture road layers (for overlay on web and for dynamic layers on native). Exported for MapLibreRouteMap. */
+export const OVERTURE_ROAD_LAYERS = [
   {
     id: "overture-roads-minor",
     type: "line" as const,
@@ -134,28 +134,64 @@ const OVERTURE_ROAD_LAYERS = [
  * Build a MapLibre style JSON that overlays Overture transportation data
  * on top of a base OSM style. Returns the style as a JSON string (data URI)
  * that MapView can load via mapStyle prop.
+ *
+ * When mapTilesAsOverlay is true: R2/Overture roads are drawn first, then map tiles
+ * (raster) on top with optional opacity — so "map tiles are an overlay to R2".
+ * Use rasterOverlayOpacity (0–1) to control; 0.5 keeps roads visible.
  */
 export function buildOvertureStyle(options: {
   baseStyleUrl: string;
   city: string;
   showRoads?: boolean;
+  /** When true, draw map tiles on top of R2 (overlay). Default false = tiles under R2. */
+  mapTilesAsOverlay?: boolean;
+  /** Opacity of the raster overlay when mapTilesAsOverlay is true (0–1). Default 0.5. */
+  rasterOverlayOpacity?: number;
 }): object {
-  const { city, showRoads = true } = options;
+  const {
+    city,
+    showRoads = true,
+    mapTilesAsOverlay = false,
+    rasterOverlayOpacity = 0.5,
+  } = options;
   const pmtilesUrl = getPMTilesUrl(city);
 
-  // Inline style with Overture source + layers
+  const osmRasterSource = {
+    type: "raster" as const,
+    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+    tileSize: 256,
+    attribution: "&copy; OpenStreetMap contributors",
+    maxzoom: 19,
+  };
+
+  const osmRasterLayer = {
+    id: "osm-base",
+    type: "raster" as const,
+    source: "osm-raster",
+    minzoom: 0,
+    maxzoom: 22,
+    ...(mapTilesAsOverlay ? { paint: { "raster-opacity": rasterOverlayOpacity } } : {}),
+  };
+
+  const layers =
+    mapTilesAsOverlay && showRoads
+      ? [
+          // R2/Overture roads first (base for overlay mode)
+          ...OVERTURE_ROAD_LAYERS,
+          // Map tiles as overlay on top of R2
+          osmRasterLayer,
+        ]
+      : [
+          // Classic: base map first, then R2 on top
+          osmRasterLayer,
+          ...(showRoads ? OVERTURE_ROAD_LAYERS : []),
+        ];
+
   return {
     version: 8,
     name: "Overture Transportation",
-    // Use OSM tiles as the raster base
     sources: {
-      "osm-raster": {
-        type: "raster",
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        attribution: "&copy; OpenStreetMap contributors",
-        maxzoom: 19,
-      },
+      "osm-raster": osmRasterSource,
       ...(showRoads
         ? {
             "overture-transportation": {
@@ -167,18 +203,7 @@ export function buildOvertureStyle(options: {
           }
         : {}),
     },
-    layers: [
-      // Base OSM raster layer
-      {
-        id: "osm-base",
-        type: "raster",
-        source: "osm-raster",
-        minzoom: 0,
-        maxzoom: 22,
-      },
-      // Overture road segments (shared with buildOvertureOverlayStyle)
-      ...(showRoads ? OVERTURE_ROAD_LAYERS : []),
-    ],
+    layers,
   };
 }
 
@@ -189,11 +214,11 @@ export function buildOvertureStyleUri(options: {
   baseStyleUrl: string;
   city: string;
   showRoads?: boolean;
+  mapTilesAsOverlay?: boolean;
+  rasterOverlayOpacity?: number;
 }): string {
   const style = buildOvertureStyle(options);
   const json = JSON.stringify(style);
-  // MapLibre can load styles from a JSON string if it's a valid URL-like string
-  // Use a data URI approach
   return `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
 }
 
