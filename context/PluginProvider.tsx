@@ -30,9 +30,15 @@ export function PluginProvider({ children, trpcClient }: PluginProviderProps) {
       trpcClientRef.current = trpcClient;
     }
     const ctx = contextRef.current;
-    loadAndRegisterPlugins(ctx).catch((err) => {
-      console.warn("Plugin load failed:", err);
+    let stale = false;
+    loadAndRegisterPlugins(ctx, () => stale).catch((err) => {
+      if (!stale) {
+        console.warn("Plugin load failed:", err);
+      }
     });
+    return () => {
+      stale = true;
+    };
   }, [trpcClient, enabledPlugins]);
 
   return <>{children}</>;
