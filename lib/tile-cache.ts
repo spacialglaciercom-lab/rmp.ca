@@ -1,7 +1,11 @@
 /**
  * Map tile cache — stores raster map tiles on disk (Library/Caches on iOS, cache dir on Android).
  * On-demand loading only: tiles are cached when requested, not pre-cached.
- * Max size 500MB with LRU eviction. Cache is cleared on app launch if it exceeds the threshold.
+ *
+ * Cache management:
+ * - During use: LRU eviction keeps cache at or below MAX_CACHE_BYTES (500MB)
+ * - On app launch: Full clear only if exceeds LAUNCH_CLEAR_THRESHOLD_BYTES (750MB)
+ *   This handles edge cases where the app crashed before LRU could run
  */
 
 import * as FileSystem from "expo-file-system/legacy";
@@ -9,11 +13,15 @@ import * as FileSystem from "expo-file-system/legacy";
 /** Subdirectory under cacheDirectory where tiles are stored (e.g. Library/Caches/map-tiles on iOS). */
 export const TILE_CACHE_DIR_NAME = "map-tiles";
 
-/** Max cache size in bytes (500MB). */
+/** Max cache size in bytes (500MB). LRU eviction keeps cache at this limit during normal use. */
 export const MAX_CACHE_BYTES = 500 * 1024 * 1024;
 
-/** If cache size exceeds this on app launch, the entire tile cache is cleared. */
-export const LAUNCH_CLEAR_THRESHOLD_BYTES = 500 * 1024 * 1024;
+/**
+ * If cache size exceeds this on app launch, the entire tile cache is cleared.
+ * Set higher than MAX_CACHE_BYTES to only trigger on abnormal growth (e.g., crash before LRU).
+ * 750MB = 50% above normal max, indicating something went wrong.
+ */
+export const LAUNCH_CLEAR_THRESHOLD_BYTES = 750 * 1024 * 1024;
 
 const MANIFEST_FILE = "manifest.json";
 
@@ -211,11 +219,24 @@ export async function clearTileCache(): Promise<void> {
 }
 
 /**
- * Call on app launch (native only). If tile cache size exceeds LAUNCH_CLEAR_THRESHOLD_BYTES, clear the cache.
+ * Call on app launch (native only). Manages cache size:
+ * - If over LAUNCH_CLEAR_THRESHOLD_BYTES: full clear (emergency/abnormal state)
+ * - If over MAX_CACHE_BYTES: LRU eviction to bring under limit
  */
 export async function ensureTileCacheUnderLimit(): Promise<void> {
   const size = await getTileCacheSize();
+
+  // Emergency clear: cache grew abnormally large (crash or bug)
   if (size >= LAUNCH_CLEAR_THRESHOLD_BYTES) {
+    console.warn(`[TileCache] Cache size ${size} exceeds threshold, clearing entirely`);
     await clearTileCache();
+    return;
+  }
+
+  // Normal maintenance: LRU eviction if over max
+  if (size > MAX_CACHE_BYTES) {
+    const manifest = await loadManifest();
+    const evicted = await evictLRU(manifest, size, MAX_CACHE_BYTES);
+    await saveManifest(evicted);
   }
 }

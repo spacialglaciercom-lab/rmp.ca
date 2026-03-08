@@ -1,14 +1,4 @@
-import { Platform } from "react-native";
-
-function getOfflineManager(): import("@maplibre/maplibre-react-native").OfflineManager | null {
-  if (Platform.OS !== "ios" && Platform.OS !== "android") return null;
-  try {
-    const ML = require("@maplibre/maplibre-react-native");
-    return ML.OfflineManager ?? ML.default?.OfflineManager ?? null;
-  } catch {
-    return null;
-  }
-}
+import { getOfflineManager } from "./maplibre-offline-manager";
 
 const MB = 1024 * 1024;
 
@@ -23,7 +13,7 @@ const MB = 1024 * 1024;
  */
 export async function initMapCache(sizeMB = 50): Promise<void> {
   const OfflineManager = getOfflineManager();
-  if (!OfflineManager) return;
+  if (!OfflineManager?.setMaximumAmbientCacheSize) return;
   await new Promise((r) => setTimeout(r, 500));
   try {
     await OfflineManager.setMaximumAmbientCacheSize(sizeMB * MB);
@@ -35,7 +25,7 @@ export async function initMapCache(sizeMB = 50): Promise<void> {
 /** Evict stale entries from the ambient cache. Does not delete offline packs. */
 export async function clearMapCache(): Promise<void> {
   const OfflineManager = getOfflineManager();
-  if (!OfflineManager) return;
+  if (!OfflineManager?.clearAmbientCache) return;
   try {
     await OfflineManager.clearAmbientCache();
   } catch (e) {
@@ -46,7 +36,7 @@ export async function clearMapCache(): Promise<void> {
 /** Delete and recreate the entire tile database. Wipes offline packs too — use clearMapCache() to keep packs. */
 export async function resetMapCache(): Promise<void> {
   const OfflineManager = getOfflineManager();
-  if (!OfflineManager) return;
+  if (!OfflineManager?.resetDatabase) return;
   try {
     await OfflineManager.resetDatabase();
   } catch (e) {
@@ -57,7 +47,7 @@ export async function resetMapCache(): Promise<void> {
 /** Mark all cached tiles as stale so they refresh on next load. */
 export async function invalidateMapCache(): Promise<void> {
   const OfflineManager = getOfflineManager();
-  if (!OfflineManager) return;
+  if (!OfflineManager?.invalidateAmbientCache) return;
   try {
     await OfflineManager.invalidateAmbientCache();
   } catch (e) {
