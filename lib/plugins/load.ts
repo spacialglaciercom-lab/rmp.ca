@@ -50,7 +50,9 @@ export function createPluginContext(api: unknown): PluginContext {
     stores: {
       mapLayer: {
         addLayer: (layer: PluginMapLayer) =>
-          mapLayerState.addLayer({ ...layer } as Parameters<typeof mapLayerState.addLayer>[0]),
+          mapLayerState.addLayer({ ...layer } as Parameters<
+            typeof mapLayerState.addLayer
+          >[0]),
         removeLayer: (id: string) => mapLayerState.removeLayer(id),
       },
     },
@@ -69,15 +71,30 @@ export function unloadAllPlugins(): void {
 /**
  * Load config, merge with plugin store, and register all enabled plugins.
  * Call after createPluginContext when the app starts and when user toggles plugins.
+ * @param context Plugin context with API and stores
+ * @param isCancelled Optional callback to check if loading should be aborted (for race condition prevention)
  */
-export async function loadAndRegisterPlugins(context: PluginContext): Promise<void> {
+export async function loadAndRegisterPlugins(
+  context: PluginContext,
+  isCancelled?: () => boolean,
+): Promise<void> {
   unloadAllPlugins();
   const config = await loadPluginConfig();
+  if (isCancelled?.()) return;
   const store = usePluginStore.getState();
+  const enabledIds = new Set<string>();
   for (const [id, entry] of Object.entries(config.plugins)) {
-    const enabled = store.isPluginEnabled(id, entry.enabled);
-    if (!enabled) continue;
+    if (store.isPluginEnabled(id, entry.enabled)) enabledIds.add(id);
+  }
+  for (const id of enabledIds) {
+    if (isCancelled?.()) return;
     const plugin = BUILTIN_PLUGINS[id];
-    if (plugin) registerPlugin(plugin, context);
+    if (!plugin) continue;
+    plugin.dependencies?.forEach((dep) => {
+      if (!enabledIds.has(dep)) {
+        console.warn(`[Plugin:${id}] dependency "${dep}" is not enabled`);
+      }
+    });
+    registerPlugin(plugin, context);
   }
 }

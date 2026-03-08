@@ -67,6 +67,8 @@ export interface Plugin {
   name: string;
   description: string;
   version: string;
+  /** Optional plugin IDs this plugin relies on. Used by load.ts to warn when dependencies are disabled. */
+  dependencies?: readonly string[];
   initialize: (context: PluginContext) => void;
   destroy: () => void;
   getFeatures: () => Record<string, unknown>;
