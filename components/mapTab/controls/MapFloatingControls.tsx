@@ -30,6 +30,7 @@ interface MapFloatingControlsProps {
   onDownloadGPX?: () => void;
   onDrivePreview?: () => void;
   onOpenInGoogle?: () => void;
+  onOpenInOsmAnd?: () => void;
   directionsLoading?: boolean;
   streetViewLoading?: boolean;
   navLoading?: boolean;
@@ -105,6 +106,7 @@ function MapFloatingControlsInner({
   onDownloadGPX,
   onDrivePreview,
   onOpenInGoogle,
+  onOpenInOsmAnd,
   directionsLoading = false,
   streetViewLoading = false,
   navLoading = false,
@@ -171,6 +173,7 @@ function MapFloatingControlsInner({
             onDownloadGPX={onDownloadGPX}
             onDrivePreview={onDrivePreview}
             onOpenInGoogle={onOpenInGoogle}
+            onOpenInOsmAnd={onOpenInOsmAnd}
             directionsLoading={directionsLoading}
             streetViewLoading={streetViewLoading}
             navLoading={navLoading}

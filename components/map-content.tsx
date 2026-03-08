@@ -43,7 +43,7 @@ import NavigationView, {
   type OffRoutePayload,
 } from "@/components/NavigationView";
 import CollectionNavigator from "@/components/CollectionNavigator";
-import { navigateExternally, openGoogleMapsViewer } from "@/lib/externalNavigation";
+import { navigateExternally, openGoogleMapsViewer, openOsmAndViewer } from "@/lib/externalNavigation";
 import type { NormalNavDestination } from "@/types/navigation";
 import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
 import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingControls";
@@ -1133,6 +1133,60 @@ export default function MapContent() {
     await openGoogleMapsViewer({ center, waypoints });
   }, [displayRoutePoints, collectionPoints, tapDestination]);
 
+  const handleOpenInOsmAnd = useCallback(async () => {
+    let center: { lat: number; lon: number } | undefined;
+    let waypoints: Array<{ lat: number; lon: number }> | undefined;
+    let gpxString: string | undefined;
+
+    const byVehicle = state?.previewRoutePointsByVehicle;
+    if (byVehicle && byVehicle.length >= 1) {
+      if (byVehicle.length > 1) {
+        const routes = byVehicle
+          .filter((r) => r.length >= 2)
+          .map((r, i) => ({
+            name: `Vehicle ${i + 1}`,
+            points: r.map((p) => ({ lat: p.lat, lon: p.lon })),
+          }));
+        if (routes.length > 0) {
+          gpxString = generateMultiTrackGPXString("trashroute_osmand", routes);
+          const first = routes[0].points;
+          center = first[0];
+          waypoints = first.length > 20
+            ? first.filter((_, i) => i % Math.ceil(first.length / 15) === 0 || i === first.length - 1)
+            : first;
+        }
+      } else if (byVehicle[0].length >= 2) {
+        const points = byVehicle[0].map((p) => ({ lat: p.lat, lon: p.lon }));
+        gpxString = generateGPXString("trashroute_osmand", points);
+        center = points[0];
+        waypoints = points.length > 20
+          ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
+          : points;
+      }
+    } else if (displayRoutePoints && displayRoutePoints.length >= 2) {
+      const points = displayRoutePoints.map((p) => ({
+        lat: "lat" in p ? p.lat : (p as { latitude: number }).latitude,
+        lon: "lon" in p ? p.lon : (p as { longitude: number }).longitude,
+      }));
+      gpxString = generateGPXString("trashroute_osmand", points);
+      center = points[0];
+      waypoints = points.length > 20
+        ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
+        : points;
+    } else if (collectionPoints && collectionPoints.length >= 2) {
+      const points = collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+      gpxString = generateGPXString("trashroute_osmand", points);
+      center = points[0];
+      waypoints = points.length > 15
+        ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
+        : points;
+    } else if (tapDestination) {
+      center = { lat: tapDestination.lat, lon: tapDestination.lon };
+    }
+
+    await openOsmAndViewer({ center, waypoints, gpxString });
+  }, [displayRoutePoints, collectionPoints, tapDestination, state?.previewRoutePointsByVehicle]);
+
   const handleStreetView = useCallback(() => {
     const coords = tapDestination
       ? { lat: tapDestination.lat, lon: tapDestination.lon }
@@ -1427,6 +1481,7 @@ export default function MapContent() {
         onDownloadGPX={handleDownloadGPX}
         onDrivePreview={drivePreviewEnabled ? handleDrivePreview : undefined}
         onOpenInGoogle={handleOpenInGoogle}
+        onOpenInOsmAnd={handleOpenInOsmAnd}
         directionsLoading={directionsLoading}
         navLoading={navLoading}
         fixToRoadsLoading={fixToRoadsLoading}
