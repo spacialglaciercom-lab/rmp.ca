@@ -261,6 +261,7 @@ export function ZonePage() {
   const [editingWastePoint, setEditingWastePoint] = useState<import("@/types").WastePoint | null>(null);
   const [pickWasteLocationMode, setPickWasteLocationMode] = useState(false);
   const [pendingWasteCoords, setPendingWasteCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
 
   /** Selected result to view: prefer displayedZoneId, else first saved (user can change via sidebar). */
   const selectedId = displayedZoneId ?? (savedZones.length > 0 ? savedZones[0].id : null);
@@ -468,92 +469,91 @@ export function ZonePage() {
     setPickWasteLocationMode(false);
   }, []);
 
-  const handleExport = useCallback(() => {
+  const doExport = useCallback(async (format: "geojson" | "json" | "kml" | "csv") => {
     const baseName = (selectedResult?.name || "zones").replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
+
+    const downloadFile = (content: string, filename: string, mimeType: string) => {
+      if (Platform.OS === "web") {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    const shareOrDownload = async (content: string, filename: string, mimeType: string) => {
+      if (Platform.OS === "web") {
+        downloadFile(content, filename, mimeType);
+        return;
+      }
+      try {
+        const path = `${FileSystem.cacheDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(path, content, { encoding: FileSystem.EncodingType.UTF8 });
+        const Sharing = await import("expo-sharing");
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(path, { mimeType, dialogTitle: `Share ${format.toUpperCase()}` });
+        }
+      } catch (e) {
+        Alert.alert("Export failed", (e as Error).message);
+      }
+    };
+
+    try {
+      switch (format) {
+        case "geojson":
+          if (!selectedResult) return;
+          await shareOrDownload(zoneResultToGeoJSON(selectedResult), `${baseName}.geojson`, "application/geo+json");
+          break;
+        case "json":
+          if (!selectedResult) return;
+          await shareOrDownload(JSON.stringify(selectedResult, null, 2), `${baseName}.json`, "application/json");
+          break;
+        case "kml":
+          await shareOrDownload(zoneResultAndWasteToKML(selectedResult ?? null, wastePoints), `${baseName}.kml`, "application/vnd.google-earth.kml+xml");
+          break;
+        case "csv": {
+          // Export waste points as CSV
+          const header = "lat,lon,type,capacity,condition,address";
+          const rows = wastePoints.map((p) =>
+            [p.lat, p.lon, p.type, p.capacityLiters ?? "", p.condition ?? "", `"${(p.address ?? "").replace(/"/g, '""')}"`].join(",")
+          );
+          const csv = [header, ...rows].join("\n");
+          await shareOrDownload(csv, `${baseName}_points.csv`, "text/csv");
+          break;
+        }
+      }
+      setExportModalVisible(false);
+    } catch (e) {
+      Alert.alert("Export failed", (e as Error).message);
+    }
+  }, [selectedResult, wastePoints]);
+
+  const handleExport = useCallback(() => {
+    hapticImpact();
+    // On web, Alert.alert with buttons doesn't work, so use modal
+    if (Platform.OS === "web") {
+      setExportModalVisible(true);
+      return;
+    }
+    // On native, use Alert with buttons
     const buttons: Array<{ text: string; style?: "cancel" | "default" | "destructive"; onPress?: () => void }> = [
       { text: "Cancel", style: "cancel" },
     ];
     if (selectedResult) {
-      buttons.push(
-        {
-          text: "GeoJSON",
-          onPress: async () => {
-            try {
-              const content = zoneResultToGeoJSON(selectedResult);
-              const path = `${FileSystem.cacheDirectory}${baseName}.geojson`;
-              await FileSystem.writeAsStringAsync(path, content, { encoding: FileSystem.EncodingType.UTF8 });
-              const Sharing = await import("expo-sharing");
-              if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(path, { mimeType: "application/geo+json", dialogTitle: "Share zone (GeoJSON)" });
-              } else if (Platform.OS === "web") {
-                const blob = new Blob([content], { type: "application/geo+json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${baseName}.geojson`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }
-            } catch (e) {
-              Alert.alert("Export failed", (e as Error).message);
-            }
-          },
-        },
-        {
-          text: "JSON",
-          onPress: async () => {
-            try {
-              const content = JSON.stringify(selectedResult, null, 2);
-              const path = `${FileSystem.cacheDirectory}${baseName}.json`;
-              await FileSystem.writeAsStringAsync(path, content, { encoding: FileSystem.EncodingType.UTF8 });
-              const Sharing = await import("expo-sharing");
-              if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(path, { mimeType: "application/json", dialogTitle: "Share zone (JSON)" });
-              } else if (Platform.OS === "web") {
-                const blob = new Blob([content], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${baseName}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }
-            } catch (e) {
-              Alert.alert("Export failed", (e as Error).message);
-            }
-          },
-        }
-      );
+      buttons.push({ text: "GeoJSON", onPress: () => doExport("geojson") });
+      buttons.push({ text: "JSON", onPress: () => doExport("json") });
     }
     if (pageMode === "waste" && (wastePoints.length > 0 || selectedResult)) {
-      buttons.push({
-        text: "KML",
-        onPress: async () => {
-          try {
-            const content = zoneResultAndWasteToKML(selectedResult ?? null, wastePoints);
-            const path = `${FileSystem.cacheDirectory}${baseName}_waste.kml`;
-            await FileSystem.writeAsStringAsync(path, content, { encoding: FileSystem.EncodingType.UTF8 });
-            const Sharing = await import("expo-sharing");
-            if (await Sharing.isAvailableAsync()) {
-              await Sharing.shareAsync(path, { mimeType: "application/vnd.google-earth.kml+xml", dialogTitle: "Share (KML)" });
-            } else if (Platform.OS === "web") {
-              const blob = new Blob([content], { type: "application/vnd.google-earth.kml+xml" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `${baseName}_waste.kml`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }
-          } catch (e) {
-            Alert.alert("Export failed", (e as Error).message);
-          }
-        },
-      });
+      buttons.push({ text: "KML", onPress: () => doExport("kml") });
     }
-    hapticImpact();
-    Alert.alert("Export zone", "Choose format", buttons);
-  }, [selectedResult, pageMode, wastePoints]);
+    if (pageMode === "waste" && wastePoints.length > 0) {
+      buttons.push({ text: "CSV (points)", onPress: () => doExport("csv") });
+    }
+    Alert.alert("Export", "Choose format", buttons);
+  }, [selectedResult, pageMode, wastePoints, doExport]);
 
   const totalTime = selectedResult
     ? selectedResult.zones.reduce((s, z) => s + z.estimated_time, 0)
@@ -1344,6 +1344,70 @@ export function ZonePage() {
           if (n > 0) Alert.alert("Import complete", `${n} point(s) added to the map.`);
         }}
       />
+
+      {/* Export Modal (web) */}
+      {exportModalVisible && (
+        <Modal transparent animationType="fade">
+          <Pressable
+            style={styles.exportModalOverlay}
+            onPress={() => setExportModalVisible(false)}
+          >
+            <Pressable
+              style={[styles.exportModalBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={[styles.exportModalTitle, { color: colors.text }]}>Export</Text>
+              <Text style={[styles.exportModalSubtitle, { color: colors.muted }]}>Choose format</Text>
+
+              <View style={styles.exportModalButtons}>
+                {selectedResult && (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.exportModalBtn, { backgroundColor: colors.primary }]}
+                      onPress={() => doExport("geojson")}
+                    >
+                      <MaterialCommunityIcons name="code-json" size={20} color="#fff" />
+                      <Text style={styles.exportModalBtnLabel}>GeoJSON</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.exportModalBtn, { backgroundColor: colors.primary }]}
+                      onPress={() => doExport("json")}
+                    >
+                      <MaterialCommunityIcons name="file-document-outline" size={20} color="#fff" />
+                      <Text style={styles.exportModalBtnLabel}>JSON</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {(pageMode === "waste" && (wastePoints.length > 0 || selectedResult)) && (
+                  <TouchableOpacity
+                    style={[styles.exportModalBtn, { backgroundColor: "#22c55e" }]}
+                    onPress={() => doExport("kml")}
+                  >
+                    <MaterialCommunityIcons name="google-earth" size={20} color="#fff" />
+                    <Text style={styles.exportModalBtnLabel}>KML</Text>
+                  </TouchableOpacity>
+                )}
+                {(pageMode === "waste" && wastePoints.length > 0) && (
+                  <TouchableOpacity
+                    style={[styles.exportModalBtn, { backgroundColor: "#f97316" }]}
+                    onPress={() => doExport("csv")}
+                  >
+                    <MaterialCommunityIcons name="file-delimited-outline" size={20} color="#fff" />
+                    <Text style={styles.exportModalBtnLabel}>CSV (points)</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.exportModalCancel, { borderColor: colors.border }]}
+                onPress={() => setExportModalVisible(false)}
+              >
+                <Text style={[styles.exportModalCancelLabel, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -1597,5 +1661,60 @@ const styles = StyleSheet.create({
   },
   resultRowMeta: {
     fontSize: 12,
+  },
+  exportModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  exportModalBox: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+  },
+  exportModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  exportModalSubtitle: {
+    fontSize: 13,
+    marginBottom: 16,
+  },
+  exportModalButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  exportModalBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  exportModalBtnLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  exportModalCancel: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 16,
+    alignSelf: "flex-end",
+  },
+  exportModalCancelLabel: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
