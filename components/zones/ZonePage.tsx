@@ -262,6 +262,7 @@ export function ZonePage() {
   const [pickWasteLocationMode, setPickWasteLocationMode] = useState(false);
   const [pendingWasteCoords, setPendingWasteCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [selectedWastePointId, setSelectedWastePointId] = useState<string | null>(null);
 
   /** Selected result to view: prefer displayedZoneId, else first saved (user can change via sidebar). */
   const selectedId = displayedZoneId ?? (savedZones.length > 0 ? savedZones[0].id : null);
@@ -569,7 +570,7 @@ export function ZonePage() {
   const sidebarSheetTitle =
     pageMode === "waste"
       ? sidebarTab === "mapping"
-        ? "Waste Mapping"
+        ? "Map contents"
         : "Zones List"
       : "Zones";
 
@@ -688,107 +689,49 @@ export function ZonePage() {
         </View>
       </View>
 
-      {/* Body: map (+ sidebar on non-compact) */}
+      {/* Body: waste = left sidebar (Map contents) + map; delivery = map + right sidebar */}
       <View style={[styles.body, isCompact && styles.bodyColumn]}>
-        <View style={[styles.mapWrap, { width: mapWidth, height: mapHeight }]}>
-          {pageMode === "waste" ? (
-            <>
-              <RouteMap
-                collectionPoints={[]}
-                height={mapHeight}
-                width={mapWidth}
-                zonesPreviewPolygons={zonesPreviewPolygons ?? undefined}
-                initialBounds={
-                  selectedResult && initialBounds
-                    ? initialBounds
-                    : wasteBounds
-                      ? { minLat: wasteBounds.minLat, maxLat: wasteBounds.maxLat, minLon: wasteBounds.minLon, maxLon: wasteBounds.maxLon }
-                      : undefined
-                }
-                wastePoints={wastePoints}
-                onMapPress={pageMode === "waste" ? handleMapPressForWastePick : undefined}
-                onLoad={() => {}}
-              />
-              {wastePoints.length === 0 && !(Platform.OS === "web" && pageMode === "waste") && (
-                <View style={[styles.mapEmptyHint, { backgroundColor: colors.surface + "E6", pointerEvents: "none" }]}>
-                  <MaterialCommunityIcons name="delete-outline" size={32} color={colors.muted} />
-                  <Text style={[styles.mapPlaceholderText, { color: colors.text, fontSize: 14, marginTop: 6 }]}>
-                    No bins or dumpsters mapped
-                  </Text>
-                  <Text style={[styles.mapPlaceholderHint, { color: colors.muted, marginTop: 2 }]}>
-                    Tap the map to add a bin or dumpster, or use Add / Import.
-                  </Text>
-                </View>
-              )}
-            </>
-          ) : selectedResult && zonesPreviewPolygons && zonesPreviewPolygons.length > 0 ? (
-            <RouteMap
-              collectionPoints={[]}
-              height={mapHeight}
-              width={mapWidth}
-              zonesPreviewPolygons={zonesPreviewPolygons}
-              initialBounds={initialBounds ?? undefined}
-              onLoad={() => {}}
-            />
-          ) : (
-            <View style={[styles.mapPlaceholder, { backgroundColor: colors.surface }]}>
-              <MaterialCommunityIcons name="vector-polygon" size={48} color={colors.muted} />
-              <Text style={[styles.mapPlaceholderText, { color: colors.text }]}>
-                {savedZones.length === 0
-                  ? "No zone results yet"
-                  : "Select a result in the sidebar"}
-              </Text>
-              <Text style={[styles.mapPlaceholderHint, { color: colors.muted }]}>
-                {savedZones.length === 0
-                  ? "Run zone partition from the Extract tab, then open Zones to view."
-                  : "Pick a saved partition to view zones on the map."}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {!sidebarCollapsed && sidebarWidth > 0 && (
+        {pageMode === "waste" && !sidebarCollapsed && sidebarWidth > 0 && (
           <View
             style={[
               styles.sidebar,
+              styles.sidebarLeft,
               {
                 width: sidebarWidth,
-                borderLeftColor: colors.border,
+                borderRightColor: colors.border,
                 backgroundColor: colors.surface,
                 alignSelf: "stretch",
                 minHeight: mapHeight,
               },
             ]}
           >
-            {pageMode === "waste" && (
-              <View style={[styles.sidebarTabs, { borderBottomColor: colors.border }]}>
-                <Pressable
-                  onPress={() => { hapticImpact(); setSidebarTab("mapping"); }}
-                  style={[styles.sidebarTab, sidebarTab === "mapping" && { borderBottomColor: colors.primary }]}
-                >
-                  <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "mapping" ? colors.primary : colors.muted }]}>
-                    Waste Mapping
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => { hapticImpact(); setSidebarTab("zones"); }}
-                  style={[styles.sidebarTab, sidebarTab === "zones" && { borderBottomColor: colors.primary }]}
-                >
-                  <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "zones" ? colors.primary : colors.muted }]}>
-                    Zones List
-                  </Text>
-                </Pressable>
-              </View>
-            )}
+            <View style={[styles.sidebarTabs, { borderBottomColor: colors.border }]}>
+              <Pressable
+                onPress={() => { hapticImpact(); setSidebarTab("mapping"); }}
+                style={[styles.sidebarTab, sidebarTab === "mapping" && { borderBottomColor: colors.primary }]}
+              >
+                <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "mapping" ? colors.primary : colors.muted }]}>
+                  Map contents
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { hapticImpact(); setSidebarTab("zones"); }}
+                style={[styles.sidebarTab, sidebarTab === "zones" && { borderBottomColor: colors.primary }]}
+              >
+                <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "zones" ? colors.primary : colors.muted }]}>
+                  Zones List
+                </Text>
+              </Pressable>
+            </View>
             <ScrollView
               style={styles.sidebarScroll}
               contentContainerStyle={styles.sidebarContent}
               showsVerticalScrollIndicator
             >
-              {pageMode === "waste" && sidebarTab === "mapping" ? (
+              {sidebarTab === "mapping" ? (
                 <>
                   <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>
-                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters mapped
+                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters
                   </Text>
                   <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 8 }]}>
                     Partition settings
@@ -844,48 +787,59 @@ export function ZonePage() {
                     />
                   </View>
                   <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>
-                    Mapped points
+                    Map contents
                   </Text>
                   {wastePoints.length === 0 ? (
                     <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                      No bins or dumpsters yet. Tap Add in the toolbar or Import CSV/GeoJSON.
+                      No bins or dumpsters yet. Use Add or Import in the toolbar.
                     </Text>
                   ) : (
-                    wastePoints.slice(0, 50).map((p) => (
-                      <View key={p.id} style={[styles.resultRow, { borderColor: colors.border, marginBottom: 6 }]}>
-                        <MaterialCommunityIcons
-                          name={p.type === "bin" ? "delete-outline" : "dump-truck"}
-                          size={18}
-                          color={p.type === "bin" ? "#22c55e" : "#3b82f6"}
-                        />
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[styles.resultRowName, { color: colors.text }]} numberOfLines={1}>
-                            {p.address || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
-                          </Text>
-                          <Text style={[styles.resultRowMeta, { color: colors.muted }]}>
-                            {p.capacityLiters != null ? `${p.capacityLiters}L` : ""} {p.condition ?? ""}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => { hapticImpact(); setEditingWastePoint(p); setAddWasteModalVisible(true); }}
-                          style={{ padding: 6 }}
+                    wastePoints.slice(0, 50).map((p, idx) => {
+                      const label = `${p.type === "bin" ? "bin" : "dumpster"} ${idx + 1}`;
+                      const isSelected = selectedWastePointId === p.id;
+                      return (
+                        <Pressable
+                          key={p.id}
+                          onPress={() => { hapticImpact(); setSelectedWastePointId(isSelected ? null : p.id); }}
+                          style={[
+                            styles.resultRow,
+                            { borderColor: colors.border, marginBottom: 6, backgroundColor: isSelected ? colors.primary + "20" : "transparent" },
+                          ]}
                         >
-                          <MaterialCommunityIcons name="pencil" size={18} color={colors.muted} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => {
-                            hapticImpact();
-                            Alert.alert("Remove point", "Remove this bin/dumpster from the map?", [
-                              { text: "Cancel", style: "cancel" },
-                              { text: "Remove", style: "destructive", onPress: () => removeWastePoint(p.id) },
-                            ]);
-                          }}
-                          style={{ padding: 6 }}
-                        >
-                          <MaterialCommunityIcons name="delete-outline" size={18} color={colors.muted} />
-                        </TouchableOpacity>
-                      </View>
-                    ))
+                          <MaterialCommunityIcons
+                            name="map-marker"
+                            size={18}
+                            color={p.type === "bin" ? "#22c55e" : "#3b82f6"}
+                          />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                              {label}
+                            </Text>
+                            <Text style={[styles.resultRowMeta, { color: colors.muted }]} numberOfLines={1}>
+                              {p.address || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => { hapticImpact(); setEditingWastePoint(p); setAddWasteModalVisible(true); }}
+                            style={{ padding: 6 }}
+                          >
+                            <MaterialCommunityIcons name="pencil" size={18} color={colors.muted} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              hapticImpact();
+                              Alert.alert("Remove point", "Remove this bin/dumpster from the map?", [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Remove", style: "destructive", onPress: () => removeWastePoint(p.id) },
+                              ]);
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <MaterialCommunityIcons name="delete-outline" size={18} color={colors.muted} />
+                          </TouchableOpacity>
+                        </Pressable>
+                      );
+                    })
                   )}
                   {wastePoints.length > 50 && (
                     <Text style={[styles.emptySidebarText, { color: colors.muted, marginTop: 8 }]}>
@@ -893,7 +847,7 @@ export function ZonePage() {
                     </Text>
                   )}
                 </>
-              ) : pageMode === "waste" && sidebarTab === "zones" ? (
+              ) : (
                 <>
                   {savedZones.length > 0 ? (
                     <>
@@ -927,27 +881,119 @@ export function ZonePage() {
                           </View>
                           <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>Zone list</Text>
                           {selectedResult.zones.sort((a, b) => b.estimated_time - a.estimated_time).map((zone, idx) => (
-                            <ZoneAccordionItem
-                              key={zone.zone_id}
-                              zone={zone}
-                              index={zone.zone_id}
-                              colors={colors}
-                              expanded={expandedZoneIds.has(zone.zone_id)}
-                              onToggle={() => toggleZoneExpanded(zone.zone_id)}
-                              sourcePoints={selectedResult.sourcePoints}
-                            />
+                            <View key={zone.zone_id} style={[styles.zoneItem, { borderLeftColor: ZONE_COLORS[idx % ZONE_COLORS.length], borderBottomColor: colors.border }]}>
+                              <Pressable
+                                onPress={() => toggleZoneExpanded(zone.zone_id)}
+                                style={[styles.zoneItemHeader, { backgroundColor: colors.background }]}
+                              >
+                                <View style={[styles.zoneSwatch, { backgroundColor: ZONE_COLORS[idx % ZONE_COLORS.length] }]} />
+                                <Text style={[styles.zoneItemTitle, { color: colors.text }]}>Zone {zone.zone_id}</Text>
+                                <Text style={[styles.zoneItemTime, { color: colors.muted }]}>{zone.estimated_time.toFixed(1)} min</Text>
+                                <MaterialCommunityIcons name={expandedZoneIds.has(zone.zone_id) ? "chevron-up" : "chevron-down"} size={20} color={colors.muted} />
+                              </Pressable>
+                              {expandedZoneIds.has(zone.zone_id) && (
+                                <View style={[styles.zoneItemBody, { backgroundColor: colors.background }]}>
+                                  <Text style={[styles.zoneItemMeta, { color: colors.muted }]}>Points: {zone.point_ids?.length ?? 0}</Text>
+                                  {zone.zone_polygon && zone.zone_polygon.length >= 3 && (
+                                    <Text style={[styles.zoneItemNodes, { color: colors.muted }]} numberOfLines={4}>
+                                      {zone.zone_polygon.slice(0, 8).map(([lon, lat]) => `${lat.toFixed(4)}, ${lon.toFixed(4)}`).join("; ")}
+                                      {zone.zone_polygon.length > 8 ? "…" : ""}
+                                    </Text>
+                                  )}
+                                </View>
+                              )}
+                            </View>
                           ))}
                         </>
                       )}
                     </>
                   ) : (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                      No zone results yet. Map bins/dumpsters, then tap Partition.
-                    </Text>
+                    <View style={styles.emptySidebar}>
+                      <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
+                        No saved zone results. Map bins/dumpsters, then run Partition.
+                      </Text>
+                    </View>
                   )}
                 </>
-              ) : null}
-              {pageMode === "delivery" && (
+              )}
+            </ScrollView>
+          </View>
+        )}
+
+        <View style={[styles.mapWrap, { width: mapWidth, height: mapHeight }]}>
+          {pageMode === "waste" ? (
+            <>
+              <RouteMap
+                collectionPoints={[]}
+                height={mapHeight}
+                width={mapWidth}
+                zonesPreviewPolygons={zonesPreviewPolygons ?? undefined}
+                initialBounds={
+                  selectedResult && initialBounds
+                    ? initialBounds
+                    : wasteBounds
+                      ? { minLat: wasteBounds.minLat, maxLat: wasteBounds.maxLat, minLon: wasteBounds.minLon, maxLon: wasteBounds.maxLon }
+                      : undefined
+                }
+                wastePoints={wastePoints}
+                onMapPress={pageMode === "waste" ? handleMapPressForWastePick : undefined}
+                onLoad={() => {}}
+              />
+              {wastePoints.length === 0 && !(Platform.OS === "web" && pageMode === "waste") && (
+                <View style={[styles.mapEmptyHint, { backgroundColor: colors.surface + "E6", pointerEvents: "none" }]}>
+                  <MaterialCommunityIcons name="delete-outline" size={32} color={colors.muted} />
+                  <Text style={[styles.mapPlaceholderText, { color: colors.text, fontSize: 14, marginTop: 6 }]}>
+                    No bins or dumpsters mapped. Use Add or Import in the toolbar.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : selectedResult && zonesPreviewPolygons && zonesPreviewPolygons.length > 0 ? (
+            <RouteMap
+              collectionPoints={[]}
+              height={mapHeight}
+              width={mapWidth}
+              zonesPreviewPolygons={zonesPreviewPolygons}
+              initialBounds={initialBounds ?? undefined}
+              onLoad={() => {}}
+            />
+          ) : (
+            <View style={[styles.mapPlaceholder, { backgroundColor: colors.surface }]}>
+              <MaterialCommunityIcons name="vector-polygon" size={48} color={colors.muted} />
+              <Text style={[styles.mapPlaceholderText, { color: colors.text }]}>
+                {savedZones.length === 0
+                  ? "No zone results yet"
+                  : "Select a result in the sidebar"}
+              </Text>
+              <Text style={[styles.mapPlaceholderHint, { color: colors.muted }]}>
+                {savedZones.length === 0
+                  ? "Run zone partition from the Extract tab, then open Zones to view."
+                  : "Pick a saved partition to view zones on the map."}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Right sidebar: delivery mode only (waste uses left sidebar above) */}
+        {!sidebarCollapsed && sidebarWidth > 0 && pageMode !== "waste" && (
+          <View
+            style={[
+              styles.sidebar,
+              {
+                width: sidebarWidth,
+                borderLeftColor: colors.border,
+                backgroundColor: colors.surface,
+                alignSelf: "stretch",
+                minHeight: mapHeight,
+              },
+            ]}
+          >
+            <ScrollView
+              style={styles.sidebarScroll}
+              contentContainerStyle={styles.sidebarContent}
+              showsVerticalScrollIndicator
+            >
+              {(
                 <>
                   {savedZones.length > 1 && (
                     <>
@@ -1055,7 +1101,7 @@ export function ZonePage() {
                   style={[styles.sidebarTab, sidebarTab === "mapping" && { borderBottomColor: colors.primary }]}
                 >
                   <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "mapping" ? colors.primary : colors.muted }]}>
-                    Waste Mapping
+                    Map contents
                   </Text>
                 </Pressable>
                 <Pressable
@@ -1076,7 +1122,7 @@ export function ZonePage() {
               {pageMode === "waste" && sidebarTab === "mapping" ? (
                 <>
                   <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>
-                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters mapped
+                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters
                   </Text>
                   <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 8 }]}>
                     Partition settings
@@ -1318,11 +1364,6 @@ export function ZonePage() {
           setPickWasteLocationMode(true);
         }}
       />
-      {pageMode === "waste" && !addWasteModalVisible && (
-        <View style={[styles.pickHint, { backgroundColor: colors.primary, pointerEvents: "none" }]}>
-          <Text style={styles.pickHintText}>Tap the map to add a bin or dumpster</Text>
-        </View>
-      )}
       <WasteImportModal
         visible={importWasteModalVisible}
         onClose={() => setImportWasteModalVisible(false)}
@@ -1497,22 +1538,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 12,
   },
-  pickHint: {
-    position: "absolute",
-    bottom: 24,
-    left: 24,
-    right: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: "center",
-  },
-  pickHintText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-  },
   toolbarButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1576,6 +1601,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     flex: 0,
     flexDirection: "column",
+  },
+  sidebarLeft: {
+    borderLeftWidth: 0,
+    borderRightWidth: 1,
   },
   sidebarScroll: {
     flex: 1,
