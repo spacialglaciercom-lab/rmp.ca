@@ -277,7 +277,7 @@ const config = {
     // Web Overture extract backend (polygon → GeoJSON/graph via WebSocket); used for extract tab
     extractUrl:
       process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
-      "https://webovertureextract-webovertureextract.up.railway.app",
+      "https://webovertureextract-286569721223.northamerica-northeast1.run.app",
   },
 };
 
