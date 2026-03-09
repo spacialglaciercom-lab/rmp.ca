@@ -152,8 +152,23 @@ export interface OfflineExtractProgress {
   total?: number;
 }
 
+export interface RoadGraphStats {
+  nodes: number;
+  edges: number;
+  roads: number;
+  segmentsLengthKm: number;
+}
+
+export interface RoadGraphResult {
+  geojson: GeoJSONFeatureCollection;
+  stats: RoadGraphStats;
+}
+
 export interface OfflineExtractResult {
   geojson: GeoJSONFeatureCollection;
+  /** Road graph edges — output of the local building_graph stage. */
+  graphGeojson: GeoJSONFeatureCollection;
+  stats: RoadGraphStats;
   source: "r2" | "s3" | "osm_pbf";
   regionId: string;
   regionName: string;
@@ -167,6 +182,152 @@ function getRoadClass(props: Record<string, unknown> | undefined): string {
   const v =
     props.highway ?? props.class ?? props.road_class ?? props.category;
   return typeof v === "string" ? v.toLowerCase().trim() : "";
+}
+
+// ---------------------------------------------------------------------------
+// Road graph building (replicates the backend's building_graph stage)
+// ---------------------------------------------------------------------------
+
+/** Haversine distance in km between two [lon, lat] points. */
+function haversineKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
+  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
+  const lat1 = (a[1] * Math.PI) / 180;
+  const lat2 = (b[1] * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function coordLengthKm(coords: [number, number][]): number {
+  let d = 0;
+  for (let i = 1; i < coords.length; i++) d += haversineKm(coords[i - 1], coords[i]);
+  return d;
+}
+
+/** Round to 6 decimal places (≈ 11 cm) for coordinate snapping. */
+function roundCoord(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+function ck(lon: number, lat: number): string {
+  return `${roundCoord(lon)},${roundCoord(lat)}`;
+}
+
+/**
+ * Build a topology-aware road graph from raw GeoJSON LineString features.
+ * Finds intersections, splits road segments at them, assigns node/edge IDs,
+ * and computes length + estimated travel time for each edge.
+ *
+ * This replicates the backend's `building_graph` stage for offline use.
+ * The returned GeoJSON is compatible with `partitionZonesFromGeoJSON`.
+ */
+export function buildRoadGraph(rawGeojson: GeoJSONFeatureCollection): RoadGraphResult {
+  const features = (rawGeojson.features ?? []).filter(
+    (f): f is Feature<GeoJSON.LineString, Record<string, unknown>> =>
+      f.geometry?.type === "LineString" &&
+      Array.isArray((f.geometry as GeoJSON.LineString).coordinates) &&
+      (f.geometry as GeoJSON.LineString).coordinates.length >= 2,
+  );
+
+  if (features.length === 0) {
+    return {
+      geojson: { type: "FeatureCollection", features: [] },
+      stats: { nodes: 0, edges: 0, roads: 0, segmentsLengthKm: 0 },
+    };
+  }
+
+  // Map each snapped coordinate key → set of feature indices that share it.
+  const coordUsage = new Map<string, Set<number>>();
+  for (let fi = 0; fi < features.length; fi++) {
+    const coords = features[fi].geometry.coordinates as [number, number][];
+    for (const [lon, lat] of coords) {
+      const k = ck(lon, lat);
+      if (!coordUsage.has(k)) coordUsage.set(k, new Set());
+      coordUsage.get(k)!.add(fi);
+    }
+  }
+
+  // A coordinate is a graph node if:
+  //   - it is the first or last point of any feature (dead end / segment end), or
+  //   - it is shared by 2+ different features (intersection).
+  const nodeKeySet = new Set<string>();
+  for (let fi = 0; fi < features.length; fi++) {
+    const coords = features[fi].geometry.coordinates as [number, number][];
+    nodeKeySet.add(ck(coords[0][0], coords[0][1]));
+    nodeKeySet.add(ck(coords[coords.length - 1][0], coords[coords.length - 1][1]));
+  }
+  for (const [k, uses] of coordUsage) {
+    if (uses.size >= 2) nodeKeySet.add(k);
+  }
+
+  // Assign stable node IDs.
+  const nodeIdMap = new Map<string, string>();
+  let nodeCounter = 0;
+  for (const k of nodeKeySet) {
+    nodeIdMap.set(k, `n${nodeCounter++}`);
+  }
+
+  // Split each feature at intersection nodes → directed graph edges.
+  const edgeFeatures: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  let edgeCounter = 0;
+  let totalLengthKm = 0;
+
+  for (const feat of features) {
+    const coords = feat.geometry.coordinates as [number, number][];
+    const props = feat.properties ?? {};
+    const roadClass = getRoadClass(props);
+    const name = typeof props.name === "string" ? props.name : undefined;
+
+    // Collect coordinate indices where we must split.
+    const splits: number[] = [0];
+    for (let i = 1; i < coords.length - 1; i++) {
+      if (nodeKeySet.has(ck(coords[i][0], coords[i][1]))) splits.push(i);
+    }
+    splits.push(coords.length - 1);
+
+    for (let s = 0; s < splits.length - 1; s++) {
+      const fromIdx = splits[s];
+      const toIdx = splits[s + 1];
+      if (fromIdx >= toIdx) continue;
+      const segCoords = coords.slice(fromIdx, toIdx + 1) as [number, number][];
+      if (segCoords.length < 2) continue;
+
+      const fromKey = ck(segCoords[0][0], segCoords[0][1]);
+      const toKey = ck(segCoords[segCoords.length - 1][0], segCoords[segCoords.length - 1][1]);
+      const fromNodeId = nodeIdMap.get(fromKey) ?? `n${nodeCounter++}`;
+      const toNodeId = nodeIdMap.get(toKey) ?? `n${nodeCounter++}`;
+      const lengthKm = coordLengthKm(segCoords);
+      totalLengthKm += lengthKm;
+
+      edgeFeatures.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: segCoords },
+        properties: {
+          id: `e${edgeCounter}`,
+          from_node: fromNodeId,
+          to_node: toNodeId,
+          length_km: Math.round(lengthKm * 10000) / 10000,
+          travel_time_sec: Math.round((lengthKm / 30) * 3600), // 30 km/h default
+          road_class: roadClass,
+          ...(name ? { name } : {}),
+        },
+      });
+      edgeCounter++;
+    }
+  }
+
+  return {
+    geojson: { type: "FeatureCollection", features: edgeFeatures },
+    stats: {
+      nodes: nodeCounter,
+      edges: edgeCounter,
+      roads: features.length,
+      segmentsLengthKm: Math.round(totalLengthKm * 100) / 100,
+    },
+  };
 }
 
 /**
@@ -402,32 +563,38 @@ export async function extractFromDownloadedData(
     return null;
   }
 
+  let geojson: GeoJSONFeatureCollection | null = null;
+  let source: "r2" | "s3" | "osm_pbf";
+
   if (region.source === "r2") {
     onProgress?.({ phase: "Using R2 tiles…" });
-    const geojson = await extractFromR2Tiles(region, polygon, onProgress);
-    return { geojson, source: "r2", regionId: region.id, regionName: region.name };
-  }
-
-  if (region.source === "s3") {
+    geojson = await extractFromR2Tiles(region, polygon, onProgress);
+    source = "r2";
+  } else if (region.source === "s3") {
     try {
       onProgress?.({ phase: "Using S3 Parquet…" });
-      const geojson = await extractFromS3Parquet(region, polygon, onProgress);
-      return { geojson, source: "s3", regionId: region.id, regionName: region.name };
+      geojson = await extractFromS3Parquet(region, polygon, onProgress);
+      source = "s3";
     } catch {
       return null;
     }
-  }
-
-  if (region.source === "osm_pbf") {
+  } else if (region.source === "osm_pbf") {
     try {
       onProgress?.({ phase: "Using downloaded OSM data…" });
-      const geojson = await extractFromOSMPBF(region, polygon, onProgress);
-      return { geojson, source: "osm_pbf", regionId: region.id, regionName: region.name };
+      geojson = await extractFromOSMPBF(region, polygon, onProgress);
+      source = "osm_pbf";
     } catch (e) {
       console.warn("[offline-extract] OSM PBF extraction failed:", e);
       return null;
     }
+  } else {
+    return null;
   }
 
-  return null;
+  if (!geojson) return null;
+
+  onProgress?.({ phase: "Building road graph…" });
+  const { geojson: graphGeojson, stats } = buildRoadGraph(geojson);
+
+  return { geojson, graphGeojson, stats, source: source!, regionId: region.id, regionName: region.name };
 }
