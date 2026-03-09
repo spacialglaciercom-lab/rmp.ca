@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, Platform, ActivityIndicator } from "react-native";
 import { getCurrentWeather, isWeatherConfigured } from "@/services/weatherService";
 import { getGoogleCurrentConditions, isGoogleWeatherConfigured } from "@/services/googleWeatherService";
+import { cardinalToAbbrev } from "@/lib/weather-utils";
 
 const DEFAULT_LAT = 45.5017;
 const DEFAULT_LON = -73.5673;
@@ -79,7 +80,7 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
           if (w?.speed?.value) {
             const spd = Math.round(w.speed.value);
             const unit = w.speed.unit === "MILES_PER_HOUR" ? "mph" : "km/h";
-            const dir = cardinalAbbrev(w.direction?.cardinal);
+            const dir = cardinalToAbbrev(w.direction?.cardinal);
             windStr = `${dir ? dir + " " : ""}${spd} ${unit}`;
           }
           setDisplay({
@@ -178,18 +179,6 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
       </View>
     </View>
   );
-}
-
-function cardinalAbbrev(cardinal?: string): string {
-  if (!cardinal) return "";
-  const map: Record<string, string> = {
-    NORTH: "N", NORTHEAST: "NE", EAST: "E", SOUTHEAST: "SE",
-    SOUTH: "S", SOUTHWEST: "SW", WEST: "W", NORTHWEST: "NW",
-    NORTH_NORTHEAST: "NNE", EAST_NORTHEAST: "ENE", EAST_SOUTHEAST: "ESE",
-    SOUTH_SOUTHEAST: "SSE", SOUTH_SOUTHWEST: "SSW",
-    WEST_SOUTHWEST: "WSW", WEST_NORTHWEST: "WNW", NORTH_NORTHWEST: "NNW",
-  };
-  return map[cardinal.toUpperCase()] ?? cardinal;
 }
 
 const styles = StyleSheet.create({

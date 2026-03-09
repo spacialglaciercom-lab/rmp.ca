@@ -33,6 +33,7 @@ import type {
 } from "@/services/googleWeatherService";
 import { getCurrentWeather, isWeatherConfigured } from "@/services/weatherService";
 import type { CurrentWeather } from "@/services/weatherService";
+import { cardinalToAbbrev } from "@/lib/weather-utils";
 
 const DEFAULT_LAT = 45.5017;
 const DEFAULT_LON = -73.5673;
@@ -81,29 +82,6 @@ function formatHour(d?: { hours?: number }, tz?: string): string {
   if (d?.hours == null) return "—";
   const h = d.hours % 24;
   return `${h}:00`;
-}
-
-function cardinalToAbbrev(cardinal?: string): string {
-  if (!cardinal) return "";
-  const map: Record<string, string> = {
-    NORTH: "N",
-    NORTHEAST: "NE",
-    EAST: "E",
-    SOUTHEAST: "SE",
-    SOUTH: "S",
-    SOUTHWEST: "SW",
-    WEST: "W",
-    NORTHWEST: "NW",
-    NORTH_NORTHEAST: "NNE",
-    EAST_NORTHEAST: "ENE",
-    EAST_SOUTHEAST: "ESE",
-    SOUTH_SOUTHEAST: "SSE",
-    SOUTH_SOUTHWEST: "SSW",
-    WEST_SOUTHWEST: "WSW",
-    WEST_NORTHWEST: "WNW",
-    NORTH_NORTHWEST: "NNW",
-  };
-  return map[cardinal.toUpperCase()] ?? cardinal;
 }
 
 function windStr(w?: { speed?: { value?: number; unit?: string }; gust?: { value?: number; unit?: string }; direction?: { cardinal?: string } }): string | null {
