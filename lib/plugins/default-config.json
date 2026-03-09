@@ -1,14 +1,14 @@
 {
   "plugins": {
-    "weather": { "enabled": true, "apiKey": "" },
+    "weather": { "enabled": false, "apiKey": "" },
     "routeOptimization": { "enabled": true },
-    "overture": { "enabled": true },
-    "overture-extraction": { "enabled": true },
-    "zones": { "enabled": true },
-    "ai-chat": { "enabled": true },
-    "drive-preview": { "enabled": true },
-    "collection-route": { "enabled": true },
-    "navigation": { "enabled": true },
+    "overture": { "enabled": false },
+    "overture-extraction": { "enabled": false },
+    "zones": { "enabled": false },
+    "ai-chat": { "enabled": false },
+    "drive-preview": { "enabled": false },
+    "collection-route": { "enabled": false },
+    "navigation": { "enabled": false },
     "dev": { "enabled": false }
   }
 }
