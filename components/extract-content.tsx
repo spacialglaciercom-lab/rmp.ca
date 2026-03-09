@@ -19,6 +19,7 @@ import {
   ScrollView,
   Alert,
   TextInput,
+  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -114,9 +115,21 @@ const STAGE_COLORS: Record<ExtractionStage, string> = {
 // City presets
 // ---------------------------------------------------------------------------
 const CITY_PRESETS = [
-  { name: "Montreal", center: [-73.5673, 45.5017] as [number, number], zoom: 12 },
-  { name: "Quebec City", center: [-71.2074, 46.8139] as [number, number], zoom: 12 },
-  { name: "Toronto", center: [-79.3832, 43.6532] as [number, number], zoom: 12 },
+  {
+    name: "Montreal",
+    center: [-73.5673, 45.5017] as [number, number],
+    zoom: 12,
+  },
+  {
+    name: "Quebec City",
+    center: [-71.2074, 46.8139] as [number, number],
+    zoom: 12,
+  },
+  {
+    name: "Toronto",
+    center: [-79.3832, 43.6532] as [number, number],
+    zoom: 12,
+  },
   { name: "Ottawa", center: [-75.6972, 45.4215] as [number, number], zoom: 12 },
 ];
 
@@ -133,13 +146,16 @@ export default function ExtractContent() {
   const drawRef = useRef<any>(null);
 
   // Polygon + measurements
-  const [polygon, setPolygon] = useState<GeoJSON.Feature<GeoJSON.Polygon> | null>(null);
+  const [polygon, setPolygon] =
+    useState<GeoJSON.Feature<GeoJSON.Polygon> | null>(null);
   const [metrics, setMetrics] = useState<MeasurementMetrics | null>(null);
 
   // Preview (DuckDB)
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewRoadCount, setPreviewRoadCount] = useState<number | null>(null);
-  const [previewPointCount, setPreviewPointCount] = useState<number | null>(null);
+  const [previewPointCount, setPreviewPointCount] = useState<number | null>(
+    null,
+  );
 
   // Extraction (WebSocket)
   const [extracting, setExtracting] = useState(false);
@@ -151,11 +167,16 @@ export default function ExtractContent() {
   const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
 
   // Dimensions
-  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [dimensions, setDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Zone partitioning (send to Map → Zones)
   const [zoneTruckCount, setZoneTruckCount] = useState("2");
-  const [zoneBalanceMetric, setZoneBalanceMetric] = useState<"time" | "distance">("time");
+  const [zoneBalanceMetric, setZoneBalanceMetric] = useState<
+    "time" | "distance"
+  >("time");
   const [zoneName, setZoneName] = useState("");
   const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
@@ -172,7 +193,8 @@ export default function ExtractContent() {
   // Init MapLibre + Draw (web only)
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (Platform.OS !== "web" || !maplibregl || !mapContainerRef.current) return;
+    if (Platform.OS !== "web" || !maplibregl || !mapContainerRef.current)
+      return;
     if (mapRef.current) return; // already initialized
 
     const map = new maplibregl.Map({
@@ -219,37 +241,74 @@ export default function ExtractContent() {
             {
               id: "gl-draw-polygon-fill",
               type: "fill",
-              filter: ["all", ["==", "$type", "Polygon"], ["!=", "mode", "static"]],
-              paint: { "fill-color": "#3b82f6", "fill-outline-color": "#3b82f6", "fill-opacity": 0.15 },
+              filter: [
+                "all",
+                ["==", "$type", "Polygon"],
+                ["!=", "mode", "static"],
+              ],
+              paint: {
+                "fill-color": "#3b82f6",
+                "fill-outline-color": "#3b82f6",
+                "fill-opacity": 0.15,
+              },
             },
             // Polygon outline
             {
               id: "gl-draw-polygon-stroke-active",
               type: "line",
-              filter: ["all", ["==", "$type", "Polygon"], ["!=", "mode", "static"]],
+              filter: [
+                "all",
+                ["==", "$type", "Polygon"],
+                ["!=", "mode", "static"],
+              ],
               layout: { "line-cap": "round", "line-join": "round" },
-              paint: { "line-color": "#3b82f6", "line-dasharray": [0.2, 2], "line-width": 2 },
+              paint: {
+                "line-color": "#3b82f6",
+                "line-dasharray": [0.2, 2],
+                "line-width": 2,
+              },
             },
             // Line
             {
               id: "gl-draw-line",
               type: "line",
-              filter: ["all", ["==", "$type", "LineString"], ["!=", "mode", "static"]],
+              filter: [
+                "all",
+                ["==", "$type", "LineString"],
+                ["!=", "mode", "static"],
+              ],
               layout: { "line-cap": "round", "line-join": "round" },
-              paint: { "line-color": "#3b82f6", "line-dasharray": [0.2, 2], "line-width": 2 },
+              paint: {
+                "line-color": "#3b82f6",
+                "line-dasharray": [0.2, 2],
+                "line-width": 2,
+              },
             },
             // Vertex points
             {
               id: "gl-draw-point",
               type: "circle",
-              filter: ["all", ["==", "$type", "Point"], ["==", "meta", "vertex"]],
-              paint: { "circle-radius": 5, "circle-color": "#fff", "circle-stroke-color": "#3b82f6", "circle-stroke-width": 2 },
+              filter: [
+                "all",
+                ["==", "$type", "Point"],
+                ["==", "meta", "vertex"],
+              ],
+              paint: {
+                "circle-radius": 5,
+                "circle-color": "#fff",
+                "circle-stroke-color": "#3b82f6",
+                "circle-stroke-width": 2,
+              },
             },
             // Midpoints
             {
               id: "gl-draw-point-mid",
               type: "circle",
-              filter: ["all", ["==", "$type", "Point"], ["==", "meta", "midpoint"]],
+              filter: [
+                "all",
+                ["==", "$type", "Point"],
+                ["==", "meta", "midpoint"],
+              ],
               paint: { "circle-radius": 3, "circle-color": "#3b82f6" },
             },
           ],
@@ -278,7 +337,13 @@ export default function ExtractContent() {
         }),
         "top-right",
       );
-      map.addControl(new maplibregl!.NavigationControl({ showCompass: true, showZoom: true }), "top-right");
+      map.addControl(
+        new maplibregl!.NavigationControl({
+          showCompass: true,
+          showZoom: true,
+        }),
+        "top-right",
+      );
     });
 
     return () => {
@@ -301,7 +366,9 @@ export default function ExtractContent() {
       setMetrics(null);
       return;
     }
-    const feat = data.features[data.features.length - 1] as GeoJSON.Feature<GeoJSON.Polygon>;
+    const feat = data.features[
+      data.features.length - 1
+    ] as GeoJSON.Feature<GeoJSON.Polygon>;
     // Keep only the last polygon
     if (data.features.length > 1) {
       const ids = data.features.slice(0, -1).map((f: any) => f.id);
@@ -386,7 +453,7 @@ export default function ExtractContent() {
         setProgress(null);
         setPreviewLoading(false);
         console.error("[Preview]", err);
-      }
+      },
     );
     cancelRef.current = handle;
   }, [polygon, extracting, clearPreviewLayer]);
@@ -413,14 +480,18 @@ export default function ExtractContent() {
       (err) => {
         // WebSocket failed — try offline data before showing error
         console.warn("[Extract] WebSocket failed, trying offline data:", err);
-        setProgress({ stage: "building_graph", message: "Trying offline data…" });
+        setProgress({
+          stage: "building_graph",
+          message: "Trying offline data…",
+        });
         const polyGeom = polygon.geometry as GeoJSON.Polygon;
         (async () => {
           try {
             const result = await extractFromDownloadedData(polyGeom, (p) => {
               const stage = p.phase.toLowerCase().includes("graph")
                 ? "building_graph"
-                : p.phase.toLowerCase().includes("clip") || p.phase.toLowerCase().includes("tile")
+                : p.phase.toLowerCase().includes("clip") ||
+                    p.phase.toLowerCase().includes("tile")
                   ? "clipping"
                   : "downloading";
               setProgress({
@@ -477,7 +548,9 @@ export default function ExtractContent() {
     if (!resultHash) return;
     if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
       try {
-        const blob = new Blob([JSON.stringify(offlineGeoJSONRef.current)], { type: "application/json" });
+        const blob = new Blob([JSON.stringify(offlineGeoJSONRef.current)], {
+          type: "application/json",
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -501,35 +574,49 @@ export default function ExtractContent() {
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      Alert.alert("Zone partitioning", "Polygon must have at least 3 vertices.");
+      Alert.alert(
+        "Zone partitioning",
+        "Polygon must have at least 3 vertices.",
+      );
       return;
     }
     if (!resultHash) {
       Alert.alert(
         "Run Extract & Process first",
-        "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones."
+        "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones.",
       );
       return;
     }
-    const truckCount = Math.max(1, Math.min(12, parseInt(zoneTruckCount, 10) || 2));
-    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [lat, lng]);
+    const truckCount = Math.max(
+      1,
+      Math.min(12, parseInt(zoneTruckCount, 10) || 2),
+    );
+    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [
+      lat,
+      lng,
+    ]);
     setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };
       if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
-        geojson = offlineGeoJSONRef.current as { type: string; features: unknown[] };
+        geojson = offlineGeoJSONRef.current as {
+          type: string;
+          features: unknown[];
+        };
       } else {
         const res = await fetch(httpGeoJSONUrl(resultHash!));
         if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
         geojson = (await res.json()) as { type: string; features: unknown[] };
       }
-      if (!geojson?.features?.length) throw new Error("Extract result has no road features.");
+      if (!geojson?.features?.length)
+        throw new Error("Extract result has no road features.");
       const { zones } = await partitionZonesFromGeoJSON({
         geojson: { type: "FeatureCollection", features: geojson.features },
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
-      const name = zoneName.trim() || `Zones ${new Date().toLocaleDateString()}`;
+      const name =
+        zoneName.trim() || `Zones ${new Date().toLocaleDateString()}`;
       addSavedZone({
         name,
         polygon: polygonLatLon,
@@ -539,7 +626,7 @@ export default function ExtractContent() {
       });
       Alert.alert(
         "Sent to Zones",
-        "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map."
+        "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map.",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -548,12 +635,19 @@ export default function ExtractContent() {
         "Zone partitioning failed",
         is404Or503
           ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
-          : msg
+          : msg,
       );
     } finally {
       setZonePartitionLoading(false);
     }
-  }, [polygon, resultHash, zoneTruckCount, zoneBalanceMetric, zoneName, addSavedZone]);
+  }, [
+    polygon,
+    resultHash,
+    zoneTruckCount,
+    zoneBalanceMetric,
+    zoneName,
+    addSavedZone,
+  ]);
 
   // -------------------------------------------------------------------------
   // Clear polygon
@@ -618,7 +712,13 @@ export default function ExtractContent() {
       <View style={styles.mapContainer}>
         <div
           ref={mapContainerRef}
-          style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
+          style={{
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            top: 0,
+            left: 0,
+          }}
         />
 
         {/* Top-left: Measurements card */}
@@ -634,26 +734,57 @@ export default function ExtractContent() {
               },
             ]}
           >
-            <Text style={[styles.metricsLabel, { color: colors.muted }]}>Area</Text>
-            <Text style={[styles.metricsValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
-              {metrics.areaKm2 < 1 ? `${(metrics.areaKm2 * 1000).toFixed(0)} m²` : `${metrics.areaKm2.toFixed(2)} km²`}
+            <Text style={[styles.metricsLabel, { color: colors.muted }]}>
+              Area
             </Text>
-            <Text style={[styles.metricsLabel, { color: colors.muted, marginTop: 4 }]}>Perimeter</Text>
-            <Text style={[styles.metricsValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
+            <Text
+              style={[
+                styles.metricsValue,
+                { color: colors.text, fontFamily: Fonts?.mono },
+              ]}
+            >
+              {metrics.areaKm2 < 1
+                ? `${(metrics.areaKm2 * 1000).toFixed(0)} m²`
+                : `${metrics.areaKm2.toFixed(2)} km²`}
+            </Text>
+            <Text
+              style={[
+                styles.metricsLabel,
+                { color: colors.muted, marginTop: 4 },
+              ]}
+            >
+              Perimeter
+            </Text>
+            <Text
+              style={[
+                styles.metricsValue,
+                { color: colors.text, fontFamily: Fonts?.mono },
+              ]}
+            >
               {metrics.perimeterKm.toFixed(2)} km
             </Text>
           </View>
         )}
 
         {/* Top-right: City presets */}
-        <View style={[styles.presetsContainer, { top: 12 + (insets?.top ?? 0) }]}>
+        <View
+          style={[styles.presetsContainer, { top: 12 + (insets?.top ?? 0) }]}
+        >
           {CITY_PRESETS.map((p) => (
             <TouchableOpacity
               key={p.name}
-              style={[styles.presetChip, { backgroundColor: colors.surface + "ee", borderColor: colors.border }]}
+              style={[
+                styles.presetChip,
+                {
+                  backgroundColor: colors.surface + "ee",
+                  borderColor: colors.border,
+                },
+              ]}
               onPress={() => flyToPreset(p.center, p.zoom)}
             >
-              <Text style={[styles.presetText, { color: colors.text }]}>{p.name}</Text>
+              <Text style={[styles.presetText, { color: colors.text }]}>
+                {p.name}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -664,12 +795,19 @@ export default function ExtractContent() {
             style={[styles.toolButton, { backgroundColor: "#3b82f6" }]}
             onPress={startDrawing}
           >
-            <MaterialCommunityIcons name="pencil-outline" size={18} color="#fff" />
+            <MaterialCommunityIcons
+              name="pencil-outline"
+              size={18}
+              color="#fff"
+            />
             <Text style={styles.toolButtonText}>Draw</Text>
           </TouchableOpacity>
           {polygon && (
             <TouchableOpacity
-              style={[styles.toolButton, { backgroundColor: colors.muted + "88", marginLeft: 8 }]}
+              style={[
+                styles.toolButton,
+                { backgroundColor: colors.muted + "88", marginLeft: 8 },
+              ]}
               onPress={clearPolygon}
             >
               <MaterialCommunityIcons name="close" size={18} color="#fff" />
@@ -681,28 +819,44 @@ export default function ExtractContent() {
 
       {/* Bottom sheet (visible when polygon exists) */}
       {polygon && (
-        <View style={[styles.bottomSheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <ScrollView style={styles.bottomSheetScroll} showsVerticalScrollIndicator={false}>
+        <View
+          style={[
+            styles.bottomSheet,
+            { backgroundColor: colors.surface, borderTopColor: colors.border },
+          ]}
+        >
+          <ScrollView
+            style={styles.bottomSheetScroll}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Stats grid */}
             <View style={styles.statsGrid}>
               <StatBox
                 label="Points"
-                value={previewPointCount != null ? String(previewPointCount) : "—"}
+                value={
+                  previewPointCount != null ? String(previewPointCount) : "—"
+                }
                 colors={colors}
               />
               <StatBox
                 label="Roads"
-                value={previewRoadCount != null ? String(previewRoadCount) : "—"}
+                value={
+                  previewRoadCount != null ? String(previewRoadCount) : "—"
+                }
                 colors={colors}
               />
               <StatBox
                 label="Nodes"
-                value={resultStats?.nodes != null ? String(resultStats.nodes) : "—"}
+                value={
+                  resultStats?.nodes != null ? String(resultStats.nodes) : "—"
+                }
                 colors={colors}
               />
               <StatBox
                 label="Edges"
-                value={resultStats?.edges != null ? String(resultStats.edges) : "—"}
+                value={
+                  resultStats?.edges != null ? String(resultStats.edges) : "—"
+                }
                 colors={colors}
               />
             </View>
@@ -711,22 +865,40 @@ export default function ExtractContent() {
             {progress && (
               <View style={styles.progressSection}>
                 <View style={styles.progressHeader}>
-                  <View style={[styles.stageBadge, { backgroundColor: stageColor + "22" }]}>
-                    <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
+                  <View
+                    style={[
+                      styles.stageBadge,
+                      { backgroundColor: stageColor + "22" },
+                    ]}
+                  >
+                    <View
+                      style={[styles.stageDot, { backgroundColor: stageColor }]}
+                    />
                     <Text style={[styles.stageText, { color: stageColor }]}>
                       {progress.stage.replace("_", " ")}
                     </Text>
                   </View>
-                  <Text style={[styles.progressMessage, { color: colors.muted }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.progressMessage, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
                     {progress.message}
                   </Text>
                 </View>
                 {progress.percent != null && (
-                  <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
+                  <View
+                    style={[
+                      styles.progressBarBg,
+                      { backgroundColor: colors.border },
+                    ]}
+                  >
                     <View
                       style={[
                         styles.progressBarFill,
-                        { width: `${Math.min(100, progress.percent)}%`, backgroundColor: stageColor },
+                        {
+                          width: `${Math.min(100, progress.percent)}%`,
+                          backgroundColor: stageColor,
+                        },
                       ]}
                     />
                   </View>
@@ -738,14 +910,24 @@ export default function ExtractContent() {
             <View style={styles.actionsRow}>
               {Platform.OS === "web" && (
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: "#3b82f6", opacity: previewLoading ? 0.6 : 1 }]}
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: "#3b82f6",
+                      opacity: previewLoading ? 0.6 : 1,
+                    },
+                  ]}
                   onPress={previewRoads}
                   disabled={previewLoading || extracting}
                 >
                   {previewLoading ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <MaterialCommunityIcons name="eye-outline" size={16} color="#fff" />
+                    <MaterialCommunityIcons
+                      name="eye-outline"
+                      size={16}
+                      color="#fff"
+                    />
                   )}
                   <Text style={styles.actionBtnText}>Preview Roads</Text>
                 </TouchableOpacity>
@@ -755,7 +937,11 @@ export default function ExtractContent() {
                   style={[styles.actionBtn, { backgroundColor: "#8b5cf6" }]}
                   onPress={extractAndProcess}
                 >
-                  <MaterialCommunityIcons name="cloud-download-outline" size={16} color="#fff" />
+                  <MaterialCommunityIcons
+                    name="cloud-download-outline"
+                    size={16}
+                    color="#fff"
+                  />
                   <Text style={styles.actionBtnText}>Extract & Process</Text>
                 </TouchableOpacity>
               ) : (
@@ -763,21 +949,58 @@ export default function ExtractContent() {
                   style={[styles.actionBtn, { backgroundColor: "#ef4444" }]}
                   onPress={cancelExtraction}
                 >
-                  <MaterialCommunityIcons name="close-circle-outline" size={16} color="#fff" />
+                  <MaterialCommunityIcons
+                    name="close-circle-outline"
+                    size={16}
+                    color="#fff"
+                  />
                   <Text style={styles.actionBtnText}>Cancel</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             {/* Zone partitioning — send to Map → Zones */}
-            <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-              <Text style={[styles.metricsLabel, { color: colors.muted, marginBottom: 8 }]}>
+            <View
+              style={{
+                marginTop: 16,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
+            >
+              <Text
+                style={[
+                  styles.metricsLabel,
+                  { color: colors.muted, marginBottom: 8 },
+                ]}
+              >
                 Zone partitioning → send to Zones (Map sidebar)
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                <Text style={[styles.metricsLabel, { color: colors.muted }]}>Trucks</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={[styles.metricsLabel, { color: colors.muted }]}>
+                  Trucks
+                </Text>
                 <TextInput
-                  style={[styles.vehicleInput, { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 48, color: colors.text }]}
+                  style={[
+                    styles.vehicleInput,
+                    {
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      minWidth: 48,
+                      color: colors.text,
+                    },
+                  ]}
                   value={zoneTruckCount}
                   onChangeText={setZoneTruckCount}
                   keyboardType="number-pad"
@@ -785,37 +1008,91 @@ export default function ExtractContent() {
                   placeholderTextColor={colors.muted}
                 />
                 <TouchableOpacity
-                  style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "time" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor:
+                        zoneBalanceMetric === "time"
+                          ? "#8b5cf6"
+                          : colors.background,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   onPress={() => setZoneBalanceMetric("time")}
                 >
-                  <Text style={{ color: zoneBalanceMetric === "time" ? "#fff" : colors.text, fontSize: 13 }}>Time</Text>
+                  <Text
+                    style={{
+                      color:
+                        zoneBalanceMetric === "time" ? "#fff" : colors.text,
+                      fontSize: 13,
+                    }}
+                  >
+                    Time
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "distance" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor:
+                        zoneBalanceMetric === "distance"
+                          ? "#8b5cf6"
+                          : colors.background,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   onPress={() => setZoneBalanceMetric("distance")}
                 >
-                  <Text style={{ color: zoneBalanceMetric === "distance" ? "#fff" : colors.text, fontSize: 13 }}>Distance</Text>
+                  <Text
+                    style={{
+                      color:
+                        zoneBalanceMetric === "distance" ? "#fff" : colors.text,
+                      fontSize: 13,
+                    }}
+                  >
+                    Distance
+                  </Text>
                 </TouchableOpacity>
               </View>
               <TextInput
-                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.text, marginBottom: 8 }]}
+                style={[
+                  styles.input,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    marginBottom: 8,
+                  },
+                ]}
                 placeholder="Zone name (optional)"
                 placeholderTextColor={colors.muted}
                 value={zoneName}
                 onChangeText={setZoneName}
               />
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: "#22c55e", opacity: zonePartitionLoading ? 0.7 : 1 }]}
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: "#22c55e",
+                    opacity: zonePartitionLoading ? 0.7 : 1,
+                  },
+                ]}
                 onPress={sendToZones}
                 disabled={zonePartitionLoading}
               >
                 {zonePartitionLoading ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <MaterialCommunityIcons name="vector-polygon" size={16} color="#fff" />
+                  <MaterialCommunityIcons
+                    name="vector-polygon"
+                    size={16}
+                    color="#fff"
+                  />
                 )}
                 <Text style={styles.actionBtnText}>
-                  {zonePartitionLoading ? "Partitioning…" : "Partition & send to Zones"}
+                  {zonePartitionLoading
+                    ? "Partitioning…"
+                    : "Partition & send to Zones"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -824,17 +1101,41 @@ export default function ExtractContent() {
             {metrics && (
               <View style={{ marginTop: 8, marginBottom: 8 }}>
                 <Text style={[styles.metricsLabel, { color: colors.muted }]}>
-                  {polygon?.geometry.coordinates[0].length ? polygon.geometry.coordinates[0].length - 1 : 0} vertices — polygon ready
+                  {polygon?.geometry.coordinates[0].length
+                    ? polygon.geometry.coordinates[0].length - 1
+                    : 0}{" "}
+                  vertices — polygon ready
                 </Text>
                 {metrics.segments.length > 0 && (
                   <View style={{ marginTop: 4 }}>
-                    <Text style={[styles.metricsLabel, { color: colors.muted }]}>Segments</Text>
+                    <Text
+                      style={[styles.metricsLabel, { color: colors.muted }]}
+                    >
+                      Segments
+                    </Text>
                     {metrics.segments.slice(0, 4).map((seg, i) => (
-                      <Text key={i} style={[styles.segmentText, { color: colors.text, fontFamily: Fonts?.mono }]}>
-                        Pt{seg.from} → Pt{seg.to}: {seg.distanceKm.toFixed(2)} km
+                      <Text
+                        key={i}
+                        style={[
+                          styles.segmentText,
+                          { color: colors.text, fontFamily: Fonts?.mono },
+                        ]}
+                      >
+                        Pt{seg.from} → Pt{seg.to}: {seg.distanceKm.toFixed(2)}{" "}
+                        km
                       </Text>
                     ))}
-                    <Text style={[styles.segmentText, { color: colors.primary, fontFamily: Fonts?.mono, marginTop: 4, fontWeight: "600" }]}>
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        {
+                          color: colors.primary,
+                          fontFamily: Fonts?.mono,
+                          marginTop: 4,
+                          fontWeight: "600",
+                        },
+                      ]}
+                    >
                       Total: {metrics.perimeterKm.toFixed(2)} km
                     </Text>
                   </View>
@@ -849,7 +1150,11 @@ export default function ExtractContent() {
                   style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
                   onPress={downloadGeoJSON}
                 >
-                  <MaterialCommunityIcons name="download" size={16} color="#fff" />
+                  <MaterialCommunityIcons
+                    name="download"
+                    size={16}
+                    color="#fff"
+                  />
                   <Text style={styles.actionBtnText}>Download GeoJSON</Text>
                 </TouchableOpacity>
               </View>
@@ -875,10 +1180,17 @@ function StatBox({
 }) {
   return (
     <View style={[styles.statBox, { borderColor: colors.border }]}>
-      <Text style={[styles.statBoxValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
+      <Text
+        style={[
+          styles.statBoxValue,
+          { color: colors.text, fontFamily: Fonts?.mono },
+        ]}
+      >
         {value}
       </Text>
-      <Text style={[styles.statBoxLabel, { color: colors.muted }]}>{label}</Text>
+      <Text style={[styles.statBoxLabel, { color: colors.muted }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -896,7 +1208,8 @@ function NativeExtractFallback({
   colors: ReturnType<typeof import("@/hooks/use-colors").useColors>;
   insets: { top: number; bottom: number };
 }) {
-  const [polygon, setPolygon] = useState<GeoJSON.Feature<GeoJSON.Polygon> | null>(null);
+  const [polygon, setPolygon] =
+    useState<GeoJSON.Feature<GeoJSON.Polygon> | null>(null);
   const [metrics, setMetrics] = useState<MeasurementMetrics | null>(null);
   const [elevationLoading, setElevationLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -907,14 +1220,18 @@ function NativeExtractFallback({
   const [drawMode, setDrawMode] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [zoneTruckCount, setZoneTruckCount] = useState("2");
-  const [zoneBalanceMetric, setZoneBalanceMetric] = useState<"time" | "distance">("time");
+  const [zoneBalanceMetric, setZoneBalanceMetric] = useState<
+    "time" | "distance"
+  >("time");
   const [zoneName, setZoneName] = useState("");
   const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
   const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
-  const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
+  const [dims, setDims] = useState<{ width: number; height: number } | null>(
+    null,
+  );
 
   // Lazy require to avoid pulling native modules at module scope on web
   const { RouteMap } = require("@/components/route-map") as { RouteMap: any };
@@ -936,21 +1253,26 @@ function NativeExtractFallback({
       try {
         const m = computePolygonMetrics(feat);
         setMetrics(m);
-        
+
         // Fetch elevation for polygon vertices
         setElevationLoading(true);
         const points = drawPoints.map(([lon, lat]) => ({ lat, lon }));
         getElevationForPoints(points)
           .then((elevations) => {
             if (elevations.length > 0) {
-              const elevationValues = elevations.map((e) => e.elevationMeters).sort((a, b) => a - b);
+              const elevationValues = elevations
+                .map((e) => e.elevationMeters)
+                .sort((a, b) => a - b);
               const min = elevationValues[0];
               const max = elevationValues[elevationValues.length - 1];
               const midIdx = Math.floor(elevationValues.length / 2);
-              const median = elevationValues.length % 2 === 0
-                ? (elevationValues[midIdx - 1] + elevationValues[midIdx]) / 2
-                : elevationValues[midIdx];
-              setMetrics((prev) => prev ? { ...prev, elevation: { min, median, max } } : null);
+              const median =
+                elevationValues.length % 2 === 0
+                  ? (elevationValues[midIdx - 1] + elevationValues[midIdx]) / 2
+                  : elevationValues[midIdx];
+              setMetrics((prev) =>
+                prev ? { ...prev, elevation: { min, median, max } } : null,
+              );
             }
           })
           .catch(() => {
@@ -995,14 +1317,18 @@ function NativeExtractFallback({
       (err) => {
         // WebSocket failed — try offline data before showing error
         console.warn("[Extract] WebSocket failed, trying offline data:", err);
-        setProgress({ stage: "building_graph", message: "Trying offline data…" });
+        setProgress({
+          stage: "building_graph",
+          message: "Trying offline data…",
+        });
         const polyGeom = polygon.geometry as GeoJSON.Polygon;
         (async () => {
           try {
             const result = await extractFromDownloadedData(polyGeom, (p) => {
               const stage = p.phase.toLowerCase().includes("graph")
                 ? "building_graph"
-                : p.phase.toLowerCase().includes("clip") || p.phase.toLowerCase().includes("tile")
+                : p.phase.toLowerCase().includes("clip") ||
+                    p.phase.toLowerCase().includes("tile")
                   ? "clipping"
                   : "downloading";
               setProgress({
@@ -1050,35 +1376,49 @@ function NativeExtractFallback({
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      Alert.alert("Zone partitioning", "Polygon must have at least 3 vertices.");
+      Alert.alert(
+        "Zone partitioning",
+        "Polygon must have at least 3 vertices.",
+      );
       return;
     }
     if (!resultHash) {
       Alert.alert(
         "Run Extract & Process first",
-        "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones."
+        "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones.",
       );
       return;
     }
-    const truckCount = Math.max(1, Math.min(12, parseInt(zoneTruckCount, 10) || 2));
-    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [lat, lng]);
+    const truckCount = Math.max(
+      1,
+      Math.min(12, parseInt(zoneTruckCount, 10) || 2),
+    );
+    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [
+      lat,
+      lng,
+    ]);
     setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };
       if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
-        geojson = offlineGeoJSONRef.current as { type: string; features: unknown[] };
+        geojson = offlineGeoJSONRef.current as {
+          type: string;
+          features: unknown[];
+        };
       } else {
         const res = await fetch(httpGeoJSONUrl(resultHash!));
         if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
         geojson = (await res.json()) as { type: string; features: unknown[] };
       }
-      if (!geojson?.features?.length) throw new Error("Extract result has no road features.");
+      if (!geojson?.features?.length)
+        throw new Error("Extract result has no road features.");
       const { zones } = await partitionZonesFromGeoJSON({
         geojson: { type: "FeatureCollection", features: geojson.features },
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
-      const name = zoneName.trim() || `Zones ${new Date().toLocaleDateString()}`;
+      const name =
+        zoneName.trim() || `Zones ${new Date().toLocaleDateString()}`;
       addSavedZone({
         name,
         polygon: polygonLatLon,
@@ -1088,7 +1428,7 @@ function NativeExtractFallback({
       });
       Alert.alert(
         "Sent to Zones",
-        "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map."
+        "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map.",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1097,20 +1437,32 @@ function NativeExtractFallback({
         "Zone partitioning failed",
         is404Or503
           ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
-          : msg
+          : msg,
       );
     } finally {
       setZonePartitionLoading(false);
     }
-  }, [polygon, resultHash, zoneTruckCount, zoneBalanceMetric, zoneName, addSavedZone]);
+  }, [
+    polygon,
+    resultHash,
+    zoneTruckCount,
+    zoneBalanceMetric,
+    zoneName,
+    addSavedZone,
+  ]);
 
   const stageColor = progress ? STAGE_COLORS[progress.stage] : "#6b7280";
 
-  const mapHeight = dims ? dims.height * 0.55 : Dimensions.get("window").height * 0.55;
+  const mapHeight = dims
+    ? dims.height * 0.55
+    : Dimensions.get("window").height * 0.55;
   const mapWidth = dims?.width ?? Dimensions.get("window").width;
 
   // Pass polygon vertices as osmExtractionPoints so they render on the native map
-  const extractionPoints = drawPoints.map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
+  const extractionPoints = drawPoints.map(([lon, lat]) => ({
+    latitude: lat,
+    longitude: lon,
+  }));
 
   return (
     <View
@@ -1126,7 +1478,9 @@ function NativeExtractFallback({
           height={mapHeight}
           width={mapWidth}
           onMapPress={handleMapPress}
-          osmExtractionPolygon={extractionPoints.length >= 3 ? extractionPoints : undefined}
+          osmExtractionPolygon={
+            extractionPoints.length >= 3 ? extractionPoints : undefined
+          }
           osmExtractionPoints={extractionPoints}
         />
         {/* Polygon Info Panel - Google Earth style */}
@@ -1142,15 +1496,20 @@ function NativeExtractFallback({
             ]}
           >
             <View style={styles.polygonInfoHeader}>
-              <MaterialCommunityIcons name="vector-polygon" size={18} color={colors.primary} />
+              <MaterialCommunityIcons
+                name="vector-polygon"
+                size={18}
+                color={colors.primary}
+              />
               <Text style={[styles.polygonInfoTitle, { color: colors.text }]}>
                 {drawPoints.length < 3 ? "Draw Polygon" : "Polygon"}
               </Text>
               <Text style={[styles.vertexCount, { color: colors.muted }]}>
-                {drawPoints.length} {drawPoints.length === 1 ? "vertex" : "vertices"}
+                {drawPoints.length}{" "}
+                {drawPoints.length === 1 ? "vertex" : "vertices"}
               </Text>
             </View>
-            
+
             {drawPoints.length < 3 ? (
               <Text style={[styles.polygonInfoHint, { color: colors.muted }]}>
                 Tap map to place at least 3 vertices
@@ -1158,51 +1517,105 @@ function NativeExtractFallback({
             ) : metrics ? (
               <>
                 <View style={styles.polygonMetricRow}>
-                  <Text style={[styles.polygonMetricLabel, { color: colors.muted }]}>Perimeter</Text>
-                  <Text style={[styles.polygonMetricValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
-                    {metrics.perimeterKm < 1 
-                      ? `${(metrics.perimeterKm * 1000).toFixed(2)} m` 
+                  <Text
+                    style={[styles.polygonMetricLabel, { color: colors.muted }]}
+                  >
+                    Perimeter
+                  </Text>
+                  <Text
+                    style={[
+                      styles.polygonMetricValue,
+                      { color: colors.text, fontFamily: Fonts?.mono },
+                    ]}
+                  >
+                    {metrics.perimeterKm < 1
+                      ? `${(metrics.perimeterKm * 1000).toFixed(2)} m`
                       : `${metrics.perimeterKm.toFixed(2)} km`}
                   </Text>
                 </View>
-                
+
                 <View style={styles.polygonMetricRow}>
-                  <Text style={[styles.polygonMetricLabel, { color: colors.muted }]}>Area</Text>
-                  <Text style={[styles.polygonMetricValue, { color: colors.text, fontFamily: Fonts?.mono }]}>
-                    {metrics.areaKm2 < 0.001 
+                  <Text
+                    style={[styles.polygonMetricLabel, { color: colors.muted }]}
+                  >
+                    Area
+                  </Text>
+                  <Text
+                    style={[
+                      styles.polygonMetricValue,
+                      { color: colors.text, fontFamily: Fonts?.mono },
+                    ]}
+                  >
+                    {metrics.areaKm2 < 0.001
                       ? `${(metrics.areaKm2 * 1000000).toFixed(2)} m²`
-                      : metrics.areaKm2 < 1 
-                        ? `${(metrics.areaKm2 * 1000000).toFixed(0)} m²` 
+                      : metrics.areaKm2 < 1
+                        ? `${(metrics.areaKm2 * 1000000).toFixed(0)} m²`
                         : `${metrics.areaKm2.toFixed(2)} km²`}
                   </Text>
                 </View>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={styles.advancedToggle}
                   onPress={() => setShowAdvanced(!showAdvanced)}
                 >
-                  <Text style={[styles.advancedToggleText, { color: colors.primary }]}>
+                  <Text
+                    style={[
+                      styles.advancedToggleText,
+                      { color: colors.primary },
+                    ]}
+                  >
                     Advanced measurements
                   </Text>
-                  <MaterialCommunityIcons 
-                    name={showAdvanced ? "chevron-up" : "chevron-down"} 
-                    size={18} 
-                    color={colors.primary} 
+                  <MaterialCommunityIcons
+                    name={showAdvanced ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
-                
+
                 {showAdvanced && (
-                  <View style={[styles.advancedSection, { borderTopColor: colors.border }]}>
+                  <View
+                    style={[
+                      styles.advancedSection,
+                      { borderTopColor: colors.border },
+                    ]}
+                  >
                     <View style={styles.polygonMetricRow}>
-                      <Text style={[styles.polygonMetricLabel, { color: colors.muted }]}>Elevation estimate</Text>
+                      <Text
+                        style={[
+                          styles.polygonMetricLabel,
+                          { color: colors.muted },
+                        ]}
+                      >
+                        Elevation estimate
+                      </Text>
                       {elevationLoading ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
+                        <ActivityIndicator
+                          size="small"
+                          color={colors.primary}
+                        />
                       ) : metrics.elevation ? (
-                        <Text style={[styles.polygonMetricValue, { color: colors.text, fontFamily: Fonts?.mono, fontSize: 11 }]}>
-                          Min: {metrics.elevation.min.toFixed(1)}m | Med: {metrics.elevation.median.toFixed(1)}m | Max: {metrics.elevation.max.toFixed(1)}m
+                        <Text
+                          style={[
+                            styles.polygonMetricValue,
+                            {
+                              color: colors.text,
+                              fontFamily: Fonts?.mono,
+                              fontSize: 11,
+                            },
+                          ]}
+                        >
+                          Min: {metrics.elevation.min.toFixed(1)}m | Med:{" "}
+                          {metrics.elevation.median.toFixed(1)}m | Max:{" "}
+                          {metrics.elevation.max.toFixed(1)}m
                         </Text>
                       ) : (
-                        <Text style={[styles.polygonMetricValue, { color: colors.muted, fontSize: 11 }]}>
+                        <Text
+                          style={[
+                            styles.polygonMetricValue,
+                            { color: colors.muted, fontSize: 11 },
+                          ]}
+                        >
                           Not available
                         </Text>
                       )}
@@ -1215,13 +1628,33 @@ function NativeExtractFallback({
         )}
       </View>
 
-      <ScrollView style={[styles.nativePanel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={[styles.nativeTitle, { color: colors.text }]}>Overture Extract</Text>
+      <ScrollView
+        style={[
+          styles.nativePanel,
+          { backgroundColor: colors.surface, borderTopColor: colors.border },
+        ]}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={[styles.nativeTitle, { color: colors.text }]}>
+            Overture Extract
+          </Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {drawPoints.length > 0 && (
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.muted + "66", flex: 0, paddingHorizontal: 12 }]}
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: colors.muted + "66",
+                    flex: 0,
+                    paddingHorizontal: 12,
+                  },
+                ]}
                 onPress={() => setDrawPoints((prev) => prev.slice(0, -1))}
               >
                 <MaterialCommunityIcons name="undo" size={16} color="#fff" />
@@ -1230,7 +1663,14 @@ function NativeExtractFallback({
             )}
             {drawPoints.length > 0 && (
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: "#ef4444", flex: 0, paddingHorizontal: 12 }]}
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: "#ef4444",
+                    flex: 0,
+                    paddingHorizontal: 12,
+                  },
+                ]}
                 onPress={clearDraw}
               >
                 <MaterialCommunityIcons name="close" size={16} color="#fff" />
@@ -1241,7 +1681,12 @@ function NativeExtractFallback({
         </View>
 
         {!polygon && (
-          <Text style={[styles.nativeSubtitle, { color: colors.muted, marginTop: 4 }]}>
+          <Text
+            style={[
+              styles.nativeSubtitle,
+              { color: colors.muted, marginTop: 4 },
+            ]}
+          >
             Tap on the map to place at least 3 vertices to draw a polygon.
           </Text>
         )}
@@ -1249,20 +1694,37 @@ function NativeExtractFallback({
         {progress && (
           <View style={[styles.progressSection, { marginTop: 12 }]}>
             <View style={styles.progressHeader}>
-              <View style={[styles.stageBadge, { backgroundColor: stageColor + "22" }]}>
-                <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
+              <View
+                style={[
+                  styles.stageBadge,
+                  { backgroundColor: stageColor + "22" },
+                ]}
+              >
+                <View
+                  style={[styles.stageDot, { backgroundColor: stageColor }]}
+                />
                 <Text style={[styles.stageText, { color: stageColor }]}>
                   {progress.stage.replace("_", " ")}
                 </Text>
               </View>
-              <Text style={[styles.progressMessage, { color: colors.muted }]}>{progress.message}</Text>
+              <Text style={[styles.progressMessage, { color: colors.muted }]}>
+                {progress.message}
+              </Text>
             </View>
             {progress.percent != null && (
-              <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
+              <View
+                style={[
+                  styles.progressBarBg,
+                  { backgroundColor: colors.border },
+                ]}
+              >
                 <View
                   style={[
                     styles.progressBarFill,
-                    { width: `${Math.min(100, progress.percent)}%`, backgroundColor: stageColor },
+                    {
+                      width: `${Math.min(100, progress.percent)}%`,
+                      backgroundColor: stageColor,
+                    },
                   ]}
                 />
               </View>
@@ -1273,19 +1735,38 @@ function NativeExtractFallback({
         {/* Stats grid - Roads = raw segments, Nodes = intersections, Edges = graph edges */}
         {resultStats && (
           <View style={[styles.statsGrid, { marginTop: 12 }]}>
-            <StatBox label="Roads" value={resultStats.roads > 0 ? String(resultStats.roads) : "—"} colors={colors} />
-            <StatBox label="Nodes" value={String(resultStats.nodes)} colors={colors} />
-            <StatBox label="Edges" value={String(resultStats.edges)} colors={colors} />
+            <StatBox
+              label="Roads"
+              value={resultStats.roads > 0 ? String(resultStats.roads) : "—"}
+              colors={colors}
+            />
+            <StatBox
+              label="Nodes"
+              value={String(resultStats.nodes)}
+              colors={colors}
+            />
+            <StatBox
+              label="Edges"
+              value={String(resultStats.edges)}
+              colors={colors}
+            />
           </View>
         )}
 
         {polygon && !extracting && (
           <>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: "#8b5cf6", marginTop: 12 }]}
+              style={[
+                styles.actionBtn,
+                { backgroundColor: "#8b5cf6", marginTop: 12 },
+              ]}
               onPress={extractAndProcess}
             >
-              <MaterialCommunityIcons name="cloud-download-outline" size={16} color="#fff" />
+              <MaterialCommunityIcons
+                name="cloud-download-outline"
+                size={16}
+                color="#fff"
+              />
               <Text style={styles.actionBtnText}>Extract & Process</Text>
             </TouchableOpacity>
             {metrics && (
@@ -1295,13 +1776,34 @@ function NativeExtractFallback({
                 </Text>
                 {metrics.segments.length > 0 && (
                   <View style={{ marginTop: 6 }}>
-                    <Text style={[styles.metricsLabel, { color: colors.muted }]}>Segments</Text>
+                    <Text
+                      style={[styles.metricsLabel, { color: colors.muted }]}
+                    >
+                      Segments
+                    </Text>
                     {metrics.segments.slice(0, 4).map((seg, i) => (
-                      <Text key={i} style={[styles.segmentText, { color: colors.text, fontFamily: Fonts?.mono }]}>
-                        Pt{seg.from} → Pt{seg.to}: {seg.distanceKm.toFixed(2)} km
+                      <Text
+                        key={i}
+                        style={[
+                          styles.segmentText,
+                          { color: colors.text, fontFamily: Fonts?.mono },
+                        ]}
+                      >
+                        Pt{seg.from} → Pt{seg.to}: {seg.distanceKm.toFixed(2)}{" "}
+                        km
                       </Text>
                     ))}
-                    <Text style={[styles.segmentText, { color: colors.primary, fontFamily: Fonts?.mono, marginTop: 4, fontWeight: "600" }]}>
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        {
+                          color: colors.primary,
+                          fontFamily: Fonts?.mono,
+                          marginTop: 4,
+                          fontWeight: "600",
+                        },
+                      ]}
+                    >
                       Total: {metrics.perimeterKm.toFixed(2)} km
                     </Text>
                   </View>
@@ -1313,14 +1815,47 @@ function NativeExtractFallback({
 
         {/* Zone partitioning — send to Map → Zones */}
         {polygon && (
-          <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-            <Text style={[styles.metricsLabel, { color: colors.muted, marginBottom: 8 }]}>
+          <View
+            style={{
+              marginTop: 16,
+              paddingTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+            }}
+          >
+            <Text
+              style={[
+                styles.metricsLabel,
+                { color: colors.muted, marginBottom: 8 },
+              ]}
+            >
               Zone partitioning → send to Zones (Map sidebar)
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <Text style={[styles.metricsLabel, { color: colors.muted }]}>Trucks</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <Text style={[styles.metricsLabel, { color: colors.muted }]}>
+                Trucks
+              </Text>
               <TextInput
-                style={[styles.vehicleInput, { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 48, color: colors.text }]}
+                style={[
+                  styles.vehicleInput,
+                  {
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    minWidth: 48,
+                    color: colors.text,
+                  },
+                ]}
                 value={zoneTruckCount}
                 onChangeText={setZoneTruckCount}
                 keyboardType="number-pad"
@@ -1328,37 +1863,90 @@ function NativeExtractFallback({
                 placeholderTextColor={colors.muted}
               />
               <TouchableOpacity
-                style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "time" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor:
+                      zoneBalanceMetric === "time"
+                        ? "#8b5cf6"
+                        : colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
                 onPress={() => setZoneBalanceMetric("time")}
               >
-                <Text style={{ color: zoneBalanceMetric === "time" ? "#fff" : colors.text, fontSize: 13 }}>Time</Text>
+                <Text
+                  style={{
+                    color: zoneBalanceMetric === "time" ? "#fff" : colors.text,
+                    fontSize: 13,
+                  }}
+                >
+                  Time
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.presetChip, { backgroundColor: zoneBalanceMetric === "distance" ? "#8b5cf6" : colors.background, borderColor: colors.border }]}
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor:
+                      zoneBalanceMetric === "distance"
+                        ? "#8b5cf6"
+                        : colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
                 onPress={() => setZoneBalanceMetric("distance")}
               >
-                <Text style={{ color: zoneBalanceMetric === "distance" ? "#fff" : colors.text, fontSize: 13 }}>Distance</Text>
+                <Text
+                  style={{
+                    color:
+                      zoneBalanceMetric === "distance" ? "#fff" : colors.text,
+                    fontSize: 13,
+                  }}
+                >
+                  Distance
+                </Text>
               </TouchableOpacity>
             </View>
             <TextInput
-              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.text, marginBottom: 8 }]}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  marginBottom: 8,
+                },
+              ]}
               placeholder="Zone name (optional)"
               placeholderTextColor={colors.muted}
               value={zoneName}
               onChangeText={setZoneName}
             />
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: "#22c55e", opacity: zonePartitionLoading ? 0.7 : 1 }]}
+              style={[
+                styles.actionBtn,
+                {
+                  backgroundColor: "#22c55e",
+                  opacity: zonePartitionLoading ? 0.7 : 1,
+                },
+              ]}
               onPress={sendToZones}
               disabled={zonePartitionLoading}
             >
               {zonePartitionLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <MaterialCommunityIcons name="vector-polygon" size={16} color="#fff" />
+                <MaterialCommunityIcons
+                  name="vector-polygon"
+                  size={16}
+                  color="#fff"
+                />
               )}
               <Text style={styles.actionBtnText}>
-                {zonePartitionLoading ? "Partitioning…" : "Partition & send to Zones"}
+                {zonePartitionLoading
+                  ? "Partitioning…"
+                  : "Partition & send to Zones"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1366,13 +1954,20 @@ function NativeExtractFallback({
 
         {extracting && (
           <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: "#ef4444", marginTop: 12 }]}
+            style={[
+              styles.actionBtn,
+              { backgroundColor: "#ef4444", marginTop: 12 },
+            ]}
             onPress={() => {
               cancelRef.current?.cancel();
               setExtracting(false);
             }}
           >
-            <MaterialCommunityIcons name="close-circle-outline" size={16} color="#fff" />
+            <MaterialCommunityIcons
+              name="close-circle-outline"
+              size={16}
+              color="#fff"
+            />
             <Text style={styles.actionBtnText}>Cancel</Text>
           </TouchableOpacity>
         )}
@@ -1381,7 +1976,21 @@ function NativeExtractFallback({
           <View style={[styles.actionsRow, { marginTop: 12 }]}>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
-              onPress={() => Linking.openURL(httpGeoJSONUrl(resultHash))}
+              onPress={() => {
+                if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+                  Share.share({
+                    message: JSON.stringify(offlineGeoJSONRef.current),
+                    title: "offline-extract.geojson",
+                  }).catch(() =>
+                    Alert.alert(
+                      "Share failed",
+                      "Could not share GeoJSON data.",
+                    ),
+                  );
+                } else {
+                  Linking.openURL(httpGeoJSONUrl(resultHash));
+                }
+              }}
             >
               <MaterialCommunityIcons name="download" size={16} color="#fff" />
               <Text style={styles.actionBtnText}>GeoJSON</Text>
@@ -1396,9 +2005,14 @@ function NativeExtractFallback({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function getBBox(feat: GeoJSON.Feature<GeoJSON.Polygon>): [number, number, number, number] {
+function getBBox(
+  feat: GeoJSON.Feature<GeoJSON.Polygon>,
+): [number, number, number, number] {
   const coords = feat.geometry.coordinates[0];
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const [x, y] of coords) {
     if (x < minX) minX = x;
     if (y < minY) minY = y;
@@ -1565,7 +2179,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   stageDot: { width: 8, height: 8, borderRadius: 4 },
-  stageText: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" as any },
+  stageText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "capitalize" as any,
+  },
   progressMessage: { fontSize: 12, flex: 1 },
   progressBarBg: {
     height: 4,
@@ -1589,7 +2207,13 @@ const styles = StyleSheet.create({
   actionBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
   vehicleInput: { fontSize: 14, minWidth: 48 },
-  input: { fontSize: 14, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
+  input: {
+    fontSize: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
 
   // Native fallback
   nativePanel: {
