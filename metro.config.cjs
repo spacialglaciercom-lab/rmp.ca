@@ -15,21 +15,13 @@ const config = getDefaultConfig(__dirname);
 // Avoid "Failed to start watch mode" on Windows (e.g. OneDrive/synced folders).
 // Watchman can time out; Node watcher is more reliable here.
 if (process.platform === "win32") {
-  config.resolver = config.resolver || {};
-  config.resolver.useWatchman = false;
+  config.watcher = config.watcher || {};
+  config.watcher.watchman = config.watcher.watchman || {};
+  config.watcher.watchman.enabled = false;
 }
 
-const configWithNativeWind = withNativeWind(config, {
-  input: "./global.css",
-});
-
-// Apply our resolver on top of NativeWind's so we wrap (not replace) the chain.
-// Avoids "Cannot read properties of undefined (reading 'get')" in Metro DependencyGraph.
-const defaultResolveRequest = configWithNativeWind.resolver.resolveRequest;
-if (typeof defaultResolveRequest !== "function") {
-  throw new Error("metro.config.cjs: NativeWind did not set resolver.resolveRequest");
-}
-
+// Set our custom resolver BEFORE withNativeWind so NativeWind wraps it.
+// Fall through via context.resolveRequest (Metro's default resolver chain).
 const projectRoot = __dirname;
 
 const codegenStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-codegen-web.js");
@@ -39,7 +31,7 @@ const rnwebviewStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-na
 const extensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
 // Always resolve 'buffer' to our shim (under projectRoot) so Metro never uses module name for SHA-1
 const bufferShimPath = path.resolve(projectRoot, "lib", "buffer-shim.js");
-configWithNativeWind.resolver.resolveRequest = (context, moduleName, platform) => {
+config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === "buffer") {
     return { type: "sourceFile", filePath: bufferShimPath };
   }
@@ -93,7 +85,9 @@ configWithNativeWind.resolver.resolveRequest = (context, moduleName, platform) =
       }
     }
   }
-  return defaultResolveRequest(context, moduleName, platform);
+  return context.resolveRequest(context, moduleName, platform);
 };
 
-module.exports = configWithNativeWind;
+module.exports = withNativeWind(config, {
+  input: "./global.css",
+});
