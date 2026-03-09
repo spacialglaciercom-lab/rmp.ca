@@ -25,10 +25,12 @@ const helpSections: HelpSection[] = [
     title: "Getting Started",
     icon: "play-circle-outline",
     content: [
-      "RouteMasterPro helps you plan efficient routes for waste collection and management.",
-      "Import your collection points from OSM data or add them manually.",
-      "The app will calculate the optimal route using advanced algorithms.",
-      "Use the map view to visualize your route and make adjustments as needed."
+      "RouteMasterPro plans efficient routes for both waste collection and delivery operations.",
+      "Planner tab: import an OSM file to build a road-network route. The backend optimizes it using a Chinese Postman algorithm and returns turn-by-turn directions.",
+      "Zones tab – Delivery mode: tap '＋ New partition', paste polygon coordinates, choose truck count and balance metric, then tap Run Partition. The backend extracts roads and splits them into balanced zones.",
+      "Zones tab – Waste mode: add bin/dumpster locations on the map (manually, from GPS, or via CSV/GeoJSON import), then run Partition to group them by truck.",
+      "Map tab: view your route, toggle map layers, and use the Extract panel to pull Overture road data for a polygon area.",
+      "Use the Settings tab to enable or disable feature plugins (weather, route optimizer, Overture extraction, zones, AI chat, and more)."
     ]
   },
   {
@@ -48,11 +50,12 @@ const helpSections: HelpSection[] = [
     title: "Route Planning",
     icon: "map-marker-path",
     content: [
-      "Import collection points from OpenStreetMap data.",
-      "Manually add or edit collection points.",
-      "Optimize routes using Eulerian circuit algorithms.",
-      "Consider traffic conditions and road restrictions.",
-      "Save and manage multiple route configurations."
+      "Import an OSM file in the Planner tab to load road network data (nodes, ways, turn restrictions).",
+      "The backend optimizer runs a Chinese Postman Problem (CPP) algorithm to find the shortest path that covers every road segment at least once.",
+      "Configure turn penalties (left turn, U-turn) and oneway mode to reflect real-world driving constraints.",
+      "Use 'Service both sides' mode to optimize two-pass collection on wide streets.",
+      "Export your optimized route as a GPX file to load into navigation apps.",
+      "The Route Optimizer plugin must be enabled in Settings → Plugins for optimization to work."
     ]
   },
   {
@@ -103,8 +106,51 @@ const helpSections: HelpSection[] = [
     ]
   },
   {
+    id: "delivery-zones",
+    title: "Delivery Zones",
+    icon: "vector-polygon",
+    content: [
+      "The Delivery mode on the Zones tab lets you split a geographic area into balanced truck zones without going through the Extract tab.",
+      "Tap '＋ New partition' (sidebar) or '＋ Create zone partition' (empty map area) to open the partition sheet.",
+      "Enter the polygon boundary as a JSON array — [[lat,lon],[lat,lon],...] — or one lat,lon pair per line. You need at least 3 points.",
+      "Set a zone name (optional), choose the number of trucks (1–12), and select the balance metric: Time balances zones by estimated drive time; Distance balances by road length.",
+      "Tap 'Run Partition'. The backend extracts the road network for your polygon and runs spectral clustering to create balanced zones. This may take up to 2 minutes for large areas.",
+      "On success, the zones appear on the map with distinct colors and are saved in the sidebar. Each zone shows its estimated time, distance, and node count.",
+      "You can also create delivery zones from the Extract tab: draw a polygon → extract roads → tap 'Partition & send to Zones'."
+    ]
+  },
+  {
+    id: "extract-overture",
+    title: "Extract & Overture Maps",
+    icon: "download-network-outline",
+    content: [
+      "The Extract panel (Map tab → ☰ sidebar → Extract) lets you pull Overture Maps road data for any polygon you draw.",
+      "Draw a polygon on the map, select road classes to include (residential, tertiary, secondary, etc.), then tap Extract.",
+      "Extraction connects to the Overture backend via WebSocket and downloads, clips, and builds a road graph for your area. Progress is shown in real time.",
+      "After extraction you can: Optimize route (run CPP on the extracted roads), or Partition & send to Zones (split roads into truck zones and save them to the Zones tab).",
+      "The Overture Maps Extraction plugin must be enabled in Settings → Plugins.",
+      "For offline use, download Overture data in advance from Settings → Offline Maps so extraction works without an internet connection."
+    ]
+  },
+  {
+    id: "plugins",
+    title: "Plugins",
+    icon: "puzzle-outline",
+    content: [
+      "Plugins are optional feature modules you can enable or disable in Settings → Plugins.",
+      "Weather: shows a weather overlay on the map and weather-aware route costs in the Planner.",
+      "Route Optimizer: enables the CPP optimization backend used by the Planner and Extract tabs.",
+      "Overture Maps Extraction: enables the polygon-to-road-network extraction panel on the Map tab.",
+      "Zones: enables the Zones tab for delivery and waste zone partitioning.",
+      "AI Chat: enables the AI assistant bubble for natural-language route and constraint queries.",
+      "Drive Preview: enables the route drive-preview feature in the Planner.",
+      "Collection Route & Navigation: enable collection route building and turn-by-turn navigation.",
+      "Disabling a plugin removes its UI and stops its background processes. Re-enabling reloads it immediately without restarting the app."
+    ]
+  },
+  {
     id: "zones-csv-geojson",
-    title: "Zones: CSV / GeoJSON import",
+    title: "Waste Zones: CSV / GeoJSON import",
     icon: "file-upload-outline",
     content: [
       "On the Zones page you can import waste points (bins or dumpsters) from a CSV or GeoJSON file. Use the toolbar Import button, then choose your file.",
