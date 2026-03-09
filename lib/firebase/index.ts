@@ -55,11 +55,19 @@ let storageRef: unknown = null;
 /** Resolves when App Check is initialized (or immediately if Firebase/App Check not used). Await before first Firestore/Storage use. */
 let appCheckReadyPromise: Promise<void> | null = null;
 
-// iOS/native only: load @react-native-firebase in a development build. Web and Expo Go use stubs only (no native Firebase).
-const isExpoGo = Constants.appOwnership === "expo";
-if (Platform.OS !== "web" && !isExpoGo) {
+let nativeInitDone = false;
+
+/**
+ * Load native Firebase (and gRPC/OkHttp) only on first use. Defers init until ensureAppCheckReady()
+ * or first Firestore/Storage use to reduce startup memory and avoid OOM on low-memory devices
+ * (e.g. tablets, Rebecco) where gRPC can exhaust the heap if loaded too early.
+ */
+function ensureFirebaseNativeLoaded(): void {
+  if (nativeInitDone || Platform.OS === "web" || Constants.appOwnership === "expo") {
+    return;
+  }
+  nativeInitDone = true;
   try {
-    // Lazy load via require() so we don't crash in Expo Go or when Firebase isn't linked; top-level import would run at bundle load.
     const firebaseApp = require("@react-native-firebase/app");
     firebase = firebaseApp.default;
     require("@react-native-firebase/crashlytics");
@@ -70,8 +78,6 @@ if (Platform.OS !== "web" && !isExpoGo) {
     db = (database as () => unknown)();
     storageRef = (storage as () => unknown)();
 
-    // App Check: must be initialized before any Firestore/Storage/Realtime DB calls or backend returns "token is invalid".
-    const appCheckModule = require("@react-native-firebase/app-check");
     const appCheckApi = (firebase as { appCheck: () => { initializeAppCheck: (opts: unknown) => Promise<void>; newReactNativeFirebaseAppCheckProvider: () => { configure: (opts: unknown) => void } } }).appCheck?.();
     if (appCheckApi) {
       const debugToken =
@@ -102,8 +108,9 @@ if (Platform.OS !== "web" && !isExpoGo) {
   }
 }
 
-/** Call before first Firestore/Storage/Realtime DB use so App Check token is ready. No-op if Firebase or App Check is not used. */
+/** Call before first Firestore/Storage/Realtime DB use so App Check token is ready. Triggers lazy native Firebase/gRPC init. */
 export function ensureAppCheckReady(): Promise<void> {
+  ensureFirebaseNativeLoaded();
   return appCheckReadyPromise ?? Promise.resolve();
 }
 

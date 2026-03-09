@@ -230,6 +230,7 @@ const config = {
     "./plugins/withRNFBFirestoreFix.js",
     "./plugins/withExpoVideoRecordingFix.js",
     "./plugins/withAndroidExcludeMoonshine.js",
+    "./plugins/withAndroidLargeHeap.js",
     // Leap SDK is iOS-only (requires Swift/SPM). Disabled for Android builds.
     // To enable for iOS: set EXPO_LEAP_SDK=1 and ensure modules/leap-extract exists
     ...(process.env.EXPO_LEAP_SDK === "1" ? [["./plugins/withLeapSdk.js", { version: "0.9.2" }]] : []),
