@@ -46,7 +46,13 @@ async function getLocationNative(): Promise<{ lat: number; lon: number }> {
 }
 
 function HeaderWeatherInner({ textColor }: { textColor: string }) {
-  const [display, setDisplay] = useState<{ temp: number; main: string } | null>(null);
+  const [display, setDisplay] = useState<{
+    temp: number;
+    main: string;
+    feelsLike?: number;
+    wind?: string;
+    humidity?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [hasSource, setHasSource] = useState(false);
@@ -68,9 +74,22 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
       if (useGoogle) {
         const cur = await getGoogleCurrentConditions(coords.lat, coords.lon);
         if (cur?.temperature) {
+          const w = cur.wind;
+          let windStr: string | undefined;
+          if (w?.speed?.value) {
+            const spd = Math.round(w.speed.value);
+            const unit = w.speed.unit === "MILES_PER_HOUR" ? "mph" : "km/h";
+            const dir = cardinalAbbrev(w.direction?.cardinal);
+            windStr = `${dir ? dir + " " : ""}${spd} ${unit}`;
+          }
           setDisplay({
             temp: Math.round(cur.temperature.degrees ?? 0),
             main: cur.weatherCondition?.description?.text ?? "—",
+            feelsLike: cur.feelsLikeTemperature?.degrees != null
+              ? Math.round(cur.feelsLikeTemperature.degrees)
+              : undefined,
+            wind: windStr,
+            humidity: cur.relativeHumidity ?? undefined,
           });
         } else {
           setDisplay(null);
@@ -82,8 +101,13 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
             ? {
                 temp: Math.round(w.temp),
                 main: w.condition?.main ?? "",
+                feelsLike: Math.round(w.feelsLike),
+                wind: w.windSpeed > 0
+                  ? `${Math.round(w.windSpeed * 3.6)} km/h`
+                  : undefined,
+                humidity: w.humidity,
               }
-            : null
+            : null,
         );
       }
     } catch {
@@ -124,32 +148,81 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
     );
   }
 
-  const { temp, main } = display;
+  const { temp, main, feelsLike, wind, humidity } = display;
+
+  // Secondary line: wind and/or humidity
+  const secondaryParts: string[] = [];
+  if (wind) secondaryParts.push(`💨 ${wind}`);
+  if (humidity != null) secondaryParts.push(`${humidity}% hum`);
+  const secondary = secondaryParts.join(" · ");
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.temp, { color: textColor }]}>{temp}°</Text>
-      <Text style={[styles.condition, { color: textColor }]} numberOfLines={1}>
-        {main}
-      </Text>
+      <View style={styles.column}>
+        <View style={styles.mainRow}>
+          <Text style={[styles.temp, { color: textColor }]}>{temp}°</Text>
+          <Text style={[styles.condition, { color: textColor }]} numberOfLines={1}>
+            {main}
+          </Text>
+          {feelsLike != null && (
+            <Text style={[styles.feelsLike, { color: textColor }]}>
+              · feels {feelsLike}°
+            </Text>
+          )}
+        </View>
+        {secondary.length > 0 && (
+          <Text style={[styles.secondary, { color: textColor }]} numberOfLines={1}>
+            {secondary}
+          </Text>
+        )}
+      </View>
     </View>
   );
+}
+
+function cardinalAbbrev(cardinal?: string): string {
+  if (!cardinal) return "";
+  const map: Record<string, string> = {
+    NORTH: "N", NORTHEAST: "NE", EAST: "E", SOUTHEAST: "SE",
+    SOUTH: "S", SOUTHWEST: "SW", WEST: "W", NORTHWEST: "NW",
+    NORTH_NORTHEAST: "NNE", EAST_NORTHEAST: "ENE", EAST_SOUTHEAST: "ESE",
+    SOUTH_SOUTHEAST: "SSE", SOUTH_SOUTHWEST: "SSW",
+    WEST_SOUTHWEST: "WSW", WEST_NORTHWEST: "WNW", NORTH_NORTHWEST: "NNW",
+  };
+  return map[cardinal.toUpperCase()] ?? cardinal;
 }
 
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+  },
+  column: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+  },
+  mainRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   temp: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "600",
   },
   condition: {
     fontSize: 13,
     opacity: 0.9,
-    maxWidth: 72,
+    maxWidth: 80,
+  },
+  feelsLike: {
+    fontSize: 12,
+    opacity: 0.75,
+  },
+  secondary: {
+    fontSize: 11,
+    opacity: 0.7,
+    marginTop: 1,
   },
 });
 
