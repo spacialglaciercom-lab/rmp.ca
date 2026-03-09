@@ -221,14 +221,22 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
         if (!geom) continue;
 
         if (geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
-          if (points.length < maxPoint) points.push({ key: f.id, lon: geom.coordinates[0] as number, lat: geom.coordinates[1] as number });
+          const lon = geom.coordinates[0] as number;
+          const lat = geom.coordinates[1] as number;
+          if (!isNaN(lon) && !isNaN(lat) && isFinite(lon) && isFinite(lat) && points.length < maxPoint) {
+            points.push({ key: f.id, lon, lat });
+          }
         } else if (geom.type === "LineString" && Array.isArray(geom.coordinates)) {
           if (lines.length >= maxLine) continue;
-          const coords = (geom.coordinates as number[][]).map((c) => ({ latitude: c[1], longitude: c[0] }));
+          const coords = (geom.coordinates as number[][])
+            .map((c) => ({ latitude: c[1], longitude: c[0] }))
+            .filter((c) => !isNaN(c.latitude) && !isNaN(c.longitude) && isFinite(c.latitude) && isFinite(c.longitude));
           if (coords.length >= 2) lines.push({ key: f.id, coords });
         } else if (geom.type === "Polygon" && Array.isArray(geom.coordinates) && geom.coordinates[0]) {
           if (polys.length >= maxPoly) continue;
-          const ring = (geom.coordinates[0] as number[][]).map((c) => ({ latitude: c[1], longitude: c[0] }));
+          const ring = (geom.coordinates[0] as number[][])
+            .map((c) => ({ latitude: c[1], longitude: c[0] }))
+            .filter((c) => !isNaN(c.latitude) && !isNaN(c.longitude) && isFinite(c.latitude) && isFinite(c.longitude));
           if (ring.length >= 3) polys.push({ key: f.id, coords: ring });
         }
       }
@@ -746,9 +754,11 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
           </>
         ) : null}
         {osmExtractionPolygon && osmExtractionPolygon.length >= 3 && (() => {
-          const closed = osmExtractionPolygon.length > 0
-            ? [...osmExtractionPolygon, osmExtractionPolygon[0]]
-            : osmExtractionPolygon;
+          const validPoly = osmExtractionPolygon.filter((p) => !isNaN(p.latitude) && !isNaN(p.longitude) && isFinite(p.latitude) && isFinite(p.longitude));
+          if (validPoly.length < 3) return null;
+          const closed = validPoly.length > 0
+            ? [...validPoly, validPoly[0]]
+            : validPoly;
           const outlineBlue = "#3b82f6";
           return (
             <>
@@ -795,7 +805,9 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
               const passThroughTouches = !!onMapPress; // when picking location (e.g. Zones Add bin), let map onPress fire
               return zonesPreviewPolygons.map((poly, idx) => {
                 if (poly.length < 3) return null;
-                const closed = [...poly, poly[0]];
+                const validPoly = poly.filter((p) => !isNaN(p.latitude) && !isNaN(p.longitude) && isFinite(p.latitude) && isFinite(p.longitude));
+                if (validPoly.length < 3) return null;
+                const closed = [...validPoly, validPoly[0]];
                 const fillColor = zoneFillColors[idx % zoneFillColors.length];
                 const strokeColor = zoneStrokeColors[idx % zoneStrokeColors.length];
                 return (
@@ -820,8 +832,10 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
               });
             })()
           : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (() => {
+              const validPoly = zonesPreviewPolygon.filter((p) => !isNaN(p.latitude) && !isNaN(p.longitude) && isFinite(p.latitude) && isFinite(p.longitude));
+              if (validPoly.length < 3) return null;
               const passThroughTouches = !!onMapPress;
-              const closed = [...zonesPreviewPolygon, zonesPreviewPolygon[0]];
+              const closed = [...validPoly, validPoly[0]];
               const fillOrange = "rgba(249, 115, 22, 0.25)";
               const strokeOrange = "#f97316";
               return (
@@ -847,7 +861,9 @@ export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(functi
               );
             })()}
         {wastePoints.length > 0 &&
-          wastePoints.map((p) => (
+          wastePoints
+            .filter((p) => !isNaN(p.lat) && !isNaN(p.lon) && isFinite(p.lat) && isFinite(p.lon))
+            .map((p) => (
             <Marker
               key={p.id}
               coordinate={{ latitude: p.lat, longitude: p.lon }}
