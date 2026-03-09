@@ -8,6 +8,7 @@
     "test:spatial": "node -e \"require('./scripts/spatialTest.js')\"",
     "dev": "cross-env CI=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port 19007",
     "dev:clear": "cross-env CI=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port 19007 --clear",
+    "dev:local": "bash scripts/dev-local.sh",
     "dev:server": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:all": "concurrently -k \"npm run dev:server\" \"npm run dev\"",
     "build": "expo export -p web",
