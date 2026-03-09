@@ -15,7 +15,7 @@ import { length as turfLength } from "@turf/length";
 // WS_BASE: direct to extract service by default; set EXPO_PUBLIC_OVERTURE_WS_BASE to use main backend proxy.
 // ---------------------------------------------------------------------------
 const DEFAULT_EXTRACT_BASE =
-  "https://webovertureextract-286569721223.northamerica-northeast1.run.app";
+  "https://webovertureextract2-286569721223.northamerica-northeast1.run.app";
 const defaultHttpBase =
   process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
   Constants.expoConfig?.extra?.extractUrl ??
