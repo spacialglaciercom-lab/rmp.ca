@@ -19,7 +19,7 @@ import { createLogger } from "./logger";
 const log = createLogger("ws-extract-proxy");
 
 /** Public web extractor backend (Railway). Override with EXTRACT_WS_UPSTREAM if your service URL differs (e.g. typo). */
-const DEFAULT_EXTRACT_UPSTREAM = "https://webovertureextract-286569721223.northamerica-northeast1.run.app";
+const DEFAULT_EXTRACT_UPSTREAM = "https://webovertureextract2-286569721223.northamerica-northeast1.run.app";
 const UPSTREAM_HTTP =
   process.env.EXTRACT_WS_UPSTREAM ||
   process.env.OPTIMIZER_WS_UPSTREAM ||
