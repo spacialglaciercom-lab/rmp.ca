@@ -148,6 +148,14 @@ const config = {
     predictiveBackGestureEnabled: true,
     package: env.androidPackage,
     permissions: ["POST_NOTIFICATIONS", "ACCESS_BACKGROUND_LOCATION"],
+    queries: [
+      {
+        package: "com.google.android.gms",
+      },
+      {
+        package: "com.android.vending",
+      },
+    ],
     intentFilters: [
       {
         action: "VIEW",
