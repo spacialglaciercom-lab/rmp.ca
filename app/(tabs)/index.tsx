@@ -13,6 +13,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  ScrollViewProps,
 } from "react-native";
 import Constants from "expo-constants";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -221,10 +222,10 @@ export default function HomeScreen() {
     );
   };
 
-  const scrollProps = {
-    style: { flex: 1 } as const,
-    contentContainerStyle: [styles.scrollContent, { paddingBottom: 24 }] as const,
-    keyboardShouldPersistTaps: "handled" as const,
+  const scrollProps: ScrollViewProps = {
+    style: { flex: 1 },
+    contentContainerStyle: [styles.scrollContent, { paddingBottom: 24 }],
+    keyboardShouldPersistTaps: "handled",
     showsVerticalScrollIndicator: false,
   };
 

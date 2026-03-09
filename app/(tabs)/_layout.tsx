@@ -28,7 +28,6 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: theme.text,
         tabBarInactiveTintColor: theme.textTertiary,
-        tabBarInactiveOpacity: 0.35,
         headerShown: false,
         tabBarShowLabel: true,
         /** So Planner and all tab content use theme background (fixes Planner staying white in dark mode). */
@@ -44,9 +43,6 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "400",
-        },
-        tabBarActiveLabelStyle: {
-          fontWeight: "600",
         },
         tabBarIconStyle: { marginBottom: 2 },
         tabBarItemStyle: { paddingVertical: 4, minWidth: 64 },
