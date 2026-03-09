@@ -40,6 +40,7 @@
     "eas:ios:dev": "eas build --profile development --platform ios --non-interactive",
     "eas:ios:dev:clean": "eas build --profile development --platform ios --non-interactive --clear-cache",
     "eas:android": "eas build --platform android --non-interactive",
+    "eas:android:preview": "eas build --platform android --profile preview --non-interactive",
     "build:android": "eas build --platform android --non-interactive",
     "eas-build-pre-install": "node scripts/eas-log-package-manager.js",
     "eas-build-post-install": "sh scripts/eas-ios-macro-trust.sh",

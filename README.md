@@ -1,147 +1,153 @@
 # TrashRoute (RouteMaster Pro)
 
-**TrashRoute** (also known as **RouteMaster Pro** / rmp.ca) is a cross-platform app for **waste collection route planning and optimization**. It helps plan and optimize routes using the Chinese Postman problem, zone partitioning, and map-based extraction from OpenStreetMap and Overture.
+**TrashRoute** (also known as **RouteMaster Pro** / [rmp.ca](https://rmp.ca)) is a cross-platform application for **waste collection route planning and optimization**. It leverages the Chinese Postman problem, zone partitioning, and map-based data extraction from OpenStreetMap (OSM) and Overture to build efficient routes.
 
-## Features
+---
 
-- **Map** — View and edit routes on MapLibre (native) or Leaflet (web). Draw polygons, extract road networks from Overture/OSM, and manage layers.
-- **Planner** — Build routes from extracted or imported GeoJSON; run optimization (Chinese Postman / VRP) and zone partitioning.
+## 🚀 Overview
+
+- **Map** — View and edit routes on MapLibre (native) or Leaflet (web). Features include polygon drawing, road network extraction (Overture/OSM), and layer management.
+- **Planner** — Build routes from extracted or imported GeoJSON; run optimization (Chinese Postman / VRP) and spectral zone partitioning.
 - **Route** — View optimized routes, export to GPX, and manage collection points.
-- **Record** — Record routes and collection points in the field (mobile).
-- **Home** — Dashboard with weather, processing queue, and quick access to planning and contribution.
-- **Settings** — Theme, map preferences, OSM/Mapillary sign-in, and app configuration.
+- **Record** — Real-time route recording and collection point logging in the field (mobile).
+- **Home** — Dashboard with weather updates, processing queue, and quick access to planning.
+- **Settings** — Personalization (theme, maps), OSM/Mapillary authentication, and global app configuration.
 
-### Backend & services
+---
 
-- **Node server** — Express + tRPC API, Firebase auth, optional MySQL (Drizzle), AI/LLM and storage integrations. See [server/README.md](server/README.md).
-- **Optimizer** — Chinese Postman and zone partitioning; can run on Railway or another host. See [backend/README.md](backend/README.md) for the Python FastAPI zone-partition service.
-- **Overture extract** — WebSocket service for polygon → GeoJSON extraction (Extract tab). Web and native connect **directly** to the extract service by default; set `EXPO_PUBLIC_OVERTURE_WS_BASE` to your main API URL to use the backend proxy instead. See `.env.example` for URLs.
-
-## Tech stack
+## 🛠 Tech Stack
 
 | Layer | Technologies |
-| :--- | :--- |
-| App | **Expo** (SDK 54), **React Native**, **expo-router**, **NativeWind** (Tailwind), **Zustand** |
-| Maps | MapLibre GL, Leaflet, react-leaflet, OSM, Overture, PMTiles, DuckDB-WASM |
-| API | **tRPC**, **TanStack Query**, **Firebase** (Auth, Firestore, Storage, Analytics) |
-| Server | **Express**, **Drizzle** (MySQL), **Firebase Admin** |
-| Optimization | Custom optimizer service (Chinese Postman, zone partition); Python FastAPI backend for spectral partitioning |
+|---|---|
+| **App** | [Expo](https://expo.dev/) (SDK 54), React Native, [expo-router](https://docs.expo.dev/router/introduction/), [NativeWind](https://www.nativewind.dev/) (Tailwind), Zustand |
+| **Maps** | MapLibre GL, Leaflet, react-leaflet, OSM, Overture, PMTiles, DuckDB-WASM |
+| **API/Backend** | **tRPC**, Express, TanStack Query, [Firebase](https://firebase.google.com/) (Auth, Firestore, Storage, Analytics) |
+| **Database** | [Drizzle ORM](https://orm.drizzle.team/), MySQL/TiDB, MongoDB |
+| **Optimization** | Custom optimizer (Chinese Postman); Python FastAPI backend for spectral partitioning |
+| **AI/Voice** | OpenAI-compatible AI SDK, Genkit, ElevenLabs, Moonshine (transcription) |
 
-## Prerequisites
+---
 
-- **Node.js** 18+ and **pnpm** 9.x (`packageManager` in `package.json`: `pnpm@9.12.0`)
-- For **mobile**: Xcode (iOS) and/or Android Studio, Expo dev client
-- For **zone partition backend**: Python 3.x, see [backend/README.md](backend/README.md)
-- Optional: Firebase project, MySQL/TiDB for user data, API keys (maps, weather, OSM OAuth, etc.)
+## 📋 Requirements
 
-## Setup
+- **Node.js**: 18.x or higher
+- **Package Manager**: [pnpm](https://pnpm.io/) (v10.0.0 specified in `package.json`)
+- **Python**: 3.x (for the zone partition backend)
+- **Mobile Development**:
+  - **iOS**: Xcode & CocoaPods
+  - **Android**: Android Studio & SDK
+- **Optional Services**: Firebase project, MySQL/TiDB instance, API keys (Maps, Weather, OSM OAuth).
 
-1. **Clone and install**
+---
 
-   ```bash
-   git clone <repo-url> rmp.ca && cd rmp.ca
-   pnpm install
-   ```
+## ⚙️ Setup & Installation
 
-2. **Environment**
+1.  **Clone the Repository**
+    ```bash
+    git clone <repo-url> rmp.ca
+    cd rmp.ca
+    ```
 
-   Copy `.env.example` to `.env` and set at least:
+2.  **Install Dependencies**
+    ```bash
+    pnpm install
+    ```
 
-   - `EXPO_PUBLIC_API_BASE_URL` — Node/Express + tRPC server (e.g. `http://localhost:3000` for local).
-   - `EXPO_PUBLIC_OPTIMIZER_URL` — Optimizer API (Chinese Postman, zones). For local dev you can point to a Railway or other deployed URL, or run your own.
-   - `EXPO_PUBLIC_OVERTURE_EXTRACT_URL` — Overture extract service (Extract tab). Optional if you don’t use that flow.
+3.  **Configure Environment Variables**
+    Copy `.env.example` to `.env` and fill in the required values:
+    ```bash
+    cp .env.example .env
+    ```
+    Key variables to set:
+    - `EXPO_PUBLIC_API_BASE_URL`: Your Node/Express + tRPC server.
+    - `EXPO_PUBLIC_OPTIMIZER_URL`: Optimizer API endpoint.
+    - `EXPO_PUBLIC_OVERTURE_EXTRACT_URL`: Overture extract service (WebSocket).
+    - `NGROK_AUTHTOKEN`: Required for mobile tunneling (`pnpm mobile:tunnel`).
 
-   For auth, AI, maps, and DB, see comments in `.env.example` and [server/README.md](server/README.md).
+4.  **Database Migration (if using MySQL)**
+    ```bash
+    pnpm db:push
+    ```
 
-3. **Run**
+---
 
-   **Web (Expo):**
+## 🏃 Commands & Scripts
 
-   ```bash
-   pnpm dev
-   ```
+### Development
+- `pnpm dev` — Start Expo for web (port 19007).
+- `pnpm dev:server` — Start Node.js tRPC server with `tsx watch`.
+- `pnpm dev:all` — Run both the app and the server concurrently.
+- `pnpm mobile` — Start Expo with a clear cache (for mobile testing).
+- `pnpm mobile:ios` / `pnpm mobile:android` — Run directly on a simulator/emulator.
 
-   **Web + Node server (API, tRPC):**
+### Build & Production
+- `pnpm build` — Export Expo app for web production.
+- `pnpm build:server` — Bundle the Node server using `esbuild` to `dist/`.
+- `pnpm start` — Run the bundled server from `dist/index.js`.
+- `pnpm build:android` — Trigger an EAS build for Android.
 
-   ```bash
-   pnpm dev:all
-   ```
+### Utilities
+- `pnpm lint` / `pnpm format` — Code quality and formatting.
+- `pnpm check` — Type-check using TypeScript.
+- `pnpm test` — Run unit tests with Vitest.
+- `pnpm cache:clear` — Comprehensive cache cleanup script.
+- `pnpm mobile:tunnel` — Start a tunnel via ngrok for remote mobile testing.
 
-   **Mobile (Expo Go or dev client):**
+---
 
-   ```bash
-   pnpm mobile          # Expo start (choose device)
-   pnpm mobile:ios      # iOS
-   pnpm mobile:android  # Android
-   ```
+## 📁 Project Structure
 
-   **Build web:**
+- `app/` — **Entry Point (App):** Expo Router screens and tab definitions.
+- `server/` — **Entry Point (API):** Express server, tRPC routers, and backend logic.
+- `backend/` — Python FastAPI service for advanced optimization (spectral partitioning).
+- `components/` — Shared React components and map logic.
+- `lib/` — core libraries, plugin system, and Firebase/tRPC configurations.
+- `services/` — Business logic: optimizers, instruction managers, etc.
+- `stores/` — State management via Zustand.
+- `drizzle/` — Database schema definitions and migrations.
+- `hooks/` — Custom React hooks (auth, theme, etc.).
+- `scripts/` — Utility scripts for dev-ops, patching, and automation.
 
-   ```bash
-   pnpm build
-   ```
+---
 
-   **Build and run Node server (production-style):**
+## 🌍 Environment Variables
 
-   ```bash
-   pnpm build:server && pnpm start
-   ```
+Refer to `.env.example` for a full list. Primary categories include:
+- **Base URLs**: API, Optimizer, Overture Extract.
+- **Authentication**: Firebase, OSM OAuth, Mapillary.
+- **API Keys**: Google Maps, Mapbox, OpenWeatherMap.
+- **AI/LLM**: OpenRouter, ElevenLabs, Mistral.
+- **Database**: `DATABASE_URL`, `MONGODB_URI`.
 
-## Scripts
+---
 
-| Script | Description |
-| :--- | :--- |
-| `pnpm dev` | Expo web on port 19007 |
-| `pnpm dev:server` | Node tRPC server (watch) |
-| `pnpm dev:all` | Expo + server concurrently |
-| `pnpm build` | Export Expo web |
-| `pnpm build:server` | Bundle server to `dist/` |
-| `pnpm db:push` | Drizzle generate + migrate |
-| `pnpm test` | Vitest |
-| `pnpm check` | TypeScript check |
-| `pnpm lint` | Expo lint |
-| `pnpm mobile:android` | Expo start + Android (dev client for hot reload) |
-| `pnpm build:android` | EAS build for Android |
+## 🧪 Testing
 
-## Project structure
+- **Unit/Integration**: Run `pnpm test` (Vitest).
+- **Type Safety**: Run `pnpm check` (tsc).
+- **Spatial Tests**: Run `pnpm test:spatial` (Custom script).
+- **TODO**: Add E2E test coverage details (e.g., Maestro or Detox if applicable).
 
-```
-rmp.ca/
-├── app/                    # Expo Router screens (tabs: Home, Route, Planner, Map, Record, Settings)
-├── components/             # Shared UI, map components, planner, Overture extract
-├── server/                 # Node API: Express, tRPC, auth, DB (server/README.md)
-├── backend/                # Python FastAPI zone partition service (backend/README.md)
-├── lib/                    # TRPC, theme, maps, storage, Firebase, plugins, etc.
-│   └── plugins/           # Plugin system: registry, config, built-ins (see docs/PLUGIN-DEVELOPMENT.md)
-├── hooks/                  # useAuth, useColors, etc.
-├── stores/                 # Zustand stores
-├── drizzle/               # DB schema and migrations
-├── services/               # Optimizer, instruction manager, etc.
-├── scripts/               # Start/kill scripts, EAS, cache (scripts/README.md)
-├── .env.example            # Env template
-└── package.json
-```
+---
 
-### Plugin setup
+## 🔌 Plugins
 
-Plugins are toggled in **Settings → Plugins** and configured via `lib/plugins/default-config.json` and per-plugin `lib/plugins/[id]/config.json` (apiKeys, endpoints). See [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) for adding plugins, testing, and deployment.
+The app features an OsmAnd-inspired plugin system. Plugins can be toggled in **Settings → Plugins**.
+- Configured via `lib/plugins/default-config.json`.
+- See `docs/PLUGIN-DEVELOPMENT.md` for details on creating and deploying plugins.
 
-## Documentation
+---
 
-- [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — Plugin system: config, registry, testing, deployment.
-- [server/README.md](server/README.md) — Backend development (auth, tRPC, DB, LLM, storage).
-- [backend/README.md](backend/README.md) — Zone partition API and deployment (e.g. Cloud Run).
-- [scripts/README.md](scripts/README.md) — Local run scripts and ports.
-- [backend/docs/GEOJSON-OSM-CLEANING-PLAN.md](backend/docs/GEOJSON-OSM-CLEANING-PLAN.md) — GeoJSON/OSM cleaning pipeline plan.
-- [backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md](backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md) — GeoJSON clean implementation review and prioritized changes.
+## 📜 License
 
-## Recent changes
+**TODO**: Confirm official license. `package.json` specifies `ISC`, but existing docs mention `Proprietary`.
 
-- **Plugins** — Plugin system (OsmAnd-style): toggles in Settings, per-plugin `config.json` (apiKeys, endpoints), dev plugin for logging in development. See [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md).
-- **GeoJSON clean (backend)** — `POST /api/geojson/clean` now enforces a **50 MB** request body limit to reduce DoS risk; responses include a **`warnings`** array (e.g. when over 10% of features are dropped as invalid, with a suggestion to check CRS and geometry validity). Invalid-drop ratio is logged at warning level. See [backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md](backend/docs/GEOJSON-CLEAN-REVIEW-AND-CHANGES.md).
-- **OSM → GeoJSON script** — `backend/scripts/osm_to_geojson.py` outputs GeoJSON in **WGS84 (EPSG:4326)** via `-t_srs EPSG:4326`; docstring updated accordingly.
-- **Map** — Record (GPS) button wired in map floating controls; tap map to add bin in Zones/waste mode; pointer-events and empty-state handling improved on web.
+---
 
-## License
+## 🔗 Additional Documentation
 
-Proprietary. See repository or project owner for terms.
+- [server/README.md](server/README.md) — Backend architecture.
+- [backend/README.md](backend/README.md) — Optimization service details.
+- [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — Plugin system guide.
+- [scripts/README.md](scripts/README.md) — Infrastructure scripts.
+- [backend/docs/](backend/docs/) — Detailed GeoJSON cleaning and pipeline plans.
