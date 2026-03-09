@@ -34,6 +34,7 @@ import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { Fonts } from "@/lib/_core/theme";
 import { WastePointFormModal, type WastePointFormValues } from "@/components/zones/WastePointFormModal";
 import { WasteImportModal } from "@/components/zones/WasteImportModal";
+import { DeliveryZonePartitionSheet } from "@/components/zones/DeliveryZonePartitionSheet";
 import { BottomSheet } from "@/components/shared/BottomSheet";
 
 export type ZonesPageMode = "delivery" | "waste";
@@ -264,6 +265,7 @@ export function ZonePage() {
   const [pendingWasteCoords, setPendingWasteCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [selectedWastePointId, setSelectedWastePointId] = useState<string | null>(null);
+  const [deliverySheetVisible, setDeliverySheetVisible] = useState(false);
 
   /** Selected result to view: prefer displayedZoneId, else first saved (user can change via sidebar). */
   const selectedId = displayedZoneId ?? (savedZones.length > 0 ? savedZones[0].id : null);
@@ -336,6 +338,21 @@ export function ZonePage() {
     setDisplayedZoneId(selectedId);
     router.replace("/(tabs)/map");
   }, [selectedId, setDisplayedZoneId, router]);
+
+  const handleDeliveryPartitionSuccess = useCallback(
+    (
+      zones: import("@/services/overtureOptimizerService").ZoneOutput[],
+      polygon: Array<[number, number]>,
+      name: string,
+      truck_count: number,
+      balance_metric: "time" | "distance",
+    ) => {
+      addSavedZone({ name, polygon, zones, truck_count, balance_metric });
+      setDeliverySheetVisible(false);
+      setSidebarTab("zones");
+    },
+    [addSavedZone],
+  );
 
   const handleWastePartition = useCallback(async () => {
     const truckCount = Math.max(1, parseInt(wasteTruckCount, 10) || 2);
@@ -966,11 +983,18 @@ export function ZonePage() {
                   ? "No zone results yet"
                   : "Select a result in the sidebar"}
               </Text>
-              <Text style={[styles.mapPlaceholderHint, { color: colors.muted }]}>
-                {savedZones.length === 0
-                  ? "Run zone partition from the Extract tab, then open Zones to view."
-                  : "Pick a saved partition to view zones on the map."}
-              </Text>
+              {savedZones.length === 0 ? (
+                <TouchableOpacity
+                  onPress={() => { hapticImpact(); setDeliverySheetVisible(true); }}
+                  style={[styles.placeholderBtn, { backgroundColor: colors.primary }]}
+                >
+                  <Text style={styles.placeholderBtnText}>＋ Create zone partition</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={[styles.mapPlaceholderHint, { color: colors.muted }]}>
+                  Pick a saved partition to view zones on the map.
+                </Text>
+              )}
             </View>
           )}
         </View>
@@ -1284,6 +1308,12 @@ export function ZonePage() {
               ) : null}
               {pageMode === "delivery" && (
                 <>
+                  <TouchableOpacity
+                    onPress={() => { hapticImpact(); setDeliverySheetVisible(true); }}
+                    style={[styles.newPartitionBtn, { backgroundColor: colors.primary }]}
+                  >
+                    <Text style={styles.newPartitionBtnText}>＋ New partition</Text>
+                  </TouchableOpacity>
                   {savedZones.length > 1 && (
                     <>
                       <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>Saved results</Text>
@@ -1341,11 +1371,9 @@ export function ZonePage() {
                         ))}
                     </>
                   ) : (
-                    <View style={styles.emptySidebar}>
-                      <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                        No saved zone results. Run partition from the Extract tab (Partition → send to Zones).
-                      </Text>
-                    </View>
+                    <Text style={[styles.emptySidebarText, { color: colors.muted, marginTop: 8 }]}>
+                      No zone results yet. Tap "＋ New partition" to get started.
+                    </Text>
                   )}
                 </>
               )}
@@ -1353,6 +1381,12 @@ export function ZonePage() {
           </View>
         </BottomSheet>
       )}
+
+      <DeliveryZonePartitionSheet
+        visible={deliverySheetVisible}
+        onClose={() => setDeliverySheetVisible(false)}
+        onSuccess={handleDeliveryPartitionSuccess}
+      />
 
       <WastePointFormModal
         visible={addWasteModalVisible}
@@ -1599,6 +1633,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 6,
     textAlign: "center",
+  },
+  placeholderBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  placeholderBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  newPartitionBtn: {
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  newPartitionBtnText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   sidebar: {
     borderLeftWidth: 1,
