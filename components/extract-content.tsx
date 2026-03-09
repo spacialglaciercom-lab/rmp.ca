@@ -39,6 +39,7 @@ import {
 import { getElevationForPoints } from "@/services/googleElevationService";
 import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
 import { useZonesStore } from "@/stores/zonesStore";
+import { extractFromDownloadedData } from "@/lib/offline-extract";
 
 // ---------------------------------------------------------------------------
 // Web-only lazy imports (MapLibre GL JS, mapbox-gl-draw, DuckDB WASM)
@@ -146,6 +147,8 @@ export default function ExtractContent() {
   const [resultHash, setResultHash] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<ExtractionStats | null>(null);
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
+  /** Stores GeoJSON graph from offline extraction (set when resultHash === "__offline__"). */
+  const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
 
   // Dimensions
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -389,13 +392,14 @@ export default function ExtractContent() {
   }, [polygon, extracting, clearPreviewLayer]);
 
   // -------------------------------------------------------------------------
-  // Extract & process via WebSocket
+  // Extract & process via WebSocket, with offline fallback
   // -------------------------------------------------------------------------
   const extractAndProcess = useCallback(() => {
     if (!polygon) return;
     setExtracting(true);
     setResultHash(null);
     setResultStats(null);
+    offlineGeoJSONRef.current = null;
     setProgress({ stage: "connecting", message: "Connecting..." });
 
     const handle = connectAndExtract(
@@ -407,8 +411,54 @@ export default function ExtractContent() {
         setExtracting(false);
       },
       (err) => {
-        setProgress({ stage: "error", message: err });
-        setExtracting(false);
+        // WebSocket failed — try offline data before showing error
+        console.warn("[Extract] WebSocket failed, trying offline data:", err);
+        setProgress({ stage: "building_graph", message: "Trying offline data…" });
+        const polyGeom = polygon.geometry as GeoJSON.Polygon;
+        (async () => {
+          try {
+            const result = await extractFromDownloadedData(polyGeom, (p) => {
+              const stage = p.phase.toLowerCase().includes("graph")
+                ? "building_graph"
+                : p.phase.toLowerCase().includes("clip") || p.phase.toLowerCase().includes("tile")
+                  ? "clipping"
+                  : "downloading";
+              setProgress({
+                stage,
+                message: p.phase,
+                percent:
+                  p.done != null && p.total
+                    ? Math.round((p.done / p.total) * 100)
+                    : undefined,
+              });
+            });
+            if (result) {
+              offlineGeoJSONRef.current = result.graphGeojson;
+              setResultHash("__offline__");
+              setResultStats({
+                points: result.stats.nodes,
+                roads: result.stats.roads,
+                nodes: result.stats.nodes,
+                edges: result.stats.edges,
+                segmentsLengthKm: result.stats.segmentsLengthKm,
+              });
+              setProgress({
+                stage: "complete",
+                message: `Offline (${result.source}) — ${result.stats.nodes} nodes, ${result.stats.edges} edges`,
+                percent: 100,
+              });
+            } else {
+              setProgress({
+                stage: "error",
+                message: `${err} — No offline data for this area. Download a region in Settings → Offline Maps.`,
+              });
+            }
+          } catch (e2) {
+            setProgress({ stage: "error", message: String(e2) });
+          } finally {
+            setExtracting(false);
+          }
+        })();
       },
     );
     cancelRef.current = handle;
@@ -425,6 +475,18 @@ export default function ExtractContent() {
   // -------------------------------------------------------------------------
   const downloadGeoJSON = useCallback(() => {
     if (!resultHash) return;
+    if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+      try {
+        const blob = new Blob([JSON.stringify(offlineGeoJSONRef.current)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "offline-extract.geojson";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch {}
+      return;
+    }
     if (Platform.OS === "web") {
       window.open(httpGeoJSONUrl(resultHash), "_blank");
     } else {
@@ -453,9 +515,14 @@ export default function ExtractContent() {
     const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [lat, lng]);
     setZonePartitionLoading(true);
     try {
-      const res = await fetch(httpGeoJSONUrl(resultHash));
-      if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
-      const geojson = (await res.json()) as { type: string; features: unknown[] };
+      let geojson: { type: string; features: unknown[] };
+      if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+        geojson = offlineGeoJSONRef.current as { type: string; features: unknown[] };
+      } else {
+        const res = await fetch(httpGeoJSONUrl(resultHash!));
+        if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
+        geojson = (await res.json()) as { type: string; features: unknown[] };
+      }
       if (!geojson?.features?.length) throw new Error("Extract result has no road features.");
       const { zones } = await partitionZonesFromGeoJSON({
         geojson: { type: "FeatureCollection", features: geojson.features },
@@ -844,6 +911,7 @@ function NativeExtractFallback({
   const [zoneName, setZoneName] = useState("");
   const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
+  const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
   const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
@@ -914,6 +982,7 @@ function NativeExtractFallback({
     setExtracting(true);
     setResultHash(null);
     setResultStats(null);
+    offlineGeoJSONRef.current = null;
 
     const handle = connectAndExtract(
       polygon,
@@ -924,8 +993,54 @@ function NativeExtractFallback({
         setExtracting(false);
       },
       (err) => {
-        setProgress({ stage: "error", message: err });
-        setExtracting(false);
+        // WebSocket failed — try offline data before showing error
+        console.warn("[Extract] WebSocket failed, trying offline data:", err);
+        setProgress({ stage: "building_graph", message: "Trying offline data…" });
+        const polyGeom = polygon.geometry as GeoJSON.Polygon;
+        (async () => {
+          try {
+            const result = await extractFromDownloadedData(polyGeom, (p) => {
+              const stage = p.phase.toLowerCase().includes("graph")
+                ? "building_graph"
+                : p.phase.toLowerCase().includes("clip") || p.phase.toLowerCase().includes("tile")
+                  ? "clipping"
+                  : "downloading";
+              setProgress({
+                stage,
+                message: p.phase,
+                percent:
+                  p.done != null && p.total
+                    ? Math.round((p.done / p.total) * 100)
+                    : undefined,
+              });
+            });
+            if (result) {
+              offlineGeoJSONRef.current = result.graphGeojson;
+              setResultHash("__offline__");
+              setResultStats({
+                points: result.stats.nodes,
+                roads: result.stats.roads,
+                nodes: result.stats.nodes,
+                edges: result.stats.edges,
+                segmentsLengthKm: result.stats.segmentsLengthKm,
+              });
+              setProgress({
+                stage: "complete",
+                message: `Offline (${result.source}) — ${result.stats.nodes} nodes, ${result.stats.edges} edges`,
+                percent: 100,
+              });
+            } else {
+              setProgress({
+                stage: "error",
+                message: `${err} — No offline data for this area. Download a region in Settings → Offline Maps.`,
+              });
+            }
+          } catch (e2) {
+            setProgress({ stage: "error", message: String(e2) });
+          } finally {
+            setExtracting(false);
+          }
+        })();
       },
     );
     cancelRef.current = handle;
@@ -949,9 +1064,14 @@ function NativeExtractFallback({
     const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [lat, lng]);
     setZonePartitionLoading(true);
     try {
-      const res = await fetch(httpGeoJSONUrl(resultHash));
-      if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
-      const geojson = (await res.json()) as { type: string; features: unknown[] };
+      let geojson: { type: string; features: unknown[] };
+      if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+        geojson = offlineGeoJSONRef.current as { type: string; features: unknown[] };
+      } else {
+        const res = await fetch(httpGeoJSONUrl(resultHash!));
+        if (!res.ok) throw new Error(`Failed to fetch GeoJSON (${res.status})`);
+        geojson = (await res.json()) as { type: string; features: unknown[] };
+      }
       if (!geojson?.features?.length) throw new Error("Extract result has no road features.");
       const { zones } = await partitionZonesFromGeoJSON({
         geojson: { type: "FeatureCollection", features: geojson.features },
