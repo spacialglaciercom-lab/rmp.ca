@@ -97,38 +97,78 @@ def _build_graph(
     features: list[GeoJSONFeature],
     oneway_mode: str = "ignore",
 ) -> nx.MultiGraph:
-    """Build a MultiGraph from LineString features."""
+    """Build a MultiGraph from LineString features, splitting at shared intersection nodes.
+
+    Each LineString's intermediate coordinates are checked against all other features.
+    Any coordinate that appears in more than one feature (or is an endpoint of any feature)
+    is treated as an intersection node, and the containing feature is split there.
+    This ensures that road branches connecting at mid-segment points are properly connected
+    in the graph and not silently dropped.
+    """
     G = nx.MultiGraph()
 
-    for idx, feat in enumerate(features):
+    # ------------------------------------------------------------------ #
+    # Step 1: Collect all lines and find split nodes                       #
+    # A split node is any coordinate that is:                              #
+    #   (a) an endpoint of any feature, or                                 #
+    #   (b) shared by more than one feature (i.e., an intersection)        #
+    # ------------------------------------------------------------------ #
+    all_lines: list[tuple[list[list[float]], int]] = []  # (coords, feat_idx)
+    coord_count: dict[str, int] = {}
+
+    for feat_idx, feat in enumerate(features):
         geom = feat.geometry
         gtype = geom.get("type", "")
-        coords_list: list[list[list[float]]] = []
-
         if gtype == "LineString":
-            coords_list = [geom.get("coordinates", [])]
+            lines = [geom.get("coordinates", [])]
         elif gtype == "MultiLineString":
-            coords_list = geom.get("coordinates", [])
+            lines = geom.get("coordinates", [])
         else:
             continue
-
-        for line_coords in coords_list:
+        for line_coords in lines:
             if len(line_coords) < 2:
                 continue
+            all_lines.append((line_coords, feat_idx))
+            for c in line_coords:
+                nid = _node_id(c[0], c[1])
+                coord_count[nid] = coord_count.get(nid, 0) + 1
 
-            # Compute edge length
-            length_km = 0.0
-            for i in range(1, len(line_coords)):
-                c0 = line_coords[i - 1]
-                c1 = line_coords[i]
-                length_km += _haversine_km(c0[0], c0[1], c1[0], c1[1])
+    # Endpoints and shared coordinates are split nodes
+    split_nodes: set[str] = set()
+    for line_coords, _ in all_lines:
+        split_nodes.add(_node_id(line_coords[0][0], line_coords[0][1]))
+        split_nodes.add(_node_id(line_coords[-1][0], line_coords[-1][1]))
+    for nid, cnt in coord_count.items():
+        if cnt >= 2:
+            split_nodes.add(nid)
 
-            start = line_coords[0]
-            end = line_coords[-1]
+    # ------------------------------------------------------------------ #
+    # Step 2: Build graph, splitting each feature at split nodes           #
+    # ------------------------------------------------------------------ #
+    edge_idx = 0
+    for line_coords, feat_idx in all_lines:
+        feat = features[feat_idx]
+        run_start = 0
+        for i in range(1, len(line_coords)):
+            nid = _node_id(line_coords[i][0], line_coords[i][1])
+            if nid not in split_nodes and i != len(line_coords) - 1:
+                continue
+
+            segment = line_coords[run_start : i + 1]
+            if len(segment) < 2:
+                run_start = i
+                continue
+
+            length_km = sum(
+                _haversine_km(segment[j - 1][0], segment[j - 1][1], segment[j][0], segment[j][1])
+                for j in range(1, len(segment))
+            )
+
+            start = segment[0]
+            end = segment[-1]
             u = _node_id(start[0], start[1])
             v = _node_id(end[0], end[1])
 
-            # Store node positions
             if u not in G:
                 G.add_node(u, lon=_round_coord(start[0]), lat=_round_coord(start[1]))
             if v not in G:
@@ -137,12 +177,14 @@ def _build_graph(
             G.add_edge(
                 u,
                 v,
-                key=idx,
+                key=edge_idx,
                 length_km=length_km,
-                coords=line_coords,
-                feature_idx=idx,
+                coords=segment,
+                feature_idx=feat_idx,
                 road_class=_get_road_class(feat),
             )
+            edge_idx += 1
+            run_start = i
 
     return G
 
@@ -168,14 +210,23 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
 
     is_directed = G.is_directed()
 
-    # If graph is disconnected, work on largest component
+    # If graph is disconnected, solve CPP on each component and concatenate.
+    # This ensures every road segment is covered, not just the largest piece.
     if is_directed:
         components = list(nx.weakly_connected_components(G))
     else:
         components = list(nx.connected_components(G))
     if len(components) > 1:
-        largest = max(components, key=len)
-        G = G.subgraph(largest).copy()
+        full_route: list[str] = []
+        for comp_nodes in sorted(components, key=len, reverse=True):
+            sub = G.subgraph(comp_nodes).copy()
+            sub_route = _solve_cpp(sub)
+            if sub_route:
+                if full_route:
+                    full_route.extend(sub_route)
+                else:
+                    full_route = sub_route
+        return full_route
 
     # Find odd-degree (undirected) or unbalanced (directed) vertices
     if is_directed:
@@ -336,12 +387,16 @@ def optimize_route(body: OptimizeRequest):
         if body.clean_options is not None:
             opts = body.clean_options
         else:
-            # Default: aggressive cleaning to reduce loops (dedupe, self-loops, short edges, parallel edges)
+            # Default: light cleaning to remove true noise (self-loops, exact duplicates)
+            # without dropping disconnected road segments (max_components=0 keeps all components).
+            # merge_parallel_edges is intentionally False: collapsing parallel edges between the
+            # same two endpoints would silently discard roads that share endpoints but differ in path.
             opts = CleanOptions(
                 remove_selfloops=True,
                 dedupe_edges=True,
-                merge_parallel_edges=True,
-                min_length_m=10.0,
+                merge_parallel_edges=False,
+                min_length_m=1.0,
+                max_components=0,
             )
         cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
         features = cleaned_fc.features
@@ -436,37 +491,64 @@ def optimize_route(body: OptimizeRequest):
 
     prev_bearing: float | None = None
 
-    for i, node in enumerate(route_nodes):
-        ndata = G.nodes[node]
-        lon = ndata.get("lon", 0)
-        lat = ndata.get("lat", 0)
-        route_points.append(RoutePoint(latitude=lat, longitude=lon, node_id=node))
-        route_coords.append([lon, lat])
+    # Track which graph edge key was consumed for each hop to avoid re-using
+    # the same multi-edge twice in a row (Eulerian traversal can have parallel edges).
+    consumed_edge_keys: set[tuple[str, str, int]] = set()
 
-        if i > 0:
-            prev_node = route_nodes[i - 1]
-            prev_data = G.nodes[prev_node]
+    for i in range(len(route_nodes) - 1):
+        u = route_nodes[i]
+        v = route_nodes[i + 1]
 
-            seg_dist = _haversine_km(
-                prev_data.get("lon", 0), prev_data.get("lat", 0),
-                lon, lat,
-            )
+        # Retrieve the edge between u and v, picking the first unconsumed one.
+        edge_data = G.get_edge_data(u, v) or G.get_edge_data(v, u)
+        chosen_key: int | None = None
+        edge_coords: list[list[float]] = []
+        is_deadhead = False
+        reversed_coords = False
+
+        if edge_data:
+            for ek, edata in edge_data.items():
+                canon = (min(u, v), max(u, v), ek)
+                if canon not in consumed_edge_keys:
+                    chosen_key = ek
+                    consumed_edge_keys.add(canon)
+                    is_deadhead = bool(edata.get("deadhead"))
+                    raw_coords = edata.get("coords") or []
+                    if raw_coords:
+                        start_nid = _node_id(raw_coords[0][0], raw_coords[0][1])
+                        reversed_coords = start_nid != u
+                        edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
+                    break
+
+        if not edge_coords:
+            # Fallback: straight line between the two endpoint nodes
+            u_data = G.nodes[u]
+            v_data = G.nodes[v]
+            edge_coords = [
+                [u_data.get("lon", 0), u_data.get("lat", 0)],
+                [v_data.get("lon", 0), v_data.get("lat", 0)],
+            ]
+
+        # Emit route points for every coordinate in the edge geometry.
+        # Skip the first coordinate on all but the first edge to avoid duplicates.
+        start_k = 0 if i == 0 else 1
+        for k, c in enumerate(edge_coords):
+            if k < start_k:
+                continue
+            lon, lat = c[0], c[1]
+            route_points.append(RoutePoint(latitude=lat, longitude=lon, node_id=u if k == 0 else v))
+            route_coords.append([lon, lat])
+
+        # Accumulate distance and turn stats using the full edge geometry
+        for k in range(1, len(edge_coords)):
+            c0 = edge_coords[k - 1]
+            c1 = edge_coords[k]
+            seg_dist = _haversine_km(c0[0], c0[1], c1[0], c1[1])
             total_distance_km += seg_dist
-            total_traversals += 1
+            if is_deadhead:
+                deadhead_distance_km += seg_dist
 
-            # Check if this edge is a deadhead
-            edge_data = G.get_edge_data(prev_node, node)
-            if edge_data:
-                for key, edata in edge_data.items():
-                    if edata.get("deadhead"):
-                        deadhead_distance_km += seg_dist
-                        break
-
-            # Turn classification
-            curr_bearing = _bearing(
-                prev_data.get("lon", 0), prev_data.get("lat", 0),
-                lon, lat,
-            )
+            curr_bearing = _bearing(c0[0], c0[1], c1[0], c1[1])
             if prev_bearing is not None:
                 turn = _classify_turn(prev_bearing, curr_bearing)
                 if turn == "right":
@@ -478,6 +560,15 @@ def optimize_route(body: OptimizeRequest):
                 else:
                     straight += 1
             prev_bearing = curr_bearing
+
+        total_traversals += 1
+
+    # Ensure the last node is emitted when there are route nodes but the loop above produced nothing
+    if route_nodes and not route_points:
+        node = route_nodes[0]
+        ndata = G.nodes[node]
+        route_points.append(RoutePoint(latitude=ndata.get("lat", 0), longitude=ndata.get("lon", 0), node_id=node))
+        route_coords.append([ndata.get("lon", 0), ndata.get("lat", 0)])
 
     # Count dead ends (degree-1 nodes)
     dead_ends = sum(1 for n in G.nodes() if G.degree(n) == 1)
