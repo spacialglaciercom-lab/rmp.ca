@@ -1,0 +1,14 @@
+services:
+  rmpca-backend:
+    build:
+      context: ./backend
+      args:
+        # Override BASE_IMAGE if Docker Hub is unreachable (e.g. behind a VPN).
+        # AWS ECR Public Gallery mirror (default) avoids Docker Hub TLS issues.
+        BASE_IMAGE: public.ecr.aws/docker/library/python:3.12-slim
+    container_name: rmpca-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    restart: unless-stopped
