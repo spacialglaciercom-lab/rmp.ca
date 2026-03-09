@@ -1,0 +1,112 @@
+# NOTE: The canonical docker-compose.yml is one level up at Desktop/rmp.ca/docker-compose.yml
+# This copy is kept for reference but the parent-level file should be used instead.
+#
+# Local dev stack — replaces Railway entirely.
+# Assumes this layout:
+#   Desktop/
+#     rmp.ca/rmp.ca/          ← this file lives here
+#     weboverture/webovertureextract/   ← sibling project
+#
+# Usage:
+#   docker compose up --build          # start everything
+#   docker compose up --build backend  # rebuild one service
+#   docker compose down -v             # stop + wipe volumes
+#
+# Set these in your .env (Expo side):
+#   EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
+#   EXPO_PUBLIC_OPTIMIZER_URL=http://localhost:8000
+#   EXPO_PUBLIC_OVERTURE_EXTRACT_URL=http://localhost:4000
+
+services:
+  # ── MySQL ─────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: trashroute
+      MYSQL_USER: trashroute
+      MYSQL_PASSWORD: trashroute
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Main Node/Express backend ──────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.server
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: "mysql://trashroute:trashroute@mysql:3306/trashroute"
+      OPTIMIZER_BACKEND_URL: "http://optimizer:8000"
+      EXTRACT_WS_UPSTREAM: "http://overture-extract-api:4000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      optimizer:
+        condition: service_started
+      overture-extract-api:
+        condition: service_started
+
+  # ── Python FastAPI route optimizer ────────────────────────────────────────
+  optimizer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      ALLOWED_ORIGINS: "*"
+
+  # ── Overture Extract — FastAPI backend (WebSocket + REST) ──────────────────
+  # Handles /ws/extract WebSocket connections and /extract REST endpoint.
+  # Source: ../../../weboverture/webovertureextract/backend
+  overture-extract-api:
+    build:
+      context: ../../weboverture/webovertureextract/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      DUCKDB_MEMORY_LIMIT: "1GB"
+      AWS_DEFAULT_REGION: "us-west-2"
+      OVERTURE_RELEASE: "2026-02-18.0"
+    volumes:
+      - overture_cache:/tmp/overture_cache
+
+  # ── Overture Extract — React frontend (standalone UI) ─────────────────────
+  # Optional: the standalone web UI at http://localhost:8090
+  # The rmp.ca mobile app does NOT need this — it talks to overture-extract-api directly.
+  # VITE_WS_URL is a Vite build-time variable; passed as a build arg so it gets baked in.
+  overture-extract-ui:
+    build:
+      context: ../../weboverture/webovertureextract
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_WS_URL: "http://localhost:4000"
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    depends_on:
+      - overture-extract-api
+
+volumes:
+  mysql_data:
+  overture_cache:

@@ -1,0 +1,12 @@
+node_modules
+.expo
+dist
+.git
+.claude
+*.log
+.env*
+!.env.server.example
+android
+ios
+__pycache__
+*.pyc

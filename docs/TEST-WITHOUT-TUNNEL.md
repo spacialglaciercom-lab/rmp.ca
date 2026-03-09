@@ -111,9 +111,12 @@ If `pnpm run mobile` fails with “Failed to start watch mode” or similar:
 
 - **Clear caches and try again:**
   ```bash
-  pnpm run mobile:fresh
+  pnpm run cache:clear
   pnpm run mobile
   ```
+  Or: `pnpm run mobile:fresh` then `pnpm run mobile`.
+- **Windows / OneDrive:**  
+  This project's `metro.config.cjs` disables Watchman on Windows so Metro uses the Node watcher (avoids timeouts in synced folders). If it still fails: exclude the project folder from **Windows Defender** real-time scanning, or move the project out of OneDrive to a local folder (e.g. `C:\dev\rmp.ca`).
 - **Windows file watcher limit:**  
   If you see “ENOSPC” or watcher errors, increase the limit (e.g. [this guide](https://learn.microsoft.com/en-us/windows/wsl/file-permissions#file-watching-and-wsl)) or run Metro inside **WSL2** and use the WSL IP from your phone on the same network.
 - **Node version:**  

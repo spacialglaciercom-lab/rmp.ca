@@ -12,7 +12,24 @@ const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
 
-// Ensure @/ alias resolves to project root (fixes CI where tsconfig paths may not apply)
+// Avoid "Failed to start watch mode" on Windows (e.g. OneDrive/synced folders).
+// Watchman can time out; Node watcher is more reliable here.
+if (process.platform === "win32") {
+  config.resolver = config.resolver || {};
+  config.resolver.useWatchman = false;
+}
+
+const configWithNativeWind = withNativeWind(config, {
+  input: "./global.css",
+});
+
+// Apply our resolver on top of NativeWind's so we wrap (not replace) the chain.
+// Avoids "Cannot read properties of undefined (reading 'get')" in Metro DependencyGraph.
+const defaultResolveRequest = configWithNativeWind.resolver.resolveRequest;
+if (typeof defaultResolveRequest !== "function") {
+  throw new Error("metro.config.cjs: NativeWind did not set resolver.resolveRequest");
+}
+
 const projectRoot = __dirname;
 
 const codegenStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-codegen-web.js");
@@ -22,7 +39,7 @@ const rnwebviewStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-na
 const extensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
 // Always resolve 'buffer' to our shim (under projectRoot) so Metro never uses module name for SHA-1
 const bufferShimPath = path.resolve(projectRoot, "lib", "buffer-shim.js");
-config.resolver.resolveRequest = (context, moduleName, platform) => {
+configWithNativeWind.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === "buffer") {
     return { type: "sourceFile", filePath: bufferShimPath };
   }
@@ -76,9 +93,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       }
     }
   }
-  return context.resolveRequest(context, moduleName, platform);
+  return defaultResolveRequest(context, moduleName, platform);
 };
 
-module.exports = withNativeWind(config, {
-  input: "./global.css",
-});
+module.exports = configWithNativeWind;
