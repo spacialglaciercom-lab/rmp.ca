@@ -1,6 +1,8 @@
 # TrashRoute API – used by Cloud Build (default). See Dockerfile.api for manual deploy.
 # Requires ai@6 (see pnpm-lock.yaml) for Vercel AI Gateway v3 models.
-FROM node:20-alpine AS builder
+# Uses AWS ECR Public Gallery mirror to avoid Docker Hub TLS timeouts behind VPNs.
+ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
 
@@ -20,7 +22,7 @@ COPY . .
 RUN pnpm run build:server
 
 # Production image
-FROM node:20-alpine
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
