@@ -37,6 +37,7 @@ import {
   type MeasurementMetrics,
   type ElevationStats,
 } from "@/lib/overtureExtractService";
+import { computeIntersectionNodes, type IntersectionNode } from "@/lib/geojsonToOsmData";
 import { getElevationForPoints } from "@/services/googleElevationService";
 import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
 import { useZonesStore } from "@/stores/zonesStore";
@@ -171,6 +172,10 @@ export default function ExtractContent() {
     width: number;
     height: number;
   } | null>(null);
+
+  // Avoided intersections (click on map to exclude from optimizer)
+  const [intersectionNodes, setIntersectionNodes] = useState<IntersectionNode[]>([]);
+  const [avoidedIntersections, setAvoidedIntersections] = useState<Set<string>>(new Set());
 
   // Zone partitioning (send to Map → Zones)
   const [zoneTruckCount, setZoneTruckCount] = useState("2");
@@ -395,7 +400,92 @@ export default function ExtractContent() {
     if (!map) return;
     if (map.getLayer("preview-roads")) map.removeLayer("preview-roads");
     if (map.getSource("preview-roads")) map.removeSource("preview-roads");
+    if (map.getLayer("intersection-nodes")) map.removeLayer("intersection-nodes");
+    if (map.getSource("intersection-nodes")) map.removeSource("intersection-nodes");
+    setIntersectionNodes([]);
+    setAvoidedIntersections(new Set());
   }, []);
+
+  // -------------------------------------------------------------------------
+  // Intersection nodes layer — rendered after preview GeoJSON is fetched
+  // -------------------------------------------------------------------------
+  const addIntersectionLayer = useCallback(
+    (geojson: GeoJSON.FeatureCollection) => {
+      const map = mapRef.current;
+      if (!map) return;
+      const nodes = computeIntersectionNodes(
+        geojson as any,
+        { vehicularOnly: false },
+      );
+      setIntersectionNodes(nodes);
+
+      const features = nodes.map((n) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [n.lon, n.lat] },
+        properties: { nodeId: n.nodeId, avoided: false },
+      }));
+
+      if (map.getLayer("intersection-nodes")) map.removeLayer("intersection-nodes");
+      if (map.getSource("intersection-nodes")) map.removeSource("intersection-nodes");
+
+      map.addSource("intersection-nodes", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features },
+      });
+      map.addLayer({
+        id: "intersection-nodes",
+        type: "circle",
+        source: "intersection-nodes",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 16, 6],
+          "circle-color": [
+            "case",
+            ["==", ["get", "avoided"], true],
+            "#ef4444",
+            "#3b82f6",
+          ],
+          "circle-stroke-color": "white",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.85,
+        },
+      });
+
+      map.on("click", "intersection-nodes", (e: any) => {
+        const nodeId = e.features?.[0]?.properties?.nodeId as string | undefined;
+        if (!nodeId) return;
+        e.preventDefault?.();
+        setAvoidedIntersections((prev) => {
+          const next = new Set(prev);
+          if (next.has(nodeId)) next.delete(nodeId);
+          else next.add(nodeId);
+          return next;
+        });
+      });
+      map.on("mouseenter", "intersection-nodes", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "intersection-nodes", () => {
+        map.getCanvas().style.cursor = "";
+      });
+    },
+    [],
+  );
+
+  // Sync avoided state to the MapLibre source whenever it changes
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const map = mapRef.current;
+    if (!map || !map.getSource("intersection-nodes")) return;
+    const features = intersectionNodes.map((n) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [n.lon, n.lat] },
+      properties: { nodeId: n.nodeId, avoided: avoidedIntersections.has(n.nodeId) },
+    }));
+    (map.getSource("intersection-nodes") as any).setData({
+      type: "FeatureCollection",
+      features,
+    });
+  }, [avoidedIntersections, intersectionNodes]);
 
   // -------------------------------------------------------------------------
   // Preview roads via same backend as Extract (webovertureextract WebSocket)
@@ -443,6 +533,7 @@ export default function ExtractContent() {
                   "line-opacity": 0.7,
                 },
               });
+              addIntersectionLayer(geojson);
             }
           })
           .catch((e) => console.error("[Preview] Fetch/draw failed:", e))
@@ -456,7 +547,7 @@ export default function ExtractContent() {
       },
     );
     cancelRef.current = handle;
-  }, [polygon, extracting, clearPreviewLayer]);
+  }, [polygon, extracting, clearPreviewLayer, addIntersectionLayer]);
 
   // -------------------------------------------------------------------------
   // Extract & process via WebSocket, with offline fallback
@@ -610,8 +701,31 @@ export default function ExtractContent() {
       }
       if (!geojson?.features?.length)
         throw new Error("Extract result has no road features.");
+
+      // Pre-filter: remove road segments whose start or end coordinate matches
+      // an avoided intersection. This excludes misclassified roads before sending
+      // to the zone partition backend (no backend changes needed).
+      let filteredFeatures = geojson.features;
+      if (avoidedIntersections.size > 0) {
+        const avoidedLatLons = new Set(
+          intersectionNodes
+            .filter((n) => avoidedIntersections.has(n.nodeId))
+            .map((n) => `${Number(n.lat.toFixed(7))},${Number(n.lon.toFixed(7))}`),
+        );
+        filteredFeatures = geojson.features.filter((f: any) => {
+          const coords: number[][] | undefined =
+            f?.geometry?.type === "LineString" ? f.geometry.coordinates : undefined;
+          if (!coords || coords.length < 2) return true;
+          const first = coords[0]!;
+          const last = coords[coords.length - 1]!;
+          const firstKey = `${Number(first[1]!.toFixed(7))},${Number(first[0]!.toFixed(7))}`;
+          const lastKey = `${Number(last[1]!.toFixed(7))},${Number(last[0]!.toFixed(7))}`;
+          return !avoidedLatLons.has(firstKey) && !avoidedLatLons.has(lastKey);
+        });
+      }
+
       const { zones } = await partitionZonesFromGeoJSON({
-        geojson: { type: "FeatureCollection", features: geojson.features },
+        geojson: { type: "FeatureCollection", features: filteredFeatures as any },
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
@@ -959,6 +1073,37 @@ export default function ExtractContent() {
               )}
             </View>
 
+            {/* Avoided intersections badge + clear */}
+            {intersectionNodes.length > 0 && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <MaterialCommunityIcons name="map-marker-off-outline" size={14} color={colors.muted} />
+                <Text style={{ color: colors.muted, fontSize: 12 }}>
+                  {avoidedIntersections.size > 0
+                    ? `${avoidedIntersections.size} intersection${avoidedIntersections.size === 1 ? "" : "s"} avoided`
+                    : "Tap blue dots to avoid intersections"}
+                </Text>
+                {avoidedIntersections.size > 0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.presetChip,
+                      { backgroundColor: "#ef444422", borderColor: "#ef4444" },
+                    ]}
+                    onPress={() => setAvoidedIntersections(new Set())}
+                  >
+                    <Text style={{ color: "#ef4444", fontSize: 12 }}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             {/* Zone partitioning — send to Map → Zones */}
             <View
               style={{
@@ -1228,6 +1373,9 @@ function NativeExtractFallback({
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
   const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
+  // Native has no map so intersection avoidance is not available; always empty.
+  const intersectionNodes: IntersectionNode[] = [];
+  const avoidedIntersections = new Set<string>();
 
   const [dims, setDims] = useState<{ width: number; height: number } | null>(
     null,
@@ -1412,8 +1560,31 @@ function NativeExtractFallback({
       }
       if (!geojson?.features?.length)
         throw new Error("Extract result has no road features.");
+
+      // Pre-filter: remove road segments whose start or end coordinate matches
+      // an avoided intersection. This excludes misclassified roads before sending
+      // to the zone partition backend (no backend changes needed).
+      let filteredFeatures = geojson.features;
+      if (avoidedIntersections.size > 0) {
+        const avoidedLatLons = new Set(
+          intersectionNodes
+            .filter((n) => avoidedIntersections.has(n.nodeId))
+            .map((n) => `${Number(n.lat.toFixed(7))},${Number(n.lon.toFixed(7))}`),
+        );
+        filteredFeatures = geojson.features.filter((f: any) => {
+          const coords: number[][] | undefined =
+            f?.geometry?.type === "LineString" ? f.geometry.coordinates : undefined;
+          if (!coords || coords.length < 2) return true;
+          const first = coords[0]!;
+          const last = coords[coords.length - 1]!;
+          const firstKey = `${Number(first[1]!.toFixed(7))},${Number(first[0]!.toFixed(7))}`;
+          const lastKey = `${Number(last[1]!.toFixed(7))},${Number(last[0]!.toFixed(7))}`;
+          return !avoidedLatLons.has(firstKey) && !avoidedLatLons.has(lastKey);
+        });
+      }
+
       const { zones } = await partitionZonesFromGeoJSON({
-        geojson: { type: "FeatureCollection", features: geojson.features },
+        geojson: { type: "FeatureCollection", features: filteredFeatures as any },
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });

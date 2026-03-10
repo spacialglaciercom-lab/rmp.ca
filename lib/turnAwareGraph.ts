@@ -77,7 +77,8 @@ export async function buildTurnExpandedGraph(
   streetEdges: StreetEdge[],
   penalties: typeof DEFAULT_STATIC_PENALTIES = DEFAULT_STATIC_PENALTIES,
   edgePenaltyMultipliers?: EdgePenaltyMultipliers,
-  onProgress?: PipelineProgressCallback
+  onProgress?: PipelineProgressCallback,
+  avoidedIntersections?: Set<string>
 ): Promise<{ nodes: TurnNode[]; edges: TurnEdge[] }> {
   const adj = buildAdjacencyList(streetEdges);
   const turnNodes = new Map<string, TurnNode>();
@@ -158,7 +159,12 @@ export async function buildTurnExpandedGraph(
       // Outgoing bearing: entry bearing of the outgoing traversal direction
       const outgoingBearing = ref.reversed ? reverseEntry[ref.idx]! : forwardEntry[ref.idx]!;
       const turnType = classifyTurn(incomingBearing, outgoingBearing);
-      const penalty = penalties[turnType];
+      const basePenalty = penalties[turnType];
+      // If this intersection is in the avoided set, apply a prohibitive penalty
+      // so the solver routes around it entirely (misclassified roads, etc.)
+      const effectivePenalty = avoidedIntersections?.has(intersectionId)
+        ? 999999
+        : basePenalty;
       const baseTime = baseTimeCache[ref.idx]!;
 
       const outDirection: "forward" | "backward" = ref.reversed ? "backward" : "forward";
@@ -173,9 +179,9 @@ export async function buildTurnExpandedGraph(
           intersectionId: toIntersection,
         },
         turnType,
-        staticPenalty: penalty,
+        staticPenalty: effectivePenalty,
         baseTime,
-        totalCost: baseTime + penalty,
+        totalCost: baseTime + effectivePenalty,
       });
     }
   };
