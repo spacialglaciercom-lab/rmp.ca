@@ -7,10 +7,10 @@ const bundleId = "space.manus.trashroute.mobile.t20260120004301";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
-/** Production API (Cloud Run). Override with EXPO_PUBLIC_API_BASE_URL for local or other hosts. */
-const DEFAULT_API_BASE_URL = "https://rmp-ca-286569721223.europe-west1.run.app";
+/** Fallback for native only; web uses same-origin in getApiBaseUrl(). */
+const DEFAULT_API_BASE_URL = "http://localhost:3000";
 
-const rawApiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+const rawApiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
 const env = {
   portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
   server: process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ?? "",
@@ -32,23 +32,26 @@ export const OWNER_NAME = env.ownerName;
 export const API_BASE_URL = env.apiBaseUrl;
 
 /**
- * Get the API base URL, deriving from current hostname if not set.
- * Metro runs on 19007 (reserved for this project), API server runs on 3000.
- * On native, never return empty — relative URLs fail; use production default so /api/config etc. work.
+ * Get the API base URL.
+ * - Web: uses same-origin (current site) so Vercel app calls rmp-ca.vercel.app instead of Railway.
+ *   Local dev: Metro on 19007 → API server on 3000.
+ *   Override with EXPO_PUBLIC_API_BASE_URL (e.g. http://localhost:3000) to point to your local backend.
+ * - Native: uses EXPO_PUBLIC_API_BASE_URL or production default (set for EAS builds).
  */
 export function getApiBaseUrl(): string {
-  const base = (API_BASE_URL && API_BASE_URL.trim()) || DEFAULT_API_BASE_URL;
-  if (base) {
-    return base.replace(/\/$/, "");
+  // Explicit override (local backend or custom deployment)
+  const explicit = typeof API_BASE_URL === "string" && API_BASE_URL.trim();
+  if (explicit) {
+    return API_BASE_URL.trim().replace(/\/$/, "");
   }
 
-  // On web only: derive from current hostname by replacing Metro port with API port
+  // Web: same-origin so deployed Vercel app does not hit deleted Railway. Local dev: 19007 → 3000.
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
-    const { protocol, hostname } = window.location;
-    const apiHostname = hostname.replace(/^19007-/, "3000-");
-    if (apiHostname !== hostname) {
-      return `${protocol}//${apiHostname}`;
+    const { protocol, hostname, port } = window.location;
+    if (port === "19007") {
+      return `${protocol}//${hostname}:3000`;
     }
+    return `${protocol}//${hostname}${port ? `:${port}` : ""}`;
   }
 
   return DEFAULT_API_BASE_URL.replace(/\/$/, "");

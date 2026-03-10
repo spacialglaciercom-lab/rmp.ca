@@ -476,8 +476,12 @@ def optimize_route(body: OptimizeRequest):
     if not route_nodes:
         raise HTTPException(status_code=400, detail="Could not compute route — graph may be empty or disconnected")
 
-    # If start node specified, rotate circuit to start there
-    if start_node and start_node in route_nodes:
+    # If start node specified, rotate circuit to start there.
+    # Only apply rotation when the route is circular (first == last), i.e. a single Eulerian circuit.
+    # Concatenated multi-component routes are non-circular (e.g. [A,B,C,A, X,Y,Z,X]); using
+    # route_nodes[idx:] + route_nodes[1:idx+1] would drop the first segment and add a phantom
+    # hop from the last node into the middle, losing coverage. So we rotate only when circular.
+    if start_node and start_node in route_nodes and route_nodes[0] == route_nodes[-1]:
         idx = route_nodes.index(start_node)
         route_nodes = route_nodes[idx:] + route_nodes[1:idx + 1]
 
@@ -505,6 +509,7 @@ def optimize_route(body: OptimizeRequest):
         edge_coords: list[list[float]] = []
         is_deadhead = False
         reversed_coords = False
+        is_component_bridge = False  # no graph edge: hop between disconnected components
 
         if edge_data:
             for ek, edata in edge_data.items():
@@ -521,7 +526,9 @@ def optimize_route(body: OptimizeRequest):
                     break
 
         if not edge_coords:
-            # Fallback: straight line between the two endpoint nodes
+            # Fallback: straight line between the two endpoint nodes (e.g. between disconnected components).
+            # Treat as deadhead only; do not count as traversal or turn.
+            is_component_bridge = True
             u_data = G.nodes[u]
             v_data = G.nodes[v]
             edge_coords = [
@@ -545,23 +552,26 @@ def optimize_route(body: OptimizeRequest):
             c1 = edge_coords[k]
             seg_dist = _haversine_km(c0[0], c0[1], c1[0], c1[1])
             total_distance_km += seg_dist
-            if is_deadhead:
+            if is_deadhead or is_component_bridge:
                 deadhead_distance_km += seg_dist
 
-            curr_bearing = _bearing(c0[0], c0[1], c1[0], c1[1])
-            if prev_bearing is not None:
-                turn = _classify_turn(prev_bearing, curr_bearing)
-                if turn == "right":
-                    right_turns += 1
-                elif turn == "left":
-                    left_turns += 1
-                elif turn == "u_turn":
-                    u_turns += 1
-                else:
-                    straight += 1
-            prev_bearing = curr_bearing
+            # Turn stats only for real graph edges; component-bridge hops have no road geometry
+            if not is_component_bridge:
+                curr_bearing = _bearing(c0[0], c0[1], c1[0], c1[1])
+                if prev_bearing is not None:
+                    turn = _classify_turn(prev_bearing, curr_bearing)
+                    if turn == "right":
+                        right_turns += 1
+                    elif turn == "left":
+                        left_turns += 1
+                    elif turn == "u_turn":
+                        u_turns += 1
+                    else:
+                        straight += 1
+                prev_bearing = curr_bearing
 
-        total_traversals += 1
+        if not is_component_bridge:
+            total_traversals += 1
 
     # Ensure the last node is emitted when there are route nodes but the loop above produced nothing
     if route_nodes and not route_points:

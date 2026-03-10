@@ -29,7 +29,7 @@ import { getApiBaseUrl } from "@/shared/oauth";
 const OPTIMIZER_BASE_URL =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://optimizer-286569721223.northamerica-northeast1.run.app";
+  "http://localhost:8000";
 
 // getOptimizerBaseUrl() is defined at bottom; on web it returns getApiBaseUrl() for proxy.
 

@@ -3,25 +3,35 @@
  * Connects to the web extractor backend to extract & process road networks from Overture Maps data.
  * By default the app connects directly to the extract service (EXPO_PUBLIC_OVERTURE_EXTRACT_URL).
  * To route WebSocket via the main backend proxy instead (e.g. if the extract service blocks browser origins),
- * set EXPO_PUBLIC_OVERTURE_WS_BASE to your main API URL (e.g. https://rmp-ca-286569721223.europe-west1.run.app).
+ * set EXPO_PUBLIC_OVERTURE_WS_BASE to your main API URL (e.g. http://localhost:3000).
  */
 
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 import { area as turfArea } from "@turf/area";
 import { length as turfLength } from "@turf/length";
+import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
-// Extract backend URL. HTTP_BASE used for /geojson/, /download/ (after extract).
-// WS_BASE: direct to extract service by default; set EXPO_PUBLIC_OVERTURE_WS_BASE to use main backend proxy.
+// Extract backend URL. On web with no env set, use same-origin (no Railway).
+// Set EXPO_PUBLIC_OVERTURE_EXTRACT_URL or EXPO_PUBLIC_OVERTURE_WS_BASE for local/custom backend.
 // ---------------------------------------------------------------------------
-const DEFAULT_EXTRACT_BASE =
-  "https://webovertureextract2-286569721223.northamerica-northeast1.run.app";
-const defaultHttpBase =
-  process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
-  Constants.expoConfig?.extra?.extractUrl ??
-  process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
-  Constants.expoConfig?.extra?.optimizerUrl ??
-  DEFAULT_EXTRACT_BASE;
+const DEFAULT_EXTRACT_BASE = "http://localhost:9000";
+
+function getDefaultExtractBase(): string {
+  const env =
+    process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
+    Constants.expoConfig?.extra?.extractUrl ??
+    process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
+    Constants.expoConfig?.extra?.optimizerUrl;
+  if (env) return env;
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return getApiBaseUrl();
+  }
+  return DEFAULT_EXTRACT_BASE;
+}
+
+const defaultHttpBase = getDefaultExtractBase();
 const defaultWsBase = defaultHttpBase
   .replace(/^https:\/\//i, "wss://")
   .replace(/^http:\/\//i, "ws://");

@@ -16,6 +16,8 @@ COPY patches ./patches
 # Install dependencies (include dev for build). Skip postinstall: patch scripts are for mobile/React Native, not the API.
 # Use --no-frozen-lockfile so patchedDependencies hash matches the patch file in this environment (avoids ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
 RUN pnpm install --no-frozen-lockfile --ignore-scripts
+# esbuild needs its platform-specific binary; rebuild it for the container arch
+RUN pnpm rebuild esbuild
 
 # Copy source and build the API server bundle (not Expo web)
 COPY . .

@@ -4,7 +4,8 @@
 #
 # VPN note: docker-compose.yml passes BASE_IMAGE=public.ecr.aws/... to the
 # build so Docker pulls from AWS ECR Public Gallery, not Docker Hub.
-set -euo pipefail
+set -eu
+# pipefail not used for Windows Git Bash compatibility
 
 echo "[dev] Checking Docker Desktop..."
 

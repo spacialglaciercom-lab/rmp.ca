@@ -272,12 +272,10 @@ const config = {
     openWeatherMapApiKey: process.env.EXPO_PUBLIC_OPENWEATHERMAP_API_KEY ?? "",
     // Python/FastAPI Overture route optimizer backend URL (baked in at build time)
     optimizerUrl:
-      process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
-      "https://optimizer-286569721223.northamerica-northeast1.run.app",
+      process.env.EXPO_PUBLIC_OPTIMIZER_URL ?? "http://localhost:8000",
     // Web Overture extract backend (polygon → GeoJSON/graph via WebSocket); used for extract tab
     extractUrl:
-      process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ??
-      "https://webovertureextract2-286569721223.northamerica-northeast1.run.app",
+      process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ?? "http://localhost:9000",
   },
 };
 

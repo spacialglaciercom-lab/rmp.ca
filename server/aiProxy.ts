@@ -110,7 +110,7 @@ export function registerAiProxyRoutes(app: Express) {
   if (sdkVersion.startsWith("5.")) {
     log.error("AI SDK 5 does not support gateway v3 models; deploy must use ai@6 (see package.json). Clear build cache and redeploy.");
   }
-  /** GET so you can verify the route is deployed (e.g. curl https://your-api.up.railway.app/api/ai/chat) */
+  /** GET so you can verify the route is deployed (e.g. curl http://localhost:3000/api/ai/chat) */
   app.get("/api/ai/chat", (_req: Request, res: Response) => {
     res.json({
       ok: true,

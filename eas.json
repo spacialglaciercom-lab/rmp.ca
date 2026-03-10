@@ -4,18 +4,18 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://rmp-ca-286569721223.europe-west1.run.app" },
+      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000" },
       "ios": { "buildConfiguration": "Debug" }
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://rmp-ca-286569721223.europe-west1.run.app" },
+      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000" },
       "android": { "buildType": "apk" },
       "ios": { "buildConfiguration": "Release" }
     },
     "production": {
       "distribution": "store",
-      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "https://rmp-ca-286569721223.europe-west1.run.app" },
+      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000" },
       "ios": { "buildConfiguration": "Release", "image": "latest" }
     }
   },

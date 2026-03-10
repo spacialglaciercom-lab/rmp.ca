@@ -18,8 +18,8 @@ import { createLogger } from "./logger";
 
 const log = createLogger("ws-extract-proxy");
 
-/** Public web extractor backend (Cloud Run). Override with EXTRACT_WS_UPSTREAM if your service URL differs (e.g. typo). */
-const DEFAULT_EXTRACT_UPSTREAM = "https://webovertureextract2-286569721223.northamerica-northeast1.run.app";
+/** Default extract upstream. Override with EXTRACT_WS_UPSTREAM env var. */
+const DEFAULT_EXTRACT_UPSTREAM = "http://localhost:9000";
 const UPSTREAM_HTTP =
   process.env.EXTRACT_WS_UPSTREAM ||
   process.env.OPTIMIZER_WS_UPSTREAM ||
