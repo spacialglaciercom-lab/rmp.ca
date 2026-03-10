@@ -1,29 +1,33 @@
 services:
-  rmpca-backend:
+  optimizer:
     build:
       context: ./backend
       args:
         BASE_IMAGE: public.ecr.aws/docker/library/python:3.12-slim
-    container_name: rmpca-backend
+    container_name: rmpca-optimizer
     ports:
       - "8000:8000"
     environment:
       - PORT=8000
     restart: unless-stopped
 
-  rmpca-server:
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         BASE_IMAGE: public.ecr.aws/docker/library/node:20-alpine
-    container_name: rmpca-server
+    container_name: rmpca-backend
     ports:
       - "3000:3000"
+    env_file:
+      - .env.server
     environment:
       - PORT=3000
-      - OPTIMIZER_BACKEND_URL=http://rmpca-backend:8000
-      - EXTRACT_WS_UPSTREAM=http://rmpca-backend:9000
+      - OPTIMIZER_BACKEND_URL=http://optimizer:8000
+      # Overture extract API: use host port since it may run from a separate compose project.
+      # Set to http://overture-extract-api:4000 if running in the same compose network.
+      - EXTRACT_WS_UPSTREAM=http://host.docker.internal:4000
     depends_on:
-      - rmpca-backend
+      - optimizer
     restart: unless-stopped

@@ -14,6 +14,7 @@
 import type { Server, IncomingMessage, IncomingHttpHeaders } from "http";
 import https from "https";
 import httpProxy from "http-proxy";
+import type { Express, Request, Response } from "express";
 import { createLogger } from "./logger";
 
 const log = createLogger("ws-extract-proxy");
@@ -52,6 +53,35 @@ function stripHeaders(req: IncomingMessage): IncomingHttpHeaders {
     }
   }
   return out;
+}
+
+/**
+ * Proxy GET /geojson/:hash and GET /download/:hash to the extract upstream.
+ * After a successful WebSocket extraction the client fetches these HTTP endpoints
+ * to retrieve the result — they must be forwarded to the same extract service.
+ */
+export function registerExtractHttpProxyRoutes(app: Express): void {
+  async function proxyToExtract(req: Request, res: Response): Promise<void> {
+    const targetUrl = `${UPSTREAM_HTTP.replace(/\/$/, "")}${req.originalUrl}`;
+    log.info("Proxying extract HTTP request", { method: req.method, path: req.originalUrl, target: targetUrl });
+    try {
+      const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(60_000) });
+      res.status(upstream.status);
+      const ct = upstream.headers.get("content-type");
+      if (ct) res.setHeader("Content-Type", ct);
+      const cd = upstream.headers.get("content-disposition");
+      if (cd) res.setHeader("Content-Disposition", cd);
+      const body = await upstream.arrayBuffer();
+      res.send(Buffer.from(body));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown proxy error";
+      log.error("Extract HTTP proxy failed", err instanceof Error ? err : new Error(message));
+      res.status(502).json({ ok: false, error: "Extract backend unreachable", details: message, target: targetUrl });
+    }
+  }
+
+  app.get("/geojson/:hash", (req, res) => proxyToExtract(req, res));
+  app.get("/download/:hash", (req, res) => proxyToExtract(req, res));
 }
 
 export function registerWsExtractProxy(server: Server): void {

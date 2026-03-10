@@ -1,4 +1,8 @@
-import "dotenv/config";
+// Load .env.server first (server secrets; doesn't override vars already set by Docker/Railway).
+// Then load .env (shared/public vars). dotenv never overrides already-set env vars by default.
+import { config as dotenvConfig } from "dotenv";
+dotenvConfig({ path: ".env.server" });
+dotenvConfig({ path: ".env" });
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -13,7 +17,7 @@ import { handleEasBuildWebhook } from "../easBuildWebhook";
 import { registerMapsProxyRoutes } from "../mapsProxy";
 import { registerAiProxyRoutes } from "../aiProxy";
 import { registerElevenLabsProxyRoutes } from "../elevenLabsProxy";
-import { registerWsExtractProxy } from "../wsExtractProxy";
+import { registerWsExtractProxy, registerExtractHttpProxyRoutes } from "../wsExtractProxy";
 import { registerOptimizerProxyRoutes } from "../optimizerProxy";
 import { createLogger } from "../logger";
 import { ENV } from "./env";
@@ -104,6 +108,7 @@ async function startServer() {
   registerAiProxyRoutes(app);
   registerElevenLabsProxyRoutes(app);
   registerOptimizerProxyRoutes(app);
+  registerExtractHttpProxyRoutes(app);
 
   app.get("/", (_req, res) => {
     res.json({
@@ -126,6 +131,8 @@ async function startServer() {
         registerPushToken: "POST /api/register-push-token",
         easBuildWebhook: "POST /api/eas-build-webhook (EAS Build events)",
         wsExtract: "WebSocket /ws/extract (proxy to optimizer backend for web same-origin)",
+        extractGeojson: "GET /geojson/:hash (proxy to extract backend)",
+        extractDownload: "GET /download/:hash (proxy to extract backend)",
         optimizerOptimize: "POST /api/optimize (proxy to Python optimizer)",
         optimizerGeojson: "POST /api/geojson/* (proxy to Python optimizer)",
         optimizerZones: "POST /api/zones/partition (proxy to Python optimizer)",

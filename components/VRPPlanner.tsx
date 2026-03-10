@@ -996,7 +996,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   const [vehicles, setVehicles] = useState(String(DEFAULT_VRP_CONFIG.vehicles));
   const [capacity, setCapacity] = useState(String(DEFAULT_VRP_CONFIG.capacity));
   const [maxRouteTimeHours, setMaxRouteTimeHours] = useState(String(DEFAULT_VRP_CONFIG.maxRouteTimeHours));
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(Platform.OS === "web");
   const [depotAddress, setDepotAddress] = useState("");
   const [startFromCurrentPosition, setStartFromCurrentPosition] = useState(false);
   const [travelSpeedFactor, setTravelSpeedFactor] = useState(String(DEFAULT_VRP_CONFIG.travelSpeedFactor));
@@ -1623,7 +1623,9 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
   /** On web home screen: Plan deliveries + Search place fill the viewport. */
   const fillScreen = nestedInScrollView && Platform.OS === "web";
-  const planCardStyle = [styles.card, { backgroundColor: colors.surface, borderWidth: 1, borderColor: magenta + "44" }, fillScreen && styles.cardFill];
+  /** On web when nested, don't flex the plan card so the full form (including Advanced options) is in the outer scroll and reachable. */
+  const planCardFills = fillScreen && !(Platform.OS === "web" && nestedInScrollView);
+  const planCardStyle = [styles.card, { backgroundColor: colors.surface, borderWidth: 1, borderColor: magenta + "44" }, planCardFills && styles.cardFill];
 
   const content = (
     <>

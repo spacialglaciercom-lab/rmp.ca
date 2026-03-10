@@ -93,6 +93,9 @@
 - `pnpm cache:clear` — Comprehensive cache cleanup script.
 - `pnpm mobile:tunnel` — Start a tunnel via ngrok for remote mobile testing.
 
+### Docker (local stack)
+The full dev stack (MySQL, backend, optimizer, Overture) runs via **Docker Compose from the parent folder** of this repo (where `docker-compose.yml` lives). This repo provides the app and backend images. See [docs/DOCKER.md](docs/DOCKER.md) for how to run `docker compose up --build`.
+
 ---
 
 ## 📁 Project Structure
@@ -148,6 +151,7 @@ The app features an OsmAnd-inspired plugin system. Plugins can be toggled in **S
 
 - [server/README.md](server/README.md) — Backend architecture.
 - [backend/README.md](backend/README.md) — Optimization service details.
+- [docs/DOCKER.md](docs/DOCKER.md) — Docker local dev stack (run from parent folder).
 - [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — Plugin system guide.
 - [scripts/README.md](scripts/README.md) — Infrastructure scripts.
 - [backend/docs/](backend/docs/) — Detailed GeoJSON cleaning and pipeline plans.
