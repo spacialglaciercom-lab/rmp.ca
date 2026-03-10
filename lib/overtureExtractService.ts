@@ -3,7 +3,7 @@
  * Connects to the web extractor backend to extract & process road networks from Overture Maps data.
  * By default the app connects directly to the extract service (EXPO_PUBLIC_OVERTURE_EXTRACT_URL).
  * To route WebSocket via the main backend proxy instead (e.g. if the extract service blocks browser origins),
- * set EXPO_PUBLIC_OVERTURE_WS_BASE to your main API URL (e.g. https://proactive-adaptation-backend.up.railway.app).
+ * set EXPO_PUBLIC_OVERTURE_WS_BASE to your main API URL (e.g. https://rmp-ca-286569721223.europe-west1.run.app).
  */
 
 import Constants from "expo-constants";
