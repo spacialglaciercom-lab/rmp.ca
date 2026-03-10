@@ -1,2 +1,4 @@
 # Ensure patch files use LF so pnpm lockfile hash matches in Docker (Linux)
 patches/*.patch text eol=lf
+# Shell scripts: LF so Bash on Windows (Git Bash) doesn't see $'\r'
+scripts/*.sh text eol=lf

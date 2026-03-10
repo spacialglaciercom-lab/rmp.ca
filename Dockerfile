@@ -1,6 +1,8 @@
 # TrashRoute API – used by Cloud Build (default). See Dockerfile.api for manual deploy.
 # Requires ai@6 (see pnpm-lock.yaml) for Vercel AI Gateway v3 models.
-FROM node:20-alpine AS builder
+# Uses AWS ECR Public Gallery mirror to avoid Docker Hub TLS timeouts behind VPNs.
+ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
 
@@ -14,13 +16,15 @@ COPY patches ./patches
 # Install dependencies (include dev for build). Skip postinstall: patch scripts are for mobile/React Native, not the API.
 # Use --no-frozen-lockfile so patchedDependencies hash matches the patch file in this environment (avoids ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
 RUN pnpm install --no-frozen-lockfile --ignore-scripts
+# esbuild needs its platform-specific binary; rebuild it for the container arch
+RUN pnpm rebuild esbuild
 
 # Copy source and build the API server bundle (not Expo web)
 COPY . .
 RUN pnpm run build:server
 
 # Production image
-FROM node:20-alpine
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 

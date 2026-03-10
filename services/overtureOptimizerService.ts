@@ -22,14 +22,14 @@ import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
-// Base URL — optimizer backend (Railway; same backend can have multiple URLs)
+// Base URL — optimizer backend (Cloud Run; same backend can have multiple URLs)
 // On web we use the dev/API server so /api/optimize is proxied (avoids CORS).
 // ---------------------------------------------------------------------------
 
 const OPTIMIZER_BASE_URL =
   process.env.EXPO_PUBLIC_OPTIMIZER_URL ??
   Constants.expoConfig?.extra?.optimizerUrl ??
-  "https://reasonable-trust-optimizer-dfc3.up.railway.app";
+  "http://localhost:8000";
 
 // getOptimizerBaseUrl() is defined at bottom; on web it returns getApiBaseUrl() for proxy.
 
