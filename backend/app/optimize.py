@@ -210,6 +210,7 @@ def _build_graph(
                 coords=segment,
                 feature_idx=feat_idx,
                 road_class=_get_road_class(feat),
+                turning_loop=feat.properties.get("junction") == "turning_loop",
             )
             edge_idx += 1
             run_start = i
@@ -466,9 +467,13 @@ def optimize_route(body: OptimizeRequest):
                 coords=data.get("coords", []),
                 feature_idx=data.get("feature_idx", 0),
                 road_class=data.get("road_class", ""),
+                turning_loop=data.get("turning_loop", False),
             )
             G_dir.add_edge(u, v, key=key, **d)
-            G_dir.add_edge(v, u, key=max_key + 1 + i, **d)
+            # turning_loop (junction=turning_loop in OSM) only needs one pass —
+            # the vehicle loops around once; the inside has no addresses.
+            if not data.get("turning_loop"):
+                G_dir.add_edge(v, u, key=max_key + 1 + i, **d)
         G = G_dir
 
     if G.number_of_nodes() < 2:
