@@ -87,7 +87,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
   {
     id: "transport-dark",
     name: "Transport Dark",
-    url: `https://api.thunderforest.com/transport-dark/{z}/{x}/{y}.png?apikey=${process.env.EXPO_PUBLIC_THUNDERFOREST_API_KEY ?? ""}`,
+    url: "https://api.thunderforest.com/transport-dark/{z}/{x}/{y}.png?apikey=bc04ca4d2bdd47b0b465cedfacaabc24",
     attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
     type: "base",
     category: "dark",
