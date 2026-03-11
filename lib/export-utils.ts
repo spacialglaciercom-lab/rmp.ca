@@ -4,7 +4,7 @@ import { RouteStatistics, RouteReport, TurnPenalties } from "@/types/routing";
 /** Format a date in Canada time (America/Toronto - Eastern). Returns ISO-like string with timezone. */
 export function formatDateCanadaTime(
   date: Date,
-  timeZone: string = "America/Toronto"
+  timeZone: string = "America/Toronto",
 ): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -75,7 +75,7 @@ export interface RouteExportData {
 // Generate export metadata
 export function generateExportMetadata(
   routeName: string,
-  pointCount: number
+  pointCount: number,
 ): ExportMetadata {
   return {
     appName: "RouteMasterPro",
@@ -117,7 +117,7 @@ export function exportToJSON(data: RouteExportData): string {
 export function exportToCSV(
   points: CollectionPoint[],
   statistics: RouteStatistics | null,
-  routeName: string
+  routeName: string,
 ): string {
   const lines: string[] = [];
 
@@ -142,7 +142,7 @@ export function exportToCSV(
 
   // Collection points header
   lines.push(
-    "id,address,location_name,latitude,longitude,collection_type,status,scheduled_time,notes"
+    "id,address,location_name,latitude,longitude,collection_type,status,scheduled_time,notes",
   );
 
   // Collection points data
@@ -166,7 +166,8 @@ export function exportToCSV(
 
 /** Sanitize estimated time if it implies an impossibly slow average speed (< 10 km/h) */
 export function sanitizeEstimatedTime(stats: RouteStatistics): number {
-  if (stats.totalDistance <= 0 || stats.estimatedTime <= 0) return stats.estimatedTime;
+  if (stats.totalDistance <= 0 || stats.estimatedTime <= 0)
+    return stats.estimatedTime;
   const impliedSpeedKmh = (stats.totalDistance / stats.estimatedTime) * 60;
   if (impliedSpeedKmh < 10) {
     return Math.round((stats.totalDistance / 25) * 60); // 25 km/h typical for trash collection
@@ -175,7 +176,9 @@ export function sanitizeEstimatedTime(stats: RouteStatistics): number {
 }
 
 /** Return statistics with sanitized estimated time for export */
-export function sanitizeRouteStatistics(stats: RouteStatistics): RouteStatistics {
+export function sanitizeRouteStatistics(
+  stats: RouteStatistics,
+): RouteStatistics {
   return { ...stats, estimatedTime: sanitizeEstimatedTime(stats) };
 }
 
@@ -183,7 +186,7 @@ export function sanitizeRouteStatistics(stats: RouteStatistics): RouteStatistics
 export function exportStatisticsToCSV(
   statistics: RouteStatistics,
   penalties: TurnPenalties,
-  routeName: string
+  routeName: string,
 ): string {
   const lines: string[] = [];
   const estimatedTime = sanitizeEstimatedTime(statistics);
@@ -228,7 +231,7 @@ function uniqueExportId(): string {
 export function exportForFleetManagement(
   points: CollectionPoint[],
   statistics: RouteStatistics | null,
-  routeName: string
+  routeName: string,
 ): string {
   const data = {
     version: "1.0",

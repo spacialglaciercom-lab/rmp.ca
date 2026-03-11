@@ -20,7 +20,7 @@ interface AIRouteAnalysisPanelProps {
 
 function getImpactColor(
   severity: "none" | "low" | "moderate" | "high",
-  colors: ReturnType<typeof useColors>
+  colors: ReturnType<typeof useColors>,
 ): string {
   switch (severity) {
     case "none":
@@ -54,7 +54,7 @@ function getImpactText(severity: "none" | "low" | "moderate" | "high"): string {
 export function AIRouteAnalysisPanel({
   analysis,
   visible,
-  loading = false
+  loading = false,
 }: AIRouteAnalysisPanelProps) {
   const colors = useColors();
 
@@ -62,22 +62,31 @@ export function AIRouteAnalysisPanel({
 
   if (loading) {
     return (
-      <View className="rounded-2xl p-5 mb-4" style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(0, 217, 255, 0.15)',
-        shadowColor: '#00D9FF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
-      }}>
-        <Text className="text-lg font-semibold mb-4" style={{ color: '#00D9FF' }}>
+      <View
+        className="rounded-2xl p-5 mb-4"
+        style={{
+          backgroundColor: "rgba(255, 255, 255, 0.08)",
+          borderWidth: 1,
+          borderColor: "rgba(0, 217, 255, 0.15)",
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 4,
+        }}
+      >
+        <Text
+          className="text-lg font-semibold mb-4"
+          style={{ color: "#00D9FF" }}
+        >
           AI Route Analysis
         </Text>
         <View className="items-center py-4">
           <ActivityIndicator size="large" color="#00D9FF" />
-          <Text className="text-sm mt-3" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+          <Text
+            className="text-sm mt-3"
+            style={{ color: "rgba(255, 255, 255, 0.7)" }}
+          >
             Analyzing route with AI...
           </Text>
         </View>
@@ -87,59 +96,71 @@ export function AIRouteAnalysisPanel({
 
   if (!analysis) {
     return (
-      <View className="rounded-2xl p-5 mb-4" style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(0, 217, 255, 0.15)',
-        shadowColor: '#00D9FF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
-      }}>
-        <Text className="text-lg font-semibold mb-4" style={{ color: '#00D9FF' }}>
+      <View
+        className="rounded-2xl p-5 mb-4"
+        style={{
+          backgroundColor: "rgba(255, 255, 255, 0.08)",
+          borderWidth: 1,
+          borderColor: "rgba(0, 217, 255, 0.15)",
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 4,
+        }}
+      >
+        <Text
+          className="text-lg font-semibold mb-4"
+          style={{ color: "#00D9FF" }}
+        >
           AI Route Analysis
         </Text>
-        <Text className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-          No AI analysis available. Refresh weather data to analyze route conditions.
+        <Text className="text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+          No AI analysis available. Refresh weather data to analyze route
+          conditions.
         </Text>
       </View>
     );
   }
 
   return (
-    <View 
+    <View
       className="rounded-2xl p-5 mb-4"
       style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: "rgba(255, 255, 255, 0.08)",
         borderWidth: 1,
-        borderColor: 'rgba(0, 217, 255, 0.15)',
-        shadowColor: '#00D9FF',
+        borderColor: "rgba(0, 217, 255, 0.15)",
+        shadowColor: "#00D9FF",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
         elevation: 4,
       }}
     >
-      <Text className="text-lg font-semibold mb-4" style={{ color: '#00D9FF' }}>
+      <Text className="text-lg font-semibold mb-4" style={{ color: "#00D9FF" }}>
         AI Route Analysis
       </Text>
 
       {/* Weather Impact */}
       <View className="mb-4">
         <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Weather Impact</Text>
-          <View 
+          <Text
+            className="text-sm"
+            style={{ color: "rgba(255, 255, 255, 0.7)" }}
+          >
+            Weather Impact
+          </Text>
+          <View
             className="px-3 py-1.5 rounded-lg"
             style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
               borderWidth: 1,
-              borderColor: 'rgba(0, 217, 255, 0.15)',
+              borderColor: "rgba(0, 217, 255, 0.15)",
             }}
           >
-            <Text 
+            <Text
               className="text-sm font-semibold"
-              style={{ color: '#00D9FF' }}
+              style={{ color: "#00D9FF" }}
             >
               {getImpactText(analysis.weatherImpactSeverity)}
             </Text>
@@ -150,14 +171,24 @@ export function AIRouteAnalysisPanel({
       {/* Speed and Time */}
       <View className="mb-4">
         <View className="flex-row justify-between mb-2">
-          <Text className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Estimated Avg Speed</Text>
-          <Text className="text-sm font-semibold" style={{ color: '#00D9FF' }}>
+          <Text
+            className="text-sm"
+            style={{ color: "rgba(255, 255, 255, 0.7)" }}
+          >
+            Estimated Avg Speed
+          </Text>
+          <Text className="text-sm font-semibold" style={{ color: "#00D9FF" }}>
             {analysis.averageSpeedMph.toFixed(1)} mph
           </Text>
         </View>
         <View className="flex-row justify-between mb-2">
-          <Text className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Total Time</Text>
-          <Text className="text-sm font-semibold" style={{ color: '#00D9FF' }}>
+          <Text
+            className="text-sm"
+            style={{ color: "rgba(255, 255, 255, 0.7)" }}
+          >
+            Total Time
+          </Text>
+          <Text className="text-sm font-semibold" style={{ color: "#00D9FF" }}>
             {analysis.totalEstimatedTimeMinutes.toFixed(0)} min
           </Text>
         </View>
@@ -166,17 +197,25 @@ export function AIRouteAnalysisPanel({
       {/* Confidence Score */}
       <View className="mb-4">
         <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>AI Confidence</Text>
-          <Text className="text-sm font-semibold" style={{ color: '#00D9FF' }}>
+          <Text
+            className="text-sm"
+            style={{ color: "rgba(255, 255, 255, 0.7)" }}
+          >
+            AI Confidence
+          </Text>
+          <Text className="text-sm font-semibold" style={{ color: "#00D9FF" }}>
             {(analysis.confidenceScore * 100).toFixed(0)}%
           </Text>
         </View>
-        <View className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}>
-          <View 
+        <View
+          className="w-full h-2 rounded-full overflow-hidden"
+          style={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+        >
+          <View
             className="h-full rounded-full"
             style={{
               width: `${analysis.confidenceScore * 100}%`,
-              backgroundColor: '#00D9FF',
+              backgroundColor: "#00D9FF",
             }}
           />
         </View>
@@ -185,16 +224,25 @@ export function AIRouteAnalysisPanel({
       {/* Reasoning */}
       {analysis.reasoning && (
         <View className="mb-2">
-          <Text className="text-sm font-semibold mb-2" style={{ color: '#00D9FF' }}>
+          <Text
+            className="text-sm font-semibold mb-2"
+            style={{ color: "#00D9FF" }}
+          >
             Analysis
           </Text>
-          <Text className="text-sm leading-5" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+          <Text
+            className="text-sm leading-5"
+            style={{ color: "rgba(255, 255, 255, 0.7)" }}
+          >
             {analysis.reasoning}
           </Text>
         </View>
       )}
 
-      <Text className="text-xs mt-4" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+      <Text
+        className="text-xs mt-4"
+        style={{ color: "rgba(255, 255, 255, 0.5)" }}
+      >
         Powered by Liquid Leap AI • Cache: 10 min
       </Text>
     </View>

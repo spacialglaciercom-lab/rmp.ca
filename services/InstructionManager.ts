@@ -19,11 +19,7 @@ export interface DeliveryInstructionsJson {
 
 /** Normalize address for fuzzy matching: lowercase, collapse spaces, remove punctuation. */
 function normalizeAddress(addr: string): string {
-  return addr
-    .toLowerCase()
-    .replace(/[.,#]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return addr.toLowerCase().replace(/[.,#]/g, "").replace(/\s+/g, " ").trim();
 }
 
 /** Check if route address/label contains instruction address or vice versa (substring match). */
@@ -108,7 +104,9 @@ export interface EnrichedRouteStop extends RouteStopInput {
  * Enrich route stops with auto-matched delivery instructions.
  * When you calculate a route, pass stops through this — instructions auto-attach by address.
  */
-export function enrichRoute<T extends RouteStopInput>(routeStops: T[]): (T & { instructions: RouteStopInstruction[] })[] {
+export function enrichRoute<T extends RouteStopInput>(
+  routeStops: T[],
+): (T & { instructions: RouteStopInstruction[] })[] {
   return routeStops.map((stop) => {
     const addr = stop.address ?? stop.label ?? "";
     const matched = instructionManager.matchForRouteStop(addr);

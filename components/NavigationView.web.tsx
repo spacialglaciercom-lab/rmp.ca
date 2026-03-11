@@ -27,7 +27,7 @@ export interface OffRoutePayload {
 export interface NavigationViewProps {
   matchedRoute: MatchedRoute;
   /** When set, draw this full route for display so segments don't disappear (matched route is downsampled). */
-  fullRoutePoints?: Array<{ lat: number; lon: number }>;
+  fullRoutePoints?: { lat: number; lon: number }[];
   onClose: () => void;
   onOffRoute?: (payload: OffRoutePayload) => void;
   onRecalculate?: (payload: OffRoutePayload) => void;
@@ -78,7 +78,7 @@ function formatDuration(seconds: number): string {
 
 function haversineDistance(
   a: { lat: number; lon: number },
-  b: { lat: number; lon: number }
+  b: { lat: number; lon: number },
 ): number {
   const R = 6371000;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -102,7 +102,8 @@ function createUserLocationIcon() {
 }
 
 const LEAFLET_CSS_ID = "leaflet-css-cdn";
-const LEAFLET_CSS_HREF = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
+const LEAFLET_CSS_HREF =
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
 
 export default function NavigationView({
   matchedRoute,
@@ -123,7 +124,9 @@ export default function NavigationView({
   const tileAttribution = isDark
     ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
     : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-  const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
+  const [userPosition, setUserPosition] = useState<[number, number] | null>(
+    null,
+  );
 
   // Phase 1.2: Ensure Leaflet CSS is loaded when nav map is shown (idempotent).
   useEffect(() => {
@@ -142,14 +145,17 @@ export default function NavigationView({
     const id = navigator.geolocation.watchPosition(
       (pos) => setUserPosition([pos.coords.latitude, pos.coords.longitude]),
       () => setUserPosition(null),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
   const matchedPositions = useMemo(
-    () => matchedRoute.matchedGeometry.map((p) => [p.lat, p.lon] as [number, number]),
-    [matchedRoute.matchedGeometry]
+    () =>
+      matchedRoute.matchedGeometry.map(
+        (p) => [p.lat, p.lon] as [number, number],
+      ),
+    [matchedRoute.matchedGeometry],
   );
 
   const routePositions = useMemo(() => {
@@ -185,18 +191,21 @@ export default function NavigationView({
       )}
       {hasMap && (
         <View style={[styles.mapWrap, styles.mapFull]}>
-          <div style={{ width: "100%", height: mapHeight, position: "relative" }}>
+          <div
+            style={{ width: "100%", height: mapHeight, position: "relative" }}
+          >
             <MapContainer
               bounds={bounds ?? undefined}
               boundsOptions={bounds ? { padding: [30, 30] } : undefined}
-              center={bounds ? undefined : [routePositions[0][0], routePositions[0][1]]}
+              center={
+                bounds
+                  ? undefined
+                  : [routePositions[0][0], routePositions[0][1]]
+              }
               zoom={bounds ? undefined : 14}
               style={{ height: mapHeight, width: "100%" }}
             >
-              <TileLayer
-                attribution={tileAttribution}
-                url={tileUrl}
-              />
+              <TileLayer attribution={tileAttribution} url={tileUrl} />
               <Polyline
                 positions={routePositions}
                 color={primary}
@@ -213,7 +222,11 @@ export default function NavigationView({
                 />
               )}
               {userPosition != null && (
-                <Marker position={userPosition} icon={createUserLocationIcon()} title="Your location" />
+                <Marker
+                  position={userPosition}
+                  icon={createUserLocationIcon()}
+                  title="Your location"
+                />
               )}
             </MapContainer>
           </div>
@@ -221,17 +234,26 @@ export default function NavigationView({
       )}
 
       {/* Minimal overlay: Close + distance/duration + Recalculate from here */}
-      <View style={[styles.overlay, { backgroundColor: colors.background + "E6" }]}>
+      <View
+        style={[styles.overlay, { backgroundColor: colors.background + "E6" }]}
+      >
         <Text style={[styles.overlayStat, { color: colors.foreground }]}>
-          {formatDistance(matchedRoute.totalDistance)} · {formatDuration(matchedRoute.totalDuration)}
+          {formatDistance(matchedRoute.totalDistance)} ·{" "}
+          {formatDuration(matchedRoute.totalDuration)}
         </Text>
         <View style={styles.overlayActions}>
           {onRecalculate && matchedRoute.matchedGeometry.length > 1 && (
             <TouchableOpacity
-              style={[styles.recalculateFromHereButton, { backgroundColor: colors.muted + "CC" }]}
+              style={[
+                styles.recalculateFromHereButton,
+                { backgroundColor: colors.muted + "CC" },
+              ]}
               onPress={() => {
                 const geom = matchedRoute.matchedGeometry;
-                const getPayload = (location: { lat: number; lon: number }, segmentIndex: number) =>
+                const getPayload = (
+                  location: { lat: number; lon: number },
+                  segmentIndex: number,
+                ) =>
                   onRecalculate({
                     location,
                     currentStepIndex: 0,
@@ -241,7 +263,10 @@ export default function NavigationView({
                 if (typeof navigator !== "undefined" && navigator.geolocation) {
                   navigator.geolocation.getCurrentPosition(
                     (pos) => {
-                      const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                      const loc = {
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude,
+                      };
                       let bestIdx = 0;
                       let bestDist = Infinity;
                       for (let i = 0; i < geom.length - 1; i++) {
@@ -256,14 +281,20 @@ export default function NavigationView({
                     () => {
                       getPayload(geom[0], 0);
                     },
-                    { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 }
+                    {
+                      enableHighAccuracy: false,
+                      timeout: 3000,
+                      maximumAge: 60000,
+                    },
                   );
                 } else {
                   getPayload(geom[0], 0);
                 }
               }}
             >
-              <Text style={styles.recalculateFromHereText}>Recalculate from here</Text>
+              <Text style={styles.recalculateFromHereText}>
+                Recalculate from here
+              </Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity

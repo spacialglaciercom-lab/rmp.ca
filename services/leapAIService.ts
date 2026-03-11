@@ -5,7 +5,11 @@
  */
 
 import { Platform } from "react-native";
-import type { RouteData, WeatherData, WeatherConstraints } from "@/types/weather";
+import type {
+  RouteData,
+  WeatherData,
+  WeatherConstraints,
+} from "@/types/weather";
 import { DEFAULT_WEATHER_CONSTRAINTS } from "@/types/weather";
 
 const LEAP_SCHEMA_HINT = `You are a route and weather analyst. Input is a JSON object with:
@@ -31,7 +35,7 @@ export interface LeapWeatherInput {
  * TODO: Re-enable when Leap SDK is available for Android.
  */
 export async function getLeapWeatherRecommendations(
-  input: LeapWeatherInput
+  input: LeapWeatherInput,
 ): Promise<string[]> {
   // Leap SDK module removed - return empty recommendations
   return [];
@@ -45,7 +49,7 @@ export function buildLeapWeatherInput(
   estimatedTotalMinutes: number,
   totalDistanceKm: number,
   weatherByPoint: Map<string, WeatherData | null>,
-  constraints: Partial<WeatherConstraints> = {}
+  constraints: Partial<WeatherConstraints> = {},
 ): LeapWeatherInput {
   const weatherConditions: WeatherData[] = [];
   const keySet = new Set(weatherByPoint.keys());
@@ -59,7 +63,8 @@ export function buildLeapWeatherInput(
     points: points.map((p, i) => ({
       lat: p.lat,
       lon: p.lon,
-      estimatedMinutes: segCount > 0 ? (estimatedTotalMinutes / segCount) * i : 0,
+      estimatedMinutes:
+        segCount > 0 ? (estimatedTotalMinutes / segCount) * i : 0,
     })),
     totalDistanceKm,
     estimatedTotalMinutes,

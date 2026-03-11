@@ -8,8 +8,7 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-const isNativeProd =
-  Platform.OS !== "web" && Constants.appOwnership !== "expo";
+const isNativeProd = Platform.OS !== "web" && Constants.appOwnership !== "expo";
 
 function getAnalytics():
   | import("@react-native-firebase/analytics").FirebaseAnalyticsTypes.Module
@@ -43,7 +42,7 @@ export function trackScreen(screenName: string, screenClass?: string): void {
  */
 export function trackEvent(
   name: string,
-  params?: Record<string, string | number | boolean>
+  params?: Record<string, string | number | boolean>,
 ): void {
   const analytics = getAnalytics();
   if (!analytics) return;
@@ -54,7 +53,10 @@ export function trackEvent(
         if (v !== undefined && v !== null) safeParams[k] = v;
       }
     }
-    analytics().logEvent(name, Object.keys(safeParams).length ? safeParams : undefined);
+    analytics().logEvent(
+      name,
+      Object.keys(safeParams).length ? safeParams : undefined,
+    );
   } catch {
     // ignore
   }

@@ -86,14 +86,16 @@ export const useMapDisplayStore = create<MapDisplayStore>()(
       setMapTilesAsOverlay: (v) => set({ mapTilesAsOverlay: v }),
       setShowRouteLine: (v) => set({ showRouteLine: v }),
       toggleOverture: () => set((s) => ({ showOverture: !s.showOverture })),
-      toggleMapTilesAsOverlay: () => set((s) => ({ mapTilesAsOverlay: !s.mapTilesAsOverlay })),
+      toggleMapTilesAsOverlay: () =>
+        set((s) => ({ mapTilesAsOverlay: !s.mapTilesAsOverlay })),
       toggleRouteLine: () => set((s) => ({ showRouteLine: !s.showRouteLine })),
       toggleScaleBar: () => set((s) => ({ showScaleBar: !s.showScaleBar })),
       toggleCompass: () => set((s) => ({ showCompass: !s.showCompass })),
-      toggleZoomControls: () => set((s) => ({ showZoomControls: !s.showZoomControls })),
+      toggleZoomControls: () =>
+        set((s) => ({ showZoomControls: !s.showZoomControls })),
       toggleTraffic: () => set((s) => ({ showTraffic: !s.showTraffic })),
       toggleOverlay: (key) =>
-        set((state) => ({ [key]: !state[key] } as Partial<MapDisplayState>)),
+        set((state) => ({ [key]: !state[key] }) as Partial<MapDisplayState>),
     }),
     {
       name: "trashroute-map-display",
@@ -114,6 +116,6 @@ export const useMapDisplayStore = create<MapDisplayStore>()(
         mapTilesAsOverlay: s.mapTilesAsOverlay,
         showRouteLine: s.showRouteLine,
       }),
-    }
-  )
+    },
+  ),
 );

@@ -1,8 +1,8 @@
 import React from "react";
-import { Pressable, View, Text, StyleSheet } from "react-native";
+import { Pressable, View, Text, StyleSheet, Platform } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import type { SidebarMenuItem } from "@/constants/sidebarConfig";
 import { useColors } from "@/hooks/use-colors";
 
@@ -66,7 +66,10 @@ function SidebarMenuItemRowInner({ item, onPress }: SidebarMenuItemProps) {
         color={colors.primary}
         style={styles.menuItemIcon}
       />
-      <Text style={[styles.menuItemLabel, { color: colors.text }]} numberOfLines={1}>
+      <Text
+        style={[styles.menuItemLabel, { color: colors.text }]}
+        numberOfLines={1}
+      >
         {item.label}
       </Text>
       {item.showChevron && (

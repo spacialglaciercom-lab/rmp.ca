@@ -5,7 +5,7 @@ function haversineMeters(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -34,7 +34,7 @@ const DEFAULT_SPEED_KMH = 30;
 export function osmToStreetEdges(
   nodes: Map<string, Node>,
   ways: Way[],
-  defaultSpeedKmh: number = DEFAULT_SPEED_KMH
+  defaultSpeedKmh: number = DEFAULT_SPEED_KMH,
 ): StreetEdge[] {
   // ---- Step 1+2: Count way membership and total references in a single pass ----
   // nodeWayCount: how many distinct ways reference each node (for intersection detection)

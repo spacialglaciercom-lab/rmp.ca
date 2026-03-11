@@ -35,6 +35,6 @@ export const usePluginStore = create<PluginStoreState>()(
       name: "@trashroute:plugins",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ enabledPlugins: s.enabledPlugins }),
-    }
-  )
+    },
+  ),
 );

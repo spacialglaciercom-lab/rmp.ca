@@ -4,7 +4,10 @@ import { useColors } from "@/hooks/use-colors";
 import { useRouting } from "@/lib/routing-context";
 import type { WeatherAnalysisResult } from "@/services/weatherAnalysis";
 
-function weatherRiskColor(risk: number, colors: ReturnType<typeof useColors>): string {
+function weatherRiskColor(
+  risk: number,
+  colors: ReturnType<typeof useColors>,
+): string {
   if (risk >= 70) return colors.accentMagenta ?? colors.error ?? "#ff00ff";
   if (risk >= 40) return colors.warning ?? "#ff6b4a";
   return colors.accentCyan ?? colors.primary ?? "#00d9ff";
@@ -193,7 +196,9 @@ export function RouteReport() {
               <Text className="text-xl font-bold text-primary">
                 {formatTime(Math.min(report.routeStats.estimatedTime, 24 * 60))}
               </Text>
-              <Text className="text-xs text-muted">Est. Time (drive + stops)</Text>
+              <Text className="text-xs text-muted">
+                Est. Time (drive + stops)
+              </Text>
             </View>
           </View>
         </View>
@@ -232,14 +237,24 @@ export function RouteReport() {
               <View
                 className="px-3 py-1.5 rounded-lg"
                 style={{
-                  backgroundColor: weatherRiskColor(weatherAnalysis.overallRiskScore, colors) + "25",
+                  backgroundColor:
+                    weatherRiskColor(weatherAnalysis.overallRiskScore, colors) +
+                    "25",
                   borderWidth: 1,
-                  borderColor: weatherRiskColor(weatherAnalysis.overallRiskScore, colors),
+                  borderColor: weatherRiskColor(
+                    weatherAnalysis.overallRiskScore,
+                    colors,
+                  ),
                 }}
               >
                 <Text
                   className="text-base font-bold"
-                  style={{ color: weatherRiskColor(weatherAnalysis.overallRiskScore, colors) }}
+                  style={{
+                    color: weatherRiskColor(
+                      weatherAnalysis.overallRiskScore,
+                      colors,
+                    ),
+                  }}
                 >
                   {weatherAnalysis.overallRiskScore}/100
                 </Text>
@@ -247,12 +262,15 @@ export function RouteReport() {
             </View>
             {weatherAnalysis.totalDelayMinutes > 0 && (
               <Text className="text-sm text-muted mb-3">
-                ~{weatherAnalysis.totalDelayMinutes.toFixed(0)} min weather-related delay
+                ~{weatherAnalysis.totalDelayMinutes.toFixed(0)} min
+                weather-related delay
               </Text>
             )}
             {weatherAnalysis.segmentRisks.length > 0 && (
               <View className="mb-3">
-                <Text className="text-xs text-muted mb-2">Segment risk (start → end)</Text>
+                <Text className="text-xs text-muted mb-2">
+                  Segment risk (start → end)
+                </Text>
                 <View className="flex-row flex-wrap gap-1">
                   {weatherAnalysis.segmentRisks.slice(0, 32).map((s) => (
                     <View
@@ -274,10 +292,16 @@ export function RouteReport() {
             {weatherAnalysis.alerts.length > 0 && (
               <View
                 className="p-2 rounded-lg mb-2"
-                style={{ backgroundColor: (colors.warning ?? "#ff6b4a") + "18" }}
+                style={{
+                  backgroundColor: (colors.warning ?? "#ff6b4a") + "18",
+                }}
               >
                 {weatherAnalysis.alerts.slice(0, 3).map((a, i) => (
-                  <Text key={i} className="text-xs mb-1" style={{ color: colors.foreground }}>
+                  <Text
+                    key={i}
+                    className="text-xs mb-1"
+                    style={{ color: colors.foreground }}
+                  >
                     ⚠️ {a}
                   </Text>
                 ))}
@@ -285,7 +309,9 @@ export function RouteReport() {
             )}
             {weatherAnalysis.recommendations.length > 0 && (
               <View>
-                <Text className="text-xs font-semibold text-foreground mb-1">Recommendations</Text>
+                <Text className="text-xs font-semibold text-foreground mb-1">
+                  Recommendations
+                </Text>
                 {weatherAnalysis.recommendations.map((r, i) => (
                   <Text key={i} className="text-xs text-muted mb-1 pl-2">
                     • {r}

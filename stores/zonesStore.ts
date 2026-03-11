@@ -75,7 +75,7 @@ export const useZonesStore = create<ZonesState>()(
         if (!trimmed) return;
         set((state) => ({
           savedZones: state.savedZones.map((z) =>
-            z.id === id ? { ...z, name: trimmed } : z
+            z.id === id ? { ...z, name: trimmed } : z,
           ),
         }));
       },
@@ -87,6 +87,6 @@ export const useZonesStore = create<ZonesState>()(
       name: "rmp-zones-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ savedZones: s.savedZones }),
-    }
-  )
+    },
+  ),
 );

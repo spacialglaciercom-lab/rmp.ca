@@ -2,15 +2,15 @@
  * Enhanced Quick Destinations with favorites, recent places, and better management
  */
 import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
   Alert,
   Modal,
-  TextInput
+  TextInput,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
@@ -41,8 +41,20 @@ interface EnhancedQuickDestinationsProps {
 }
 
 const DEFAULT_DESTINATIONS = [
-  { id: "home", label: "Home", type: "home" as const, icon: "home-outline", color: "#FF6B6B" },
-  { id: "work", label: "Work", type: "work" as const, icon: "office-building-outline", color: "#4ECDC4" },
+  {
+    id: "home",
+    label: "Home",
+    type: "home" as const,
+    icon: "home-outline",
+    color: "#FF6B6B",
+  },
+  {
+    id: "work",
+    label: "Work",
+    type: "work" as const,
+    icon: "office-building-outline",
+    color: "#4ECDC4",
+  },
 ];
 
 export function EnhancedQuickDestinations({
@@ -56,11 +68,14 @@ export function EnhancedQuickDestinations({
   maxRecent = 3,
 }: EnhancedQuickDestinationsProps) {
   const colors = useColors();
-  const [selectedTab, setSelectedTab] = useState<"quick" | "favorites" | "recent">("quick");
+  const [selectedTab, setSelectedTab] = useState<
+    "quick" | "favorites" | "recent"
+  >("quick");
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingDestination, setEditingDestination] = useState<QuickDestination | null>(null);
+  const [editingDestination, setEditingDestination] =
+    useState<QuickDestination | null>(null);
   const [editLabel, setEditLabel] = useState("");
-  
+
   const { favorites } = useFavoritesStore();
 
   const handleDestinationPress = (destination: QuickDestination) => {
@@ -87,12 +102,12 @@ export function EnhancedQuickDestinations({
       `Are you sure you want to delete "${destination.label}"?`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
+        {
+          text: "Delete",
           style: "destructive",
-          onPress: () => onDelete?.(destination.id)
-        }
-      ]
+          onPress: () => onDelete?.(destination.id),
+        },
+      ],
     );
   };
 
@@ -100,7 +115,7 @@ export function EnhancedQuickDestinations({
     if (editingDestination && editLabel.trim()) {
       onEdit?.({
         ...editingDestination,
-        label: editLabel.trim()
+        label: editLabel.trim(),
       });
     }
     setEditModalVisible(false);
@@ -108,7 +123,10 @@ export function EnhancedQuickDestinations({
     setEditLabel("");
   };
 
-  const renderDestinationCard = (destination: QuickDestination, showEdit: boolean = false) => (
+  const renderDestinationCard = (
+    destination: QuickDestination,
+    showEdit: boolean = false,
+  ) => (
     <TouchableOpacity
       key={destination.id}
       style={[
@@ -124,19 +142,24 @@ export function EnhancedQuickDestinations({
       <View style={styles.cardContent}>
         <View style={styles.cardLeft}>
           <MaterialCommunityIcons
-            name={destination.icon as any || "map-marker-outline"}
+            name={(destination.icon as any) || "map-marker-outline"}
             size={24}
             color={destination.color || colors.primary}
           />
           <View style={styles.cardText}>
-            <Text style={[styles.cardLabel, { color: colors.text }]} numberOfLines={1}>
+            <Text
+              style={[styles.cardLabel, { color: colors.text }]}
+              numberOfLines={1}
+            >
               {destination.label}
             </Text>
-            <Text style={[styles.cardSublabel, { color: colors.muted }]} numberOfLines={1}>
-              {destination.coords 
+            <Text
+              style={[styles.cardSublabel, { color: colors.muted }]}
+              numberOfLines={1}
+            >
+              {destination.coords
                 ? `${destination.coords.lat.toFixed(5)}, ${destination.coords.lon.toFixed(5)}`
-                : "No location set"
-              }
+                : "No location set"}
             </Text>
           </View>
         </View>
@@ -146,13 +169,21 @@ export function EnhancedQuickDestinations({
               onPress={() => handleEditPress(destination)}
               style={styles.actionButton}
             >
-              <MaterialCommunityIcons name="pencil" size={16} color={colors.muted} />
+              <MaterialCommunityIcons
+                name="pencil"
+                size={16}
+                color={colors.muted}
+              />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => handleDeletePress(destination)}
               style={styles.actionButton}
             >
-              <MaterialCommunityIcons name="delete" size={16} color={colors.danger || "#FF6B6B"} />
+              <MaterialCommunityIcons
+                name="delete"
+                size={16}
+                color={colors.danger || "#FF6B6B"}
+              />
             </TouchableOpacity>
           </View>
         )}
@@ -160,7 +191,11 @@ export function EnhancedQuickDestinations({
     </TouchableOpacity>
   );
 
-  const renderAddCard = (type: QuickDestinationType, label: string, icon: string) => (
+  const renderAddCard = (
+    type: QuickDestinationType,
+    label: string,
+    icon: string,
+  ) => (
     <TouchableOpacity
       key={`add-${type}`}
       style={[
@@ -174,23 +209,36 @@ export function EnhancedQuickDestinations({
       ]}
       onPress={() => handleAddPress(type)}
     >
-      <MaterialCommunityIcons name={icon as any} size={32} color={colors.muted} />
+      <MaterialCommunityIcons
+        name={icon as any}
+        size={32}
+        color={colors.muted}
+      />
       <Text style={[styles.addLabel, { color: colors.muted }]}>
         Add {label}
       </Text>
     </TouchableOpacity>
   );
 
-  const quickDestinations = destinations.length > 0 ? destinations : DEFAULT_DESTINATIONS;
+  const quickDestinations =
+    destinations.length > 0 ? destinations : DEFAULT_DESTINATIONS;
 
   return (
     <View style={styles.container}>
       {/* Tab Navigation */}
-      <View style={[styles.tabContainer, { borderBottomColor: TECH_NAV.glassBorder }]}>
+      <View
+        style={[
+          styles.tabContainer,
+          { borderBottomColor: TECH_NAV.glassBorder },
+        ]}
+      >
         <TouchableOpacity
           style={[
             styles.tab,
-            selectedTab === "quick" && [styles.activeTab, { borderBottomColor: TECH_NAV.blue }],
+            selectedTab === "quick" && [
+              styles.activeTab,
+              { borderBottomColor: TECH_NAV.blue },
+            ],
           ]}
           onPress={() => {
             hapticImpact();
@@ -205,7 +253,10 @@ export function EnhancedQuickDestinations({
           <Text
             style={[
               styles.tabText,
-              { color: selectedTab === "quick" ? TECH_NAV.blueLight : colors.muted },
+              {
+                color:
+                  selectedTab === "quick" ? TECH_NAV.blueLight : colors.muted,
+              },
             ]}
           >
             Quick
@@ -216,7 +267,10 @@ export function EnhancedQuickDestinations({
           <TouchableOpacity
             style={[
               styles.tab,
-              selectedTab === "favorites" && [styles.activeTab, { borderBottomColor: TECH_NAV.blue }],
+              selectedTab === "favorites" && [
+                styles.activeTab,
+                { borderBottomColor: TECH_NAV.blue },
+              ],
             ]}
             onPress={() => {
               hapticImpact();
@@ -226,12 +280,19 @@ export function EnhancedQuickDestinations({
             <MaterialCommunityIcons
               name="star"
               size={18}
-              color={selectedTab === "favorites" ? TECH_NAV.blueLight : colors.muted}
+              color={
+                selectedTab === "favorites" ? TECH_NAV.blueLight : colors.muted
+              }
             />
             <Text
               style={[
                 styles.tabText,
-                { color: selectedTab === "favorites" ? TECH_NAV.blueLight : colors.muted },
+                {
+                  color:
+                    selectedTab === "favorites"
+                      ? TECH_NAV.blueLight
+                      : colors.muted,
+                },
               ]}
             >
               Favorites
@@ -243,7 +304,10 @@ export function EnhancedQuickDestinations({
           <TouchableOpacity
             style={[
               styles.tab,
-              selectedTab === "recent" && [styles.activeTab, { borderBottomColor: TECH_NAV.blue }],
+              selectedTab === "recent" && [
+                styles.activeTab,
+                { borderBottomColor: TECH_NAV.blue },
+              ],
             ]}
             onPress={() => {
               hapticImpact();
@@ -253,12 +317,19 @@ export function EnhancedQuickDestinations({
             <MaterialCommunityIcons
               name="history"
               size={18}
-              color={selectedTab === "recent" ? TECH_NAV.blueLight : colors.muted}
+              color={
+                selectedTab === "recent" ? TECH_NAV.blueLight : colors.muted
+              }
             />
             <Text
               style={[
                 styles.tabText,
-                { color: selectedTab === "recent" ? TECH_NAV.blueLight : colors.muted },
+                {
+                  color:
+                    selectedTab === "recent"
+                      ? TECH_NAV.blueLight
+                      : colors.muted,
+                },
               ]}
             >
               Recent
@@ -271,27 +342,37 @@ export function EnhancedQuickDestinations({
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {selectedTab === "quick" && (
           <View style={styles.tabContent}>
-            {quickDestinations.filter(dest => dest.coords).map(dest => renderDestinationCard(dest, true))}
-            {quickDestinations.filter(dest => !dest.coords).map(dest => 
-              renderAddCard(dest.type, dest.label, dest.icon || "plus")
-            )}
+            {quickDestinations
+              .filter((dest) => dest.coords)
+              .map((dest) => renderDestinationCard(dest, true))}
+            {quickDestinations
+              .filter((dest) => !dest.coords)
+              .map((dest) =>
+                renderAddCard(dest.type, dest.label, dest.icon || "plus"),
+              )}
           </View>
         )}
 
         {selectedTab === "favorites" && (
           <View style={styles.tabContent}>
             {favorites.length > 0 ? (
-              favorites.map(fav => renderDestinationCard({
-                id: `fav-${fav.id}`,
-                label: fav.name,
-                coords: fav.coords,
-                type: "custom",
-                icon: "star-outline",
-                color: "#FFD700"
-              }))
+              favorites.map((fav) =>
+                renderDestinationCard({
+                  id: `fav-${fav.id}`,
+                  label: fav.name,
+                  coords: fav.coords,
+                  type: "custom",
+                  icon: "star-outline",
+                  color: "#FFD700",
+                }),
+              )
             ) : (
               <View style={styles.emptyState}>
-                <MaterialCommunityIcons name="star-outline" size={48} color={colors.muted} />
+                <MaterialCommunityIcons
+                  name="star-outline"
+                  size={48}
+                  color={colors.muted}
+                />
                 <Text style={[styles.emptyText, { color: colors.muted }]}>
                   No favorites yet
                 </Text>
@@ -305,10 +386,16 @@ export function EnhancedQuickDestinations({
 
         {selectedTab === "recent" && (
           <View style={styles.tabContent}>
-            {recentDestinations.slice(0, maxRecent).map(dest => renderDestinationCard(dest))}
+            {recentDestinations
+              .slice(0, maxRecent)
+              .map((dest) => renderDestinationCard(dest))}
             {recentDestinations.length === 0 && (
               <View style={styles.emptyState}>
-                <MaterialCommunityIcons name="history" size={48} color={colors.muted} />
+                <MaterialCommunityIcons
+                  name="history"
+                  size={48}
+                  color={colors.muted}
+                />
                 <Text style={[styles.emptyText, { color: colors.muted }]}>
                   No recent destinations
                 </Text>
@@ -361,7 +448,10 @@ export function EnhancedQuickDestinations({
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, { borderColor: TECH_NAV.glassBorder }]}
+                style={[
+                  styles.modalButton,
+                  { borderColor: TECH_NAV.glassBorder },
+                ]}
                 onPress={() => setEditModalVisible(false)}
               >
                 <Text style={{ color: colors.muted }}>Cancel</Text>

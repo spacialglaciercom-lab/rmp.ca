@@ -217,7 +217,11 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 /** Zone partition (spectral clustering) can be slow on large graphs; allow 2 minutes. */
 const ZONE_PARTITION_TIMEOUT_MS = 120_000;
 
-async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<T> {
+async function request<T>(
+  path: string,
+  body: unknown,
+  timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+): Promise<T> {
   const base = getOptimizerBaseUrl();
   const url = `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
   const controller = new AbortController();
@@ -228,7 +232,9 @@ async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUE
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: controller.signal,
-      ...(Platform.OS === "web" && { credentials: "include" as RequestCredentials }),
+      ...(Platform.OS === "web" && {
+        credentials: "include" as RequestCredentials,
+      }),
     });
     clearTimeout(timeout);
 
@@ -237,7 +243,12 @@ async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUE
       let detail: unknown = errorBody;
       let hint: string | undefined;
       try {
-        const parsed = JSON.parse(errorBody) as { detail?: unknown; message?: string; error?: string; hint?: string };
+        const parsed = JSON.parse(errorBody) as {
+          detail?: unknown;
+          message?: string;
+          error?: string;
+          hint?: string;
+        };
         detail = parsed.detail ?? parsed.message ?? parsed.error ?? errorBody;
         hint = parsed.hint;
       } catch {}
@@ -252,7 +263,9 @@ async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUE
   } catch (err) {
     clearTimeout(timeout);
     if ((err as { name?: string }).name === "AbortError") {
-      throw new Error(`Backend optimizer timed out after ${timeoutMs / 1000}s – falling back to offline`);
+      throw new Error(
+        `Backend optimizer timed out after ${timeoutMs / 1000}s – falling back to offline`,
+      );
     }
     throw err;
   }
@@ -282,7 +295,9 @@ export async function optimizeOvertureRoute(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
         signal: controller.signal,
-        ...(Platform.OS === "web" && { credentials: "include" as RequestCredentials }),
+        ...(Platform.OS === "web" && {
+          credentials: "include" as RequestCredentials,
+        }),
       },
     );
 
@@ -381,7 +396,11 @@ export function buildOvertureOptimizeRequest(params: {
   overrides?: {
     oneway_mode?: string;
     service_both_sides?: boolean;
-    turn_penalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
+    turn_penalties?: {
+      left_turn?: number;
+      u_turn?: number;
+      right_turn?: number;
+    };
     road_classes?: string[];
   };
 }): OptimizeRouteParams {
@@ -392,7 +411,8 @@ export function buildOvertureOptimizeRequest(params: {
     start_lat: params.start_lat,
     start_lon: params.start_lon,
     oneway_mode: params.overrides?.oneway_mode ?? c?.onewayMode ?? "A",
-    service_both_sides: params.overrides?.service_both_sides ?? c?.serviceBothSides ?? false,
+    service_both_sides:
+      params.overrides?.service_both_sides ?? c?.serviceBothSides ?? false,
     turn_penalties:
       params.overrides?.turn_penalties ??
       (turnPenalties
@@ -410,7 +430,9 @@ export function buildOvertureOptimizeRequest(params: {
   return result;
 }
 
-export async function optimizeRoute(params: OptimizeRouteParams): Promise<OptimizeResponse> {
+export async function optimizeRoute(
+  params: OptimizeRouteParams,
+): Promise<OptimizeResponse> {
   return request<OptimizeResponse>("/api/optimize", params);
 }
 
@@ -441,7 +463,11 @@ export async function extractRoads(
 export async function partitionZones(
   params: ZonesPartitionRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition", params, ZONE_PARTITION_TIMEOUT_MS);
+  return request<ZonesPartitionResponse>(
+    "/api/zones/partition",
+    params,
+    ZONE_PARTITION_TIMEOUT_MS,
+  );
 }
 
 /** Request body for partition-by-polygon (backend may implement this to extract + partition in one step). */
@@ -460,7 +486,11 @@ export interface ZonesPartitionByPolygonRequest {
 export async function partitionZonesByPolygon(
   params: ZonesPartitionByPolygonRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition-by-polygon", params, ZONE_PARTITION_TIMEOUT_MS);
+  return request<ZonesPartitionResponse>(
+    "/api/zones/partition-by-polygon",
+    params,
+    ZONE_PARTITION_TIMEOUT_MS,
+  );
 }
 
 /** Request body for partition-from-geojson (use after Extract & Process: send road GeoJSON). */
@@ -477,7 +507,11 @@ export interface ZonesPartitionFromGeoJSONRequest {
 export async function partitionZonesFromGeoJSON(
   params: ZonesPartitionFromGeoJSONRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition-from-geojson", params, ZONE_PARTITION_TIMEOUT_MS);
+  return request<ZonesPartitionResponse>(
+    "/api/zones/partition-from-geojson",
+    params,
+    ZONE_PARTITION_TIMEOUT_MS,
+  );
 }
 
 /** One point (e.g. delivery address or stop) for partition-from-points. */
@@ -507,7 +541,11 @@ export interface ZonesPartitionFromPointsRequest {
 export async function partitionZonesFromPoints(
   params: ZonesPartitionFromPointsRequest,
 ): Promise<ZonesPartitionResponse> {
-  return request<ZonesPartitionResponse>("/api/zones/partition-from-points", params, ZONE_PARTITION_TIMEOUT_MS);
+  return request<ZonesPartitionResponse>(
+    "/api/zones/partition-from-points",
+    params,
+    ZONE_PARTITION_TIMEOUT_MS,
+  );
 }
 
 export async function healthCheck(): Promise<boolean> {

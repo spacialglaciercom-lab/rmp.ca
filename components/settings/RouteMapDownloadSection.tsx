@@ -106,10 +106,7 @@ export const RouteMapDownloadSection: React.FC = () => {
       }
     } catch (e) {
       setProgress(null);
-      Alert.alert(
-        "Error",
-        e instanceof Error ? e.message : "Download failed.",
-      );
+      Alert.alert("Error", e instanceof Error ? e.message : "Download failed.");
     } finally {
       abortRef.current = null;
       setDownloading(false);
@@ -235,12 +232,16 @@ export const RouteMapDownloadSection: React.FC = () => {
       </Text>
 
       {!gpxData ? (
-        <Text style={{ fontSize: 13, color: colors.muted, fontStyle: "italic" }}>
+        <Text
+          style={{ fontSize: 13, color: colors.muted, fontStyle: "italic" }}
+        >
           No route loaded. Generate or import a route first, then return here to
           download offline map tiles along the route.
         </Text>
       ) : !estimate ? (
-        <Text style={{ fontSize: 13, color: colors.muted, fontStyle: "italic" }}>
+        <Text
+          style={{ fontSize: 13, color: colors.muted, fontStyle: "italic" }}
+        >
           Could not compute bounding box from route GPX.
         </Text>
       ) : !estimate.city ? (
@@ -289,7 +290,9 @@ export const RouteMapDownloadSection: React.FC = () => {
                 Downloading tiles…
               </Text>
               {progress && (
-                <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>
+                <Text
+                  style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}
+                >
                   {progress.done}/{progress.total} · {progressPct}%
                 </Text>
               )}
@@ -299,7 +302,9 @@ export const RouteMapDownloadSection: React.FC = () => {
                 </Text>
               )}
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
               <ActivityIndicator size="small" color={colors.primary} />
               <TouchableOpacity
                 onPress={handleCancel}

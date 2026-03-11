@@ -12,9 +12,11 @@ import { Platform } from "react-native";
 import { getGoogleMapsApiKey } from "@/lib/google-maps-config";
 import { getApiBaseUrl } from "@/shared/oauth";
 
-const PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
+const PLACES_AUTOCOMPLETE_URL =
+  "https://places.googleapis.com/v1/places:autocomplete";
 const PLACES_DETAILS_BASE = "https://places.googleapis.com/v1/places";
-const PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby";
+const PLACES_NEARBY_URL =
+  "https://places.googleapis.com/v1/places:searchNearby";
 
 // ─── Response types ────────────────────────────────────────────────────────
 
@@ -37,8 +39,12 @@ export interface GooglePlaceDetails {
 async function fetchAutocompleteProxy(
   input: string,
   sessionToken?: string,
-  locationBias?: { lat: number; lon: number; radiusMeters?: number }
-): Promise<{ suggestions?: Array<{ placePrediction?: { placeId?: string; text?: { text?: string } } }> }> {
+  locationBias?: { lat: number; lon: number; radiusMeters?: number },
+): Promise<{
+  suggestions?: Array<{
+    placePrediction?: { placeId?: string; text?: { text?: string } };
+  }>;
+}> {
   const base = getApiBaseUrl();
   if (!base) throw new Error("API base URL not configured");
   const url = `${base.replace(/\/$/, "")}/api/maps/places/autocomplete`;
@@ -58,7 +64,10 @@ async function fetchAutocompleteProxy(
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Autocomplete failed");
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: string }).error ?? "Autocomplete failed",
+    );
   return data;
 }
 
@@ -66,8 +75,12 @@ async function fetchAutocompleteDirect(
   apiKey: string,
   input: string,
   sessionToken?: string,
-  locationBias?: { lat: number; lon: number; radiusMeters?: number }
-): Promise<{ suggestions?: Array<{ placePrediction?: { placeId?: string; text?: { text?: string } } }> }> {
+  locationBias?: { lat: number; lon: number; radiusMeters?: number },
+): Promise<{
+  suggestions?: Array<{
+    placePrediction?: { placeId?: string; text?: { text?: string } };
+  }>;
+}> {
   const body: Record<string, unknown> = { input: input.trim() };
   if (sessionToken) body.sessionToken = sessionToken;
   if (locationBias) {
@@ -83,12 +96,17 @@ async function fetchAutocompleteDirect(
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "suggestions.placePrediction.placeId,suggestions.placePrediction.text",
+      "X-Goog-FieldMask":
+        "suggestions.placePrediction.placeId,suggestions.placePrediction.text",
     },
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error((data as { error?: { message?: string } }).error?.message ?? "Autocomplete failed");
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: { message?: string } }).error?.message ??
+        "Autocomplete failed",
+    );
   return data;
 }
 
@@ -101,14 +119,14 @@ export async function getPlacePredictions(
   options?: {
     sessionToken?: string;
     locationBias?: { lat: number; lon: number; radiusMeters?: number };
-  }
+  },
 ): Promise<GooglePlacePrediction[]> {
   if (!input?.trim()) return [];
   if (Platform.OS === "web") {
     const data = await fetchAutocompleteProxy(
       input,
       options?.sessionToken,
-      options?.locationBias
+      options?.locationBias,
     );
     return parsePredictions(data);
   }
@@ -118,13 +136,15 @@ export async function getPlacePredictions(
     apiKey,
     input,
     options?.sessionToken,
-    options?.locationBias
+    options?.locationBias,
   );
   return parsePredictions(data);
 }
 
 function parsePredictions(data: {
-  suggestions?: Array<{ placePrediction?: { placeId?: string; text?: { text?: string } } }>;
+  suggestions?: Array<{
+    placePrediction?: { placeId?: string; text?: { text?: string } };
+  }>;
 }): GooglePlacePrediction[] {
   const list = data.suggestions ?? [];
   const out: GooglePlacePrediction[] = [];
@@ -152,13 +172,16 @@ async function fetchPlaceDetailsProxy(placeId: string): Promise<{
   const url = `${base.replace(/\/$/, "")}/api/maps/places/details/${encodeURIComponent(placeId)}`;
   const res = await fetch(url);
   const data = await res.json();
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Place details failed");
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: string }).error ?? "Place details failed",
+    );
   return data;
 }
 
 async function fetchPlaceDetailsDirect(
   apiKey: string,
-  placeId: string
+  placeId: string,
 ): Promise<{
   id?: string;
   displayName?: { text?: string };
@@ -175,7 +198,11 @@ async function fetchPlaceDetailsDirect(
     },
   });
   const data = await res.json();
-  if (!res.ok) throw new Error((data as { error?: { message?: string } }).error?.message ?? "Place details failed");
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: { message?: string } }).error?.message ??
+        "Place details failed",
+    );
   return data;
 }
 
@@ -183,7 +210,9 @@ async function fetchPlaceDetailsDirect(
  * Get place details (display name, address, lat/lon) for a place ID.
  * On web uses server proxy; on native uses API key directly.
  */
-export async function getPlaceDetails(placeId: string): Promise<GooglePlaceDetails | null> {
+export async function getPlaceDetails(
+  placeId: string,
+): Promise<GooglePlaceDetails | null> {
   if (!placeId?.trim()) return null;
   try {
     let raw: {
@@ -225,8 +254,15 @@ export interface GooglePlaceNearby {
 async function fetchNearbyProxy(
   lat: number,
   lon: number,
-  radiusMeters?: number
-): Promise<{ places?: Array<{ id?: string; displayName?: { text?: string }; formattedAddress?: string; location?: { latitude?: number; longitude?: number } }> }> {
+  radiusMeters?: number,
+): Promise<{
+  places?: Array<{
+    id?: string;
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    location?: { latitude?: number; longitude?: number };
+  }>;
+}> {
   const base = getApiBaseUrl();
   if (!base) throw new Error("API base URL not configured");
   const res = await fetch(`${base.replace(/\/$/, "")}/api/maps/places/nearby`, {
@@ -235,7 +271,10 @@ async function fetchNearbyProxy(
     body: JSON.stringify({ lat, lon, radiusMeters: radiusMeters ?? 100 }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Nearby search failed");
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: string }).error ?? "Nearby search failed",
+    );
   return data;
 }
 
@@ -243,8 +282,15 @@ async function fetchNearbyDirect(
   apiKey: string,
   lat: number,
   lon: number,
-  radiusMeters?: number
-): Promise<{ places?: Array<{ id?: string; displayName?: { text?: string }; formattedAddress?: string; location?: { latitude?: number; longitude?: number } }> }> {
+  radiusMeters?: number,
+): Promise<{
+  places?: Array<{
+    id?: string;
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    location?: { latitude?: number; longitude?: number };
+  }>;
+}> {
   const radius = Math.min(50000, Math.max(50, radiusMeters ?? 100));
   const body = {
     locationRestriction: {
@@ -261,12 +307,17 @@ async function fetchNearbyDirect(
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location",
     },
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error((data as { error?: { message?: string } }).error?.message ?? "Nearby search failed");
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: { message?: string } }).error?.message ??
+        "Nearby search failed",
+    );
   return data;
 }
 
@@ -277,10 +328,17 @@ async function fetchNearbyDirect(
 export async function searchNearby(
   lat: number,
   lon: number,
-  options?: { radiusMeters?: number }
+  options?: { radiusMeters?: number },
 ): Promise<GooglePlaceNearby[]> {
   try {
-    let data: { places?: Array<{ id?: string; displayName?: { text?: string }; formattedAddress?: string; location?: { latitude?: number; longitude?: number } }> };
+    let data: {
+      places?: Array<{
+        id?: string;
+        displayName?: { text?: string };
+        formattedAddress?: string;
+        location?: { latitude?: number; longitude?: number };
+      }>;
+    };
     if (Platform.OS === "web") {
       data = await fetchNearbyProxy(lat, lon, options?.radiusMeters);
     } else {
@@ -290,7 +348,12 @@ export async function searchNearby(
     }
     const places = data.places ?? [];
     return places
-      .filter((p) => p?.id && p.location?.latitude != null && p.location?.longitude != null)
+      .filter(
+        (p) =>
+          p?.id &&
+          p.location?.latitude != null &&
+          p.location?.longitude != null,
+      )
       .map((p) => ({
         placeId: p.id!.replace(/^places\//, ""),
         displayName: p.displayName?.text ?? p.formattedAddress ?? "Place",

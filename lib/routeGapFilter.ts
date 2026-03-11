@@ -42,7 +42,7 @@ const MAX_REPAIRS = 25;
  */
 export function findGapIndices(
   points: LatLon[],
-  thresholdM: number = GAP_THRESHOLD_M
+  thresholdM: number = GAP_THRESHOLD_M,
 ): number[] {
   const gaps: number[] = [];
   for (let i = 0; i < points.length - 1; i++) {
@@ -59,7 +59,7 @@ export function findGapIndices(
  */
 export function countGaps(
   points: LatLon[],
-  thresholdM: number = GAP_THRESHOLD_M
+  thresholdM: number = GAP_THRESHOLD_M,
 ): number {
   return findGapIndices(points, thresholdM).length;
 }
@@ -82,7 +82,7 @@ export async function repairRouteGaps(
   points: LatLon[],
   config: RoutingConfig,
   options?: RouteOptions,
-  thresholdM: number = GAP_THRESHOLD_M
+  thresholdM: number = GAP_THRESHOLD_M,
 ): Promise<LatLon[]> {
   if (points.length < 2) return points;
 
@@ -97,7 +97,11 @@ export async function repairRouteGaps(
       try {
         const from = points[idx];
         const to = points[idx + 1];
-        const matched = await routeThroughWaypoints([from, to], config, options);
+        const matched = await routeThroughWaypoints(
+          [from, to],
+          config,
+          options,
+        );
         if (matched && matched.matchedGeometry.length >= 2) {
           return { idx, segment: matched.matchedGeometry };
         }
@@ -105,7 +109,7 @@ export async function repairRouteGaps(
         // Repair failed — keep the straight-line segment
       }
       return { idx, segment: null };
-    })
+    }),
   );
 
   // Build lookup: gap index → repaired geometry

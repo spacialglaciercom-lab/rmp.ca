@@ -4,7 +4,13 @@
  */
 
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import type { WeatherAnalysisResult } from "@/services/weatherAnalysis";
 import { WeatherInfoPanel } from "./WeatherInfoPanel";
@@ -39,8 +45,18 @@ export function WeatherRouteCard({
   return (
     <View style={styles.wrapper}>
       {errorMessage ? (
-        <View style={[styles.errorBanner, { backgroundColor: (colors.warning ?? "#ff6b4a") + "20", borderColor: colors.warning ?? "#ff6b4a" }]}>
-          <Text style={[styles.errorText, { color: colors.foreground }]}>{errorMessage}</Text>
+        <View
+          style={[
+            styles.errorBanner,
+            {
+              backgroundColor: (colors.warning ?? "#ff6b4a") + "20",
+              borderColor: colors.warning ?? "#ff6b4a",
+            },
+          ]}
+        >
+          <Text style={[styles.errorText, { color: colors.foreground }]}>
+            {errorMessage}
+          </Text>
         </View>
       ) : null}
       <WeatherInfoPanel analysis={analysis} mainCondition={mainCondition} />
@@ -49,12 +65,20 @@ export function WeatherRouteCard({
           <TouchableOpacity
             onPress={handleRefresh}
             disabled={refreshing}
-            style={[styles.refreshButton, { borderColor: colors.accentCyan ?? colors.primary }]}
+            style={[
+              styles.refreshButton,
+              { borderColor: colors.accentCyan ?? colors.primary },
+            ]}
           >
             {refreshing ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={[styles.refreshLabel, { color: colors.accentCyan ?? colors.primary }]}>
+              <Text
+                style={[
+                  styles.refreshLabel,
+                  { color: colors.accentCyan ?? colors.primary },
+                ]}
+              >
                 Refresh weather
               </Text>
             )}
@@ -62,9 +86,13 @@ export function WeatherRouteCard({
         )}
         {analysis.recommendations.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recommendations</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              Recommendations
+            </Text>
             {analysis.recommendations.map((r, i) => (
-              <Text key={i} style={[styles.rec, { color: colors.muted }]}>{r}</Text>
+              <Text key={i} style={[styles.rec, { color: colors.muted }]}>
+                {r}
+              </Text>
             ))}
           </View>
         )}

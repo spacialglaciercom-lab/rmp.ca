@@ -37,7 +37,12 @@ export const ragRouter = router({
   }),
 
   query: publicProcedure
-    .input(z.object({ query: z.string().min(1), topK: z.number().int().min(1).max(10).optional() }))
+    .input(
+      z.object({
+        query: z.string().min(1),
+        topK: z.number().int().min(1).max(10).optional(),
+      }),
+    )
     .query(async ({ input }) => {
       const results = await retrieveContext(input.query, input.topK);
       return { results };

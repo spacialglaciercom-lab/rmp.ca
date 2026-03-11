@@ -9,14 +9,16 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withDangerousMod } = requireFromRoot("expo/config-plugins");
 
 function patchFirestoreCommon(projectRoot) {
   let firestoreRoot;
   try {
     const pkgPath = requireFromRoot.resolve(
-      "@react-native-firebase/firestore/package.json"
+      "@react-native-firebase/firestore/package.json",
     );
     firestoreRoot = path.dirname(pkgPath);
   } catch {
@@ -37,56 +39,50 @@ function patchFirestoreCommon(projectRoot) {
   const alreadyPatched = header.includes("withError:(NSError *)");
 
   if (!alreadyPatched) {
-  // Header: rename selector error: -> withError: and parameter to err
-  header = header.replace(
-    "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)error;",
-    "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err;"
-  );
-  header = header.replace(
-    "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)err;",
-    "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err;"
-  );
-  header = header.replace(
-    "getCodeAndMessage:(NSError *)error;",
-    "getCodeAndMessage:(NSError *)err;"
-  );
+    // Header: rename selector error: -> withError: and parameter to err
+    header = header.replace(
+      "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)error;",
+      "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err;",
+    );
+    header = header.replace(
+      "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)err;",
+      "promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err;",
+    );
+    header = header.replace(
+      "getCodeAndMessage:(NSError *)error;",
+      "getCodeAndMessage:(NSError *)err;",
+    );
 
-  // .m: implementation - selector withError: and parameter err
-  impl = impl.replace(
-    "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)error {",
-    "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err {"
-  );
-  impl = impl.replace(
-    "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)err {",
-    "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err {"
-  );
-  impl = impl.replace(
-    "NSArray *codeAndMessage = [self getCodeAndMessage:error];",
-    "NSArray *codeAndMessage = [self getCodeAndMessage:err];"
-  );
-  impl = impl.replace(
-    "+ (NSArray *)getCodeAndMessage:(NSError *)error {",
-    "+ (NSArray *)getCodeAndMessage:(NSError *)err {"
-  );
-  impl = impl.replace(
-    "if (error == nil)",
-    "if (err == nil)"
-  );
-  impl = impl.replace(
-    "switch (error.code)",
-    "switch (err.code)"
-  );
-  impl = impl.replace(
-    "[error.localizedDescription containsString:",
-    "[err.localizedDescription containsString:"
-  );
-  impl = impl.replace(
-    "message = error.localizedDescription;",
-    "message = err.localizedDescription;"
-  );
+    // .m: implementation - selector withError: and parameter err
+    impl = impl.replace(
+      "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)error {",
+      "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err {",
+    );
+    impl = impl.replace(
+      "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject error:(NSError *)err {",
+      "+ (void)promiseRejectFirestoreException:(RCTPromiseRejectBlock)reject withError:(NSError *)err {",
+    );
+    impl = impl.replace(
+      "NSArray *codeAndMessage = [self getCodeAndMessage:error];",
+      "NSArray *codeAndMessage = [self getCodeAndMessage:err];",
+    );
+    impl = impl.replace(
+      "+ (NSArray *)getCodeAndMessage:(NSError *)error {",
+      "+ (NSArray *)getCodeAndMessage:(NSError *)err {",
+    );
+    impl = impl.replace("if (error == nil)", "if (err == nil)");
+    impl = impl.replace("switch (error.code)", "switch (err.code)");
+    impl = impl.replace(
+      "[error.localizedDescription containsString:",
+      "[err.localizedDescription containsString:",
+    );
+    impl = impl.replace(
+      "message = error.localizedDescription;",
+      "message = err.localizedDescription;",
+    );
 
-  fs.writeFileSync(headerPath, header, "utf8");
-  fs.writeFileSync(implPath, impl, "utf8");
+    fs.writeFileSync(headerPath, header, "utf8");
+    fs.writeFileSync(implPath, impl, "utf8");
   }
 
   // Update all call sites (always run): promiseRejectFirestoreException:... error: -> withError:
@@ -98,10 +94,13 @@ function patchFirestoreCommon(projectRoot) {
     if (!ent.isFile() || !ent.name.endsWith(".m")) continue;
     const fpath = path.join(iosDir, ent.name);
     let content = fs.readFileSync(fpath, "utf8");
-    if (content.includes("promiseRejectFirestoreException:") && content.includes("error:")) {
+    if (
+      content.includes("promiseRejectFirestoreException:") &&
+      content.includes("error:")
+    ) {
       const updated = content.replace(
         callSiteRegex,
-        "promiseRejectFirestoreException:reject withError:"
+        "promiseRejectFirestoreException:reject withError:",
       );
       if (updated !== content) {
         fs.writeFileSync(fpath, updated, "utf8");

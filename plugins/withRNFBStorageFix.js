@@ -8,7 +8,9 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withDangerousMod } = requireFromRoot("expo/config-plugins");
 
 const IMPORT_TO_ADD = "#import <React/RCTBridgeModule.h>";
@@ -21,13 +23,13 @@ function withRNFBStorageFix(config) {
       let storageModulePath;
       try {
         const pkgPath = requireFromRoot.resolve(
-          "@react-native-firebase/storage/package.json"
+          "@react-native-firebase/storage/package.json",
         );
         storageModulePath = path.join(
           path.dirname(pkgPath),
           "ios",
           "RNFBStorage",
-          "RNFBStorageModule.m"
+          "RNFBStorageModule.m",
         );
       } catch {
         return cfg;
@@ -44,10 +46,7 @@ function withRNFBStorageFix(config) {
       }
 
       if (contents.includes(MARKER)) {
-        contents = contents.replace(
-          MARKER,
-          IMPORT_TO_ADD + "\n" + MARKER
-        );
+        contents = contents.replace(MARKER, IMPORT_TO_ADD + "\n" + MARKER);
         fs.writeFileSync(storageModulePath, contents, "utf8");
       }
 

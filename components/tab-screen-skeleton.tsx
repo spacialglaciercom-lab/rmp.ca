@@ -17,9 +17,13 @@ export function TabScreenSkeleton({ title, subtitle }: TabScreenSkeletonProps) {
   return (
     <ScreenContainer style={{ backgroundColor: colors.background }}>
       <View style={styles.outer}>
-        <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>
+          {title}
+        </Text>
         {subtitle ? (
-          <Text style={[styles.subtitle, { color: colors.muted }]}>{subtitle}</Text>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>
+            {subtitle}
+          </Text>
         ) : null}
         <ActivityIndicator
           size="large"

@@ -12,11 +12,11 @@ import { fetchWeather } from "./fetchWeather";
 const WEATHER_OVERLAY_LAYER_ID = "weather-overlay";
 
 export const WeatherWidget = lazy(() =>
-  import("./WeatherWidget").then((m) => ({ default: m.default }))
+  import("./WeatherWidget").then((m) => ({ default: m.default })),
 );
 
 export const WeatherOverlay = lazy(() =>
-  import("./WeatherOverlay").then((m) => ({ default: m.default }))
+  import("./WeatherOverlay").then((m) => ({ default: m.default })),
 );
 
 export const weatherPlugin: Plugin = {

@@ -30,7 +30,9 @@ function generateId(): string {
   return `fav_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
-function parsePointsFromFile(data: string): Array<{ name: string; lat: number; lon: number }> {
+function parsePointsFromFile(
+  data: string,
+): Array<{ name: string; lat: number; lon: number }> {
   // Try GPX first
   const gpxPoints = parseGPXPoints(data);
   if (gpxPoints.length > 0) return gpxPoints;
@@ -38,7 +40,9 @@ function parsePointsFromFile(data: string): Array<{ name: string; lat: number; l
   return parseKMLPoints(data);
 }
 
-function parseKMLPoints(kmlData: string): Array<{ name: string; lat: number; lon: number }> {
+function parseKMLPoints(
+  kmlData: string,
+): Array<{ name: string; lat: number; lon: number }> {
   const points: Array<{ name: string; lat: number; lon: number }> = [];
   // KML Placemark: <Placemark>...</Placemark> with <name> and <coordinates>lon,lat[,alt]</coordinates>
   const placemarkRegex = /<Placemark[^>]*>([\s\S]*?)<\/Placemark>/gi;
@@ -53,7 +57,9 @@ function parseKMLPoints(kmlData: string): Array<{ name: string; lat: number; lon
       const lat = parseFloat(parts[1]);
       if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
         const nameMatch = inner.match(/<name>([\s\S]*?)<\/name>/i);
-        const name = nameMatch ? nameMatch[1].trim() : `Point ${points.length + 1}`;
+        const name = nameMatch
+          ? nameMatch[1].trim()
+          : `Point ${points.length + 1}`;
         points.push({ name, lat, lon });
       }
     }
@@ -61,11 +67,14 @@ function parseKMLPoints(kmlData: string): Array<{ name: string; lat: number; lon
   return points;
 }
 
-function parseGPXPoints(gpxData: string): Array<{ name: string; lat: number; lon: number }> {
+function parseGPXPoints(
+  gpxData: string,
+): Array<{ name: string; lat: number; lon: number }> {
   const points: Array<{ name: string; lat: number; lon: number }> = [];
 
   // Parse wpt (waypoint) elements
-  const wptRegex = /<wpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>([\s\S]*?)<\/wpt>/gi;
+  const wptRegex =
+    /<wpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>([\s\S]*?)<\/wpt>/gi;
   let match;
   while ((match = wptRegex.exec(gpxData)) !== null) {
     const lat = parseFloat(match[1]);
@@ -73,7 +82,9 @@ function parseGPXPoints(gpxData: string): Array<{ name: string; lat: number; lon
     if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
       const inner = match[3];
       const nameMatch = inner.match(/<name>([\s\S]*?)<\/name>/i);
-      const name = nameMatch ? nameMatch[1].trim() : `Point ${points.length + 1}`;
+      const name = nameMatch
+        ? nameMatch[1].trim()
+        : `Point ${points.length + 1}`;
       points.push({ name, lat, lon });
     }
   }
@@ -180,8 +191,8 @@ export const useFavoritesStore = create<FavoritesState>()(
     {
       name: "trashroute-favorites",
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    },
+  ),
 );
 
 function escapeXml(s: string): string {

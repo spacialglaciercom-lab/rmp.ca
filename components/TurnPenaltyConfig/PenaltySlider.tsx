@@ -61,14 +61,20 @@ export function PenaltySlider({
           ) : (
             <View style={[styles.dot, { backgroundColor: color }]} />
           )}
-          <Text style={[styles.label, { color: colors.foreground }]} numberOfLines={1}>
+          <Text
+            style={[styles.label, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
             {label}
           </Text>
         </View>
         <Text style={[styles.value, { color }]}>{value}</Text>
       </View>
 
-      <Text style={[styles.description, { color: colors.muted }]} numberOfLines={2}>
+      <Text
+        style={[styles.description, { color: colors.muted }]}
+        numberOfLines={2}
+      >
         {description}
       </Text>
 
@@ -80,7 +86,9 @@ export function PenaltySlider({
           accessibilityRole="button"
           accessibilityLabel={`Decrease ${label}`}
         >
-          <Text style={[styles.adjustText, { color: colors.foreground }]}>−</Text>
+          <Text style={[styles.adjustText, { color: colors.foreground }]}>
+            −
+          </Text>
         </TouchableOpacity>
 
         <View style={[styles.track, { backgroundColor: colors.muted + "30" }]}>
@@ -102,7 +110,9 @@ export function PenaltySlider({
           accessibilityRole="button"
           accessibilityLabel={`Increase ${label}`}
         >
-          <Text style={[styles.adjustText, { color: colors.foreground }]}>+</Text>
+          <Text style={[styles.adjustText, { color: colors.foreground }]}>
+            +
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

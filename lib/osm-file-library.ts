@@ -85,7 +85,7 @@ export async function saveOSMFile(
     wayCount: number;
     nodeCount: number;
     bounds?: OSMFileEntry["bounds"];
-  }
+  },
 ): Promise<OSMFileEntry> {
   const id = `osm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const sizeBytes = estimateByteLength(xmlContent);
@@ -125,7 +125,7 @@ async function writeOSMContent(id: string, content: string): Promise<void> {
     if (bytes > MAX_CONTENT_BYTES_WEB) {
       throw new Error(
         `OSM file is too large to save in the library on this device (${(bytes / 1024 / 1024).toFixed(1)} MB). ` +
-          `Maximum is about ${(MAX_CONTENT_BYTES_WEB / 1024 / 1024).toFixed(1)} MB. Use a smaller extract or open the file directly each time.`
+          `Maximum is about ${(MAX_CONTENT_BYTES_WEB / 1024 / 1024).toFixed(1)} MB. Use a smaller extract or open the file directly each time.`,
       );
     }
     await AsyncStorage.setItem(CONTENT_PREFIX + id, content);
@@ -189,7 +189,10 @@ export async function deleteOSMFile(id: string): Promise<void> {
 }
 
 /** Rename a stored OSM file. */
-export async function renameOSMFile(id: string, newName: string): Promise<void> {
+export async function renameOSMFile(
+  id: string,
+  newName: string,
+): Promise<void> {
   const manifest = await listOSMFiles();
   const entry = manifest.find((e) => e.id === id);
   if (entry) {

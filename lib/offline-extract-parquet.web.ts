@@ -7,7 +7,11 @@ import type { DownloadedRegion } from "@/lib/offline-map-download";
 import type { GeoJSONFeatureCollection } from "@/services/overtureOptimizerService";
 import type { Polygon } from "geojson";
 
-export type OfflineExtractProgress = { phase: string; done?: number; total?: number };
+export type OfflineExtractProgress = {
+  phase: string;
+  done?: number;
+  total?: number;
+};
 
 export async function extractFromS3ParquetImpl(
   _region: DownloadedRegion,

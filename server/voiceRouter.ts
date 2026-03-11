@@ -8,9 +8,19 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "./_core/trpc";
-import { transcribeAudio, transcribeAudioFromBase64 } from "./_core/voiceTranscription";
-import { transcribeWithFallback, transcribeBase64WithFallback } from "./_core/moonshineTranscription";
-import { chatWithCoPilot, NavContextSchema, ChatMessageSchema } from "./genkit/coPilot";
+import {
+  transcribeAudio,
+  transcribeAudioFromBase64,
+} from "./_core/voiceTranscription";
+import {
+  transcribeWithFallback,
+  transcribeBase64WithFallback,
+} from "./_core/moonshineTranscription";
+import {
+  chatWithCoPilot,
+  NavContextSchema,
+  ChatMessageSchema,
+} from "./genkit/coPilot";
 
 export const voiceRouter = router({
   /**
@@ -40,18 +50,33 @@ export const voiceRouter = router({
           input.prompt,
         );
         if ("error" in result) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: result.error, cause: result });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: result.error,
+            cause: result,
+          });
         }
         return result;
       }
 
       if (!input.audioUrl) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Either audioUrl or audioBase64 is required" });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Either audioUrl or audioBase64 is required",
+        });
       }
 
-      const result = await transcribeWithFallback({ audioUrl: input.audioUrl, language: input.language, prompt: input.prompt });
+      const result = await transcribeWithFallback({
+        audioUrl: input.audioUrl,
+        language: input.language,
+        prompt: input.prompt,
+      });
       if ("error" in result) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: result.error, cause: result });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: result.error,
+          cause: result,
+        });
       }
       return result;
     }),

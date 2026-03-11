@@ -1,5 +1,14 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Linking, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Platform,
+  Linking,
+  Alert,
+} from "react-native";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useColors } from "@/hooks/use-colors";
 
@@ -128,7 +137,10 @@ function RouteActionChipsInner({
             <TouchableOpacity
               style={[
                 chipStyles.chip,
-                { backgroundColor: colors.primary, marginLeft: hasTapDestination ? 0 : 0 },
+                {
+                  backgroundColor: colors.primary,
+                  marginLeft: hasTapDestination ? 0 : 0,
+                },
               ]}
               onPress={() => handlePress(onStartNavigation)}
               disabled={navLoading}
@@ -161,7 +173,10 @@ function RouteActionChipsInner({
           </TouchableOpacity>
           {onClearRoute && (
             <TouchableOpacity
-              style={[chipStyles.chip, { backgroundColor: (colors.error ?? "#ef4444") + "CC" }]}
+              style={[
+                chipStyles.chip,
+                { backgroundColor: (colors.error ?? "#ef4444") + "CC" },
+              ]}
               onPress={() => handlePress(onClearRoute)}
             >
               <Text style={chipStyles.chipText}>Clear route</Text>

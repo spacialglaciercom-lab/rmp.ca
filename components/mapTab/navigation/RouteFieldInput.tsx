@@ -1,8 +1,14 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import { useColors } from "@/hooks/use-colors";
 import { TECH_NAV } from "./navigationTechStyle";
 
@@ -65,7 +71,10 @@ export function RouteFieldInput({
             color={isMyPosition ? colors.primary : colors.muted}
           />
           <Text
-            style={[styles.fieldText, { color: point ? colors.text : colors.muted }]}
+            style={[
+              styles.fieldText,
+              { color: point ? colors.text : colors.muted },
+            ]}
             numberOfLines={1}
           >
             {displayText}
@@ -81,7 +90,11 @@ export function RouteFieldInput({
               style={styles.iconButton}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialCommunityIcons name="swap-vertical" size={22} color={colors.muted} />
+              <MaterialCommunityIcons
+                name="swap-vertical"
+                size={22}
+                color={colors.muted}
+              />
             </TouchableOpacity>
           )}
           {showAdd && onAdd && (
@@ -93,7 +106,11 @@ export function RouteFieldInput({
               style={styles.iconButton}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialCommunityIcons name="plus" size={22} color={colors.muted} />
+              <MaterialCommunityIcons
+                name="plus"
+                size={22}
+                color={colors.muted}
+              />
             </TouchableOpacity>
           )}
         </View>

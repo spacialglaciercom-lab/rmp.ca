@@ -1,32 +1,38 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export interface MapLayer {
   id: string;
   name: string;
   url: string;
   attribution: string;
-  type: 'base' | 'overlay';
-  category: 'standard' | 'satellite' | 'terrain' | 'dark' | 'traffic' | 'collection';
+  type: "base" | "overlay";
+  category:
+    | "standard"
+    | "satellite"
+    | "terrain"
+    | "dark"
+    | "traffic"
+    | "collection";
 }
 
 export interface MapLayerState {
   // Current base layer
   activeBaseLayer: string;
-  
+
   // Active overlay layers
   activeOverlays: string[];
-  
+
   // Available layers (default + plugin-contributed)
   availableLayers: MapLayer[];
-  
+
   // Plugin-contributed layer IDs (not persisted; recomputed on init)
   pluginLayerIds: string[];
-  
+
   // Layer visibility settings
   layerOpacity: Record<string, number>;
-  
+
   // Actions
   setActiveBaseLayer: (layerId: string) => void;
   toggleOverlay: (layerId: string) => void;
@@ -44,7 +50,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "",
     attribution: "© Google",
     type: "base",
-    category: "standard"
+    category: "standard",
   },
   {
     id: "standard",
@@ -52,7 +58,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors",
     type: "base",
-    category: "standard"
+    category: "standard",
   },
   {
     id: "dark",
@@ -60,7 +66,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
     attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
     type: "base",
-    category: "dark"
+    category: "dark",
   },
   {
     id: "satellite",
@@ -68,7 +74,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "&copy; Esri &copy; DigitalGlobe",
     type: "base",
-    category: "satellite"
+    category: "satellite",
   },
   {
     id: "terrain",
@@ -76,7 +82,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenTopoMap &copy; OpenStreetMap contributors",
     type: "base",
-    category: "terrain"
+    category: "terrain",
   },
   {
     id: "traffic",
@@ -84,7 +90,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", // Would be replaced with traffic tile service
     attribution: "&copy; OpenStreetMap contributors",
     type: "overlay",
-    category: "traffic"
+    category: "traffic",
   },
   {
     id: "collection-points",
@@ -92,8 +98,8 @@ const DEFAULT_LAYERS: MapLayer[] = [
     url: "", // Custom layer for collection points
     attribution: "",
     type: "overlay",
-    category: "collection"
-  }
+    category: "collection",
+  },
 ];
 
 /** Base layer IDs that typically take longer to load (raster tiles from external servers). */
@@ -116,7 +122,7 @@ export const useMapLayerStore = create<MapLayerState>()(
         set((state) => {
           const isActive = state.activeOverlays.includes(layerId);
           const newOverlays = isActive
-            ? state.activeOverlays.filter(id => id !== layerId)
+            ? state.activeOverlays.filter((id) => id !== layerId)
             : [...state.activeOverlays, layerId];
           return { activeOverlays: newOverlays };
         });
@@ -126,8 +132,8 @@ export const useMapLayerStore = create<MapLayerState>()(
         set((state) => ({
           layerOpacity: {
             ...state.layerOpacity,
-            [layerId]: opacity
-          }
+            [layerId]: opacity,
+          },
         }));
       },
 
@@ -146,7 +152,9 @@ export const useMapLayerStore = create<MapLayerState>()(
           if (!state.pluginLayerIds.includes(layerId)) return state;
           return {
             pluginLayerIds: state.pluginLayerIds.filter((id) => id !== layerId),
-            availableLayers: state.availableLayers.filter((l) => l.id !== layerId),
+            availableLayers: state.availableLayers.filter(
+              (l) => l.id !== layerId,
+            ),
             activeOverlays: state.activeOverlays.filter((id) => id !== layerId),
           };
         });
@@ -156,18 +164,18 @@ export const useMapLayerStore = create<MapLayerState>()(
         set({
           activeBaseLayer: "google-maps",
           activeOverlays: ["collection-points"],
-          layerOpacity: {}
+          layerOpacity: {},
         });
-      }
+      },
     }),
     {
-      name: 'map-layer-store',
+      name: "map-layer-store",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         activeBaseLayer: state.activeBaseLayer,
         activeOverlays: state.activeOverlays,
-        layerOpacity: state.layerOpacity
-      })
-    }
-  )
+        layerOpacity: state.layerOpacity,
+      }),
+    },
+  ),
 );

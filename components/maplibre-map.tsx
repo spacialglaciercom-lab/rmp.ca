@@ -4,6 +4,8 @@ import { useColors } from "@/hooks/use-colors";
 import { buildPMTilesStyle } from "@/lib/pmtiles-source";
 import type { CollectionPoint } from "@/types";
 
+import { registerPMTilesProtocol as registerPMTilesProtocolShared } from "@/lib/maplibre-pmtiles-protocol";
+
 // Only load MapLibre on native platforms
 let MapLibreGL: any;
 if (Platform.OS !== "web") {
@@ -14,15 +16,13 @@ if (Platform.OS !== "web") {
   }
 }
 
-import { registerPMTilesProtocol as registerPMTilesProtocolShared } from "@/lib/maplibre-pmtiles-protocol";
-
 function registerPMTilesProtocol() {
   registerPMTilesProtocolShared();
 }
 
 export interface MapLibreMapProps {
   collectionPoints?: CollectionPoint[];
-  routePoints?: Array<{ lat: number; lon: number }>;
+  routePoints?: { lat: number; lon: number }[];
   pmtilesUrl: string;
   height?: number;
   onPointClick?: (point: CollectionPoint) => void;
@@ -43,7 +43,10 @@ export const MapLibreMap = React.memo(function MapLibreMap({
     registerPMTilesProtocol();
   }, []);
 
-  const styleJSON = useMemo(() => buildPMTilesStyle({ url: pmtilesUrl }), [pmtilesUrl]);
+  const styleJSON = useMemo(
+    () => buildPMTilesStyle({ url: pmtilesUrl }),
+    [pmtilesUrl],
+  );
 
   // Compute initial center/zoom from points
   const initialCamera = useMemo(() => {
@@ -147,9 +150,7 @@ export const MapLibreMap = React.memo(function MapLibreMap({
         logoEnabled={false}
         attributionEnabled={false}
       >
-        <MapLibreGL.Camera
-          defaultSettings={initialCamera}
-        />
+        <MapLibreGL.Camera defaultSettings={initialCamera} />
 
         {/* Route polyline overlay */}
         {routeGeoJSON && (

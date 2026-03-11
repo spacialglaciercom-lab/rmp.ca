@@ -14,10 +14,12 @@ export const MAPILLARY_APP_SCHEME = "mapillary";
 export const MAPILLARY_CAPTURE_URL = "mapillary://capture";
 
 /** App Store URL for Mapillary (iOS). */
-export const MAPILLARY_APP_STORE_URL = "https://apps.apple.com/us/app/mapillary/id757286802";
+export const MAPILLARY_APP_STORE_URL =
+  "https://apps.apple.com/us/app/mapillary/id757286802";
 
 /** Play Store URL for Mapillary (Android). */
-export const MAPILLARY_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.mapillary.app";
+export const MAPILLARY_PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.mapillary.app";
 
 /** Mapillary access token. Replace with your own from the developer dashboard if needed. */
 export const MAPILLARY_ACCESS_TOKEN =
@@ -50,7 +52,7 @@ function distSq(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const dlat = lat2 - lat1;
   const dlon = lon2 - lon1;
@@ -66,7 +68,7 @@ function distSq(
  */
 export async function fetchMapillaryImage(
   latitude: number,
-  longitude: number
+  longitude: number,
 ): Promise<string | null> {
   const token = MAPILLARY_ACCESS_TOKEN;
   if (!token) {

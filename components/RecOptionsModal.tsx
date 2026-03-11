@@ -91,12 +91,22 @@ export interface RecOptionsModalProps {
 
 export function RecOptionsModal({ visible, onClose }: RecOptionsModalProps) {
   const colors = useColors();
-  const loggingIntervalSeconds = useRecordingSettingsStore((s) => s.loggingIntervalSeconds);
+  const loggingIntervalSeconds = useRecordingSettingsStore(
+    (s) => s.loggingIntervalSeconds,
+  );
   const rememberMyChoice = useRecordingSettingsStore((s) => s.rememberMyChoice);
-  const showRecOnMapWhenRecording = useRecordingSettingsStore((s) => s.showRecOnMapWhenRecording);
-  const setLoggingIntervalSeconds = useRecordingSettingsStore((s) => s.setLoggingIntervalSeconds);
-  const setRememberMyChoice = useRecordingSettingsStore((s) => s.setRememberMyChoice);
-  const setShowRecOnMapWhenRecording = useRecordingSettingsStore((s) => s.setShowRecOnMapWhenRecording);
+  const showRecOnMapWhenRecording = useRecordingSettingsStore(
+    (s) => s.showRecOnMapWhenRecording,
+  );
+  const setLoggingIntervalSeconds = useRecordingSettingsStore(
+    (s) => s.setLoggingIntervalSeconds,
+  );
+  const setRememberMyChoice = useRecordingSettingsStore(
+    (s) => s.setRememberMyChoice,
+  );
+  const setShowRecOnMapWhenRecording = useRecordingSettingsStore(
+    (s) => s.setShowRecOnMapWhenRecording,
+  );
 
   return (
     <Modal
@@ -113,7 +123,9 @@ export function RecOptionsModal({ visible, onClose }: RecOptionsModalProps) {
           <Text style={[styles.title, { color: colors.text }]}>
             START TRIP RECORDING
           </Text>
-          <View style={[styles.titleUnderline, { backgroundColor: "#FF9800" }]} />
+          <View
+            style={[styles.titleUnderline, { backgroundColor: "#FF9800" }]}
+          />
 
           <Text style={[styles.label, { color: colors.text }]}>
             Logging interval: {loggingIntervalSeconds} sec
@@ -131,9 +143,18 @@ export function RecOptionsModal({ visible, onClose }: RecOptionsModalProps) {
           />
 
           <View style={styles.rememberRow}>
-            <Text style={{ color: colors.text, fontSize: 15 }}>Remember my choice</Text>
+            <Text style={{ color: colors.text, fontSize: 15 }}>
+              Remember my choice
+            </Text>
             <TouchableOpacity
-              style={[styles.switch, { backgroundColor: rememberMyChoice ? colors.primary : colors.border }]}
+              style={[
+                styles.switch,
+                {
+                  backgroundColor: rememberMyChoice
+                    ? colors.primary
+                    : colors.border,
+                },
+              ]}
               onPress={() => {
                 if (Platform.OS !== "web") hapticImpact();
                 setRememberMyChoice(!rememberMyChoice);
@@ -143,16 +164,28 @@ export function RecOptionsModal({ visible, onClose }: RecOptionsModalProps) {
               <View
                 style={[
                   styles.switchThumb,
-                  { backgroundColor: "white", alignSelf: rememberMyChoice ? "flex-end" : "flex-start" },
+                  {
+                    backgroundColor: "white",
+                    alignSelf: rememberMyChoice ? "flex-end" : "flex-start",
+                  },
                 ]}
               />
             </TouchableOpacity>
           </View>
 
           <View style={styles.rememberRow}>
-            <Text style={{ color: colors.text, fontSize: 15 }}>Show REC on map when recording</Text>
+            <Text style={{ color: colors.text, fontSize: 15 }}>
+              Show REC on map when recording
+            </Text>
             <TouchableOpacity
-              style={[styles.switch, { backgroundColor: showRecOnMapWhenRecording ? colors.primary : colors.border }]}
+              style={[
+                styles.switch,
+                {
+                  backgroundColor: showRecOnMapWhenRecording
+                    ? colors.primary
+                    : colors.border,
+                },
+              ]}
               onPress={() => {
                 if (Platform.OS !== "web") hapticImpact();
                 setShowRecOnMapWhenRecording(!showRecOnMapWhenRecording);
@@ -162,7 +195,12 @@ export function RecOptionsModal({ visible, onClose }: RecOptionsModalProps) {
               <View
                 style={[
                   styles.switchThumb,
-                  { backgroundColor: "white", alignSelf: showRecOnMapWhenRecording ? "flex-end" : "flex-start" },
+                  {
+                    backgroundColor: "white",
+                    alignSelf: showRecOnMapWhenRecording
+                      ? "flex-end"
+                      : "flex-start",
+                  },
                 ]}
               />
             </TouchableOpacity>
@@ -170,16 +208,25 @@ export function RecOptionsModal({ visible, onClose }: RecOptionsModalProps) {
 
           <View style={styles.buttons}>
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: colors.border ?? "#e0e0e0" }]}
+              style={[
+                styles.button,
+                { backgroundColor: colors.border ?? "#e0e0e0" },
+              ]}
               onPress={onClose}
             >
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}>CANCEL</Text>
+              <Text
+                style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}
+              >
+                CANCEL
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: colors.primary }]}
               onPress={onClose}
             >
-              <Text style={{ color: "white", fontSize: 15, fontWeight: "600" }}>OK</Text>
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "600" }}>
+                OK
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>

@@ -31,7 +31,8 @@ const env = {
   appSlug: "trashroute-mobile",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663304551018/mcoTEDACrdFNhFmz.png",
+  logoUrl:
+    "https://files.manuscdn.com/user_upload_by_module/session_file/310519663304551018/mcoTEDACrdFNhFmz.png",
   scheme: "routemasterpro",
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -61,11 +62,21 @@ const config = {
       ITSAppUsesNonExemptEncryption: false,
       UIBackgroundModes: ["location", "audio"],
       // Required for Linking.canOpenURL to detect Organic Maps, OsmAnd, MAPS.ME (offline map apps), Mapillary
-      LSApplicationQueriesSchemes: ["om", "osmandmaps", "mapswithme", "mapswithmepro", "mapillary", "comgooglemaps", "waze"],
+      LSApplicationQueriesSchemes: [
+        "om",
+        "osmandmaps",
+        "mapswithme",
+        "mapswithmepro",
+        "mapillary",
+        "comgooglemaps",
+        "waze",
+      ],
       // Required for microphone access (expo-audio recording)
-      NSMicrophoneUsageDescription: "Allow $(PRODUCT_NAME) to access your microphone for voice commands and AI chat.",
+      NSMicrophoneUsageDescription:
+        "Allow $(PRODUCT_NAME) to access your microphone for voice commands and AI chat.",
       // Required for Mapillary contribution (expo-camera)
-      NSCameraUsageDescription: "Allow $(PRODUCT_NAME) to capture street-level imagery for Mapillary.",
+      NSCameraUsageDescription:
+        "Allow $(PRODUCT_NAME) to capture street-level imagery for Mapillary.",
       // Allow tile servers used by Map (UrlTile) — without these, map shows gray grid on iOS
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: false,
@@ -100,7 +111,7 @@ const config = {
             NSExceptionMinimumTLSVersion: "TLSv1.2",
             NSExceptionRequiresForwardSecrecy: false,
           },
-          "localhost": {
+          localhost: {
             NSExceptionAllowsInsecureHTTPLoads: true,
             NSExceptionMinimumTLSVersion: "TLSv1.2",
             NSExceptionRequiresForwardSecrecy: false,
@@ -184,7 +195,8 @@ const config = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
+        microphonePermission:
+          "Allow $(PRODUCT_NAME) to access your microphone.",
       },
     ],
     [
@@ -241,12 +253,18 @@ const config = {
     "./plugins/withAndroidLargeHeap.js",
     // Leap SDK is iOS-only (requires Swift/SPM). Disabled for Android builds.
     // To enable for iOS: set EXPO_LEAP_SDK=1 and ensure modules/leap-extract exists
-    ...(process.env.EXPO_LEAP_SDK === "1" ? [["./plugins/withLeapSdk.js", { version: "0.9.2" }]] : []),
+    ...(process.env.EXPO_LEAP_SDK === "1"
+      ? [["./plugins/withLeapSdk.js", { version: "0.9.2" }]]
+      : []),
     // Moonshine Voice on-device STT. Adds SPM package (iOS) and JNI libs (Android).
     // Enable for native builds: set EXPO_MOONSHINE=1
-    ...(process.env.EXPO_MOONSHINE === "1" ? [["./plugins/withMoonshineSdk.js", { version: "2.0.0" }]] : []),
+    ...(process.env.EXPO_MOONSHINE === "1"
+      ? [["./plugins/withMoonshineSdk.js", { version: "2.0.0" }]]
+      : []),
     // Embed MAPS.ME native map only when OMIM framework is available (set EXPO_MAPME_EMBED=1). Otherwise use openInOfflineMap() from lib/offline-map-url.ts.
-    ...(process.env.EXPO_MAPME_EMBED === "1" ? ["./plugins/withMapsMe.js"] : []),
+    ...(process.env.EXPO_MAPME_EMBED === "1"
+      ? ["./plugins/withMapsMe.js"]
+      : []),
     // Vector map on native (iOS/Android). No token required; use OSM or MapLibre styles. Replaces Mapbox; no Podfile hacks.
     "@maplibre/maplibre-react-native",
   ],

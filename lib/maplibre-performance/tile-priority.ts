@@ -22,7 +22,7 @@ export function getViewportTileKeys(
   xMax: number,
   yMin: number,
   yMax: number,
-  prefetchRing: number = PREFETCH_RING
+  prefetchRing: number = PREFETCH_RING,
 ): { viewport: TileKey[]; prefetch: TileKey[] } {
   const viewport: TileKey[] = [];
   for (let x = xMin; x <= xMax; x++) {
@@ -57,7 +57,7 @@ export function getZoomPredictionTileKeys(
   targetZ: number,
   centerX: number,
   centerY: number,
-  radius: number = 2
+  radius: number = 2,
 ): TileKey[] {
   const xMin = Math.floor(centerX - radius);
   const xMax = Math.floor(centerX + radius);

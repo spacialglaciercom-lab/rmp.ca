@@ -70,8 +70,7 @@ export function useCollectionNavigation(
     const segment = segments[activeSegmentIndex];
     if (!segment) return;
 
-    const currentSourceKey =
-      segment.source_id ?? `__single_${segment.index}`;
+    const currentSourceKey = segment.source_id ?? `__single_${segment.index}`;
 
     const isNewStreetGroup = currentSourceKey !== prevSourceGroupKey.current;
     prevSourceGroupKey.current = currentSourceKey;

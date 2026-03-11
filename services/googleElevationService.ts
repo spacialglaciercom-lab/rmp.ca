@@ -93,12 +93,12 @@ export interface ElevationProfileSummary {
 
 async function fetchElevationBatch(
   points: Array<{ lat: number; lon: number }>,
-  apiKey: string
+  apiKey: string,
 ): Promise<GoogleElevationResult[]> {
   if (points.length === 0) return [];
   if (points.length > MAX_POINTS_PER_REQUEST) {
     throw new Error(
-      `Elevation API: max ${MAX_POINTS_PER_REQUEST} points per request; got ${points.length}. Use getElevationForPoints which batches automatically.`
+      `Elevation API: max ${MAX_POINTS_PER_REQUEST} points per request; got ${points.length}. Use getElevationForPoints which batches automatically.`,
     );
   }
   const locations = points.map((p) => `${p.lat},${p.lon}`).join("|");
@@ -117,7 +117,7 @@ async function fetchElevationBatch(
  * Returns one result per input point in the same order.
  */
 export async function getElevationForPoints(
-  points: Array<{ lat: number; lon: number }>
+  points: Array<{ lat: number; lon: number }>,
 ): Promise<PointWithElevation[]> {
   if (points.length === 0) return [];
   const apiKey = await getGoogleMapsApiKey();
@@ -145,7 +145,7 @@ export async function getElevationForPoints(
  * Grade % = (elevation change / horizontal distance) × 100.
  */
 export function computeSegmentGrades(
-  points: PointWithElevation[]
+  points: PointWithElevation[],
 ): SegmentGrade[] {
   const segments: SegmentGrade[] = [];
   for (let i = 0; i < points.length - 1; i++) {
@@ -176,11 +176,20 @@ export function computeSegmentGrades(
  */
 export function computeElevationSummary(
   points: PointWithElevation[],
-  segments: SegmentGrade[]
+  segments: SegmentGrade[],
 ): ElevationProfileSummary {
-  const totalClimbMeters = segments.reduce((s, seg) => s + seg.elevationGainMeters, 0);
-  const totalDescentMeters = segments.reduce((s, seg) => s + seg.elevationLossMeters, 0);
-  const totalDistanceMeters = segments.reduce((s, seg) => s + seg.distanceMeters, 0);
+  const totalClimbMeters = segments.reduce(
+    (s, seg) => s + seg.elevationGainMeters,
+    0,
+  );
+  const totalDescentMeters = segments.reduce(
+    (s, seg) => s + seg.elevationLossMeters,
+    0,
+  );
+  const totalDistanceMeters = segments.reduce(
+    (s, seg) => s + seg.distanceMeters,
+    0,
+  );
   const grades = segments.map((s) => s.gradePercent);
   const maxGradePercent = grades.length ? Math.max(...grades) : 0;
   const minGradePercent = grades.length ? Math.min(...grades) : 0;
@@ -205,7 +214,7 @@ export function computeElevationSummary(
  * Use this to enhance GPX route data and for elevation profile visualization.
  */
 export async function getElevationProfile(
-  points: Array<{ lat: number; lon: number }>
+  points: Array<{ lat: number; lon: number }>,
 ): Promise<ElevationProfile | null> {
   if (points.length < 2) return null;
   const pointsWithElevation = await getElevationForPoints(points);
@@ -236,7 +245,7 @@ export async function isGoogleElevationConfigured(): Promise<boolean> {
  */
 export function toGPXTrkptWithElevation(
   point: PointWithElevation,
-  time?: string
+  time?: string,
 ): string {
   const ele = `<ele>${point.elevationMeters.toFixed(1)}</ele>`;
   const timeTag = time ? `\n        <time>${time}</time>` : "";
@@ -248,7 +257,7 @@ export function toGPXTrkptWithElevation(
  * or display. Returns points with elevation; if API fails, returns null.
  */
 export async function enhanceRoutePointsWithElevation(
-  points: Array<{ lat: number; lon: number }>
+  points: Array<{ lat: number; lon: number }>,
 ): Promise<PointWithElevation[] | null> {
   if (points.length < 2) return null;
   try {

@@ -24,17 +24,20 @@ The MAPS.ME React Native integration provides:
 ### Setup Steps
 
 1. **Ensure the module is in place**:
+
    ```bash
    # The module should be at lib/mapsme-react-native/
    ls -la lib/mapsme-react-native/
    ```
 
 2. **Install dependencies**:
+
    ```bash
    pnpm install
    ```
 
 3. **Run the iOS app with MAPS.ME integration**:
+
    ```bash
    npx expo run:ios
    ```
@@ -101,7 +104,7 @@ const MapControlExample = () => {
       try {
         const success = await initializeMapsMeFramework();
         console.log('Framework initialized:', success);
-        
+
         if (success) {
           const position = await getCurrentPosition();
           console.log('Current position:', position);
@@ -110,7 +113,7 @@ const MapControlExample = () => {
         console.error('Initialization error:', error);
       }
     };
-    
+
     init();
   }, []);
 
@@ -148,48 +151,56 @@ export default MapControlExample;
 
 **Props:**
 
-| Prop | Type | Description | Default |
-|------|------|-------------|---------|
-| `collectionPoints` | `CollectionPoint[]` | Array of collection points to display | `[]` |
-| `routePoints` | `{ lat: number; lon: number; label?: string }[]` | Route points for path display | `undefined` |
-| `segmentRisks` | `SegmentRisk[]` | Weather risk data for route segments | `undefined` |
-| `height` | `number` | Map height | `400` |
-| `width` | `number` | Map width | `undefined` (flex) |
-| `onPointClick` | `(point: CollectionPoint) => void` | Callback when a point is clicked | `undefined` |
-| `onMapPress` | `(lat: number, lon: number) => void` | Callback when map is pressed | `undefined` |
-| `tapDestination` | `{ lat: number; lon: number } | null` | Destination for tap navigation | `null` |
+| Prop               | Type                                             | Description                           | Default                        |
+| ------------------ | ------------------------------------------------ | ------------------------------------- | ------------------------------ | ------ |
+| `collectionPoints` | `CollectionPoint[]`                              | Array of collection points to display | `[]`                           |
+| `routePoints`      | `{ lat: number; lon: number; label?: string }[]` | Route points for path display         | `undefined`                    |
+| `segmentRisks`     | `SegmentRisk[]`                                  | Weather risk data for route segments  | `undefined`                    |
+| `height`           | `number`                                         | Map height                            | `400`                          |
+| `width`            | `number`                                         | Map width                             | `undefined` (flex)             |
+| `onPointClick`     | `(point: CollectionPoint) => void`               | Callback when a point is clicked      | `undefined`                    |
+| `onMapPress`       | `(lat: number, lon: number) => void`             | Callback when map is pressed          | `undefined`                    |
+| `tapDestination`   | `{ lat: number; lon: number }                    | null`                                 | Destination for tap navigation | `null` |
 
 ### MapsMeModule
 
 **Methods:**
 
 #### `initializeMapsMeFramework(): Promise<boolean>`
+
 Initializes the MAPS.ME framework.
 
 **Returns:** `Promise<boolean>` - `true` if initialization succeeded
 
 #### `setMapPosition(latitude: number, longitude: number): Promise<void>`
+
 Sets the map center to the specified coordinates.
 
 **Parameters:**
+
 - `latitude`: Latitude coordinate
 - `longitude`: Longitude coordinate
 
 #### `setMapZoom(zoom: number): Promise<void>`
+
 Sets the map zoom level.
 
 **Parameters:**
+
 - `zoom`: Zoom level (typically 1-20)
 
 #### `getCurrentPosition(): Promise<{latitude: number, longitude: number, timestamp: number} | null>`
+
 Gets the current map position.
 
 **Returns:** Current position or `null` if not available
 
 #### `search(query: string): Promise<Array<{name: string, latitude: number, longitude: number, type: string}> | null>`
+
 Performs a search query.
 
 **Parameters:**
+
 - `query`: Search query string
 
 **Returns:** Array of search results or `null` if not available
@@ -201,6 +212,7 @@ Performs a search query.
 ✅ **Fully Supported**: The MAPS.ME integration is designed for iOS and uses native framework capabilities.
 
 **Requirements:**
+
 - iOS 11.0+
 - Xcode 12.0+
 - CocoaPods
@@ -240,6 +252,7 @@ mapsme-react-native/
 ### JavaScript Dependencies
 
 The module requires:
+
 - React 18.0.0+
 - React Native 0.72.0+
 
@@ -260,17 +273,20 @@ These are configured in the Podfile and will be installed via CocoaPods.
 ### Common Issues
 
 **Framework initialization fails:**
+
 - Ensure you're using a development build (not Expo Go)
 - Check that the MAPS.ME module is properly copied to the iOS project
 - Verify that all required dependencies are installed via CocoaPods
 - Run `pod install` in the ios directory
 
 **Map not rendering:**
+
 - Check that the view has proper dimensions
 - Verify that the framework initialized successfully
 - Ensure the component is only used on iOS (Android/web will show fallback)
 
 **Build errors:**
+
 - Run `pod install` in the ios directory
 - Clean the Xcode project and rebuild
 - Check that all header search paths are correctly configured

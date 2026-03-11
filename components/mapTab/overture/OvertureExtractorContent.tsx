@@ -57,8 +57,16 @@ const ROAD_CLASSES = [
 
 /** Optionally include these; default is OFF (excluded). Toggle ON to include in route. */
 const OPTIONAL_EXCLUDE_CLASSES = [
-  { key: "motorways", label: "Motorways", classes: ["motorway", "motorway_link"] },
-  { key: "highways", label: "Highways", classes: ["trunk", "trunk_link", "primary", "primary_link"] },
+  {
+    key: "motorways",
+    label: "Motorways",
+    classes: ["motorway", "motorway_link"],
+  },
+  {
+    key: "highways",
+    label: "Highways",
+    classes: ["trunk", "trunk_link", "primary", "primary_link"],
+  },
   { key: "driveways", label: "Driveways", classes: ["driveway"] },
   { key: "service_roads", label: "Service Roads", classes: ["service"] },
 ] as const;
@@ -97,7 +105,8 @@ export function OvertureExtractorContent({
   const colors = useColors();
   const primaryBlue = colors.primary ?? "#3b82f6";
   const { state: routingState, dispatch: routingDispatch } = useRouting();
-  const serviceBothSides = routingState?.configuration?.serviceBothSides ?? false;
+  const serviceBothSides =
+    routingState?.configuration?.serviceBothSides ?? false;
 
   const [selectedRoadClasses, setSelectedRoadClasses] = useState<string[]>([
     "residential",
@@ -106,7 +115,9 @@ export function OvertureExtractorContent({
     "unclassified",
   ]);
   /** Optional: include these classes (default OFF = excluded). */
-  const [optionalIncluded, setOptionalIncluded] = useState<Record<string, boolean>>({
+  const [optionalIncluded, setOptionalIncluded] = useState<
+    Record<string, boolean>
+  >({
     motorways: false,
     highways: false,
     driveways: false,
@@ -148,15 +159,20 @@ export function OvertureExtractorContent({
   const runOfflineExtract = useCallback(
     async (
       polygon: GeoJSON.Feature<GeoJSON.Polygon>,
-      polygonForFilter: Array<{ lat: number; lon: number }>,
+      polygonForFilter: { lat: number; lon: number }[],
     ) => {
-      const result = await extractFromDownloadedData(
-        polygon.geometry,
-        (p) => setExtractProgress(p.total != null ? `${p.phase} (${p.done}/${p.total})` : p.phase),
+      const result = await extractFromDownloadedData(polygon.geometry, (p) =>
+        setExtractProgress(
+          p.total != null ? `${p.phase} (${p.done}/${p.total})` : p.phase,
+        ),
       );
       if (!result) return false;
       setExtractProgress("Filtering road classes…");
-      let filtered: { geojson: GeoJSONFeatureCollection; feature_count: number; road_class_counts: Record<string, number> };
+      let filtered: {
+        geojson: GeoJSONFeatureCollection;
+        feature_count: number;
+        road_class_counts: Record<string, number>;
+      };
       try {
         filtered = await filterGeoJSON({
           geojson: result.geojson,
@@ -183,7 +199,9 @@ export function OvertureExtractorContent({
         warnings:
           filtered.feature_count === 0
             ? ["No road features match the selected road classes in this area"]
-            : [`Extracted ${filtered.feature_count} road features from offline ${sourceLabel} (${result.regionName})`],
+            : [
+                `Extracted ${filtered.feature_count} road features from offline ${sourceLabel} (${result.regionName})`,
+              ],
       });
       setLoadedGeoJSON(filtered.geojson);
       return true;
@@ -200,9 +218,15 @@ export function OvertureExtractorContent({
       return () => {};
     }
 
-    const polygonCoords: [number, number][] = safePoints.map((p) => [p.longitude, p.latitude]);
+    const polygonCoords: [number, number][] = safePoints.map((p) => [
+      p.longitude,
+      p.latitude,
+    ]);
     const polygon = coordsToPolygonFeature(polygonCoords);
-    const polygonForFilter = safePoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+    const polygonForFilter = safePoints.map((p) => ({
+      lat: p.latitude,
+      lon: p.longitude,
+    }));
 
     setIsLoading(true);
 
@@ -249,7 +273,10 @@ export function OvertureExtractorContent({
     // Use overture-extraction plugin when available (cached extracts, same GeoJSON path).
     const plugin = getPlugin("overture-extraction");
     const extractor = plugin?.getFeatures()?.extractor as
-      | ((polygon: GeoJSON.Feature<GeoJSON.Polygon>, theme?: string) => Promise<{ geojson: GeoJSONFeatureCollection; warnings: string[] }>)
+      | ((
+          polygon: GeoJSON.Feature<GeoJSON.Polygon>,
+          theme?: string,
+        ) => Promise<{ geojson: GeoJSONFeatureCollection; warnings: string[] }>)
       | undefined;
     if (extractor) {
       try {
@@ -262,14 +289,20 @@ export function OvertureExtractorContent({
             featureCount: 0,
             roadClasses: {},
             valid: false,
-            warnings: result.warnings.length ? result.warnings : ["No road features found in the extraction area"],
+            warnings: result.warnings.length
+              ? result.warnings
+              : ["No road features found in the extraction area"],
           });
           setLoadedGeoJSON({ type: "FeatureCollection", features: [] });
           setIsLoading(false);
           setExtractProgress(null);
           return () => {};
         }
-        let filtered: { geojson: GeoJSONFeatureCollection; feature_count: number; road_class_counts: Record<string, number> };
+        let filtered: {
+          geojson: GeoJSONFeatureCollection;
+          feature_count: number;
+          road_class_counts: Record<string, number>;
+        };
         try {
           filtered = await filterGeoJSON({
             geojson: rawGeojson,
@@ -289,12 +322,19 @@ export function OvertureExtractorContent({
           valid: filtered.feature_count > 0,
           warnings:
             filtered.feature_count === 0
-              ? ["No road features match the selected road classes in this area"]
-              : [...result.warnings, `Extracted ${filtered.feature_count} road features from Overture Maps`].filter(Boolean),
+              ? [
+                  "No road features match the selected road classes in this area",
+                ]
+              : [
+                  ...result.warnings,
+                  `Extracted ${filtered.feature_count} road features from Overture Maps`,
+                ].filter(Boolean),
         });
         setLoadedGeoJSON(filtered.geojson);
       } catch (err) {
-        tryOfflineThenAlert(err instanceof Error ? err.message : "Extraction failed.");
+        tryOfflineThenAlert(
+          err instanceof Error ? err.message : "Extraction failed.",
+        );
         return () => {};
       } finally {
         setIsLoading(false);
@@ -327,7 +367,11 @@ export function OvertureExtractorContent({
             setLoadedGeoJSON({ type: "FeatureCollection", features: [] });
             return;
           }
-          let filtered: { geojson: GeoJSONFeatureCollection; feature_count: number; road_class_counts: Record<string, number> };
+          let filtered: {
+            geojson: GeoJSONFeatureCollection;
+            feature_count: number;
+            road_class_counts: Record<string, number>;
+          };
           try {
             filtered = await filterGeoJSON({
               geojson: rawGeojson,
@@ -347,14 +391,20 @@ export function OvertureExtractorContent({
             valid: filtered.feature_count > 0,
             warnings:
               filtered.feature_count === 0
-                ? ["No road features match the selected road classes in this area"]
-                : [`Extracted ${filtered.feature_count} road features from Overture Maps`],
+                ? [
+                    "No road features match the selected road classes in this area",
+                  ]
+                : [
+                    `Extracted ${filtered.feature_count} road features from Overture Maps`,
+                  ],
           });
           setLoadedGeoJSON(filtered.geojson);
         } catch (err) {
           Alert.alert(
             "Extraction Failed",
-            err instanceof Error ? err.message : "Could not load or filter road data.",
+            err instanceof Error
+              ? err.message
+              : "Could not load or filter road data.",
           );
         } finally {
           setIsLoading(false);
@@ -394,7 +444,13 @@ export function OvertureExtractorContent({
       serviceBothSides,
     });
     setShowResults(true);
-  }, [loadedGeoJSON, effectiveRoadClasses, serviceBothSides, onOptimizeRoute, checkBackend]);
+  }, [
+    loadedGeoJSON,
+    effectiveRoadClasses,
+    serviceBothSides,
+    onOptimizeRoute,
+    checkBackend,
+  ]);
 
   const handleExportRoute = useCallback(async () => {
     if (!lastResult?.route_geojson?.features?.length) {
@@ -475,15 +531,23 @@ export function OvertureExtractorContent({
           Polygon Points
         </Text>
         <Text style={[styles.infoText, { color: colors.text }]}>
-          Tap the map to define the extraction area ({safePoints.length} points).
-          Need at least {MIN_POINTS}.
+          Tap the map to define the extraction area ({safePoints.length}{" "}
+          points). Need at least {MIN_POINTS}.
         </Text>
         {safePoints.length > 0 && (
           <TouchableOpacity
-            style={[styles.clearBtn, { backgroundColor: colors.surfaceElevated }]}
+            style={[
+              styles.clearBtn,
+              { backgroundColor: colors.surfaceElevated },
+            ]}
             onPress={onClearPoints}
           >
-            <Text style={[styles.clearBtnText, { color: colors.error ?? "#f87171" }]}>
+            <Text
+              style={[
+                styles.clearBtnText,
+                { color: colors.error ?? "#f87171" },
+              ]}
+            >
               Clear Points
             </Text>
           </TouchableOpacity>
@@ -508,7 +572,9 @@ export function OvertureExtractorContent({
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <ActivityIndicator color="#fff" />
               {extractProgress ? (
-                <Text style={[styles.loadBtnText, { marginLeft: 8 }]}>{extractProgress}</Text>
+                <Text style={[styles.loadBtnText, { marginLeft: 8 }]}>
+                  {extractProgress}
+                </Text>
               ) : null}
             </View>
           ) : (
@@ -519,7 +585,9 @@ export function OvertureExtractorContent({
         </TouchableOpacity>
 
         {geoJSONInfo && (
-          <View style={[styles.validationCard, { backgroundColor: colors.surface }]}>
+          <View
+            style={[styles.validationCard, { backgroundColor: colors.surface }]}
+          >
             <Text style={[styles.validationTitle, { color: colors.text }]}>
               {geoJSONInfo.featureCount} features extracted
             </Text>
@@ -541,7 +609,10 @@ export function OvertureExtractorContent({
             {geoJSONInfo.warnings.map((w, i) => (
               <Text
                 key={i}
-                style={[styles.warningText, { color: colors.error ?? "#f87171" }]}
+                style={[
+                  styles.warningText,
+                  { color: colors.error ?? "#f87171" },
+                ]}
               >
                 {w}
               </Text>
@@ -564,7 +635,9 @@ export function OvertureExtractorContent({
                 style={[
                   styles.classChip,
                   {
-                    backgroundColor: selected ? primaryBlue : colors.surfaceElevated,
+                    backgroundColor: selected
+                      ? primaryBlue
+                      : colors.surfaceElevated,
                   },
                 ]}
                 onPress={() => toggleRoadClass(key)}
@@ -594,7 +667,9 @@ export function OvertureExtractorContent({
                 style={[
                   styles.classChip,
                   {
-                    backgroundColor: included ? primaryBlue : colors.surfaceElevated,
+                    backgroundColor: included
+                      ? primaryBlue
+                      : colors.surfaceElevated,
                   },
                 ]}
                 onPress={() => toggleOptionalInclude(key)}
@@ -618,14 +693,20 @@ export function OvertureExtractorContent({
         <Text style={[styles.sectionTitle, { color: colors.muted }]}>
           Route passes
         </Text>
-        <Text style={[styles.infoText, { color: colors.text, marginBottom: 8 }]}>
-          One pass: each street once per direction. Two pass: both sides (left and right curb).
+        <Text
+          style={[styles.infoText, { color: colors.text, marginBottom: 8 }]}
+        >
+          One pass: each street once per direction. Two pass: both sides (left
+          and right curb).
         </Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <TouchableOpacity
             onPress={() => {
               hapticImpact();
-              routingDispatch({ type: "SET_SERVICE_BOTH_SIDES", payload: false });
+              routingDispatch({
+                type: "SET_SERVICE_BOTH_SIDES",
+                payload: false,
+              });
             }}
             style={{
               flex: 1,
@@ -634,7 +715,9 @@ export function OvertureExtractorContent({
               borderRadius: 10,
               borderWidth: 2,
               borderColor: !serviceBothSides ? primaryBlue : colors.border,
-              backgroundColor: !serviceBothSides ? primaryBlue + "18" : "transparent",
+              backgroundColor: !serviceBothSides
+                ? primaryBlue + "18"
+                : "transparent",
             }}
           >
             <Text
@@ -651,7 +734,10 @@ export function OvertureExtractorContent({
           <TouchableOpacity
             onPress={() => {
               hapticImpact();
-              routingDispatch({ type: "SET_SERVICE_BOTH_SIDES", payload: true });
+              routingDispatch({
+                type: "SET_SERVICE_BOTH_SIDES",
+                payload: true,
+              });
             }}
             style={{
               flex: 1,
@@ -660,7 +746,9 @@ export function OvertureExtractorContent({
               borderRadius: 10,
               borderWidth: 2,
               borderColor: serviceBothSides ? primaryBlue : colors.border,
-              backgroundColor: serviceBothSides ? primaryBlue + "18" : "transparent",
+              backgroundColor: serviceBothSides
+                ? primaryBlue + "18"
+                : "transparent",
             }}
           >
             <Text
@@ -715,7 +803,9 @@ export function OvertureExtractorContent({
           </Text>
 
           <View style={styles.statsGrid}>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.total_distance_km.toFixed(2)}
               </Text>
@@ -723,7 +813,9 @@ export function OvertureExtractorContent({
                 Total km
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.efficiency.toFixed(1)}%
               </Text>
@@ -731,7 +823,9 @@ export function OvertureExtractorContent({
                 Efficiency
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.deadhead_distance_km.toFixed(2)}
               </Text>
@@ -739,7 +833,9 @@ export function OvertureExtractorContent({
                 Deadhead km
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.edges_in_graph}
               </Text>
@@ -747,7 +843,9 @@ export function OvertureExtractorContent({
                 Road Segments
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.right_turns}
               </Text>
@@ -755,7 +853,9 @@ export function OvertureExtractorContent({
                 Right Turns
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.left_turns}
               </Text>
@@ -763,7 +863,9 @@ export function OvertureExtractorContent({
                 Left Turns
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.u_turns}
               </Text>
@@ -771,7 +873,9 @@ export function OvertureExtractorContent({
                 U-Turns
               </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.statCard, { backgroundColor: colors.surface }]}
+            >
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {lastResult.stats.nodes_in_graph}
               </Text>
@@ -787,7 +891,10 @@ export function OvertureExtractorContent({
 
           <View style={styles.exportRow}>
             <TouchableOpacity
-              style={[styles.exportBtn, { backgroundColor: colors.surfaceElevated }]}
+              style={[
+                styles.exportBtn,
+                { backgroundColor: colors.surfaceElevated },
+              ]}
               onPress={handleExportRoute}
             >
               <Text style={[styles.exportBtnText, { color: colors.text }]}>

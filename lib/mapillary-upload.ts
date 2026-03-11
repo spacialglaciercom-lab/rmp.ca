@@ -40,8 +40,18 @@ export interface MapillaryUploadResult {
  * (e.g. from mapillary_tools or Mapillary support). The structure here
  * follows the standard pattern: create upload → send file + metadata.
  */
-export async function uploadToMapillary(params: MapillaryUploadParams): Promise<MapillaryUploadResult> {
-  const { imageUri, latitude, longitude, heading, accessToken, sequenceId, capturedAt } = params;
+export async function uploadToMapillary(
+  params: MapillaryUploadParams,
+): Promise<MapillaryUploadResult> {
+  const {
+    imageUri,
+    latitude,
+    longitude,
+    heading,
+    accessToken,
+    sequenceId,
+    capturedAt,
+  } = params;
   const capturedAtIso = capturedAt ?? new Date().toISOString();
 
   const authHeader = `OAuth ${accessToken}`;
@@ -139,7 +149,10 @@ export async function uploadToMapillary(params: MapillaryUploadParams): Promise<
         };
       }
 
-      const imgData = (await imgRes.json()) as { id?: string; sequence_id?: string };
+      const imgData = (await imgRes.json()) as {
+        id?: string;
+        sequence_id?: string;
+      };
       return {
         success: true,
         imageId: imgData.id ?? uploadId,

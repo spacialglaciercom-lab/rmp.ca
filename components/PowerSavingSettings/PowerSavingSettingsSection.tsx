@@ -2,7 +2,13 @@
  * Settings section: Power Saving Mode selector, auto-switch toggle, and thresholds.
  */
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Platform, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Platform,
+  StyleSheet,
+} from "react-native";
 import { usePowerSaving } from "@/src/powerSaving";
 import { POWER_MODE_LABELS, type PowerMode } from "@/src/powerSaving";
 import { useTheme } from "@/lib/theme-provider";
@@ -16,7 +22,8 @@ const BATTERY_IMPACT: Record<PowerMode, string> = {
 };
 
 export const PowerSavingSettingsSection: React.FC = () => {
-  const { mode, state, batteryLevel, setMode, setAutoSwitchEnabled, isReady } = usePowerSaving();
+  const { mode, state, batteryLevel, setMode, setAutoSwitchEnabled, isReady } =
+    usePowerSaving();
   const theme = useTheme();
 
   const handleSelectMode = (m: PowerMode) => {
@@ -35,7 +42,9 @@ export const PowerSavingSettingsSection: React.FC = () => {
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.label, { color: theme.text }]}>Power saving mode</Text>
+      <Text style={[styles.label, { color: theme.text }]}>
+        Power saving mode
+      </Text>
       <Text style={[styles.description, { color: theme.textTertiary }]}>
         Balance battery life with navigation accuracy. Battery: {batteryPct}%
       </Text>
@@ -48,25 +57,33 @@ export const PowerSavingSettingsSection: React.FC = () => {
             style={[
               styles.modeButton,
               {
-                backgroundColor: mode === m ? theme.accent + "25" : theme.border,
+                backgroundColor:
+                  mode === m ? theme.accent + "25" : theme.border,
                 borderColor: mode === m ? theme.accent : "transparent",
               },
             ]}
           >
             <Text
-              style={[styles.modeLabel, { color: mode === m ? theme.accent : theme.text }]}
+              style={[
+                styles.modeLabel,
+                { color: mode === m ? theme.accent : theme.text },
+              ]}
               numberOfLines={1}
             >
               {POWER_MODE_LABELS[m]}
             </Text>
-            <Text style={[styles.modeImpact, { color: theme.textTertiary }]}>{BATTERY_IMPACT[m]}</Text>
+            <Text style={[styles.modeImpact, { color: theme.textTertiary }]}>
+              {BATTERY_IMPACT[m]}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={[styles.toggleRow, { borderTopColor: theme.borderLight }]}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.toggleLabel, { color: theme.text }]}>Auto-switch by battery</Text>
+          <Text style={[styles.toggleLabel, { color: theme.text }]}>
+            Auto-switch by battery
+          </Text>
           <Text style={[styles.toggleDesc, { color: theme.textTertiary }]}>
             Performance &gt;30%, Balanced 15–30%, Ultra &lt;15%
           </Text>
@@ -74,7 +91,11 @@ export const PowerSavingSettingsSection: React.FC = () => {
         <TouchableOpacity
           style={[
             styles.toggleTrack,
-            { backgroundColor: state.autoSwitchEnabled ? theme.accent : theme.border },
+            {
+              backgroundColor: state.autoSwitchEnabled
+                ? theme.accent
+                : theme.border,
+            },
           ]}
           onPress={handleToggleAuto}
           activeOpacity={0.9}

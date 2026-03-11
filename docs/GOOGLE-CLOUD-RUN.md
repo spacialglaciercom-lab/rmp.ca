@@ -15,10 +15,10 @@ Then you set **Vercel** `EXPO_PUBLIC_API_BASE_URL` to the Node API’s Cloud Run
 
 The **Node API** (rmp-ca) does not run the optimizer or extract logic itself. It **proxies** requests to other services:
 
-| Feature | What the Node API does | Do you need another service? |
-|--------|------------------------|------------------------------|
-| **Optimizer** (route optimization, zones, GeoJSON) | Proxies `/api/optimize`, `/api/geojson/*`, `/api/zones/*` to `OPTIMIZER_BACKEND_URL` | **Yes.** Deploy the **Python FastAPI** app (`backend/`) as a separate Cloud Run service, then set `OPTIMIZER_BACKEND_URL` on the Node service to that URL. Without it, those endpoints return **503** “Optimizer backend not configured”. |
-| **Extract** (Overture polygon → roads/GeoJSON via WebSocket) | Proxies `wss://.../ws/extract` to `EXTRACT_WS_UPSTREAM` | **Yes**, if you use the Extract tab. Deploy an **Overture extract** service (separate repo/service), then set `EXTRACT_WS_UPSTREAM` on the Node service. If unset, the Node server still tries the old Railway default (likely dead), so extraction will fail. |
+| Feature                                                      | What the Node API does                                                               | Do you need another service?                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Optimizer** (route optimization, zones, GeoJSON)           | Proxies `/api/optimize`, `/api/geojson/*`, `/api/zones/*` to `OPTIMIZER_BACKEND_URL` | **Yes.** Deploy the **Python FastAPI** app (`backend/`) as a separate Cloud Run service, then set `OPTIMIZER_BACKEND_URL` on the Node service to that URL. Without it, those endpoints return **503** “Optimizer backend not configured”.                      |
+| **Extract** (Overture polygon → roads/GeoJSON via WebSocket) | Proxies `wss://.../ws/extract` to `EXTRACT_WS_UPSTREAM`                              | **Yes**, if you use the Extract tab. Deploy an **Overture extract** service (separate repo/service), then set `EXTRACT_WS_UPSTREAM` on the Node service. If unset, the Node server still tries the old Railway default (likely dead), so extraction will fail. |
 
 **Summary:**
 
@@ -32,13 +32,13 @@ The **Node API** (rmp-ca) does not run the optimizer or extract logic itself. It
 
 **Single container (all-in-one)** can be simpler: one image, one Cloud Run service, one URL, no `OPTIMIZER_BACKEND_URL` to set. Node and Python run in the same container; the Node server proxies optimizer requests to `http://127.0.0.1:8000` inside the container.
 
-| | Single container | Multiple services |
-|---|------------------|-------------------|
-| **Deploy** | One image, one `gcloud run deploy` | Build and deploy Node + optimizer (and optionally extract) separately |
-| **Config** | No `OPTIMIZER_BACKEND_URL` | Set `OPTIMIZER_BACKEND_URL` on the Node service to the optimizer URL |
-| **Scaling** | Node and optimizer scale together | Scale optimizer and Node independently |
-| **Image size** | Larger (Node + Python) | Smaller per image |
-| **Extract** | Still needs a separate extract service + `EXTRACT_WS_UPSTREAM` (no Overture extract in this repo) | Same |
+|                | Single container                                                                                  | Multiple services                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Deploy**     | One image, one `gcloud run deploy`                                                                | Build and deploy Node + optimizer (and optionally extract) separately |
+| **Config**     | No `OPTIMIZER_BACKEND_URL`                                                                        | Set `OPTIMIZER_BACKEND_URL` on the Node service to the optimizer URL  |
+| **Scaling**    | Node and optimizer scale together                                                                 | Scale optimizer and Node independently                                |
+| **Image size** | Larger (Node + Python)                                                                            | Smaller per image                                                     |
+| **Extract**    | Still needs a separate extract service + `EXTRACT_WS_UPSTREAM` (no Overture extract in this repo) | Same                                                                  |
 
 **When to use a single container:** You want route optimization (and zones/GeoJSON) with minimal setup and one URL. Use `Dockerfile.all-in-one` and deploy one Cloud Run service.
 
@@ -192,23 +192,23 @@ Store the optimizer URL in Secret Manager and use `--set-secrets` in the deploy 
 Example `cloudbuild.yaml` snippet for the deploy step:
 
 ```yaml
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    entrypoint: gcloud
-    args:
-      - "run"
-      - "deploy"
-      - "trashroute-mobile"
-      - "--image"
-      - "gcr.io/${PROJECT_ID}/trashroute-api:${SHORT_SHA}"
-      - "--region"
-      - "${_REGION}"
-      - "--platform"
-      - "managed"
-      - "--allow-unauthenticated"
-      - "--port"
-      - "8080"
-      - "--set-env-vars"
-      - "OPTIMIZER_BACKEND_URL=${_OPTIMIZER_BACKEND_URL}"
+- name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+  entrypoint: gcloud
+  args:
+    - "run"
+    - "deploy"
+    - "trashroute-mobile"
+    - "--image"
+    - "gcr.io/${PROJECT_ID}/trashroute-api:${SHORT_SHA}"
+    - "--region"
+    - "${_REGION}"
+    - "--platform"
+    - "managed"
+    - "--allow-unauthenticated"
+    - "--port"
+    - "8080"
+    - "--set-env-vars"
+    - "OPTIMIZER_BACKEND_URL=${_OPTIMIZER_BACKEND_URL}"
 ```
 
 ---
@@ -274,11 +274,11 @@ Trigger this from `backend/` or set the trigger config so the build context is `
 
 ## Summary
 
-| Step | What | URL / Env |
-|------|------|-----------|
-| 1 | Deploy Python optimizer (Cloud Run) | `OPTIMIZER_URL` = `https://rmp-optimizer-xxx.run.app` |
-| 2 | Deploy Node API (Cloud Run) with `OPTIMIZER_BACKEND_URL=$OPTIMIZER_URL` | Node URL = `https://trashroute-mobile-xxx.run.app` |
-| 3 | Vercel env `EXPO_PUBLIC_API_BASE_URL` = Node URL, then redeploy | Vercel frontend calls Cloud Run |
+| Step | What                                                                    | URL / Env                                             |
+| ---- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1    | Deploy Python optimizer (Cloud Run)                                     | `OPTIMIZER_URL` = `https://rmp-optimizer-xxx.run.app` |
+| 2    | Deploy Node API (Cloud Run) with `OPTIMIZER_BACKEND_URL=$OPTIMIZER_URL` | Node URL = `https://trashroute-mobile-xxx.run.app`    |
+| 3    | Vercel env `EXPO_PUBLIC_API_BASE_URL` = Node URL, then redeploy         | Vercel frontend calls Cloud Run                       |
 
 After that, **Vercel talks to Google Cloud Run** and the old Railway backend is no longer used.
 

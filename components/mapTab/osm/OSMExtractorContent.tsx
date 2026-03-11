@@ -22,7 +22,12 @@ import {
   type LatLonPoint,
   type ParsedOverpassResult,
 } from "@/lib/overpassService";
-import { shareGeoJSON, shareCSV, shareOSM, type OSMBounds } from "@/lib/exportService";
+import {
+  shareGeoJSON,
+  shareCSV,
+  shareOSM,
+  type OSMBounds,
+} from "@/lib/exportService";
 import { useColors } from "@/hooks/use-colors";
 import { useRouting } from "@/lib/routing-context";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
@@ -64,7 +69,9 @@ export interface OSMExtractorContentProps {
   onClearPoints: () => void;
   onExtract: (data: ParsedOverpassResult) => void;
   extractedData: ParsedOverpassResult | null;
-  onOptimizeRoute?: (rawElements: import("@/lib/overpassService").OverpassElement[]) => void;
+  onOptimizeRoute?: (
+    rawElements: import("@/lib/overpassService").OverpassElement[],
+  ) => void;
   optimizing?: boolean;
   optimizationStatus?: string;
 }
@@ -81,7 +88,8 @@ export function OSMExtractorContent({
   const safePoints = points ?? [];
   const [featureStep, setFeatureStep] = useState<FeatureStep>(1);
   const { state: routingState, dispatch: routingDispatch } = useRouting();
-  const serviceBothSides = routingState?.configuration?.serviceBothSides ?? false;
+  const serviceBothSides =
+    routingState?.configuration?.serviceBothSides ?? false;
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [numPoints, setNumPoints] = useState(5);
   const [selectedCategories, setSelectedCategories] = useState<
@@ -100,7 +108,7 @@ export function OSMExtractorContent({
 
   const toggleCategory = (cat: OSMCategoryKey) => {
     setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
     );
   };
 
@@ -108,7 +116,7 @@ export function OSMExtractorContent({
     if (safePoints.length < MIN_POINTS) {
       Alert.alert(
         "Error",
-        `Please add at least ${MIN_POINTS} points on the map to define a polygon.`
+        `Please add at least ${MIN_POINTS} points on the map to define a polygon.`,
       );
       return;
     }
@@ -124,7 +132,7 @@ export function OSMExtractorContent({
     } catch (error) {
       Alert.alert(
         "Extraction Failed",
-        error instanceof Error ? error.message : "Unknown error"
+        error instanceof Error ? error.message : "Unknown error",
       );
     } finally {
       setIsExtracting(false);
@@ -141,7 +149,7 @@ export function OSMExtractorContent({
     } catch (error) {
       Alert.alert(
         "Export Failed",
-        error instanceof Error ? error.message : "Unknown error"
+        error instanceof Error ? error.message : "Unknown error",
       );
     }
   };
@@ -156,7 +164,7 @@ export function OSMExtractorContent({
     } catch (error) {
       Alert.alert(
         "Export Failed",
-        error instanceof Error ? error.message : "Unknown error"
+        error instanceof Error ? error.message : "Unknown error",
       );
     }
   };
@@ -167,7 +175,10 @@ export function OSMExtractorContent({
       return;
     }
     if (safePoints.length < 3) {
-      Alert.alert("No Bounds", "Extraction polygon is required for OSM file bounds.");
+      Alert.alert(
+        "No Bounds",
+        "Extraction polygon is required for OSM file bounds.",
+      );
       return;
     }
     try {
@@ -183,7 +194,7 @@ export function OSMExtractorContent({
     } catch (error) {
       Alert.alert(
         "Export Failed",
-        error instanceof Error ? error.message : "Unknown error"
+        error instanceof Error ? error.message : "Unknown error",
       );
     }
   };
@@ -209,14 +220,21 @@ export function OSMExtractorContent({
             </Text>
             {safePoints.length >= 2 && (
               <>
-                <Text style={[styles.featureCardTitle, { color: colors.text, marginTop: 8 }]}>
+                <Text
+                  style={[
+                    styles.featureCardTitle,
+                    { color: colors.text, marginTop: 8 },
+                  ]}
+                >
                   Total Distance
                 </Text>
                 <Text style={[styles.featureCardValue, { color: primaryBlue }]}>
                   {pathDistanceKm.toFixed(3)} km
                 </Text>
                 <View style={styles.segmentList}>
-                  <Text style={[styles.segmentListTitle, { color: colors.muted }]}>
+                  <Text
+                    style={[styles.segmentListTitle, { color: colors.muted }]}
+                  >
                     Segment measurements
                   </Text>
                   {segmentDistancesKm.map((km, i) => (
@@ -224,7 +242,10 @@ export function OSMExtractorContent({
                       key={i}
                       style={[styles.segmentRow, { color: colors.text }]}
                     >
-                      Pt {i + 1} → Pt {i + 2}: {km < 1 ? (km * 1000).toFixed(1) + " m" : km.toFixed(3) + " km"}
+                      Pt {i + 1} → Pt {i + 2}:{" "}
+                      {km < 1
+                        ? (km * 1000).toFixed(1) + " m"
+                        : km.toFixed(3) + " km"}
                     </Text>
                   ))}
                 </View>
@@ -236,15 +257,27 @@ export function OSMExtractorContent({
             <Text style={[styles.featureCardTitle, { color: colors.text }]}>
               {FEATURE_STEPS[featureStep].title}
             </Text>
-            <Text style={[styles.featureCardDescription, { color: colors.muted }]}>
+            <Text
+              style={[styles.featureCardDescription, { color: colors.muted }]}
+            >
               {FEATURE_STEPS[featureStep].description}
             </Text>
             {featureStep === 1 && area > 0 && (
               <View style={styles.featureCardMeasure}>
-                <Text style={[styles.featureCardMeasureLabel, { color: primaryBlue }]}>
+                <Text
+                  style={[
+                    styles.featureCardMeasureLabel,
+                    { color: primaryBlue },
+                  ]}
+                >
                   Total Area
                 </Text>
-                <Text style={[styles.featureCardMeasureValue, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.featureCardMeasureValue,
+                    { color: colors.text },
+                  ]}
+                >
                   {formatArea(area)}
                 </Text>
               </View>
@@ -252,15 +285,27 @@ export function OSMExtractorContent({
             {featureStep === 2 && safePoints.length >= 2 && (
               <>
                 <View style={styles.featureCardMeasure}>
-                  <Text style={[styles.featureCardMeasureLabel, { color: primaryBlue }]}>
+                  <Text
+                    style={[
+                      styles.featureCardMeasureLabel,
+                      { color: primaryBlue },
+                    ]}
+                  >
                     Total Distance
                   </Text>
-                  <Text style={[styles.featureCardMeasureValue, { color: colors.text }]}>
+                  <Text
+                    style={[
+                      styles.featureCardMeasureValue,
+                      { color: colors.text },
+                    ]}
+                  >
                     {pathDistanceKm.toFixed(3)} km
                   </Text>
                 </View>
                 <View style={styles.segmentList}>
-                  <Text style={[styles.segmentListTitle, { color: colors.muted }]}>
+                  <Text
+                    style={[styles.segmentListTitle, { color: colors.muted }]}
+                  >
                     Segment measurements
                   </Text>
                   {segmentDistancesKm.map((km, i) => (
@@ -268,7 +313,10 @@ export function OSMExtractorContent({
                       key={i}
                       style={[styles.segmentRow, { color: colors.text }]}
                     >
-                      Pt {i + 1} → Pt {i + 2}: {km < 1 ? (km * 1000).toFixed(1) + " m" : km.toFixed(3) + " km"}
+                      Pt {i + 1} → Pt {i + 2}:{" "}
+                      {km < 1
+                        ? (km * 1000).toFixed(1) + " m"
+                        : km.toFixed(3) + " km"}
                     </Text>
                   ))}
                 </View>
@@ -277,16 +325,28 @@ export function OSMExtractorContent({
             {featureStep === 3 && area > 0 && (
               <>
                 <View style={styles.featureCardMeasure}>
-                  <Text style={[styles.featureCardMeasureLabel, { color: primaryBlue }]}>
+                  <Text
+                    style={[
+                      styles.featureCardMeasureLabel,
+                      { color: primaryBlue },
+                    ]}
+                  >
                     Total Area
                   </Text>
-                  <Text style={[styles.featureCardMeasureValue, { color: colors.text }]}>
+                  <Text
+                    style={[
+                      styles.featureCardMeasureValue,
+                      { color: colors.text },
+                    ]}
+                  >
                     {formatArea(area)}
                   </Text>
                 </View>
                 {safePoints.length >= 2 && (
                   <View style={styles.segmentList}>
-                    <Text style={[styles.segmentListTitle, { color: colors.muted }]}>
+                    <Text
+                      style={[styles.segmentListTitle, { color: colors.muted }]}
+                    >
                       Segment measurements
                     </Text>
                     {segmentDistancesKm.map((km, i) => (
@@ -294,7 +354,10 @@ export function OSMExtractorContent({
                         key={i}
                         style={[styles.segmentRow, { color: colors.text }]}
                       >
-                        Pt {i + 1} → Pt {i + 2}: {km < 1 ? (km * 1000).toFixed(1) + " m" : km.toFixed(3) + " km"}
+                        Pt {i + 1} → Pt {i + 2}:{" "}
+                        {km < 1
+                          ? (km * 1000).toFixed(1) + " m"
+                          : km.toFixed(3) + " km"}
                       </Text>
                     ))}
                   </View>
@@ -308,7 +371,8 @@ export function OSMExtractorContent({
                   style={[
                     styles.paginationDot,
                     {
-                      backgroundColor: i === featureStep ? primaryBlue : colors.muted + "60",
+                      backgroundColor:
+                        i === featureStep ? primaryBlue : colors.muted + "60",
                     },
                   ]}
                 />
@@ -316,14 +380,20 @@ export function OSMExtractorContent({
             </View>
             {featureStep < 3 ? (
               <TouchableOpacity
-                style={[styles.featureCardButton, { backgroundColor: primaryBlue }]}
+                style={[
+                  styles.featureCardButton,
+                  { backgroundColor: primaryBlue },
+                ]}
                 onPress={handleFeatureContinue}
               >
                 <Text style={styles.featureCardButtonText}>Continue</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={[styles.featureCardButton, { backgroundColor: primaryBlue }]}
+                style={[
+                  styles.featureCardButton,
+                  { backgroundColor: primaryBlue },
+                ]}
                 onPress={handleFeatureDone}
               >
                 <Text style={styles.featureCardButtonText}>Done</Text>
@@ -342,19 +412,29 @@ export function OSMExtractorContent({
         </Text>
         <View style={styles.pointsSelector}>
           <TouchableOpacity
-            style={[styles.pointsBtn, { backgroundColor: colors.surfaceElevated }]}
+            style={[
+              styles.pointsBtn,
+              { backgroundColor: colors.surfaceElevated },
+            ]}
             onPress={() => setNumPoints((n) => Math.max(MIN_POINTS, n - 1))}
           >
-            <Text style={[styles.pointsBtnText, { color: colors.text }]}>−</Text>
+            <Text style={[styles.pointsBtnText, { color: colors.text }]}>
+              −
+            </Text>
           </TouchableOpacity>
           <Text style={[styles.pointsValue, { color: colors.text }]}>
             {safePoints.length}
           </Text>
           <TouchableOpacity
-            style={[styles.pointsBtn, { backgroundColor: colors.surfaceElevated }]}
+            style={[
+              styles.pointsBtn,
+              { backgroundColor: colors.surfaceElevated },
+            ]}
             onPress={() => setNumPoints((n) => Math.min(MAX_POINTS, n + 1))}
           >
-            <Text style={[styles.pointsBtnText, { color: colors.text }]}>+</Text>
+            <Text style={[styles.pointsBtnText, { color: colors.text }]}>
+              +
+            </Text>
           </TouchableOpacity>
         </View>
         {area > 0 && (
@@ -364,10 +444,18 @@ export function OSMExtractorContent({
         )}
         {safePoints.length > 0 && (
           <TouchableOpacity
-            style={[styles.clearBtn, { backgroundColor: colors.surfaceElevated }]}
+            style={[
+              styles.clearBtn,
+              { backgroundColor: colors.surfaceElevated },
+            ]}
             onPress={onClearPoints}
           >
-            <Text style={[styles.clearBtnText, { color: colors.error ?? "#f87171" }]}>
+            <Text
+              style={[
+                styles.clearBtnText,
+                { color: colors.error ?? "#f87171" },
+              ]}
+            >
               Clear points
             </Text>
           </TouchableOpacity>
@@ -389,7 +477,9 @@ export function OSMExtractorContent({
                 style={[
                   styles.categoryChip,
                   {
-                    backgroundColor: selected ? (colors.primary ?? "#3b82f6") : colors.surfaceElevated,
+                    backgroundColor: selected
+                      ? (colors.primary ?? "#3b82f6")
+                      : colors.surfaceElevated,
                   },
                 ]}
                 onPress={() => toggleCategory(key)}
@@ -410,14 +500,20 @@ export function OSMExtractorContent({
 
       {onOptimizeRoute && (
         <>
-          <Text style={[styles.infoText, { color: colors.muted, marginBottom: 8 }]}>
-            Route passes: One pass or Two pass (both sides of street). Then use Optimize Route below.
+          <Text
+            style={[styles.infoText, { color: colors.muted, marginBottom: 8 }]}
+          >
+            Route passes: One pass or Two pass (both sides of street). Then use
+            Optimize Route below.
           </Text>
           <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
             <TouchableOpacity
               onPress={() => {
                 hapticImpact();
-                routingDispatch({ type: "SET_SERVICE_BOTH_SIDES", payload: false });
+                routingDispatch({
+                  type: "SET_SERVICE_BOTH_SIDES",
+                  payload: false,
+                });
               }}
               style={{
                 flex: 1,
@@ -426,17 +522,29 @@ export function OSMExtractorContent({
                 borderRadius: 10,
                 borderWidth: 2,
                 borderColor: !serviceBothSides ? primaryBlue : colors.border,
-                backgroundColor: !serviceBothSides ? primaryBlue + "18" : "transparent",
+                backgroundColor: !serviceBothSides
+                  ? primaryBlue + "18"
+                  : "transparent",
               }}
             >
-              <Text style={{ color: !serviceBothSides ? primaryBlue : colors.muted, fontWeight: "600", textAlign: "center", fontSize: 14 }}>
+              <Text
+                style={{
+                  color: !serviceBothSides ? primaryBlue : colors.muted,
+                  fontWeight: "600",
+                  textAlign: "center",
+                  fontSize: 14,
+                }}
+              >
                 One pass
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 hapticImpact();
-                routingDispatch({ type: "SET_SERVICE_BOTH_SIDES", payload: true });
+                routingDispatch({
+                  type: "SET_SERVICE_BOTH_SIDES",
+                  payload: true,
+                });
               }}
               style={{
                 flex: 1,
@@ -445,10 +553,19 @@ export function OSMExtractorContent({
                 borderRadius: 10,
                 borderWidth: 2,
                 borderColor: serviceBothSides ? primaryBlue : colors.border,
-                backgroundColor: serviceBothSides ? primaryBlue + "18" : "transparent",
+                backgroundColor: serviceBothSides
+                  ? primaryBlue + "18"
+                  : "transparent",
               }}
             >
-              <Text style={{ color: serviceBothSides ? primaryBlue : colors.muted, fontWeight: "600", textAlign: "center", fontSize: 14 }}>
+              <Text
+                style={{
+                  color: serviceBothSides ? primaryBlue : colors.muted,
+                  fontWeight: "600",
+                  textAlign: "center",
+                  fontSize: 14,
+                }}
+              >
                 Two pass (both sides)
               </Text>
             </TouchableOpacity>
@@ -480,8 +597,13 @@ export function OSMExtractorContent({
             ((extractedData?.rawElements?.length ?? 0) === 0 || optimizing) &&
               styles.extractBtnDisabled,
           ]}
-          onPress={() => extractedData?.rawElements && onOptimizeRoute(extractedData.rawElements)}
-          disabled={(extractedData?.rawElements?.length ?? 0) === 0 || optimizing}
+          onPress={() =>
+            extractedData?.rawElements &&
+            onOptimizeRoute(extractedData.rawElements)
+          }
+          disabled={
+            (extractedData?.rawElements?.length ?? 0) === 0 || optimizing
+          }
         >
           {optimizing ? (
             <ActivityIndicator color="#fff" />
@@ -490,11 +612,19 @@ export function OSMExtractorContent({
           )}
         </TouchableOpacity>
       )}
-      {onOptimizeRoute && (extractedData?.rawElements?.length ?? 0) > 0 && optimizing && optimizationStatus && (
-        <Text style={[styles.infoText, { color: colors.muted, textAlign: "center", marginBottom: 8 }]}>
-          {optimizationStatus}
-        </Text>
-      )}
+      {onOptimizeRoute &&
+        (extractedData?.rawElements?.length ?? 0) > 0 &&
+        optimizing &&
+        optimizationStatus && (
+          <Text
+            style={[
+              styles.infoText,
+              { color: colors.muted, textAlign: "center", marginBottom: 8 },
+            ]}
+          >
+            {optimizationStatus}
+          </Text>
+        )}
 
       {showResults && extractedData && (
         <View style={styles.section}>
@@ -506,19 +636,25 @@ export function OSMExtractorContent({
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {extractedData.counts.roads}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.muted }]}>Roads</Text>
+              <Text style={[styles.statLabel, { color: colors.muted }]}>
+                Roads
+              </Text>
             </View>
             <View style={styles.stat}>
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {extractedData.counts.buildings}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.muted }]}>Buildings</Text>
+              <Text style={[styles.statLabel, { color: colors.muted }]}>
+                Buildings
+              </Text>
             </View>
             <View style={styles.stat}>
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {extractedData.counts.amenities}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.muted }]}>Amenities</Text>
+              <Text style={[styles.statLabel, { color: colors.muted }]}>
+                Amenities
+              </Text>
             </View>
             <View style={styles.stat}>
               <Text style={[styles.statValue, { color: colors.text }]}>
@@ -530,11 +666,15 @@ export function OSMExtractorContent({
             </View>
           </View>
           <Text style={[styles.mapLegend, { color: colors.muted }]}>
-            Map: blue outline = extraction boundary; green markers = POIs; green lines = roads.
+            Map: blue outline = extraction boundary; green markers = POIs; green
+            lines = roads.
           </Text>
           <View style={styles.exportRow}>
             <TouchableOpacity
-              style={[styles.exportBtn, { backgroundColor: colors.surfaceElevated }]}
+              style={[
+                styles.exportBtn,
+                { backgroundColor: colors.surfaceElevated },
+              ]}
               onPress={handleExportOSM}
             >
               <Text style={[styles.exportBtnText, { color: colors.text }]}>
@@ -542,7 +682,10 @@ export function OSMExtractorContent({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.exportBtn, { backgroundColor: colors.surfaceElevated }]}
+              style={[
+                styles.exportBtn,
+                { backgroundColor: colors.surfaceElevated },
+              ]}
               onPress={handleExportGeoJSON}
             >
               <Text style={[styles.exportBtnText, { color: colors.text }]}>
@@ -550,7 +693,10 @@ export function OSMExtractorContent({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.exportBtn, { backgroundColor: colors.surfaceElevated }]}
+              style={[
+                styles.exportBtn,
+                { backgroundColor: colors.surfaceElevated },
+              ]}
               onPress={handleExportCSV}
             >
               <Text style={[styles.exportBtnText, { color: colors.text }]}>

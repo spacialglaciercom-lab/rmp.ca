@@ -26,7 +26,7 @@ describe("CycleDetector", () => {
         const result = detector.enterNode("A", 10 - i);
         expect(result.isLooping).toBe(false);
       }
-      
+
       // One more visit should trigger oscillation detection
       const result = detector.enterNode("A", 5);
       expect(result.isLooping).toBe(true);
@@ -37,7 +37,7 @@ describe("CycleDetector", () => {
     it("should detect zero progress when edge count doesn't decrease", () => {
       const config = { ...DEFAULT_CYCLE_CONFIG, recentWindowSize: 10 };
       detector = new CycleDetector(config);
-      
+
       // Simulate stagnation
       for (let i = 0; i < config.recentWindowSize + 1; i++) {
         const result = detector.enterNode(`node${i % 5}`, 10);
@@ -54,7 +54,7 @@ describe("CycleDetector", () => {
       for (let i = 0; i <= DEFAULT_CYCLE_CONFIG.maxNodeRevisits; i++) {
         detector.enterNode("A", 10);
       }
-      
+
       expect(detector.isTabu("A")).toBe(true);
     });
   });
@@ -70,12 +70,12 @@ describe("CycleDetector", () => {
       detector.enterNode("B", 9);
       detector.enterNode("C", 8);
       detector.enterNode("A", 7); // Back to A - forms SCC
-      
+
       detector.leaveNode("A");
       detector.leaveNode("C");
       detector.leaveNode("B");
       detector.leaveNode("A");
-      
+
       const diag = detector.getDiagnostics();
       expect(diag.sccsFound).toBeGreaterThan(0);
     });
@@ -89,10 +89,10 @@ describe("CycleDetector", () => {
     it("should return exponential penalty based on visit count", () => {
       detector.enterNode("A", 10);
       const penalty1 = detector.getPenalty("A");
-      
+
       detector.enterNode("A", 9);
       const penalty2 = detector.getPenalty("A");
-      
+
       expect(penalty2).toBeGreaterThan(penalty1);
     });
 
@@ -101,7 +101,7 @@ describe("CycleDetector", () => {
       for (let i = 0; i <= DEFAULT_CYCLE_CONFIG.maxNodeRevisits; i++) {
         detector.enterNode("A", 10);
       }
-      
+
       expect(detector.getPenalty("A")).toBe(1000);
     });
   });
@@ -112,7 +112,7 @@ describe("CycleDetector", () => {
       for (let i = 0; i <= DEFAULT_CYCLE_CONFIG.maxNodeRevisits; i++) {
         detector.enterNode("A", 10);
       }
-      
+
       expect(detector.isTabu("A")).toBe(true);
       detector.clearTabu("A");
       expect(detector.isTabu("A")).toBe(false);
@@ -123,9 +123,9 @@ describe("CycleDetector", () => {
     it("should clear all state", () => {
       detector.enterNode("A", 10);
       detector.enterNode("B", 9);
-      
+
       detector.reset();
-      
+
       const diag = detector.getDiagnostics();
       expect(diag.totalNodesVisited).toBe(0);
       expect(diag.uniqueNodes).toBe(0);
@@ -138,7 +138,7 @@ describe("CycleDetector", () => {
       detector.enterNode("A", 10);
       detector.enterNode("B", 9);
       detector.enterNode("A", 8);
-      
+
       const diag = detector.getDiagnostics();
       expect(diag.totalNodesVisited).toBe(3);
       expect(diag.uniqueNodes).toBe(2);

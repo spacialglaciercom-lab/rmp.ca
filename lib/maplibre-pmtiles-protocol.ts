@@ -38,7 +38,10 @@ function getMapLibre(): any {
  * Register a local PMTiles file path for a city so that requests to
  * pmtiles://local-{cityId}/z/x/y are served from that file.
  */
-export function registerLocalPmtilesPath(cityId: string, localPath: string): void {
+export function registerLocalPmtilesPath(
+  cityId: string,
+  localPath: string,
+): void {
   localPaths.set(`local-${cityId}`, localPath);
 }
 
@@ -61,11 +64,14 @@ let _remoteCache: Map<string, CacheEntry<any>> | null = null;
 /**
  * Evict least recently used entries from cache if over limit.
  */
-function evictLRU<T>(cache: Map<string, CacheEntry<T>>, maxEntries: number): void {
+function evictLRU<T>(
+  cache: Map<string, CacheEntry<T>>,
+  maxEntries: number,
+): void {
   if (cache.size <= maxEntries) return;
 
   const entries = Array.from(cache.entries()).sort(
-    ([, a], [, b]) => a.lastAccessed - b.lastAccessed
+    ([, a], [, b]) => a.lastAccessed - b.lastAccessed,
   );
 
   const toRemove = entries.slice(0, cache.size - maxEntries);
@@ -123,7 +129,11 @@ export function registerPMTilesProtocol(): void {
 
         const prefix = parts.slice(0, -3).join("/");
         const isLocal = prefix.startsWith("local-");
-        const key = isLocal ? prefix : (prefix.endsWith(".pmtiles") ? prefix : `${prefix}.pmtiles`);
+        const key = isLocal
+          ? prefix
+          : prefix.endsWith(".pmtiles")
+            ? prefix
+            : `${prefix}.pmtiles`;
 
         if (isLocal) {
           const path = localPaths.get(prefix);
@@ -137,7 +147,9 @@ export function registerPMTilesProtocol(): void {
             const FileSystem = require("expo-file-system/legacy").default;
 
             // Check file exists and get size
-            const fileInfo = await FileSystem.getInfoAsync(path, { size: true });
+            const fileInfo = await FileSystem.getInfoAsync(path, {
+              size: true,
+            });
             if (!fileInfo.exists) {
               console.warn(`[pmtiles] Local file not found: ${path}`);
               return { data: new ArrayBuffer(0) };
@@ -170,7 +182,9 @@ export function registerPMTilesProtocol(): void {
         // Remote PMTiles - uses HTTP range requests natively
         let entry = _remoteCache!.get(key);
         if (!entry) {
-          const pmtilesUrl = key.includes(".pmtiles") ? key : `${prefix}.pmtiles`;
+          const pmtilesUrl = key.includes(".pmtiles")
+            ? key
+            : `${prefix}.pmtiles`;
           entry = {
             instance: new PMTiles(pmtilesUrl),
             lastAccessed: Date.now(),

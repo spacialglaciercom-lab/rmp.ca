@@ -20,7 +20,10 @@ export function OverlayToggles() {
 
   return (
     <View style={{ paddingVertical: 4 }}>
-      <SectionLabel color={colors.primary} style={{ marginTop: 0, marginBottom: 12 }}>
+      <SectionLabel
+        color={colors.primary}
+        style={{ marginTop: 0, marginBottom: 12 }}
+      >
         Overlays
       </SectionLabel>
       {OVERLAYS.map(({ key, label }) => {

@@ -13,7 +13,11 @@ export class GeoJSONParser {
    * Parse GeoJSON FeatureCollection into Nodes and Ways for the optimizer.
    * Splits LineStrings into ways and deduplicates nodes based on coordinates.
    */
-  parseGeoJSON(geojson: GeoJSONFeatureCollection): { nodes: Map<string, Node>; ways: Way[]; turnRestrictions: TurnRestriction[] } {
+  parseGeoJSON(geojson: GeoJSONFeatureCollection): {
+    nodes: Map<string, Node>;
+    ways: Way[];
+    turnRestrictions: TurnRestriction[];
+  } {
     this.nodes.clear();
     this.ways = [];
     this.turnRestrictions = [];
@@ -28,7 +32,7 @@ export class GeoJSONParser {
       }
       // Generate a deterministic ID if possible, or random
       // For Overture, we might not have stable IDs, so we use coordinate-based or random
-      const id = `node-${this.nodes.size + 1}`; 
+      const id = `node-${this.nodes.size + 1}`;
       this.nodes.set(id, { id, lat, lon });
       coordToNodeId.set(key, id);
       return id;
@@ -53,7 +57,10 @@ export class GeoJSONParser {
         }
 
         // Ensure we have a valid ID
-        const wayId = typeof feature?.id === "string" ? feature.id : `way-${this.ways.length + 1}`;
+        const wayId =
+          typeof feature?.id === "string"
+            ? feature.id
+            : `way-${this.ways.length + 1}`;
 
         this.ways.push({
           id: wayId,
@@ -68,6 +75,10 @@ export class GeoJSONParser {
       waysCount: this.ways.length,
     });
 
-    return { nodes: this.nodes, ways: this.ways, turnRestrictions: this.turnRestrictions };
+    return {
+      nodes: this.nodes,
+      ways: this.ways,
+      turnRestrictions: this.turnRestrictions,
+    };
   }
 }

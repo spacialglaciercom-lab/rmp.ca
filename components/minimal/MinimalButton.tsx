@@ -1,4 +1,8 @@
-import { Text, TouchableOpacity, type TouchableOpacityProps } from "react-native";
+import {
+  Text,
+  TouchableOpacity,
+  type TouchableOpacityProps,
+} from "react-native";
 import { useTheme } from "@/lib/theme-provider";
 
 type Variant = "primary" | "secondary" | "dashed";
@@ -23,11 +27,18 @@ export function MinimalButton({
       : variant === "dashed"
         ? theme.surfaceAlt
         : theme.surfaceAlt;
-  const border = variant === "dashed" ? { borderWidth: 1.5, borderStyle: "dashed" as const, borderColor: theme.border } : variant === "secondary" ? { borderWidth: 1, borderColor: theme.border } : {};
+  const border =
+    variant === "dashed"
+      ? {
+          borderWidth: 1.5,
+          borderStyle: "dashed" as const,
+          borderColor: theme.border,
+        }
+      : variant === "secondary"
+        ? { borderWidth: 1, borderColor: theme.border }
+        : {};
   const color =
-    variant === "primary"
-      ? isDark ? "#0C0C0C" : "#fff"
-      : theme.textSecondary;
+    variant === "primary" ? (isDark ? "#0C0C0C" : "#fff") : theme.textSecondary;
 
   return (
     <TouchableOpacity

@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Switch } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { impactAsync as hapticImpact, notificationAsync as hapticNotification, NotificationFeedbackType } from "@/lib/safe-haptics";
+import {
+  impactAsync as hapticImpact,
+  notificationAsync as hapticNotification,
+  NotificationFeedbackType,
+} from "@/lib/safe-haptics";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -13,13 +17,13 @@ interface OptimizationSettings {
   capacityConstraints: boolean;
   serviceTimes: boolean;
   turnPenalties: boolean;
-  
+
   // Temporal Settings
   timeWindows: boolean;
   stochasticTravelTimes: boolean;
   congestionSampling: boolean;
   robustOptimization: "mean" | "worst95" | "worst99";
-  
+
   // Multi-objective
   multiObjective: boolean;
   objectives: {
@@ -29,12 +33,12 @@ interface OptimizationSettings {
     risk: boolean;
   };
   paretoEnabled: boolean;
-  
+
   // Online Re-optimization
   warmStartEnabled: boolean;
   roadClosureHandling: boolean;
   eulerianBalancing: boolean;
-  
+
   // Fallbacks
   fallbackToLNS: boolean;
   rollingHorizon: boolean;
@@ -68,7 +72,8 @@ const defaultSettings: OptimizationSettings = {
 export default function RouteOptimizationScreen() {
   const colors = useColors();
   const router = useRouter();
-  const [settings, setSettings] = useState<OptimizationSettings>(defaultSettings);
+  const [settings, setSettings] =
+    useState<OptimizationSettings>(defaultSettings);
   const [expandedSection, setExpandedSection] = useState<string | null>("core");
 
   useEffect(() => {
@@ -82,7 +87,7 @@ export default function RouteOptimizationScreen() {
 
   const updateSetting = <K extends keyof OptimizationSettings>(
     key: K,
-    value: OptimizationSettings[K]
+    value: OptimizationSettings[K],
   ) => {
     hapticImpact();
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -91,7 +96,10 @@ export default function RouteOptimizationScreen() {
     }
   };
 
-  const updateObjective = (key: keyof OptimizationSettings["objectives"], value: boolean) => {
+  const updateObjective = (
+    key: keyof OptimizationSettings["objectives"],
+    value: boolean,
+  ) => {
     hapticImpact();
     setSettings((prev) => ({
       ...prev,
@@ -123,7 +131,9 @@ export default function RouteOptimizationScreen() {
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
-            <Text className="text-base font-semibold text-foreground">{title}</Text>
+            <Text className="text-base font-semibold text-foreground">
+              {title}
+            </Text>
             <Text className="text-xs text-muted mt-1">{subtitle}</Text>
           </View>
           <Text className="text-muted text-lg">
@@ -197,8 +207,13 @@ export default function RouteOptimizationScreen() {
           subtitle="Constraints and options"
         >
           <View>
-            <View className="mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: colors.background }}>
-              <Text className="text-xs text-muted italic">Features to come</Text>
+            <View
+              className="mb-2 px-3 py-2 rounded-lg"
+              style={{ backgroundColor: colors.background }}
+            >
+              <Text className="text-xs text-muted italic">
+                Features to come
+              </Text>
             </View>
             <SettingRow
               label="Capacity Constraints"
@@ -227,7 +242,10 @@ export default function RouteOptimizationScreen() {
           title="Temporal Optimization"
           subtitle="Time windows + stochastic travel times"
         >
-          <View className="mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: colors.background }}>
+          <View
+            className="mb-2 px-3 py-2 rounded-lg"
+            style={{ backgroundColor: colors.background }}
+          >
             <Text className="text-xs text-muted italic">Features to come</Text>
           </View>
           <SettingRow
@@ -250,7 +268,9 @@ export default function RouteOptimizationScreen() {
           />
 
           <View className="mt-4">
-            <Text className="text-xs text-muted mb-2">Robust Optimization Target</Text>
+            <Text className="text-xs text-muted mb-2">
+              Robust Optimization Target
+            </Text>
             <View className="flex-row gap-2">
               {(["mean", "worst95", "worst99"] as const).map((opt) => (
                 <TouchableOpacity
@@ -273,7 +293,11 @@ export default function RouteOptimizationScreen() {
                     }}
                     className="text-xs font-medium"
                   >
-                    {opt === "mean" ? "Mean" : opt === "worst95" ? "Worst 95%" : "Worst 99%"}
+                    {opt === "mean"
+                      ? "Mean"
+                      : opt === "worst95"
+                        ? "Worst 95%"
+                        : "Worst 99%"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -290,7 +314,10 @@ export default function RouteOptimizationScreen() {
           title="Multi-objective Layer"
           subtitle="Lexicographic solve with Pareto pruning"
         >
-          <View className="mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: colors.background }}>
+          <View
+            className="mb-2 px-3 py-2 rounded-lg"
+            style={{ backgroundColor: colors.background }}
+          >
             <Text className="text-xs text-muted italic">Features to come</Text>
           </View>
           <SettingRow
@@ -345,7 +372,10 @@ export default function RouteOptimizationScreen() {
           title="Online Re-optimization"
           subtitle="Warm-start CPP with dynamic updates"
         >
-          <View className="mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: colors.background }}>
+          <View
+            className="mb-2 px-3 py-2 rounded-lg"
+            style={{ backgroundColor: colors.background }}
+          >
             <Text className="text-xs text-muted italic">Features to come</Text>
           </View>
           <SettingRow
@@ -374,7 +404,10 @@ export default function RouteOptimizationScreen() {
           title="Fallbacks (Reversible)"
           subtitle="Graceful degradation strategies"
         >
-          <View className="mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: colors.background }}>
+          <View
+            className="mb-2 px-3 py-2 rounded-lg"
+            style={{ backgroundColor: colors.background }}
+          >
             <Text className="text-xs text-muted italic">Features to come</Text>
           </View>
           <View
@@ -382,7 +415,8 @@ export default function RouteOptimizationScreen() {
             style={{ backgroundColor: colors.warning + "15" }}
           >
             <Text className="text-xs" style={{ color: colors.warning }}>
-              These fallbacks activate automatically when constraints cause CPP to explode
+              These fallbacks activate automatically when constraints cause CPP
+              to explode
             </Text>
           </View>
 
@@ -420,7 +454,9 @@ export default function RouteOptimizationScreen() {
                     <Text
                       style={{
                         color:
-                          settings.subgraphSize === size ? "#fff" : colors.foreground,
+                          settings.subgraphSize === size
+                            ? "#fff"
+                            : colors.foreground,
                       }}
                       className="text-xs font-medium"
                     >
@@ -442,7 +478,9 @@ export default function RouteOptimizationScreen() {
           style={{ backgroundColor: colors.primary }}
           className="py-4 rounded-xl items-center mb-8 active:opacity-80"
         >
-          <Text className="text-white text-lg font-semibold">Save Configuration</Text>
+          <Text className="text-white text-lg font-semibold">
+            Save Configuration
+          </Text>
         </TouchableOpacity>
 
         <View className="h-8" />

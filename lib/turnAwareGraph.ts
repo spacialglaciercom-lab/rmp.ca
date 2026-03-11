@@ -1,8 +1,4 @@
-import type {
-  StreetEdge,
-  TurnNode,
-  TurnEdge,
-} from "@/types/turnAware";
+import type { StreetEdge, TurnNode, TurnEdge } from "@/types/turnAware";
 import { DEFAULT_STATIC_PENALTIES } from "@/types/turnAware";
 
 /** Yield control to the UI thread so React can paint updates. */
@@ -14,7 +10,7 @@ export type PipelineProgressCallback = (step: string, detail?: string) => void;
 /** Calculate bearing between two coordinates (degrees 0–360). */
 function calculateBearing(
   start: [number, number],
-  end: [number, number]
+  end: [number, number],
 ): number {
   const lat1 = (start[0] * Math.PI) / 180;
   const lat2 = (end[0] * Math.PI) / 180;
@@ -30,7 +26,7 @@ function calculateBearing(
 /** Classify turn based on angle difference. */
 function classifyTurn(
   incomingBearing: number,
-  outgoingBearing: number
+  outgoingBearing: number,
 ): keyof typeof DEFAULT_STATIC_PENALTIES {
   let angleDiff = (outgoingBearing - incomingBearing + 360) % 360;
   if (angleDiff >= 340 || angleDiff <= 20) return "straight";
@@ -55,11 +51,17 @@ function buildAdjacencyList(edges: StreetEdge[]): Map<string, AdjRef[]> {
   for (let i = 0; i < edges.length; i++) {
     const edge = edges[i]!;
     let fromList = adj.get(edge.from);
-    if (!fromList) { fromList = []; adj.set(edge.from, fromList); }
+    if (!fromList) {
+      fromList = [];
+      adj.set(edge.from, fromList);
+    }
     fromList.push({ idx: i, reversed: false });
     if (!edge.oneWay) {
       let toList = adj.get(edge.to);
-      if (!toList) { toList = []; adj.set(edge.to, toList); }
+      if (!toList) {
+        toList = [];
+        adj.set(edge.to, toList);
+      }
       toList.push({ idx: i, reversed: true });
     }
   }
@@ -77,7 +79,7 @@ export async function buildTurnExpandedGraph(
   streetEdges: StreetEdge[],
   penalties: typeof DEFAULT_STATIC_PENALTIES = DEFAULT_STATIC_PENALTIES,
   edgePenaltyMultipliers?: EdgePenaltyMultipliers,
-  onProgress?: PipelineProgressCallback
+  onProgress?: PipelineProgressCallback,
 ): Promise<{ nodes: TurnNode[]; edges: TurnEdge[] }> {
   const adj = buildAdjacencyList(streetEdges);
   const turnNodes = new Map<string, TurnNode>();
@@ -108,12 +110,15 @@ export async function buildTurnExpandedGraph(
   for (let i = 0; i < streetEdges.length; i++) {
     const e = streetEdges[i]!;
     const speedKmh = e.speed > 0 ? e.speed : 30; // fallback 30 km/h if missing
-    let bt = (e.length / 1000) / (speedKmh / 3600); // seconds
+    let bt = e.length / 1000 / (speedKmh / 3600); // seconds
     const mlPenalty = edgePenaltyMultipliers?.get(e.wayId ?? e.id) ?? 0;
     baseTimeCache[i] = bt * (1 + mlPenalty);
   }
 
-  onProgress?.("build-graph", `Pre-computed bearings for ${streetEdges.length} edges`);
+  onProgress?.(
+    "build-graph",
+    `Pre-computed bearings for ${streetEdges.length} edges`,
+  );
   await yieldToUI();
 
   // Create turn nodes: one for each (street, direction) pair
@@ -140,7 +145,7 @@ export async function buildTurnExpandedGraph(
     incomingBearing: number,
     intersectionId: string,
     fromNode: TurnNode,
-    idPrefix: string
+    idPrefix: string,
   ) => {
     const outgoing = adj.get(intersectionId);
     if (!outgoing) return;
@@ -151,17 +156,22 @@ export async function buildTurnExpandedGraph(
       const outEdge = streetEdges[ref.idx]!;
 
       // Skip same-direction traversal of the same edge
-      if (outEdge.id === incomingId && ref.reversed === incomingReversed) continue;
+      if (outEdge.id === incomingId && ref.reversed === incomingReversed)
+        continue;
 
       if (outEdge.coordinates.length < 2) continue;
 
       // Outgoing bearing: entry bearing of the outgoing traversal direction
-      const outgoingBearing = ref.reversed ? reverseEntry[ref.idx]! : forwardEntry[ref.idx]!;
+      const outgoingBearing = ref.reversed
+        ? reverseEntry[ref.idx]!
+        : forwardEntry[ref.idx]!;
       const turnType = classifyTurn(incomingBearing, outgoingBearing);
       const penalty = penalties[turnType];
       const baseTime = baseTimeCache[ref.idx]!;
 
-      const outDirection: "forward" | "backward" = ref.reversed ? "backward" : "forward";
+      const outDirection: "forward" | "backward" = ref.reversed
+        ? "backward"
+        : "forward";
       const toIntersection = ref.reversed ? outEdge.to : outEdge.from;
 
       turnEdges.push({
@@ -191,8 +201,12 @@ export async function buildTurnExpandedGraph(
       false,
       forwardExit[i]!,
       incoming.to,
-      { edgeId: incoming.id, direction: "forward", intersectionId: incoming.to },
-      incoming.id
+      {
+        edgeId: incoming.id,
+        direction: "forward",
+        intersectionId: incoming.to,
+      },
+      incoming.id,
     );
 
     // Backward direction if not one-way: exits at incoming.from
@@ -202,8 +216,12 @@ export async function buildTurnExpandedGraph(
         true,
         reverseExit[i]!,
         incoming.from,
-        { edgeId: incoming.id, direction: "backward", intersectionId: incoming.from },
-        `${incoming.id}:b`
+        {
+          edgeId: incoming.id,
+          direction: "backward",
+          intersectionId: incoming.from,
+        },
+        `${incoming.id}:b`,
       );
     }
 
@@ -242,7 +260,10 @@ function computeSCCs(turnEdges: TurnEdge[]): Map<string, number> {
   let nextIdx = 0;
   const getIdx = (key: string): number => {
     let idx = keyToIdx.get(key);
-    if (idx === undefined) { idx = nextIdx++; keyToIdx.set(key, idx); }
+    if (idx === undefined) {
+      idx = nextIdx++;
+      keyToIdx.set(key, idx);
+    }
     return idx;
   };
 
@@ -260,7 +281,10 @@ function computeSCCs(turnEdges: TurnEdge[]): Map<string, number> {
   // Build adjacency using arrays of arrays (faster than Map<string, string[]>)
   const outAdj: number[][] = new Array(n);
   const inAdj: number[][] = new Array(n);
-  for (let i = 0; i < n; i++) { outAdj[i] = []; inAdj[i] = []; }
+  for (let i = 0; i < n; i++) {
+    outAdj[i] = [];
+    inAdj[i] = [];
+  }
 
   for (let i = 0; i < turnEdges.length; i++) {
     const fromI = keyToIdx.get(fromKeys[i]!)!;
@@ -274,7 +298,9 @@ function computeSCCs(turnEdges: TurnEdge[]): Map<string, number> {
   const visited = new Uint8Array(n); // 0 = unvisited
   for (let start = 0; start < n; start++) {
     if (visited[start]) continue;
-    const stack: Array<{ node: number; idx: number }> = [{ node: start, idx: 0 }];
+    const stack: Array<{ node: number; idx: number }> = [
+      { node: start, idx: 0 },
+    ];
     visited[start] = 1;
     while (stack.length > 0) {
       const frame = stack[stack.length - 1]!;
@@ -316,7 +342,9 @@ function computeSCCs(turnEdges: TurnEdge[]): Map<string, number> {
 
   // Convert back to string-keyed Map for API compatibility
   const sccId = new Map<string, number>();
-  keyToIdx.forEach((idx, key) => { sccId.set(key, sccIdArr[idx]!); });
+  keyToIdx.forEach((idx, key) => {
+    sccId.set(key, sccIdArr[idx]!);
+  });
   return sccId;
 }
 
@@ -343,7 +371,7 @@ export function restrictToLargestSCC(turnEdges: TurnEdge[]): TurnEdge[] {
   });
 
   return turnEdges.filter(
-    (e) => inLargest.has(nodeKey(e.from)) && inLargest.has(nodeKey(e.to))
+    (e) => inLargest.has(nodeKey(e.from)) && inLargest.has(nodeKey(e.to)),
   );
 }
 
@@ -364,7 +392,7 @@ export async function bridgeAllSCCs(
   turnEdges: TurnEdge[],
   streetEdges: StreetEdge[],
   cachedSCCs?: Map<string, number>,
-  onProgress?: PipelineProgressCallback
+  onProgress?: PipelineProgressCallback,
 ): Promise<TurnEdge[]> {
   const sccId = cachedSCCs ?? computeSCCs(turnEdges);
   onProgress?.("bridge", `Computed SCCs for ${sccId.size} nodes`);
@@ -400,11 +428,17 @@ export async function bridgeAllSCCs(
     const fk = nodeKey(e.from);
     const tk = nodeKey(e.to);
     let fList = uAdj.get(fk);
-    if (!fList) { fList = []; uAdj.set(fk, fList); }
+    if (!fList) {
+      fList = [];
+      uAdj.set(fk, fList);
+    }
     fList.push({ edge: e, toKey: tk });
     // Reverse direction for undirected pathfinding
     let tList = uAdj.get(tk);
-    if (!tList) { tList = []; uAdj.set(tk, tList); }
+    if (!tList) {
+      tList = [];
+      uAdj.set(tk, tList);
+    }
     tList.push({ edge: e, toKey: fk });
   }
 
@@ -422,7 +456,10 @@ export async function bridgeAllSCCs(
 
     // Dijkstra from all nodes in this small SCC to any node in largest SCC
     const dist = new Map<string, number>();
-    const prev = new Map<string, { node: string; edge: TurnEdge; reversed: boolean }>();
+    const prev = new Map<
+      string,
+      { node: string; edge: TurnEdge; reversed: boolean }
+    >();
     // Simple priority queue (array-based, adequate for bridge pathfinding)
     const pq: Array<{ key: string; cost: number }> = [];
 
@@ -462,7 +499,10 @@ export async function bridgeAllSCCs(
           // Insert sorted (simple linear insert for moderate sizes)
           let ins = pq.length;
           for (let k = 0; k < pq.length; k++) {
-            if (pq[k]!.cost > newCost) { ins = k; break; }
+            if (pq[k]!.cost > newCost) {
+              ins = k;
+              break;
+            }
           }
           pq.splice(ins, 0, { key: v, cost: newCost });
         }
@@ -472,12 +512,12 @@ export async function bridgeAllSCCs(
     if (!found) {
       // No real path exists — drop this SCC (truly disconnected, e.g. at export boundary)
       droppedSCCs++;
-      const totalEdgesInSCC = turnEdges.filter(e => 
-        nodes.includes(nodeKey(e.from)) || nodes.includes(nodeKey(e.to))
+      const totalEdgesInSCC = turnEdges.filter(
+        (e) => nodes.includes(nodeKey(e.from)) || nodes.includes(nodeKey(e.to)),
       ).length;
       console.warn(
         `[bridgeAllSCCs] Dropping SCC ${id} (${nodes.length} nodes, ~${totalEdgesInSCC} edges) — ` +
-        `no real path to main component after ${steps} Dijkstra steps`
+          `no real path to main component after ${steps} Dijkstra steps`,
       );
       return;
     }
@@ -527,16 +567,18 @@ export async function bridgeAllSCCs(
       if (id === maxId) return;
       // Check if this SCC was dropped (no bridge edges connect to it)
       const sccNodeSet = new Set(nodes);
-      const hasBridge = bridgeEdges.some(e =>
-        sccNodeSet.has(nodeKey(e.from)) || sccNodeSet.has(nodeKey(e.to))
+      const hasBridge = bridgeEdges.some(
+        (e) => sccNodeSet.has(nodeKey(e.from)) || sccNodeSet.has(nodeKey(e.to)),
       );
       if (!hasBridge) {
         for (const n of nodes) droppedNodes.add(n);
       }
     });
     if (droppedNodes.size > 0) {
-      const filtered = turnEdges.filter(e =>
-        !droppedNodes.has(nodeKey(e.from)) && !droppedNodes.has(nodeKey(e.to))
+      const filtered = turnEdges.filter(
+        (e) =>
+          !droppedNodes.has(nodeKey(e.from)) &&
+          !droppedNodes.has(nodeKey(e.to)),
       );
       // Replace turnEdges contents
       turnEdges.length = 0;
@@ -548,7 +590,10 @@ export async function bridgeAllSCCs(
   for (let i = 0; i < bridgeEdges.length; i++) {
     turnEdges.push(bridgeEdges[i]!);
   }
-  onProgress?.("bridge", `Bridged ${sccSizes.size - 1 - droppedSCCs} SCCs with ${bridgeEdges.length} real-path edges (dropped ${droppedSCCs} unreachable SCCs)`);
+  onProgress?.(
+    "bridge",
+    `Bridged ${sccSizes.size - 1 - droppedSCCs} SCCs with ${bridgeEdges.length} real-path edges (dropped ${droppedSCCs} unreachable SCCs)`,
+  );
   return turnEdges;
 }
 
@@ -557,7 +602,10 @@ export async function bridgeAllSCCs(
  * in-degree and out-degree at every node. Uses multi-target BFS from each
  * excess-out node to find nearest excess-in node efficiently.
  */
-export async function makeEulerian(turnEdges: TurnEdge[], onProgress?: PipelineProgressCallback): Promise<TurnEdge[]> {
+export async function makeEulerian(
+  turnEdges: TurnEdge[],
+  onProgress?: PipelineProgressCallback,
+): Promise<TurnEdge[]> {
   // Compute in-degree and out-degree
   const inDeg = new Map<string, number>();
   const outDeg = new Map<string, number>();
@@ -597,7 +645,10 @@ export async function makeEulerian(turnEdges: TurnEdge[], onProgress?: PipelineP
     const e = turnEdges[i]!;
     const fromK = nodeKey(e.from);
     let list = adj.get(fromK);
-    if (!list) { list = []; adj.set(fromK, list); }
+    if (!list) {
+      list = [];
+      adj.set(fromK, list);
+    }
     list.push({ edge: e, toKey: nodeKey(e.to) });
   }
 
@@ -607,7 +658,7 @@ export async function makeEulerian(turnEdges: TurnEdge[], onProgress?: PipelineP
   function dijkstraToNearest(
     src: string,
     targetSet: Set<string>,
-    maxSteps: number = 5000
+    maxSteps: number = 5000,
   ): { target: string; path: TurnEdge[] } | null {
     if (targetSet.has(src)) return { target: src, path: [] };
     const dist = new Map<string, number>();
@@ -646,7 +697,10 @@ export async function makeEulerian(turnEdges: TurnEdge[], onProgress?: PipelineP
           // Binary-ish insert to keep sorted
           let ins = pq.length;
           for (let k = 0; k < pq.length; k++) {
-            if (pq[k]!.cost > newCost) { ins = k; break; }
+            if (pq[k]!.cost > newCost) {
+              ins = k;
+              break;
+            }
           }
           pq.splice(ins, 0, { key: v, cost: newCost });
         }
@@ -703,17 +757,29 @@ export async function makeEulerian(turnEdges: TurnEdge[], onProgress?: PipelineP
         excessInMap.set(result.target, remaining);
       }
     }
-    if (totalIterations >= MAX_BALANCE_ITERATIONS || deadheadEdges.length >= MAX_DEADHEAD_EDGES) break;
+    if (
+      totalIterations >= MAX_BALANCE_ITERATIONS ||
+      deadheadEdges.length >= MAX_DEADHEAD_EDGES
+    )
+      break;
   }
 
-  if (totalIterations >= MAX_BALANCE_ITERATIONS || deadheadEdges.length >= MAX_DEADHEAD_EDGES) {
-    console.warn(`[makeEulerian] Hit safety cap: ${totalIterations} iterations, ${deadheadEdges.length} deadhead edges — graph may be partially balanced`);
+  if (
+    totalIterations >= MAX_BALANCE_ITERATIONS ||
+    deadheadEdges.length >= MAX_DEADHEAD_EDGES
+  ) {
+    console.warn(
+      `[makeEulerian] Hit safety cap: ${totalIterations} iterations, ${deadheadEdges.length} deadhead edges — graph may be partially balanced`,
+    );
   }
 
   for (let i = 0; i < deadheadEdges.length; i++) {
     turnEdges.push(deadheadEdges[i]!);
   }
-  onProgress?.("eulerian", `Balanced graph: ${deadheadEdges.length} deadhead edges added`);
+  onProgress?.(
+    "eulerian",
+    `Balanced graph: ${deadheadEdges.length} deadhead edges added`,
+  );
   return turnEdges;
 }
 

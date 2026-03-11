@@ -7,7 +7,10 @@ interface ConfigureScreenSheetProps {
   onClose: () => void;
 }
 
-export function ConfigureScreenSheet({ visible, onClose }: ConfigureScreenSheetProps) {
+export function ConfigureScreenSheet({
+  visible,
+  onClose,
+}: ConfigureScreenSheetProps) {
   return (
     <BottomSheet visible={visible} onClose={onClose} title="Configure screen">
       <DisplayOptionsToggles />

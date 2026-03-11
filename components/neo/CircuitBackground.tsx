@@ -13,7 +13,13 @@ export function CircuitBackground() {
   const magenta = colors.accentMagenta ?? "#d946ef";
   const opacity = 0.12;
 
-  const lines: { x1: number; y1: number; x2: number; y2: number; stroke: string }[] = [];
+  const lines: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    stroke: string;
+  }[] = [];
   const w = 400;
   const h = 600;
   const step = 48;
@@ -26,7 +32,13 @@ export function CircuitBackground() {
 
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
-      <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="xMidYMid slice"
+        style={StyleSheet.absoluteFill}
+      >
         {lines.map((l, i) => (
           <Line
             key={i}

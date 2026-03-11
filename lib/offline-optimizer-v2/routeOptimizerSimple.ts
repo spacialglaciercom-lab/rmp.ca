@@ -7,7 +7,12 @@
  * and route points include nodeId for rmp.ca compatibility. No console.log.
  */
 
-import type { Node, Way, RoutePoint, OptimizationResult } from "@/lib/route-optimizer-v2/types";
+import type {
+  Node,
+  Way,
+  RoutePoint,
+  OptimizationResult,
+} from "@/lib/route-optimizer-v2/types";
 
 interface EdgeData {
   length: number;
@@ -44,7 +49,11 @@ export class RouteOptimizerSimpleV2 {
 
     const startNode = this.findStartNode(customLat, customLon);
     if (!startNode) {
-      return { route: [], totalDistance: 0, message: "Could not find start node" };
+      return {
+        route: [],
+        totalDistance: 0,
+        message: "Could not find start node",
+      };
     }
 
     // v2 always uses two-pass (both sides); one-pass causes loops with this graph, so we ignore serviceBothSides
@@ -144,7 +153,11 @@ export class RouteOptimizerSimpleV2 {
     return circuit;
   }
 
-  private chooseBest(prev: string | null, current: string, edges: Map<string, EdgeData>): string {
+  private chooseBest(
+    prev: string | null,
+    current: string,
+    edges: Map<string, EdgeData>,
+  ): string {
     const keys = Array.from(edges.keys());
     if (!prev || keys.length === 1) return keys[0]!;
 
@@ -270,16 +283,27 @@ export class RouteOptimizerSimpleV2 {
       }
     }
 
-    return { totalKm: total, rightTurns: right, leftTurns: left, uTurns: uturns, straight };
+    return {
+      totalKm: total,
+      rightTurns: right,
+      leftTurns: left,
+      uTurns: uturns,
+      straight,
+    };
   }
 
-  private haversine(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  private haversine(
+    a: { lat: number; lon: number },
+    b: { lat: number; lon: number },
+  ): number {
     const R = 6371;
     const dLat = ((b.lat - a.lat) * Math.PI) / 180;
     const dLon = ((b.lon - a.lon) * Math.PI) / 180;
     const x =
       Math.sin(dLat / 2) ** 2 +
-      Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+      Math.cos((a.lat * Math.PI) / 180) *
+        Math.cos((b.lat * Math.PI) / 180) *
+        Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 
@@ -291,7 +315,9 @@ export class RouteOptimizerSimpleV2 {
     const lat1 = (from.lat * Math.PI) / 180;
     const lat2 = (to.lat * Math.PI) / 180;
     const x = Math.sin(dLon) * Math.cos(lat2);
-    const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    const y =
+      Math.cos(lat1) * Math.sin(lat2) -
+      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
     return (Math.atan2(x, y) * (180 / Math.PI) + 360) % 360;
   }
 

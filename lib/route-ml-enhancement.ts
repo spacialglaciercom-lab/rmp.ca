@@ -80,7 +80,7 @@ export function parseScoresFromExtractOutput(raw: string): Map<string, number> {
  */
 async function getEdgePenaltiesFromMistral(
   ways: Way[],
-  weatherContext?: string | null
+  weatherContext?: string | null,
 ): Promise<Map<string, number>> {
   const apiKey = await getMistralApiKey();
   if (!apiKey || ways.length === 0) {
@@ -116,7 +116,10 @@ async function getEdgePenaltiesFromMistral(
 
     if (!response.ok) {
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        console.warn("[route-ml-enhancement] Mistral API error:", response.status);
+        console.warn(
+          "[route-ml-enhancement] Mistral API error:",
+          response.status,
+        );
       }
       return new Map();
     }
@@ -126,7 +129,10 @@ async function getEdgePenaltiesFromMistral(
     if (!raw) return new Map();
 
     // Strip markdown code fences if Mistral wraps in ```json ... ```
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
     return parseScoresFromExtractOutput(cleaned);
   } catch (e) {
     if (typeof __DEV__ !== "undefined" && __DEV__) {
@@ -149,7 +155,7 @@ async function getEdgePenaltiesFromMistral(
  */
 export async function getEdgePenaltiesFromLeap(
   ways: Way[],
-  weatherContext?: string | null
+  weatherContext?: string | null,
 ): Promise<Map<string, number>> {
   if (ways.length === 0) {
     return new Map();

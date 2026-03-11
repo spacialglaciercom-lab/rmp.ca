@@ -11,9 +11,7 @@ export interface LatLonPoint {
  * contain bogus values (e.g. after clearing a route on iOS the store
  * could briefly emit an array containing `[ { lat: NaN, lon: NaN } ]`).
  */
-export function sanitizeLatLonArray(
-  arr?: LatLonPoint[] | null,
-): LatLonPoint[] {
+export function sanitizeLatLonArray(arr?: LatLonPoint[] | null): LatLonPoint[] {
   if (!arr) return [];
   return arr.filter(
     (p) =>

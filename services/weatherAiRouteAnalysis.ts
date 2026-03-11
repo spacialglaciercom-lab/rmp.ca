@@ -41,17 +41,20 @@ let isAnalyzing = false;
 /**
  * Generate a cache key by combining route signature and weather hash
  */
-function generateCacheKey(routeStats: RouteStats, weatherData: CurrentWeather): string {
+function generateCacheKey(
+  routeStats: RouteStats,
+  weatherData: CurrentWeather,
+): string {
   // Route signature: hash of segment count + total distance + vehicle type
   const routeSignature = `${routeStats.segmentCount}-${routeStats.totalDistanceMiles.toFixed(1)}-${routeStats.vehicleType}`;
-  
+
   // Weather hash: rounded values to avoid unnecessary cache misses
   const tempRounded = Math.round(weatherData.temp / 5) * 5; // Nearest 5°F equivalent
   const windRounded = Math.round(weatherData.windSpeed * 2.237 * 5) / 5; // Convert m/s to mph, round to nearest 5
   const precipRounded = Math.round((weatherData.rain1h ?? 0) * 10) / 10; // Nearest 0.1"
-  
+
   const weatherHash = `${tempRounded}-${windRounded}-${precipRounded}`;
-  
+
   return `${routeSignature}|${weatherHash}`;
 }
 
@@ -68,7 +71,7 @@ function isCacheValid(entry: CacheEntry): boolean {
  */
 export async function analyzeRouteWithWeather(
   weatherData: CurrentWeather,
-  routeStats: RouteStats
+  routeStats: RouteStats,
 ): Promise<AIRouteAnalysis | null> {
   // Prevent simultaneous analysis calls
   if (isAnalyzing) {
@@ -105,11 +108,10 @@ export async function analyzeRouteWithWeather(
     // Store result in cache
     analysisCache.set(cacheKey, {
       result: parsedResponse,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     return parsedResponse;
-
   } catch (error) {
     console.error("AI route analysis failed:", error);
     return null;
@@ -124,7 +126,7 @@ export async function analyzeRouteWithWeather(
  */
 async function tryLeapAnalysis(
   weatherData: CurrentWeather,
-  routeStats: RouteStats
+  routeStats: RouteStats,
 ): Promise<AIRouteAnalysis | null> {
   // Leap SDK removed - return null to use Mistral fallback
   return null;
@@ -140,15 +142,18 @@ export function clearAnalysisCache(): void {
 /**
  * Get cache statistics for debugging
  */
-export function getCacheStats(): { size: number; entries: Array<{ key: string; age: number }> } {
+export function getCacheStats(): {
+  size: number;
+  entries: Array<{ key: string; age: number }>;
+} {
   const now = Date.now();
   const entries = Array.from(analysisCache.entries()).map(([key, entry]) => ({
     key,
-    age: now - entry.timestamp
+    age: now - entry.timestamp,
   }));
-  
+
   return {
     size: analysisCache.size,
-    entries
+    entries,
   };
 }

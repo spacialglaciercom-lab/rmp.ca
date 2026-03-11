@@ -101,11 +101,18 @@ export function MapillaryViewer({
           ]}
         >
           <View style={styles.dragHandleContainer}>
-            <View style={[styles.dragHandle, { backgroundColor: colors.border ?? "#999" }]} />
+            <View
+              style={[
+                styles.dragHandle,
+                { backgroundColor: colors.border ?? "#999" },
+              ]}
+            />
           </View>
 
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>Mapillary Street View</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Mapillary Street View
+            </Text>
             <TouchableOpacity
               onPress={handleClose}
               style={styles.closeButton}
@@ -114,7 +121,11 @@ export function MapillaryViewer({
               accessibilityLabel="Close"
               accessibilityRole="button"
             >
-              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={colors.text}
+              />
             </TouchableOpacity>
           </View>
 
@@ -142,7 +153,14 @@ export function MapillaryViewer({
             {embedUrl && !loading && (
               <iframe
                 src={embedUrl}
-                style={{ flex: 1, width: "100%", height: "100%", border: "none" } as any}
+                style={
+                  {
+                    flex: 1,
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                  } as any
+                }
                 allow="fullscreen"
               />
             )}

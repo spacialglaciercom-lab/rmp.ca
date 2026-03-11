@@ -19,12 +19,20 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useColors } from "@/hooks/use-colors";
 import { useFavoritesStore } from "@/stores/favoritesStore";
-import { useEnhancedQuickDestinationsStore, type QuickDestination } from "@/stores/enhancedQuickDestinationsStore";
+import {
+  useEnhancedQuickDestinationsStore,
+  type QuickDestination,
+} from "@/stores/enhancedQuickDestinationsStore";
 import { searchAddress } from "@/lib/geocode";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TECH_NAV } from "./navigationTechStyle";
 
-export type AddDestinationMethod = "current" | "map" | "favorites" | "address" | "coordinates";
+export type AddDestinationMethod =
+  | "current"
+  | "map"
+  | "favorites"
+  | "address"
+  | "coordinates";
 
 interface AddDestinationModalProps {
   visible: boolean;
@@ -81,18 +89,27 @@ export function AddDestinationModal({
 }: AddDestinationModalProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [selectedMethod, setSelectedMethod] = useState<AddDestinationMethod | null>(null);
+  const [selectedMethod, setSelectedMethod] =
+    useState<AddDestinationMethod | null>(null);
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resolvedLocation, setResolvedLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [resolvedLocation, setResolvedLocation] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
   const [locationFetching, setLocationFetching] = useState(false);
 
   const { favorites } = useFavoritesStore();
 
-  const destinationTypeLabel = destinationType === "home" ? "Home" : destinationType === "work" ? "Work" : "Custom Destination";
+  const destinationTypeLabel =
+    destinationType === "home"
+      ? "Home"
+      : destinationType === "work"
+        ? "Work"
+        : "Custom Destination";
 
   const effectiveCurrentLocation = currentLocation ?? resolvedLocation;
 
@@ -118,17 +135,24 @@ export function AddDestinationModal({
     setLocationFetching(true);
     setResolvedLocation(null);
     try {
-      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
+      if (
+        Platform.OS === "web" &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation
+      ) {
         await new Promise<void>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(
             (p) => {
-              setResolvedLocation({ lat: p.coords.latitude, lon: p.coords.longitude });
+              setResolvedLocation({
+                lat: p.coords.latitude,
+                lon: p.coords.longitude,
+              });
               resolve();
             },
             () => {
               reject(new Error("Location not found"));
             },
-            { enableHighAccuracy: false, timeout: 12000, maximumAge: 0 }
+            { enableHighAccuracy: false, timeout: 12000, maximumAge: 0 },
           );
         });
         return;
@@ -136,18 +160,36 @@ export function AddDestinationModal({
       const Loc = await import("expo-location");
       const { status } = await Loc.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Location not found", "Allow location access in settings to use your current position.");
+        Alert.alert(
+          "Location not found",
+          "Allow location access in settings to use your current position.",
+        );
         return;
       }
-      const getPos = (Loc as { getCurrentPositionAsync?: (opts: object) => Promise<{ coords: { latitude: number; longitude: number } }> }).getCurrentPositionAsync;
+      const getPos = (
+        Loc as {
+          getCurrentPositionAsync?: (
+            opts: object,
+          ) => Promise<{ coords: { latitude: number; longitude: number } }>;
+        }
+      ).getCurrentPositionAsync;
       if (!getPos) {
-        Alert.alert("Location not found", "Location is not available on this device.");
+        Alert.alert(
+          "Location not found",
+          "Location is not available on this device.",
+        );
         return;
       }
       const pos = await getPos({});
-      setResolvedLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      setResolvedLocation({
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+      });
     } catch (e) {
-      Alert.alert("Location not found", "Enable location services and try again.");
+      Alert.alert(
+        "Location not found",
+        "Enable location services and try again.",
+      );
     } finally {
       setLocationFetching(false);
     }
@@ -155,7 +197,10 @@ export function AddDestinationModal({
 
   const handleUseCurrentLocation = () => {
     if (!effectiveCurrentLocation) {
-      Alert.alert("Location not found", "Enable location services and try again, or tap \"Get my location\" to retry.");
+      Alert.alert(
+        "Location not found",
+        'Enable location services and try again, or tap "Get my location" to retry.',
+      );
       return;
     }
 
@@ -175,8 +220,8 @@ export function AddDestinationModal({
   const handlePickFromMap = () => {
     Alert.alert(
       "Pick on Map",
-      "Close this modal and long-press anywhere on the map, then select \"Save to Quick Destinations\" from the context menu.",
-      [{ text: "OK", onPress: onClose }]
+      'Close this modal and long-press anywhere on the map, then select "Save to Quick Destinations" from the context menu.',
+      [{ text: "OK", onPress: onClose }],
     );
   };
 
@@ -210,7 +255,8 @@ export function AddDestinationModal({
       }
       const destination: QuickDestination = {
         id: `address-${Date.now()}`,
-        label: label.trim() || (first?.displayName ?? `${first.lat}, ${first.lon}`),
+        label:
+          label.trim() || (first?.displayName ?? `${first.lat}, ${first.lon}`),
         coords: { lat: first.lat, lon: first.lon },
         type: destinationType,
         icon: "home-city-outline",
@@ -219,7 +265,12 @@ export function AddDestinationModal({
       onAddDestination(destination);
       onClose();
     } catch (e) {
-      Alert.alert("Search failed", e instanceof Error ? e.message : "Could not look up address. Check your connection.");
+      Alert.alert(
+        "Search failed",
+        e instanceof Error
+          ? e.message
+          : "Could not look up address. Check your connection.",
+      );
     } finally {
       setLoading(false);
     }
@@ -227,7 +278,10 @@ export function AddDestinationModal({
 
   const handleUseCoordinates = () => {
     if (!lat.trim() || !lon.trim()) {
-      Alert.alert("Coordinates Required", "Please enter both latitude and longitude.");
+      Alert.alert(
+        "Coordinates Required",
+        "Please enter both latitude and longitude.",
+      );
       return;
     }
 
@@ -235,12 +289,18 @@ export function AddDestinationModal({
     const lonNum = parseFloat(lon);
 
     if (isNaN(latNum) || isNaN(lonNum)) {
-      Alert.alert("Invalid Coordinates", "Please enter valid numeric coordinates.");
+      Alert.alert(
+        "Invalid Coordinates",
+        "Please enter valid numeric coordinates.",
+      );
       return;
     }
 
     if (latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
-      Alert.alert("Invalid Range", "Latitude must be between -90 and 90, longitude between -180 and 180.");
+      Alert.alert(
+        "Invalid Range",
+        "Latitude must be between -90 and 90, longitude between -180 and 180.",
+      );
       return;
     }
 
@@ -315,10 +375,14 @@ export function AddDestinationModal({
             onPress={() => setSelectedMethod(null)}
             style={styles.backButton}
           >
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={24}
+              color={colors.text}
+            />
           </TouchableOpacity>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
-            {ADD_METHODS.find(m => m.id === selectedMethod)?.title}
+            {ADD_METHODS.find((m) => m.id === selectedMethod)?.title}
           </Text>
         </View>
 
@@ -342,14 +406,22 @@ export function AddDestinationModal({
               />
               {!effectiveCurrentLocation && (
                 <TouchableOpacity
-                  style={[styles.secondaryButton, { borderColor: TECH_NAV.blue }]}
+                  style={[
+                    styles.secondaryButton,
+                    { borderColor: TECH_NAV.blue },
+                  ]}
                   onPress={fetchCurrentLocation}
                   disabled={locationFetching}
                 >
                   {locationFetching ? (
                     <ActivityIndicator size="small" color={TECH_NAV.blue} />
                   ) : (
-                    <Text style={[styles.secondaryButtonText, { color: TECH_NAV.blue }]}>
+                    <Text
+                      style={[
+                        styles.secondaryButtonText,
+                        { color: TECH_NAV.blue },
+                      ]}
+                    >
                       Get my location
                     </Text>
                   )}
@@ -367,7 +439,9 @@ export function AddDestinationModal({
                 disabled={!effectiveCurrentLocation}
               >
                 <Text style={styles.primaryButtonText}>
-                  {effectiveCurrentLocation ? "Use Current Location" : "Location not found"}
+                  {effectiveCurrentLocation
+                    ? "Use Current Location"
+                    : "Location not found"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -409,21 +483,38 @@ export function AddDestinationModal({
                     ]}
                     onPress={() => handleSelectFromFavorites(favorite)}
                   >
-                    <MaterialCommunityIcons name="star" size={20} color="#FFD700" />
+                    <MaterialCommunityIcons
+                      name="star"
+                      size={20}
+                      color="#FFD700"
+                    />
                     <View style={styles.favoriteText}>
-                      <Text style={[styles.favoriteName, { color: colors.text }]}>
+                      <Text
+                        style={[styles.favoriteName, { color: colors.text }]}
+                      >
                         {favorite.name}
                       </Text>
-                      <Text style={[styles.favoriteCoords, { color: colors.muted }]}>
-                        {favorite.coords.lat.toFixed(5)}, {favorite.coords.lon.toFixed(5)}
+                      <Text
+                        style={[styles.favoriteCoords, { color: colors.muted }]}
+                      >
+                        {favorite.coords.lat.toFixed(5)},{" "}
+                        {favorite.coords.lon.toFixed(5)}
                       </Text>
                     </View>
-                    <MaterialCommunityIcons name="chevron-right" size={20} color={colors.muted} />
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={20}
+                      color={colors.muted}
+                    />
                   </TouchableOpacity>
                 ))
               ) : (
                 <View style={styles.emptyState}>
-                  <MaterialCommunityIcons name="star-outline" size={48} color={colors.muted} />
+                  <MaterialCommunityIcons
+                    name="star-outline"
+                    size={48}
+                    color={colors.muted}
+                  />
                   <Text style={[styles.emptyText, { color: colors.muted }]}>
                     No favorites yet
                   </Text>
@@ -563,7 +654,7 @@ export function AddDestinationModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
@@ -579,7 +670,11 @@ export function AddDestinationModal({
         >
           <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={colors.text}
+              />
             </TouchableOpacity>
           </View>
 

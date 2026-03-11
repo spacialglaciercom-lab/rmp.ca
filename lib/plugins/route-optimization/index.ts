@@ -21,7 +21,8 @@ const CHUNK_FEATURE_LIMIT = 5000;
 export const routeOptimizationPlugin: Plugin = {
   id: "routeOptimization",
   name: "Route Optimizer",
-  description: "CPP, turn-aware optimization, Overture/OSM route generation, zone partitioning",
+  description:
+    "CPP, turn-aware optimization, Overture/OSM route generation, zone partitioning",
   version: "1.0.0",
   dependencies: ["weather"],
 
@@ -30,7 +31,6 @@ export const routeOptimizationPlugin: Plugin = {
   destroy() {},
 
   getFeatures() {
-
     return {
       /** Route optimizer feature: optimize GeoJSON road network (CPP). Optionally avoid rainy zones if weather plugin provides data. */
       routeOptimizer: {
@@ -40,7 +40,7 @@ export const routeOptimizationPlugin: Plugin = {
          */
         optimizer: async (
           geojson: OptimizeRouteParams["geojson"],
-          options?: Partial<Omit<OptimizeRouteParams, "geojson">>
+          options?: Partial<Omit<OptimizeRouteParams, "geojson">>,
         ): Promise<OptimizeResponse> => {
           const params: OptimizeRouteParams = { geojson, ...options };
           const weather = getPlugin("weather")?.getFeatures?.();
@@ -53,7 +53,9 @@ export const routeOptimizationPlugin: Plugin = {
           if (routeWeather && typeof routeWeather === "function") {
             try {
               const bbox = bboxFromGeoJSON(geojson);
-              const weatherData = await (routeWeather as (opts: any) => Promise<any>)({ bbox });
+              const weatherData = await (
+                routeWeather as (opts: any) => Promise<any>
+              )({ bbox });
               if (weatherData?.avoidZones?.length) {
                 (params as Record<string, unknown>)._weatherAvoidZones =
                   weatherData.avoidZones;
@@ -69,7 +71,7 @@ export const routeOptimizationPlugin: Plugin = {
          * Partition road GeoJSON into zones (spectral clustering). Uses same backend as optimizer.
          */
         partitioner: async (
-          zonesParams: ZonesPartitionFromGeoJSONRequest
+          zonesParams: ZonesPartitionFromGeoJSONRequest,
         ): Promise<ZonesPartitionResponse> => {
           return partitionZonesFromGeoJSON(zonesParams);
         },
@@ -80,7 +82,7 @@ export const routeOptimizationPlugin: Plugin = {
          */
         chunkedOptimizer: async (
           geojson: OptimizeRouteParams["geojson"],
-          options?: Partial<Omit<OptimizeRouteParams, "geojson">>
+          options?: Partial<Omit<OptimizeRouteParams, "geojson">>,
         ): Promise<OptimizeResponse> => {
           const features = geojson?.features ?? [];
           if (features.length <= CHUNK_FEATURE_LIMIT) {
@@ -94,7 +96,7 @@ export const routeOptimizationPlugin: Plugin = {
             });
           }
           const results = await Promise.all(
-            chunks.map((fc) => backendOptimize({ geojson: fc, ...options }))
+            chunks.map((fc) => backendOptimize({ geojson: fc, ...options })),
           );
           const route: OptimizeResponse["route"] = [];
           let total_distance_km = 0;
@@ -120,7 +122,7 @@ export const routeOptimizationPlugin: Plugin = {
 };
 
 function bboxFromGeoJSON(
-  geojson: OptimizeRouteParams["geojson"]
+  geojson: OptimizeRouteParams["geojson"],
 ): [number, number, number, number] | undefined {
   const features = geojson?.features ?? [];
   if (features.length === 0) return undefined;
@@ -129,7 +131,9 @@ function bboxFromGeoJSON(
     maxLon = -Infinity,
     maxLat = -Infinity;
   for (const f of features) {
-    const g = (f as { geometry?: { type?: string; coordinates?: [number, number][] } }).geometry;
+    const g = (
+      f as { geometry?: { type?: string; coordinates?: [number, number][] } }
+    ).geometry;
     if (!g || g.type !== "LineString") continue;
     const coords = g.coordinates ?? [];
     for (const c of coords) {

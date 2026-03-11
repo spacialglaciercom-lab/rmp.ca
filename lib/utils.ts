@@ -20,7 +20,10 @@ export function cn(...inputs: ClassValue[]) {
  * otherwise timestamp + random suffix (no extra dependencies).
  */
 export function generateRouteId(): string {
-  if (typeof globalThis !== "undefined" && typeof (globalThis as any).crypto?.randomUUID === "function") {
+  if (
+    typeof globalThis !== "undefined" &&
+    typeof (globalThis as any).crypto?.randomUUID === "function"
+  ) {
     return `route_${(globalThis as any).crypto.randomUUID()}`;
   }
   return `route_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;

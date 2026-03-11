@@ -4,10 +4,13 @@ export function confirmDestructive(
   title: string,
   message: string,
   onConfirm: () => void,
-  confirmLabel = "Delete"
+  confirmLabel = "Delete",
 ): void {
   if (Platform.OS === "web") {
-    if (typeof window !== "undefined" && window.confirm(`${title}\n\n${message}`)) {
+    if (
+      typeof window !== "undefined" &&
+      window.confirm(`${title}\n\n${message}`)
+    ) {
       onConfirm();
     }
   } else {

@@ -30,7 +30,10 @@ export function QuickDestinations({
 }: QuickDestinationsProps) {
   const colors = useColors();
 
-  const handlePress = (dest: QuickDestination | null, type: QuickDestinationType) => {
+  const handlePress = (
+    dest: QuickDestination | null,
+    type: QuickDestinationType,
+  ) => {
     hapticImpact();
     if (dest) {
       onSelect(dest.coords, dest.label);
@@ -46,7 +49,10 @@ export function QuickDestinations({
       </SectionLabel>
       <View style={styles.row}>
         <TouchableOpacity
-          style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          style={[
+            styles.card,
+            { borderColor: colors.border, backgroundColor: colors.surface },
+          ]}
           onPress={() => handlePress(home, "home")}
         >
           <MaterialCommunityIcons
@@ -54,15 +60,23 @@ export function QuickDestinations({
             size={24}
             color={colors.primary}
           />
-          <Text style={[styles.label, { color: colors.text }]} numberOfLines={1}>
+          <Text
+            style={[styles.label, { color: colors.text }]}
+            numberOfLines={1}
+          >
             {home ? home.label : "Home"}
           </Text>
           <Text style={[styles.sublabel, { color: colors.muted }]}>
-            {home ? `${home.coords.lat.toFixed(4)}, ${home.coords.lon.toFixed(4)}` : "Add"}
+            {home
+              ? `${home.coords.lat.toFixed(4)}, ${home.coords.lon.toFixed(4)}`
+              : "Add"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          style={[
+            styles.card,
+            { borderColor: colors.border, backgroundColor: colors.surface },
+          ]}
           onPress={() => handlePress(work, "work")}
         >
           <MaterialCommunityIcons
@@ -70,11 +84,16 @@ export function QuickDestinations({
             size={24}
             color={colors.primary}
           />
-          <Text style={[styles.label, { color: colors.text }]} numberOfLines={1}>
+          <Text
+            style={[styles.label, { color: colors.text }]}
+            numberOfLines={1}
+          >
             {work ? work.label : "Work"}
           </Text>
           <Text style={[styles.sublabel, { color: colors.muted }]}>
-            {work ? `${work.coords.lat.toFixed(4)}, ${work.coords.lon.toFixed(4)}` : "Add"}
+            {work
+              ? `${work.coords.lat.toFixed(4)}, ${work.coords.lon.toFixed(4)}`
+              : "Add"}
           </Text>
         </TouchableOpacity>
       </View>

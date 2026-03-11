@@ -9,7 +9,12 @@ interface MapStyleSheetProps {
 
 export function MapStyleSheet({ visible, onClose }: MapStyleSheetProps) {
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Map style" maxHeight="40%">
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Map style"
+      maxHeight="40%"
+    >
       <MapSourcePicker />
     </BottomSheet>
   );

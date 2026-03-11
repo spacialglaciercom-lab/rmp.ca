@@ -30,7 +30,9 @@ export default function PointDetailScreen() {
   const storeSegments = useCollectionNavigationStore((s) => s.segments);
   const storeComplete = useCollectionNavigationStore((s) => s.completeSegment);
   const storeSkip = useCollectionNavigationStore((s) => s.skipSegmentByIndex);
-  const drivePreviewEnabled = usePluginStore((s) => s.isPluginEnabled("drive-preview", true));
+  const drivePreviewEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("drive-preview", true),
+  );
   const [point, setPoint] = useState<CollectionPoint | null>(null);
   const [notes, setNotes] = useState("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -71,7 +73,9 @@ export default function PointDetailScreen() {
       lastCollectionDate: new Date().toISOString(),
     });
 
-    const segIdx = storeSegments.findIndex((s) => s.collectionPoint?.id === point.id);
+    const segIdx = storeSegments.findIndex(
+      (s) => s.collectionPoint?.id === point.id,
+    );
     if (segIdx !== -1) storeComplete(segIdx);
 
     router.back();
@@ -89,7 +93,9 @@ export default function PointDetailScreen() {
       status: "skipped",
     });
 
-    const skipIdx = storeSegments.findIndex((s) => s.collectionPoint?.id === point.id);
+    const skipIdx = storeSegments.findIndex(
+      (s) => s.collectionPoint?.id === point.id,
+    );
     if (skipIdx !== -1) storeSkip(skipIdx);
 
     Alert.alert("Skipped", "Stop marked as skipped");
@@ -99,55 +105,63 @@ export default function PointDetailScreen() {
   const handleTakePhoto = async () => {
     if (!point) return;
     hapticImpact();
-    Alert.alert(
-      "Add Photo",
-      "Choose an option",
-      [
-        {
-          text: "Take Photo",
-          onPress: async () => {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission required", "Camera access is needed to take photos.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ["images"],
-              quality: 0.8,
-              allowsEditing: false,
-            });
-            if (!result.canceled && result.assets.length > 0) {
-              const uri = result.assets[0].uri;
-              setPhotoUri(uri);
-              const route = await storage.loadRoute();
-              if (route) await storage.updateCollectionPoint(route.id, point.id, { photoUri: uri });
-            }
-          },
+    Alert.alert("Add Photo", "Choose an option", [
+      {
+        text: "Take Photo",
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert(
+              "Permission required",
+              "Camera access is needed to take photos.",
+            );
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+            allowsEditing: false,
+          });
+          if (!result.canceled && result.assets.length > 0) {
+            const uri = result.assets[0].uri;
+            setPhotoUri(uri);
+            const route = await storage.loadRoute();
+            if (route)
+              await storage.updateCollectionPoint(route.id, point.id, {
+                photoUri: uri,
+              });
+          }
         },
-        {
-          text: "Choose from Library",
-          onPress: async () => {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission required", "Photo library access is needed.");
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ["images"],
-              quality: 0.8,
-              allowsEditing: false,
-            });
-            if (!result.canceled && result.assets.length > 0) {
-              const uri = result.assets[0].uri;
-              setPhotoUri(uri);
-              const route = await storage.loadRoute();
-              if (route) await storage.updateCollectionPoint(route.id, point.id, { photoUri: uri });
-            }
-          },
+      },
+      {
+        text: "Choose from Library",
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert(
+              "Permission required",
+              "Photo library access is needed.",
+            );
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+            allowsEditing: false,
+          });
+          if (!result.canceled && result.assets.length > 0) {
+            const uri = result.assets[0].uri;
+            setPhotoUri(uri);
+            const route = await storage.loadRoute();
+            if (route)
+              await storage.updateCollectionPoint(route.id, point.id, {
+                photoUri: uri,
+              });
+          }
         },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const handleSaveNotes = async () => {
@@ -209,18 +223,19 @@ export default function PointDetailScreen() {
                 if (!route) return;
                 await storage.updateCollectionPoint(route.id, point.id, {
                   status: "issue",
-                  notes: (point.notes || "") + `\n[Issue: ${description.trim()}]`,
+                  notes:
+                    (point.notes || "") + `\n[Issue: ${description.trim()}]`,
                 });
                 await loadPoint();
               },
               "plain-text",
               "",
-              "default"
+              "default",
             );
           },
         },
         { text: "Cancel", style: "cancel" },
-      ]
+      ],
     );
   };
 
@@ -355,7 +370,10 @@ export default function PointDetailScreen() {
         >
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-lg font-semibold text-foreground">Photo</Text>
-            <TouchableOpacity onPress={handleTakePhoto} className="active:opacity-70">
+            <TouchableOpacity
+              onPress={handleTakePhoto}
+              className="active:opacity-70"
+            >
               <Text className="text-primary font-medium">
                 {photoUri ? "Retake / Change" : "Add Photo"}
               </Text>
@@ -453,9 +471,7 @@ export default function PointDetailScreen() {
               style={{ backgroundColor: "#F59E0B" }}
               className="py-4 rounded-xl items-center active:opacity-70"
             >
-              <Text className="text-white text-base font-semibold">
-                Skip
-              </Text>
+              <Text className="text-white text-base font-semibold">Skip</Text>
             </TouchableOpacity>
           )}
 

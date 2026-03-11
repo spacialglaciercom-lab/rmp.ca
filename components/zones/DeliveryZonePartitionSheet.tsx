@@ -25,7 +25,10 @@ import {
 // Coordinate parsing
 // ---------------------------------------------------------------------------
 
-function parseCoords(raw: string): { points: Array<[number, number]>; error: string | null } {
+function parseCoords(raw: string): {
+  points: [number, number][];
+  error: string | null;
+} {
   const s = raw.trim();
   if (!s) return { points: [], error: null };
 
@@ -33,8 +36,9 @@ function parseCoords(raw: string): { points: Array<[number, number]>; error: str
   if (s.startsWith("[")) {
     try {
       const parsed = JSON.parse(s) as unknown;
-      if (!Array.isArray(parsed)) return { points: [], error: "Expected a JSON array." };
-      const points: Array<[number, number]> = [];
+      if (!Array.isArray(parsed))
+        return { points: [], error: "Expected a JSON array." };
+      const points: [number, number][] = [];
       for (const item of parsed) {
         if (!Array.isArray(item) || item.length < 2) {
           return { points: [], error: "Each entry must be [lat, lon]." };
@@ -42,29 +46,47 @@ function parseCoords(raw: string): { points: Array<[number, number]>; error: str
         const lat = Number(item[0]);
         const lon = Number(item[1]);
         if (!isFinite(lat) || !isFinite(lon)) {
-          return { points: [], error: `Invalid coordinate: [${item[0]}, ${item[1]}]` };
+          return {
+            points: [],
+            error: `Invalid coordinate: [${item[0]}, ${item[1]}]`,
+          };
         }
-        if (lat < -90 || lat > 90) return { points: [], error: `Latitude ${lat} out of range (-90 to 90).` };
-        if (lon < -180 || lon > 180) return { points: [], error: `Longitude ${lon} out of range (-180 to 180).` };
+        if (lat < -90 || lat > 90)
+          return {
+            points: [],
+            error: `Latitude ${lat} out of range (-90 to 90).`,
+          };
+        if (lon < -180 || lon > 180)
+          return {
+            points: [],
+            error: `Longitude ${lon} out of range (-180 to 180).`,
+          };
         points.push([lat, lon]);
       }
       return { points, error: null };
     } catch {
-      return { points: [], error: "Invalid JSON. Expected [[lat,lon],[lat,lon],...]" };
+      return {
+        points: [],
+        error: "Invalid JSON. Expected [[lat,lon],[lat,lon],...]",
+      };
     }
   }
 
   // Try one lat,lon pair per line
   const lines = s.split(/\r?\n/).filter((l) => l.trim());
-  const points: Array<[number, number]> = [];
+  const points: [number, number][] = [];
   for (const line of lines) {
     const parts = line.trim().split(/[\s,]+/);
-    if (parts.length < 2) return { points: [], error: `Cannot parse line: "${line}"` };
+    if (parts.length < 2)
+      return { points: [], error: `Cannot parse line: "${line}"` };
     const lat = Number(parts[0]);
     const lon = Number(parts[1]);
-    if (!isFinite(lat) || !isFinite(lon)) return { points: [], error: `Invalid numbers on line: "${line}"` };
-    if (lat < -90 || lat > 90) return { points: [], error: `Latitude ${lat} out of range.` };
-    if (lon < -180 || lon > 180) return { points: [], error: `Longitude ${lon} out of range.` };
+    if (!isFinite(lat) || !isFinite(lon))
+      return { points: [], error: `Invalid numbers on line: "${line}"` };
+    if (lat < -90 || lat > 90)
+      return { points: [], error: `Latitude ${lat} out of range.` };
+    if (lon < -180 || lon > 180)
+      return { points: [], error: `Longitude ${lon} out of range.` };
     points.push([lat, lon]);
   }
   return { points, error: null };
@@ -79,24 +101,33 @@ interface Props {
   onClose: () => void;
   onSuccess: (
     zones: ZoneOutput[],
-    polygon: Array<[number, number]>,
+    polygon: [number, number][],
     name: string,
     truck_count: number,
     balance_metric: "time" | "distance",
   ) => void;
 }
 
-export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Props) {
+export function DeliveryZonePartitionSheet({
+  visible,
+  onClose,
+  onSuccess,
+}: Props) {
   const colors = useColors();
 
   const [coordsText, setCoordsText] = useState("");
   const [zoneName, setZoneName] = useState("");
   const [truckCount, setTruckCount] = useState(2);
-  const [balanceMetric, setBalanceMetric] = useState<"time" | "distance">("time");
+  const [balanceMetric, setBalanceMetric] = useState<"time" | "distance">(
+    "time",
+  );
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const { points, error: parseError } = useMemo(() => parseCoords(coordsText), [coordsText]);
+  const { points, error: parseError } = useMemo(
+    () => parseCoords(coordsText),
+    [coordsText],
+  );
 
   const canRun = points.length >= 3 && !loading;
 
@@ -116,7 +147,9 @@ export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Prop
         truck_count: truckCount,
         balance_metric: balanceMetric,
       });
-      const name = zoneName.trim() || `Delivery zones (${new Date().toLocaleDateString()})`;
+      const name =
+        zoneName.trim() ||
+        `Delivery zones (${new Date().toLocaleDateString()})`;
       onSuccess(zones, points, name, truckCount, balanceMetric);
       // Reset form
       setCoordsText("");
@@ -136,14 +169,21 @@ export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Prop
   }, []);
 
   return (
-    <BottomSheet visible={visible} onClose={handleClose} title="New zone partition" maxHeight="85%">
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      title="New zone partition"
+      maxHeight="85%"
+    >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
         {/* ---- Coordinates ---- */}
-        <Text style={[styles.label, { color: colors.text }]}>Polygon coordinates</Text>
+        <Text style={[styles.label, { color: colors.text }]}>
+          Polygon coordinates
+        </Text>
         <Text style={[styles.hint, { color: colors.muted }]}>
           JSON array: {`[[lat,lon],[lat,lon],...]`} — or one lat,lon per line
         </Text>
@@ -157,7 +197,10 @@ export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Prop
             },
           ]}
           value={coordsText}
-          onChangeText={(t) => { setCoordsText(t); setApiError(null); }}
+          onChangeText={(t) => {
+            setCoordsText(t);
+            setApiError(null);
+          }}
           placeholder={"[[45.50,-73.60],[45.51,-73.60],[45.51,-73.58]]"}
           placeholderTextColor={colors.muted}
           multiline
@@ -175,11 +218,17 @@ export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Prop
         ) : null}
 
         {/* ---- Zone name ---- */}
-        <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Zone name (optional)</Text>
+        <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>
+          Zone name (optional)
+        </Text>
         <TextInput
           style={[
             styles.nameInput,
-            { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
+            {
+              color: colors.text,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
           ]}
           value={zoneName}
           onChangeText={setZoneName}
@@ -188,38 +237,77 @@ export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Prop
         />
 
         {/* ---- Truck count ---- */}
-        <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Number of trucks</Text>
+        <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>
+          Number of trucks
+        </Text>
         <View style={styles.stepper}>
           <TouchableOpacity
             onPress={() => adjustTruckCount(-1)}
-            style={[styles.stepBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[
+              styles.stepBtn,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
             disabled={truckCount <= 1}
           >
-            <Text style={[styles.stepBtnText, { color: truckCount <= 1 ? colors.muted : colors.text }]}>−</Text>
+            <Text
+              style={[
+                styles.stepBtnText,
+                { color: truckCount <= 1 ? colors.muted : colors.text },
+              ]}
+            >
+              −
+            </Text>
           </TouchableOpacity>
-          <Text style={[styles.stepValue, { color: colors.text }]}>{truckCount}</Text>
+          <Text style={[styles.stepValue, { color: colors.text }]}>
+            {truckCount}
+          </Text>
           <TouchableOpacity
             onPress={() => adjustTruckCount(1)}
-            style={[styles.stepBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[
+              styles.stepBtn,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
             disabled={truckCount >= 12}
           >
-            <Text style={[styles.stepBtnText, { color: truckCount >= 12 ? colors.muted : colors.text }]}>＋</Text>
+            <Text
+              style={[
+                styles.stepBtnText,
+                { color: truckCount >= 12 ? colors.muted : colors.text },
+              ]}
+            >
+              ＋
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* ---- Balance metric ---- */}
-        <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Balance metric</Text>
-        <View style={[styles.metricToggle, { borderColor: colors.border, backgroundColor: colors.background }]}>
+        <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>
+          Balance metric
+        </Text>
+        <View
+          style={[
+            styles.metricToggle,
+            { borderColor: colors.border, backgroundColor: colors.background },
+          ]}
+        >
           {(["time", "distance"] as const).map((m) => (
             <TouchableOpacity
               key={m}
-              onPress={() => { hapticImpact(); setBalanceMetric(m); }}
+              onPress={() => {
+                hapticImpact();
+                setBalanceMetric(m);
+              }}
               style={[
                 styles.metricBtn,
                 balanceMetric === m && { backgroundColor: colors.primary },
               ]}
             >
-              <Text style={[styles.metricBtnText, { color: balanceMetric === m ? "#fff" : colors.muted }]}>
+              <Text
+                style={[
+                  styles.metricBtnText,
+                  { color: balanceMetric === m ? "#fff" : colors.muted },
+                ]}
+              >
                 {m === "time" ? "Time" : "Distance"}
               </Text>
             </TouchableOpacity>
@@ -228,7 +316,12 @@ export function DeliveryZonePartitionSheet({ visible, onClose, onSuccess }: Prop
 
         {/* ---- API error ---- */}
         {apiError ? (
-          <View style={[styles.errorBanner, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
+          <View
+            style={[
+              styles.errorBanner,
+              { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
+            ]}
+          >
             <Text style={styles.errorBannerText}>{apiError}</Text>
           </View>
         ) : null}
@@ -294,7 +387,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepBtnText: { fontSize: 20, lineHeight: 24 },
-  stepValue: { fontSize: 18, fontWeight: "600", minWidth: 28, textAlign: "center" },
+  stepValue: {
+    fontSize: 18,
+    fontWeight: "600",
+    minWidth: 28,
+    textAlign: "center",
+  },
   metricToggle: {
     flexDirection: "row",
     borderRadius: 8,

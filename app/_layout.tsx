@@ -2,9 +2,6 @@ import "@/global.css";
 import { recordStartupComplete } from "../lib/startup-time";
 import instructionManager from "@/services/InstructionManager";
 import instructionsData from "@/data/deliveryInstructions.json";
-
-// Import delivery instructions once at startup
-instructionManager.importFromJson(instructionsData);
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -13,10 +10,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
 import { LogBox, Platform, Text, View } from "react-native";
-
-// Force Platform (PlatformConstants) to initialize before other code; avoids TurboModuleRegistry
-// "PlatformConstants could not be found" when bridgeless/New Arch is misconfigured.
-if (typeof Platform !== "undefined") void Platform.OS;
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ThemedStatusBar } from "@/components/themed-status-bar";
@@ -59,6 +52,13 @@ import { isMockRoute, isMockCollectionPoints } from "@/lib/is-mock-route";
 import type { CollectionPoint } from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Import delivery instructions once at startup
+instructionManager.importFromJson(instructionsData);
+
+// Force Platform (PlatformConstants) to initialize before other code; avoids TurboModuleRegistry
+// "PlatformConstants could not be found" when bridgeless/New Arch is misconfigured.
+if (typeof Platform !== "undefined") void Platform.OS;
+
 const IMPORTED_POINTS_KEY = "trashroute_imported_points";
 const IMPORTED_DISTANCE_KEY = "trashroute_imported_distance_km";
 
@@ -86,7 +86,7 @@ export default function RootLayout() {
   useEffect(() => {
     const raw = pathname?.replace(/^\//, "") || "unknown";
     const screenName =
-      raw === "(tabs)" || raw === "" ? "Home" : raw.split("/").pop() ?? raw;
+      raw === "(tabs)" || raw === "" ? "Home" : (raw.split("/").pop() ?? raw);
     trackScreen(screenName, raw);
   }, [pathname]);
 
@@ -265,7 +265,10 @@ export default function RootLayout() {
           } catch (osmErr) {
             // OSM data can exceed AsyncStorage per-key limit (~2MB); avoid leaving partial/corrupt data
             await AsyncStorage.removeItem(OSM_DATA_STORAGE_KEY);
-            console.warn("OSM data too large for storage; re-optimize will require re-import:", osmErr);
+            console.warn(
+              "OSM data too large for storage; re-optimize will require re-import:",
+              osmErr,
+            );
           }
         } else {
           await AsyncStorage.removeItem(OSM_DATA_STORAGE_KEY);
@@ -322,32 +325,29 @@ export default function RootLayout() {
           <DeliveryInstructionsProvider>
             {/* --- Feature & AI providers --- */}
             <BetaFeaturesProvider>
-                  {/* --- Data providers (Firebase, routing, server) --- */}
-                  <FirebaseProvider>
-                    <RoutingProvider>
-                      <trpc.Provider
-                        client={trpcClient}
-                        queryClient={queryClient}
-                      >
-                        <PluginProvider trpcClient={trpcClient}>
-                          <QueryClientProvider client={queryClient}>
-                            <ErrorBoundary>
-                              {Platform.OS === "web" ? (
-                                <WebOSMDropZoneRoot
-                                  onImportComplete={handleWebOSMImport}
-                                >
-                                  {navigationStack}
-                                </WebOSMDropZoneRoot>
-                              ) : (
-                                navigationStack
-                              )}
-                            </ErrorBoundary>
-                            <ThemedStatusBar />
-                          </QueryClientProvider>
-                        </PluginProvider>
-                      </trpc.Provider>
-                    </RoutingProvider>
-                  </FirebaseProvider>
+              {/* --- Data providers (Firebase, routing, server) --- */}
+              <FirebaseProvider>
+                <RoutingProvider>
+                  <trpc.Provider client={trpcClient} queryClient={queryClient}>
+                    <PluginProvider trpcClient={trpcClient}>
+                      <QueryClientProvider client={queryClient}>
+                        <ErrorBoundary>
+                          {Platform.OS === "web" ? (
+                            <WebOSMDropZoneRoot
+                              onImportComplete={handleWebOSMImport}
+                            >
+                              {navigationStack}
+                            </WebOSMDropZoneRoot>
+                          ) : (
+                            navigationStack
+                          )}
+                        </ErrorBoundary>
+                        <ThemedStatusBar />
+                      </QueryClientProvider>
+                    </PluginProvider>
+                  </trpc.Provider>
+                </RoutingProvider>
+              </FirebaseProvider>
             </BetaFeaturesProvider>
           </DeliveryInstructionsProvider>
         </PowerSavingProvider>

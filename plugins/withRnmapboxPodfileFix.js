@@ -7,8 +7,12 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
-const { withPodfile, withDangerousMod, withPlugins } = requireFromRoot("expo/config-plugins");
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
+const { withPodfile, withDangerousMod, withPlugins } = requireFromRoot(
+  "expo/config-plugins",
+);
 
 // Remove the entire line containing "end @rnmapbox/..." (allow \r for Windows)
 const BAD_LINE = /^\s*end\s+@rnmapbox[^\n\r]*\r?\n?/gm;
@@ -35,7 +39,12 @@ function findPodfiles(dir, collected = [], depth = 0) {
   for (const e of entries) {
     const full = path.join(dir, e.name);
     if (e.name === "Podfile") collected.push(full);
-    else if (e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith(".")) findPodfiles(full, collected, depth + 1);
+    else if (
+      e.isDirectory() &&
+      e.name !== "node_modules" &&
+      !e.name.startsWith(".")
+    )
+      findPodfiles(full, collected, depth + 1);
   }
   return collected;
 }
@@ -60,14 +69,25 @@ function withRnmapboxPodfileFix(config) {
             path.join(root, "..", "ios", "Podfile"),
             path.join(root, "..", "build", "ios", "Podfile"),
           ];
-          const searchRoots = [root, path.join(root, ".."), cwd, path.join(cwd, "build")];
-          const allPodfiles = [...new Set([...candidates, ...searchRoots.flatMap((d) => findPodfiles(d))])];
+          const searchRoots = [
+            root,
+            path.join(root, ".."),
+            cwd,
+            path.join(cwd, "build"),
+          ];
+          const allPodfiles = [
+            ...new Set([
+              ...candidates,
+              ...searchRoots.flatMap((d) => findPodfiles(d)),
+            ]),
+          ];
           for (const podfilePath of allPodfiles) {
             try {
               if (!fs.existsSync(podfilePath)) continue;
               const contents = fs.readFileSync(podfilePath, "utf8");
               const fixed = fixPodfileContent(contents);
-              if (fixed !== contents) fs.writeFileSync(podfilePath, fixed, "utf8");
+              if (fixed !== contents)
+                fs.writeFileSync(podfilePath, fixed, "utf8");
             } catch {
               // ignore
             }

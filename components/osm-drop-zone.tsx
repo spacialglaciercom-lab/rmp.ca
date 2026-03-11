@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { View, Text, Platform } from "react-native";
-import { notificationAsync as hapticNotification, NotificationFeedbackType } from "@/lib/safe-haptics";
+import {
+  notificationAsync as hapticNotification,
+  NotificationFeedbackType,
+} from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
 import { useCustomStartPoint } from "@/hooks/useCustomStartPoint";
@@ -21,7 +24,8 @@ function readFileAsTextFallback(file: File | Blob): Promise<string> {
     }
     const reader = new FileReader();
     reader.onload = () => resolve((reader.result as string) ?? "");
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsText(file, "UTF-8");
   });
 }
@@ -30,7 +34,7 @@ interface OSMDropZoneProps {
   onImportComplete: (
     points: CollectionPoint[],
     osmData?: StoredOSMData,
-    options?: { totalDistanceKm?: number }
+    options?: { totalDistanceKm?: number },
   ) => void;
   children?: React.ReactNode;
 }
@@ -62,7 +66,11 @@ export function OSMDropZone({ onImportComplete, children }: OSMDropZoneProps) {
 
       setIsProcessing(true);
       setError(null);
-      setProgress({ stage: "parsing", progress: 0, message: "Reading file..." });
+      setProgress({
+        stage: "parsing",
+        progress: 0,
+        message: "Reading file...",
+      });
 
       try {
         // Use readFileAsText from lib (never calls file.text()); fallback if import is undefined (e.g. bundler)
@@ -71,30 +79,41 @@ export function OSMDropZone({ onImportComplete, children }: OSMDropZoneProps) {
             ? readFileAsTextLib
             : (f: File | Blob) => readFileAsTextFallback(f);
         const content = await readFn(file);
-        setProgress({ stage: "parsing", progress: 30, message: "Parsing OSM..." });
+        setProgress({
+          stage: "parsing",
+          progress: 30,
+          message: "Parsing OSM...",
+        });
 
         const parser = new OSMParser();
         const { nodes, ways, turnRestrictions } = parser.parseOSM(content);
 
         const startCoords = customStartPoint.getStartPoint();
 
-        setProgress({ stage: "parsing", progress: 50, message: "Optimizing route..." });
+        setProgress({
+          stage: "parsing",
+          progress: 50,
+          message: "Optimizing route...",
+        });
 
         // Yield so browser can paint progress before CPU-heavy work
         await new Promise<void>((r) => setTimeout(r, 0));
 
-        const onewayMode = customStartPoint.state.configuration.onewayMode ?? "B";
-        const turnPenalties = customStartPoint.state.configuration.turnPenalties;
-        const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
+        const onewayMode =
+          customStartPoint.state.configuration.onewayMode ?? "B";
+        const turnPenalties =
+          customStartPoint.state.configuration.turnPenalties;
+        const serviceBothSides =
+          customStartPoint.state.configuration.serviceBothSides ?? false;
 
         const stepLabels: Record<string, string> = {
           "street-edges": "Converting streets...",
           "turn-graph": "Building turn graph...",
           "build-graph": "Building turn graph...",
-          "scc": "Analyzing connectivity...",
-          "bridge": "Connecting components...",
-          "eulerian": "Balancing graph...",
-          "circuit": "Computing optimal circuit...",
+          scc: "Analyzing connectivity...",
+          bridge: "Connecting components...",
+          eulerian: "Balancing graph...",
+          circuit: "Computing optimal circuit...",
           "route-points": "Generating route points...",
         };
 
@@ -114,23 +133,41 @@ export function OSMDropZone({ onImportComplete, children }: OSMDropZoneProps) {
           : await new Promise<any>((resolve, reject) => {
               setTimeout(() => {
                 try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
-                  resolve(optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties));
-                } catch (err) { reject(err); }
+                  const optimizer = new RouteOptimizer(
+                    nodes,
+                    ways,
+                    onewayMode,
+                    turnRestrictions ?? [],
+                    undefined,
+                    { serviceBothSides, antiLoopMode: "strict" },
+                  );
+                  resolve(
+                    optimizer.optimize(
+                      startCoords?.latitude,
+                      startCoords?.longitude,
+                      turnPenalties,
+                    ),
+                  );
+                } catch (err) {
+                  reject(err);
+                }
               }, 0);
             });
 
-        const collectionPoints: CollectionPoint[] = optResult.route.map((p, i) => ({
-          id: (p as { nodeId?: string }).nodeId ?? `route-${i}`,
-          address: `Stop ${i + 1}`,
-          latitude: p.latitude,
-          longitude: p.longitude,
-          collectionType: "residential",
-          status: "pending",
-        }));
+        const collectionPoints: CollectionPoint[] = optResult.route.map(
+          (p, i) => ({
+            id: (p as { nodeId?: string }).nodeId ?? `route-${i}`,
+            address: `Stop ${i + 1}`,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            collectionType: "residential",
+            status: "pending",
+          }),
+        );
 
         const bounds = (() => {
-          if (nodes.size === 0) return { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
+          if (nodes.size === 0)
+            return { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
           let minLat = 90;
           let maxLat = -90;
           let minLon = 180;
@@ -174,7 +211,7 @@ export function OSMDropZone({ onImportComplete, children }: OSMDropZoneProps) {
         setIsProcessing(false);
       }
     },
-    [onImportComplete, customStartPoint, isExperimentalRoute, optimizeRoute]
+    [onImportComplete, customStartPoint, isExperimentalRoute, optimizeRoute],
   );
 
   useEffect(() => {

@@ -22,4 +22,6 @@ if (fixed === contents) {
   process.exit(0);
 }
 fs.writeFileSync(podfilePath, fixed, "utf8");
-console.log("[patch-podfile-rnmapbox] Patched Podfile: removed invalid 'end @rnmapbox/...' line(s).");
+console.log(
+  "[patch-podfile-rnmapbox] Patched Podfile: removed invalid 'end @rnmapbox/...' line(s).",
+);

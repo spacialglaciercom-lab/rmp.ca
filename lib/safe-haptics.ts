@@ -20,7 +20,7 @@ function runOnNative(fn: () => void | Promise<void>) {
 }
 
 export function impactAsync(
-  style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light
+  style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light,
 ): void {
   runOnNative(() => {
     Haptics.impactAsync(style);
@@ -28,7 +28,7 @@ export function impactAsync(
 }
 
 export function notificationAsync(
-  type: Haptics.NotificationFeedbackType
+  type: Haptics.NotificationFeedbackType,
 ): void {
   runOnNative(() => {
     Haptics.notificationAsync(type);

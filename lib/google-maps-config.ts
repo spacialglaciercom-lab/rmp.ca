@@ -19,22 +19,31 @@ let serverConfigCache: { googleMapsApiKey?: string } | null = null;
 
 /** Build-time key from app.config extra (set by EAS when EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is set). Used on iOS where env can be missing. */
 function getExtraConfigKey(): string {
-  const extra = Constants.expoConfig?.extra as { googleMapsApiKey?: string } | undefined;
+  const extra = Constants.expoConfig?.extra as
+    | { googleMapsApiKey?: string }
+    | undefined;
   return (extra?.googleMapsApiKey ?? "").trim();
 }
 
 /** Fallback from env (no hardcoded keys). */
 function getEnvFallback(): string {
-  return (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) || "";
+  return (
+    (typeof process !== "undefined" &&
+      process.env?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) ||
+    ""
+  );
 }
 
 /** Fetch Google Maps key from server (Railway env GOOGLE_MAPS_API_KEY). Uses public API URL. */
 async function fetchServerGoogleMapsKey(): Promise<string> {
-  if (serverConfigCache && serverConfigCache.googleMapsApiKey) return serverConfigCache.googleMapsApiKey;
+  if (serverConfigCache && serverConfigCache.googleMapsApiKey)
+    return serverConfigCache.googleMapsApiKey;
   const base = getApiBaseUrl();
   if (!base) return "";
   try {
-    const res = await fetch(`${base.replace(/\/$/, "")}/api/config`, { method: "GET" });
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/config`, {
+      method: "GET",
+    });
     if (!res.ok) return "";
     const data = (await res.json()) as { googleMapsApiKey?: string };
     serverConfigCache = data;
@@ -56,7 +65,11 @@ export async function getGoogleMapsApiKey(): Promise<string> {
     if (envKey) return envKey;
     return fetchServerGoogleMapsKey();
   } catch {
-    return getExtraConfigKey() || getEnvFallback() || (await fetchServerGoogleMapsKey());
+    return (
+      getExtraConfigKey() ||
+      getEnvFallback() ||
+      (await fetchServerGoogleMapsKey())
+    );
   }
 }
 
@@ -84,6 +97,8 @@ export async function getNavigationProvider(): Promise<NavigationProvider> {
   }
 }
 
-export async function setNavigationProvider(provider: NavigationProvider): Promise<void> {
+export async function setNavigationProvider(
+  provider: NavigationProvider,
+): Promise<void> {
   await AsyncStorage.setItem(NAV_PROVIDER_STORAGE_KEY, provider);
 }

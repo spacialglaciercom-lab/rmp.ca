@@ -30,7 +30,8 @@ function useFirestoreSnapshot() {
 
     (async () => {
       try {
-        const { firestoreDb, ensureAppCheckReady } = await import("@/lib/firebase/index");
+        const { firestoreDb, ensureAppCheckReady } =
+          await import("@/lib/firebase/index");
         await ensureAppCheckReady();
         if (!mounted) return;
         const routesRef = firestoreDb.collection("routes");
@@ -46,28 +47,36 @@ function useFirestoreSnapshot() {
             setError(null);
 
             // Validation: detect invalid GPX and set flag for UI (e.g. alert)
-            const invalid = newRoutes.some((r) => r.data.hasInvalidGPX === true);
+            const invalid = newRoutes.some(
+              (r) => r.data.hasInvalidGPX === true,
+            );
             setHasInvalidGpx(invalid);
 
             // Logging: route updates (critical validation step)
             if (__DEV__) {
               console.log(
                 "Firebase routes updated:",
-                snapshot.docs.map((d) => ({ id: d.id, hasInvalidGPX: d.data()?.hasInvalidGPX }))
+                snapshot.docs.map((d) => ({
+                  id: d.id,
+                  hasInvalidGPX: d.data()?.hasInvalidGPX,
+                })),
               );
             }
           },
           (err: unknown) => {
             if (!mounted) return;
             const e = err instanceof Error ? err : new Error(String(err));
-            const code = err && typeof err === "object" && "code" in err ? String((err as { code: string }).code) : "";
+            const code =
+              err && typeof err === "object" && "code" in err
+                ? String((err as { code: string }).code)
+                : "";
             recordErrorToCrashlytics(e, "FirestoreListener", {
               firestore_code: code,
               firestore_message: e.message,
             });
             setError(e);
             setLoading(false);
-          }
+          },
         );
       } catch (e) {
         if (!mounted) return;

@@ -4,7 +4,7 @@
  * Pools are categorized by size ranges for reuse without wasting memory.
  */
 
-const SIZE_SMALL = 1024;       // < 1KB
+const SIZE_SMALL = 1024; // < 1KB
 const SIZE_MEDIUM = 10 * 1024; // 1–10KB
 const MAX_POOL_SMALL = 32;
 const MAX_POOL_MEDIUM = 16;
@@ -20,9 +20,12 @@ function getPoolKey(size: number): "small" | "medium" | "large" {
 
 function getMaxPoolSize(key: "small" | "medium" | "large"): number {
   switch (key) {
-    case "small": return MAX_POOL_SMALL;
-    case "medium": return MAX_POOL_MEDIUM;
-    case "large": return MAX_POOL_LARGE;
+    case "small":
+      return MAX_POOL_SMALL;
+    case "medium":
+      return MAX_POOL_MEDIUM;
+    case "large":
+      return MAX_POOL_LARGE;
   }
 }
 
@@ -84,7 +87,12 @@ export class VertexBufferPool {
     this.activeBuffers.clear();
   }
 
-  getPoolStats(): { small: number; medium: number; large: number; active: number } {
+  getPoolStats(): {
+    small: number;
+    medium: number;
+    large: number;
+    active: number;
+  } {
     return {
       small: this.pool.get("small")!.length,
       medium: this.pool.get("medium")!.length,

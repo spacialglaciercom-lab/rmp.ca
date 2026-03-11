@@ -46,7 +46,9 @@ export function TripsTab({ onClose }: TripsTabProps) {
   const router = useRouter();
   const { dispatch } = useRouting();
   const [savedTracks, setSavedTracks] = useState<SavedTrack[]>([]);
-  const [streetViewTrack, setStreetViewTrack] = useState<SavedTrack | null>(null);
+  const [streetViewTrack, setStreetViewTrack] = useState<SavedTrack | null>(
+    null,
+  );
 
   useEffect(() => {
     trackStorage.loadTracks().then(setSavedTracks);
@@ -61,7 +63,7 @@ export function TripsTab({ onClose }: TripsTabProps) {
       onClose?.();
       router.push("/(tabs)/map");
     },
-    [dispatch, router, onClose]
+    [dispatch, router, onClose],
   );
 
   const handleExport = useCallback(async (track: SavedTrack) => {
@@ -93,35 +95,32 @@ export function TripsTab({ onClose }: TripsTabProps) {
     }
   }, []);
 
-  const handleDelete = useCallback(
-    async (track: SavedTrack) => {
-      if (Platform.OS === "web") {
-        const confirmed =
-          typeof window !== "undefined" &&
-          window.confirm(`Delete "${track.name}"? This cannot be undone.`);
-        if (!confirmed) return;
-        await trackStorage.deleteTrack(track.id);
-        setSavedTracks(await trackStorage.loadTracks());
-      } else {
-        Alert.alert(
-          "Delete Track?",
-          `Delete "${track.name}"? This cannot be undone.`,
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Delete",
-              style: "destructive",
-              onPress: async () => {
-                await trackStorage.deleteTrack(track.id);
-                setSavedTracks(await trackStorage.loadTracks());
-              },
+  const handleDelete = useCallback(async (track: SavedTrack) => {
+    if (Platform.OS === "web") {
+      const confirmed =
+        typeof window !== "undefined" &&
+        window.confirm(`Delete "${track.name}"? This cannot be undone.`);
+      if (!confirmed) return;
+      await trackStorage.deleteTrack(track.id);
+      setSavedTracks(await trackStorage.loadTracks());
+    } else {
+      Alert.alert(
+        "Delete Track?",
+        `Delete "${track.name}"? This cannot be undone.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              await trackStorage.deleteTrack(track.id);
+              setSavedTracks(await trackStorage.loadTracks());
             },
-          ]
-        );
-      }
-    },
-    []
-  );
+          },
+        ],
+      );
+    }
+  }, []);
 
   if (savedTracks.length === 0) {
     return (
@@ -140,104 +139,120 @@ export function TripsTab({ onClose }: TripsTabProps) {
 
   return (
     <>
-    <FlatList
-      data={savedTracks}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
-      renderItem={({ item }) => {
-        const date = new Date(item.createdAt);
-        const dateStr = date.toLocaleDateString();
-        const timeStr = date.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        return (
-          <View
-            style={[
-              styles.item,
-              glassStyle,
-              { borderColor: colors.gridLine ?? colors.border },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.itemContent}
-              onPress={() => handlePreview(item)}
-              activeOpacity={0.7}
+      <FlatList
+        data={savedTracks}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => {
+          const date = new Date(item.createdAt);
+          const dateStr = date.toLocaleDateString();
+          const timeStr = date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          return (
+            <View
+              style={[
+                styles.item,
+                glassStyle,
+                { borderColor: colors.gridLine ?? colors.border },
+              ]}
             >
-              <MaterialCommunityIcons
-                name="map-marker-path"
-                size={20}
-                color={colors.primary}
-              />
-              <View style={styles.itemText}>
-                <Text
-                  style={[styles.itemName, { color: colors.text }]}
-                  numberOfLines={1}
-                >
-                  {item.name}
-                </Text>
-                <Text
-                  style={[styles.itemMeta, { color: colors.muted, fontFamily: Fonts!.mono }]}
-                >
-                  {dateStr} {timeStr} • {formatDistance(item.totalDistanceMeters)} •{" "}
-                  {formatElapsed(item.elapsedMs)}
-                </Text>
-              </View>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={20}
-                color={colors.muted}
-              />
-            </TouchableOpacity>
-            <View style={styles.actions}>
-              {Platform.OS !== "web" && (
+              <TouchableOpacity
+                style={styles.itemContent}
+                onPress={() => handlePreview(item)}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name="map-marker-path"
+                  size={20}
+                  color={colors.primary}
+                />
+                <View style={styles.itemText}>
+                  <Text
+                    style={[styles.itemName, { color: colors.text }]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.itemMeta,
+                      { color: colors.muted, fontFamily: Fonts!.mono },
+                    ]}
+                  >
+                    {dateStr} {timeStr} •{" "}
+                    {formatDistance(item.totalDistanceMeters)} •{" "}
+                    {formatElapsed(item.elapsedMs)}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={colors.muted}
+                />
+              </TouchableOpacity>
+              <View style={styles.actions}>
+                {Platform.OS !== "web" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.iconBtn,
+                      { backgroundColor: colors.primary + "22" },
+                    ]}
+                    onPress={() => setStreetViewTrack(item)}
+                  >
+                    <MaterialCommunityIcons
+                      name="play-circle-outline"
+                      size={18}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={[styles.iconBtn, { backgroundColor: colors.primary + "22" }]}
-                  onPress={() => setStreetViewTrack(item)}
+                  style={[
+                    styles.iconBtn,
+                    { backgroundColor: colors.primary + "22", marginLeft: 6 },
+                  ]}
+                  onPress={() => handleExport(item)}
                 >
                   <MaterialCommunityIcons
-                    name="play-circle-outline"
+                    name="export-variant"
                     size={18}
                     color={colors.primary}
                   />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.iconBtn, { backgroundColor: colors.primary + "22", marginLeft: 6 }]}
-                onPress={() => handleExport(item)}
-              >
-                <MaterialCommunityIcons
-                  name="export-variant"
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.iconBtn,
-                  { backgroundColor: (colors.error ?? "#ef4444") + "22", marginLeft: 6 },
-                ]}
-                onPress={() => handleDelete(item)}
-              >
-                <MaterialCommunityIcons
-                  name="delete-outline"
-                  size={18}
-                  color={colors.error ?? "#ef4444"}
-                />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.iconBtn,
+                    {
+                      backgroundColor: (colors.error ?? "#ef4444") + "22",
+                      marginLeft: 6,
+                    },
+                  ]}
+                  onPress={() => handleDelete(item)}
+                >
+                  <MaterialCommunityIcons
+                    name="delete-outline"
+                    size={18}
+                    color={colors.error ?? "#ef4444"}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        );
-      }}
-    />
-    {Platform.OS !== "web" && streetViewTrack && (
-      <StreetViewPreview
-        points={streetViewTrack.points.map((p) => ({ lat: p.lat, lon: p.lon }))}
-        isVisible={!!streetViewTrack}
-        onClose={() => setStreetViewTrack(null)}
-        trackName={streetViewTrack.name}
+          );
+        }}
       />
-    )}
+      {Platform.OS !== "web" && streetViewTrack && (
+        <StreetViewPreview
+          points={streetViewTrack.points.map((p) => ({
+            lat: p.lat,
+            lon: p.lon,
+          }))}
+          isVisible={!!streetViewTrack}
+          onClose={() => setStreetViewTrack(null)}
+          trackName={streetViewTrack.name}
+        />
+      )}
     </>
   );
 }

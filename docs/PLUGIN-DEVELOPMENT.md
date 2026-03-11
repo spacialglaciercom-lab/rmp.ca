@@ -39,11 +39,17 @@ lib/plugins/
      name: "My Plugin",
      description: "…",
      version: "1.0.0",
-     initialize(context) { /* optional */ },
-     destroy() { /* optional */ },
+     initialize(context) {
+       /* optional */
+     },
+     destroy() {
+       /* optional */
+     },
      getFeatures() {
        // Return a record of feature keys → implementations. Known keys: mapLayer, dataProvider, widget, routeOptimizer, extractService (see types.ts).
-       return { /* e.g. widget: { ... } */ };
+       return {
+         /* e.g. widget: { ... } */
+       };
      },
    };
    ```

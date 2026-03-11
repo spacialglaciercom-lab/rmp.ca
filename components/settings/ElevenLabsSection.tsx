@@ -40,7 +40,9 @@ export function ElevenLabsSection() {
   const [voices, setVoices] = useState<ElevenLabsVoice[]>([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
-  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(
+    null,
+  );
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const [showVoices, setShowVoices] = useState(false);
 
@@ -84,7 +86,9 @@ export function ElevenLabsSection() {
         if (!cancelled) setServerHasKey(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Toggle enabled
@@ -130,7 +134,8 @@ export function ElevenLabsSection() {
     if (playingPreview === voice.voice_id) {
       // Stop current preview
       try {
-        const { stopElevenLabsSpeaking } = await import("@/services/elevenLabsTtsService");
+        const { stopElevenLabsSpeaking } =
+          await import("@/services/elevenLabsTtsService");
         await stopElevenLabsSpeaking();
       } catch {}
       setPlayingPreview(null);
@@ -138,7 +143,8 @@ export function ElevenLabsSection() {
     }
     setPlayingPreview(voice.voice_id);
     try {
-      const { playVoicePreview } = await import("@/services/elevenLabsTtsService");
+      const { playVoicePreview } =
+        await import("@/services/elevenLabsTtsService");
       await playVoicePreview(voice.preview_url);
     } catch {}
     setPlayingPreview(null);
@@ -153,7 +159,10 @@ export function ElevenLabsSection() {
     );
   }
 
-  const switchTrack = { false: colors.border, true: colors.accentCyan ?? colors.primary };
+  const switchTrack = {
+    false: colors.border,
+    true: colors.accentCyan ?? colors.primary,
+  };
 
   return (
     <View style={styles.container}>
@@ -166,11 +175,15 @@ export function ElevenLabsSection() {
       </Text>
 
       {serverHasKey ? (
-        <Text style={[styles.caption, { color: colors.primary, marginBottom: 8 }]}>
+        <Text
+          style={[styles.caption, { color: colors.primary, marginBottom: 8 }]}
+        >
           Server key set (Railway). Use the toggle and voice picker below.
         </Text>
       ) : (
-        <Text style={[styles.caption, { color: colors.muted, marginBottom: 8 }]}>
+        <Text
+          style={[styles.caption, { color: colors.muted, marginBottom: 8 }]}
+        >
           Set ELEVENLABS_API_KEY on Railway to enable ElevenLabs TTS.
         </Text>
       )}
@@ -197,7 +210,7 @@ export function ElevenLabsSection() {
             thumbColor={
               Platform.OS === "android"
                 ? enabled
-                  ? colors.accentCyan ?? colors.primary
+                  ? (colors.accentCyan ?? colors.primary)
                   : colors.muted
                 : undefined
             }
@@ -218,7 +231,11 @@ export function ElevenLabsSection() {
             {showVoices ? "Hide voices" : "Choose voice"}
           </Text>
           {loadingVoices && (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />
+            <ActivityIndicator
+              size="small"
+              color={colors.primary}
+              style={{ marginLeft: 8 }}
+            />
           )}
         </TouchableOpacity>
       )}
@@ -252,7 +269,7 @@ export function ElevenLabsSection() {
                     {
                       borderColor: isSelected ? colors.primary : colors.border,
                       backgroundColor: isSelected
-                        ? (colors.primary + "15")
+                        ? colors.primary + "15"
                         : colors.background,
                     },
                   ]}
@@ -264,7 +281,9 @@ export function ElevenLabsSection() {
                       style={[
                         styles.voiceName,
                         {
-                          color: isSelected ? colors.primary : colors.foreground,
+                          color: isSelected
+                            ? colors.primary
+                            : colors.foreground,
                           fontWeight: isSelected ? "700" : "500",
                         },
                       ]}

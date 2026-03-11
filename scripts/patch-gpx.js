@@ -1,6 +1,6 @@
-const fs = require('fs');
-let c = fs.readFileSync('components/VRPPlanner.tsx', 'utf8');
-const nl = c.includes('\r\n') ? '\r\n' : '\n';
+const fs = require("fs");
+let c = fs.readFileSync("components/VRPPlanner.tsx", "utf8");
+const nl = c.includes("\r\n") ? "\r\n" : "\n";
 
 // ── GPX helper ──────────────────────────────────────────────────────────────
 const gpxFunctions = `
@@ -133,7 +133,7 @@ const gpxFunctions = `
 `;
 
 // Insert the GPX functions before handleExportCsv
-const anchor = '  const handleExportCsv = async () => {';
+const anchor = "  const handleExportCsv = async () => {";
 c = c.replace(anchor, gpxFunctions + nl + anchor);
 
 // ── UI buttons ──────────────────────────────────────────────────────────────
@@ -146,16 +146,19 @@ const csvButton = `              <TouchableOpacity
                 <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>Export CSV</Text>
               </TouchableOpacity>`;
 
-const csvButtonWithGpx = csvButton + nl +
-`              <TouchableOpacity
+const csvButtonWithGpx =
+  csvButton +
+  nl +
+  `              <TouchableOpacity
                 style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
                 onPress={handleExportGpx}
                 activeOpacity={0.8}
               >
                 <Ionicons name="navigate-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
                 <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>Export GPX</Text>
-              </TouchableOpacity>` + nl +
-`              {result?.routes && result.routes.length > 1 && (
+              </TouchableOpacity>` +
+  nl +
+  `              {result?.routes && result.routes.length > 1 && (
                 <TouchableOpacity
                   style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
                   onPress={handleExportGpxPerVehicle}
@@ -168,5 +171,5 @@ const csvButtonWithGpx = csvButton + nl +
 
 c = c.replace(csvButton, csvButtonWithGpx);
 
-fs.writeFileSync('components/VRPPlanner.tsx', c, 'utf8');
-console.log('done');
+fs.writeFileSync("components/VRPPlanner.tsx", c, "utf8");
+console.log("done");

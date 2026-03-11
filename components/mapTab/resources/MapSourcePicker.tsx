@@ -1,14 +1,24 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import { useMapType, type MapTypePreference } from "@/lib/map-type-preference";
 import { useColors } from "@/hooks/use-colors";
 import { useMapLayerStore } from "@/stores/mapLayerStore";
 import { SectionLabel } from "@/components/minimal";
 
-const SOURCES: { value: MapTypePreference; label: string; icon: "theme-light-dark" | "map-outline" }[] = [
+const SOURCES: {
+  value: MapTypePreference;
+  label: string;
+  icon: "theme-light-dark" | "map-outline";
+}[] = [
   { value: "dark", label: "Dark", icon: "theme-light-dark" },
   { value: "standard", label: "Standard", icon: "map-outline" },
 ];
@@ -51,7 +61,10 @@ export function MapSourcePicker() {
 
   return (
     <View style={styles.container}>
-      <SectionLabel color={colors.primary} style={{ marginTop: 0, marginBottom: 12 }}>
+      <SectionLabel
+        color={colors.primary}
+        style={{ marginTop: 0, marginBottom: 12 }}
+      >
         Map source
       </SectionLabel>
       {SOURCES.map(({ value, label, icon }) => {
@@ -75,7 +88,9 @@ export function MapSourcePicker() {
                 size={22}
                 color={isSelected ? colors.primary : colors.muted}
               />
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "500" }}>
+              <Text
+                style={{ color: colors.text, fontSize: 16, fontWeight: "500" }}
+              >
                 {label}
               </Text>
             </View>

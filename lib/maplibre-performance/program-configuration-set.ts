@@ -6,7 +6,14 @@
  * accepts external batch order.
  */
 
-export type LayerType = "fill" | "line" | "symbol" | "circle" | "heatmap" | "raster" | "background";
+export type LayerType =
+  | "fill"
+  | "line"
+  | "symbol"
+  | "circle"
+  | "heatmap"
+  | "raster"
+  | "background";
 
 export interface LayerSpecLike {
   type?: string;
@@ -20,7 +27,15 @@ export interface ProgramConfiguration {
   layerType: LayerType;
 }
 
-const layerTypes: LayerType[] = ["fill", "line", "symbol", "circle", "heatmap", "raster", "background"];
+const layerTypes: LayerType[] = [
+  "fill",
+  "line",
+  "symbol",
+  "circle",
+  "heatmap",
+  "raster",
+  "background",
+];
 
 function isLayerType(t: string): t is LayerType {
   return layerTypes.includes(t as LayerType);
@@ -33,10 +48,18 @@ export function getProgramMergeKey(layer: LayerSpecLike): string {
   const type = (layer.type ?? "fill") as string;
   const paint = layer.paint ?? {};
   const layout = layer.layout ?? {};
-  const paintKeys = Object.keys(paint).sort().filter((k) => paint[k] != null);
-  const layoutKeys = Object.keys(layout).sort().filter((k) => layout[k] != null);
-  const paintPart = paintKeys.map((k) => `${k}:${String((paint as Record<string, unknown>)[k])}`).join("|");
-  const layoutPart = layoutKeys.map((k) => `${k}:${String((layout as Record<string, unknown>)[k])}`).join("|");
+  const paintKeys = Object.keys(paint)
+    .sort()
+    .filter((k) => paint[k] != null);
+  const layoutKeys = Object.keys(layout)
+    .sort()
+    .filter((k) => layout[k] != null);
+  const paintPart = paintKeys
+    .map((k) => `${k}:${String((paint as Record<string, unknown>)[k])}`)
+    .join("|");
+  const layoutPart = layoutKeys
+    .map((k) => `${k}:${String((layout as Record<string, unknown>)[k])}`)
+    .join("|");
   return `${type};${paintPart};${layoutPart}`;
 }
 
@@ -50,7 +73,9 @@ export class ProgramConfigurationSet {
     if (existingId) {
       return this.configurations.get(existingId)!;
     }
-    const layerType = isLayerType((layer.type ?? "fill") as string) ? (layer.type as LayerType) : "fill";
+    const layerType = isLayerType((layer.type ?? "fill") as string)
+      ? (layer.type as LayerType)
+      : "fill";
     const configId = id ?? `prog_${this.configurations.size}`;
     const config: ProgramConfiguration = { id: configId, mergeKey, layerType };
     this.configurations.set(configId, config);
@@ -67,7 +92,7 @@ export class ProgramConfigurationSet {
    */
   getBatchRenderOrder<T extends { id: string }>(
     layers: T[],
-    getMergeKey: (layer: T) => string
+    getMergeKey: (layer: T) => string,
   ): T[] {
     const keyToLayers = new Map<string, T[]>();
     for (const layer of layers) {

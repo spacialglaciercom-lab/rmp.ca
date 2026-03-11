@@ -13,7 +13,9 @@ import { loadPluginConfig } from "@/lib/plugins/config";
 
 export const PluginsSection: React.FC = () => {
   const { theme } = useTheme();
-  const [configDefaults, setConfigDefaults] = useState<Record<string, boolean>>({});
+  const [configDefaults, setConfigDefaults] = useState<Record<string, boolean>>(
+    {},
+  );
   /** Local copy of enabled state so the toggle updates immediately on press (avoids persist/subscribe timing). */
   const [localEnabled, setLocalEnabled] = useState<Record<string, boolean>>({});
 
@@ -21,21 +23,23 @@ export const PluginsSection: React.FC = () => {
 
   // Load config defaults and sync local state from store (including after rehydration)
   useEffect(() => {
-    loadPluginConfig().then((config) => {
-      const defaults: Record<string, boolean> = {};
-      for (const [id, entry] of Object.entries(config.plugins)) {
-        defaults[id] = entry.enabled;
-      }
-      setConfigDefaults(defaults);
-      const store = usePluginStore.getState();
-      const next: Record<string, boolean> = {};
-      descriptors.forEach((d) => {
-        next[d.id] = store.isPluginEnabled(d.id, defaults[d.id] ?? true);
+    loadPluginConfig()
+      .then((config) => {
+        const defaults: Record<string, boolean> = {};
+        for (const [id, entry] of Object.entries(config.plugins)) {
+          defaults[id] = entry.enabled;
+        }
+        setConfigDefaults(defaults);
+        const store = usePluginStore.getState();
+        const next: Record<string, boolean> = {};
+        descriptors.forEach((d) => {
+          next[d.id] = store.isPluginEnabled(d.id, defaults[d.id] ?? true);
+        });
+        setLocalEnabled(next);
+      })
+      .catch((err) => {
+        console.warn("[PluginsSection] Failed to load plugin config:", err);
       });
-      setLocalEnabled(next);
-    }).catch((err) => {
-      console.warn("[PluginsSection] Failed to load plugin config:", err);
-    });
   }, []);
 
   // Keep local state in sync when store changes (e.g. rehydration)
@@ -65,12 +69,14 @@ export const PluginsSection: React.FC = () => {
     <View style={[styles.section, { borderTopColor: theme.borderLight }]}>
       <Text style={[styles.sectionTitle, { color: theme.text }]}>Plugins</Text>
       <Text style={[styles.sectionDesc, { color: theme.textTertiary }]}>
-        Enable or disable feature extensions (weather, route optimization, Overture extraction). List from plugin registry.
+        Enable or disable feature extensions (weather, route optimization,
+        Overture extraction). List from plugin registry.
       </Text>
       <View style={styles.rows}>
         {descriptors.map((d) => {
           const defaultEnabled = configDefaults[d.id] ?? true;
-          const enabled = d.id in localEnabled ? localEnabled[d.id] : defaultEnabled;
+          const enabled =
+            d.id in localEnabled ? localEnabled[d.id] : defaultEnabled;
           return (
             <Pressable
               key={d.id}
@@ -80,8 +86,12 @@ export const PluginsSection: React.FC = () => {
               accessibilityState={{ checked: enabled }}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[styles.label, { color: theme.text }]}>{d.name}</Text>
-                <Text style={[styles.description, { color: theme.textTertiary }]}>
+                <Text style={[styles.label, { color: theme.text }]}>
+                  {d.name}
+                </Text>
+                <Text
+                  style={[styles.description, { color: theme.textTertiary }]}
+                >
                   {d.description}
                 </Text>
               </View>
@@ -91,12 +101,9 @@ export const PluginsSection: React.FC = () => {
                   { backgroundColor: enabled ? theme.accent : theme.border },
                 ]}
               >
-              <View
-                style={[
-                  styles.toggleThumb,
-                  { marginLeft: enabled ? 22 : 2 },
-                ]}
-              />
+                <View
+                  style={[styles.toggleThumb, { marginLeft: enabled ? 22 : 2 }]}
+                />
               </View>
             </Pressable>
           );

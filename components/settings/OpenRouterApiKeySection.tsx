@@ -1,6 +1,9 @@
 import React from "react";
 import { ApiKeySection } from "./ApiKeySection";
-import { getOpenRouterApiKey, setOpenRouterApiKey } from "@/lib/openrouter-api-key";
+import {
+  getOpenRouterApiKey,
+  setOpenRouterApiKey,
+} from "@/lib/openrouter-api-key";
 
 export function OpenRouterApiKeySection() {
   return (

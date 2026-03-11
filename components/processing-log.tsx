@@ -1,5 +1,12 @@
 import { useRef, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Platform, Alert } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Platform,
+  Alert,
+} from "react-native";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
@@ -61,7 +68,11 @@ export function ProcessingLog() {
   const handleExportLog = async () => {
     if (state.processingLog.length === 0) return;
     hapticImpact();
-    const date = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
+    const date = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", "_")
+      .replace(/:/g, "-");
     const fileName = `route_log_${date}.json`;
     const payload = JSON.stringify(
       state.processingLog.map((e) => ({
@@ -70,31 +81,45 @@ export function ProcessingLog() {
         message: e.message,
       })),
       null,
-      2
+      2,
     );
     try {
-      if (Platform.OS === 'web') {
-        const blob = new Blob([payload], { type: 'application/json' });
+      if (Platform.OS === "web") {
+        const blob = new Blob([payload], { type: "application/json" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = fileName;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       } else {
-        const FileSystem = await import('expo-file-system/legacy');
-        const Sharing = (await import('expo-sharing')) as { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: { mimeType?: string; dialogTitle?: string }) => Promise<void> };
+        const FileSystem = await import("expo-file-system/legacy");
+        const Sharing = (await import("expo-sharing")) as {
+          isAvailableAsync: () => Promise<boolean>;
+          shareAsync: (
+            uri: string,
+            opts?: { mimeType?: string; dialogTitle?: string },
+          ) => Promise<void>;
+        };
         const fileUri = `${FileSystem.cacheDirectory ?? ""}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, payload, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, payload, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
         const isAvailable = await Sharing.isAvailableAsync();
         if (isAvailable) {
-          await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Export processing log' });
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/json",
+            dialogTitle: "Export processing log",
+          });
         } else {
-          Alert.alert('Saved', `Log saved to ${fileUri}`);
+          Alert.alert("Saved", `Log saved to ${fileUri}`);
         }
       }
     } catch (e) {
       console.error(e);
-      Alert.alert('Export failed', 'Could not export log. Please try again.');
+      Alert.alert("Export failed", "Could not export log. Please try again.");
     }
   };
   return (
@@ -106,12 +131,18 @@ export function ProcessingLog() {
         <Text className="text-lg font-semibold text-foreground">
           Processing Log
         </Text>
-                {state.processingLog.length > 0 && (
+        {state.processingLog.length > 0 && (
           <View style={{ flexDirection: "row", gap: 16 }}>
-            <TouchableOpacity onPress={handleExportLog} className="active:opacity-70">
+            <TouchableOpacity
+              onPress={handleExportLog}
+              className="active:opacity-70"
+            >
               <Text className="text-sm text-muted">Export</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleClearLog} className="active:opacity-70">
+            <TouchableOpacity
+              onPress={handleClearLog}
+              className="active:opacity-70"
+            >
               <Text className="text-sm text-muted">Clear</Text>
             </TouchableOpacity>
           </View>
@@ -186,8 +217,10 @@ export function ProcessingLog() {
             {state.processingLog.length} entries
           </Text>
           <Text className="text-xs text-muted">
-            {state.processingLog.filter((e) => e.type === "error").length} errors,{" "}
-            {state.processingLog.filter((e) => e.type === "warning").length} warnings
+            {state.processingLog.filter((e) => e.type === "error").length}{" "}
+            errors,{" "}
+            {state.processingLog.filter((e) => e.type === "warning").length}{" "}
+            warnings
           </Text>
         </View>
       )}

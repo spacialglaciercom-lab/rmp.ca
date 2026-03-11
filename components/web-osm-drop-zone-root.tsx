@@ -30,7 +30,8 @@ function readFileAsTextFallback(file: File | Blob): Promise<string> {
     }
     const reader = new FileReader();
     reader.onload = () => resolve((reader.result as string) ?? "");
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsText(file, "UTF-8");
   });
 }
@@ -42,12 +43,15 @@ export interface WebOSMDropZoneRootProps {
   onImportComplete: (
     points: CollectionPoint[],
     osmData?: StoredOSMData,
-    options?: { totalDistanceKm?: number }
+    options?: { totalDistanceKm?: number },
   ) => void;
   children: React.ReactNode;
 }
 
-export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZoneRootProps) {
+export function WebOSMDropZoneRoot({
+  onImportComplete,
+  children,
+}: WebOSMDropZoneRootProps) {
   const colors = useColors();
   const customStartPoint = useCustomStartPoint();
   const { optimizeRoute } = useRouteOptimization();
@@ -66,16 +70,23 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
         return;
       }
       const fileName = (file.name ?? "").toLowerCase();
-      const isGeoJSON = fileName.endsWith(".geojson") || fileName.endsWith(".json");
+      const isGeoJSON =
+        fileName.endsWith(".geojson") || fileName.endsWith(".json");
       const isOSM = fileName.endsWith(".osm") || fileName.endsWith(".xml");
       if (!isOSM && !isGeoJSON) {
-        setError("Please drop an OSM file (.osm, .xml) or GeoJSON file (.geojson, .json)");
+        setError(
+          "Please drop an OSM file (.osm, .xml) or GeoJSON file (.geojson, .json)",
+        );
         return;
       }
 
       setIsProcessing(true);
       setError(null);
-      setProgress({ stage: "parsing", progress: 0, message: "Reading file..." });
+      setProgress({
+        stage: "parsing",
+        progress: 0,
+        message: "Reading file...",
+      });
 
       try {
         // Use readFileAsText from lib (never calls file.text()); fallback if import is undefined (e.g. bundler)
@@ -87,13 +98,22 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
 
         // GeoJSON: send to Python optimizer backend
         if (isGeoJSON) {
-          setProgress({ stage: "parsing", progress: 30, message: "Parsing GeoJSON..." });
+          setProgress({
+            stage: "parsing",
+            progress: 30,
+            message: "Parsing GeoJSON...",
+          });
           const geojson = parseGeoJSON(content);
 
-          setProgress({ stage: "parsing", progress: 50, message: "Sending to route optimizer..." });
+          setProgress({
+            stage: "parsing",
+            progress: 50,
+            message: "Sending to route optimizer...",
+          });
 
           const startCoords = customStartPoint.getStartPoint();
-          const turnPenalties = customStartPoint.state.configuration.turnPenalties;
+          const turnPenalties =
+            customStartPoint.state.configuration.turnPenalties;
           const importResult = await importGeoJSONRoute(geojson, {
             startLat: startCoords?.latitude,
             startLon: startCoords?.longitude,
@@ -106,7 +126,11 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
               : undefined,
           });
 
-          setProgress({ stage: "complete", progress: 100, message: "Import complete!" });
+          setProgress({
+            stage: "complete",
+            progress: 100,
+            message: "Import complete!",
+          });
 
           setResult({
             success: true,
@@ -127,7 +151,11 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
         }
 
         // OSM XML: parse with OSMParser
-        setProgress({ stage: "parsing", progress: 30, message: "Parsing OSM..." });
+        setProgress({
+          stage: "parsing",
+          progress: 30,
+          message: "Parsing OSM...",
+        });
 
         const parser = new OSMParser();
         const { nodes, ways, turnRestrictions } = parser.parseOSM(content);
@@ -136,10 +164,15 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
         const fileName = (file.name ?? "import").replace(/\.(osm|xml)$/i, "");
         const fileBounds = (() => {
           if (nodes.size === 0) return undefined;
-          let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+          let minLat = 90,
+            maxLat = -90,
+            minLon = 180,
+            maxLon = -180;
           for (const n of nodes.values()) {
-            minLat = Math.min(minLat, n.lat); maxLat = Math.max(maxLat, n.lat);
-            minLon = Math.min(minLon, n.lon); maxLon = Math.max(maxLon, n.lon);
+            minLat = Math.min(minLat, n.lat);
+            maxLat = Math.max(maxLat, n.lat);
+            minLon = Math.min(minLon, n.lon);
+            maxLon = Math.max(maxLon, n.lon);
           }
           return { minLat, maxLat, minLon, maxLon };
         })();
@@ -149,28 +182,38 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
           nodeCount: nodes.size,
           bounds: fileBounds,
         }).catch((err) => {
-          console.warn("[OSMLibrary] Save to library failed:", err instanceof Error ? err.message : err);
+          console.warn(
+            "[OSMLibrary] Save to library failed:",
+            err instanceof Error ? err.message : err,
+          );
         });
 
         const startCoords = customStartPoint.getStartPoint();
 
-        setProgress({ stage: "parsing", progress: 50, message: "Optimizing route..." });
+        setProgress({
+          stage: "parsing",
+          progress: 50,
+          message: "Optimizing route...",
+        });
 
         // Yield so browser can paint progress before CPU-heavy work
         await new Promise<void>((r) => setTimeout(r, 0));
 
-        const onewayMode = customStartPoint.state.configuration.onewayMode ?? "B";
-        const turnPenalties = customStartPoint.state.configuration.turnPenalties;
-        const serviceBothSides = customStartPoint.state.configuration.serviceBothSides ?? false;
+        const onewayMode =
+          customStartPoint.state.configuration.onewayMode ?? "B";
+        const turnPenalties =
+          customStartPoint.state.configuration.turnPenalties;
+        const serviceBothSides =
+          customStartPoint.state.configuration.serviceBothSides ?? false;
 
         const stepLabels: Record<string, string> = {
           "street-edges": "Converting streets...",
           "turn-graph": "Building turn graph...",
           "build-graph": "Building turn graph...",
-          "scc": "Analyzing connectivity...",
-          "bridge": "Connecting components...",
-          "eulerian": "Balancing graph...",
-          "circuit": "Computing optimal circuit...",
+          scc: "Analyzing connectivity...",
+          bridge: "Connecting components...",
+          eulerian: "Balancing graph...",
+          circuit: "Computing optimal circuit...",
           "route-points": "Generating route points...",
         };
 
@@ -190,23 +233,41 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
           : await new Promise<any>((resolve, reject) => {
               setTimeout(() => {
                 try {
-                  const optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions ?? [], undefined, { serviceBothSides, antiLoopMode: "strict" });
-                  resolve(optimizer.optimize(startCoords?.latitude, startCoords?.longitude, turnPenalties));
-                } catch (err) { reject(err); }
+                  const optimizer = new RouteOptimizer(
+                    nodes,
+                    ways,
+                    onewayMode,
+                    turnRestrictions ?? [],
+                    undefined,
+                    { serviceBothSides, antiLoopMode: "strict" },
+                  );
+                  resolve(
+                    optimizer.optimize(
+                      startCoords?.latitude,
+                      startCoords?.longitude,
+                      turnPenalties,
+                    ),
+                  );
+                } catch (err) {
+                  reject(err);
+                }
               }, 0);
             });
 
-        const collectionPoints: CollectionPoint[] = optResult.route.map((p, i) => ({
-          id: (p as { nodeId?: string }).nodeId ?? `route-${i}`,
-          address: `Stop ${i + 1}`,
-          latitude: p.latitude,
-          longitude: p.longitude,
-          collectionType: "residential",
-          status: "pending",
-        }));
+        const collectionPoints: CollectionPoint[] = optResult.route.map(
+          (p, i) => ({
+            id: (p as { nodeId?: string }).nodeId ?? `route-${i}`,
+            address: `Stop ${i + 1}`,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            collectionType: "residential",
+            status: "pending",
+          }),
+        );
 
         const bounds = (() => {
-          if (nodes.size === 0) return { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
+          if (nodes.size === 0)
+            return { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
           let minLat = 90;
           let maxLat = -90;
           let minLon = 180;
@@ -249,7 +310,7 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
         setIsProcessing(false);
       }
     },
-    [onImportComplete, customStartPoint, isExperimentalRoute, optimizeRoute]
+    [onImportComplete, customStartPoint, isExperimentalRoute, optimizeRoute],
   );
 
   useEffect(() => {
@@ -295,9 +356,12 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
   const showOverlay = (isDragging || isProcessing) && !osmExtractorVisible;
   const getProgressColor = () => {
     switch (progress?.stage) {
-      case "complete": return colors.success;
-      case "error": return colors.error;
-      default: return colors.primary;
+      case "complete":
+        return colors.success;
+      case "error":
+        return colors.error;
+      default:
+        return colors.primary;
     }
   };
 
@@ -331,12 +395,28 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
               alignItems: "center",
             }}
           >
-            <View style={{ backgroundColor: colors.surface, padding: 32, borderRadius: 16, alignItems: "center" }}>
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                padding: 32,
+                borderRadius: 16,
+                alignItems: "center",
+              }}
+            >
               <Text style={{ fontSize: 48, marginBottom: 16 }}>📂</Text>
-              <Text style={{ fontSize: 24, fontWeight: "bold", color: colors.primary, marginBottom: 8 }}>
+              <Text
+                style={{
+                  fontSize: 24,
+                  fontWeight: "bold",
+                  color: colors.primary,
+                  marginBottom: 8,
+                }}
+              >
                 Drop OSM File Here
               </Text>
-              <Text style={{ fontSize: 14, color: colors.muted }}>Supports .osm and .xml files</Text>
+              <Text style={{ fontSize: 14, color: colors.muted }}>
+                Supports .osm and .xml files
+              </Text>
             </View>
           </View>
         )}
@@ -350,14 +430,45 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
               alignItems: "center",
             }}
           >
-            <View style={{ backgroundColor: colors.surface, padding: 24, borderRadius: 16, width: "80%", maxWidth: 400 }}>
-              <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.foreground, marginBottom: 16, textAlign: "center" }}>
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                padding: 24,
+                borderRadius: 16,
+                width: "80%",
+                maxWidth: 400,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  color: colors.foreground,
+                  marginBottom: 16,
+                  textAlign: "center",
+                }}
+              >
                 Importing OSM Data...
               </Text>
               {progress && (
                 <>
-                  <Text style={{ fontSize: 14, color: colors.muted, marginBottom: 8 }}>{progress.message}</Text>
-                  <View style={{ height: 8, backgroundColor: colors.border, borderRadius: 4, overflow: "hidden" }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: colors.muted,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {progress.message}
+                  </Text>
+                  <View
+                    style={{
+                      height: 8,
+                      backgroundColor: colors.border,
+                      borderRadius: 4,
+                      overflow: "hidden",
+                    }}
+                  >
                     <View
                       style={{
                         height: "100%",
@@ -367,7 +478,14 @@ export function WebOSMDropZoneRoot({ onImportComplete, children }: WebOSMDropZon
                       }}
                     />
                   </View>
-                  <Text style={{ fontSize: 12, color: colors.muted, marginTop: 8, textAlign: "right" }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: colors.muted,
+                      marginTop: 8,
+                      textAlign: "right",
+                    }}
+                  >
                     {progress.progress}%
                   </Text>
                 </>

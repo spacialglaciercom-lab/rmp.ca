@@ -13,7 +13,9 @@
 const path = require("path");
 const { createRequire } = require("module");
 
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withXcodeProject } = requireFromRoot("expo/config-plugins");
 
 const DEFAULT_OPTIONS = {
@@ -60,7 +62,9 @@ function addMoonshineSdkToTargets(config, options) {
 
     // 2. PBXProject.packageReferences
     const projectSection = objects.PBXProject || {};
-    const projectId = Object.keys(projectSection).find((k) => !k.includes("_comment"));
+    const projectId = Object.keys(projectSection).find(
+      (k) => !k.includes("_comment"),
+    );
     if (projectId) {
       const proj = projectSection[projectId];
       if (!proj.packageReferences) proj.packageReferences = [];
@@ -114,14 +118,16 @@ function addMoonshineSdkToTargets(config, options) {
         // 6. Frameworks build phase
         if (target.buildPhases) {
           for (const phaseRef of target.buildPhases) {
-            const phaseKey = typeof phaseRef === "string" ? phaseRef : phaseRef.value;
+            const phaseKey =
+              typeof phaseRef === "string" ? phaseRef : phaseRef.value;
             const phase = objects.PBXFrameworksBuildPhase?.[phaseKey];
             if (phase) {
               if (!phase.files) phase.files = [];
               const fileAlreadyAdded = phase.files.some((f) => {
                 const bf = objects.PBXBuildFile?.[f];
                 if (!bf || !bf.productRef) return false;
-                const dep = objects.XCSwiftPackageProductDependency?.[bf.productRef];
+                const dep =
+                  objects.XCSwiftPackageProductDependency?.[bf.productRef];
                 return dep && dep.productName === productName;
               });
               if (!fileAlreadyAdded) {

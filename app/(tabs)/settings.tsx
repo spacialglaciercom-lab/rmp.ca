@@ -13,12 +13,7 @@ export default function SettingsScreen() {
   return (
     <ErrorBoundary>
       <Suspense
-        fallback={
-          <TabScreenSkeleton
-            title="Settings"
-            subtitle="Loading..."
-          />
-        }
+        fallback={<TabScreenSkeleton title="Settings" subtitle="Loading..." />}
       >
         <SettingsContent />
       </Suspense>

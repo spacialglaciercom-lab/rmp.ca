@@ -26,11 +26,16 @@ const UPSTREAM_HTTP =
   process.env.OPTIMIZER_WS_UPSTREAM ||
   process.env.EXPO_PUBLIC_OVERTURE_EXTRACT_URL ||
   DEFAULT_EXTRACT_UPSTREAM;
-const UPSTREAM_WS = UPSTREAM_HTTP.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+const UPSTREAM_WS = UPSTREAM_HTTP.replace(/^https:\/\//i, "wss://").replace(
+  /^http:\/\//i,
+  "ws://",
+);
 
 /** Force IPv4 for upstream connection; avoids ECONNREFUSED when upstream only listens on IPv4 (e.g. some Railway setups). */
 const UPSTREAM_IS_WSS = /^wss:\/\//i.test(UPSTREAM_WS);
-const upstreamAgent = UPSTREAM_IS_WSS ? new https.Agent({ family: 4 }) : undefined;
+const upstreamAgent = UPSTREAM_IS_WSS
+  ? new https.Agent({ family: 4 })
+  : undefined;
 
 /** Headers essential for WebSocket upgrade — everything else is stripped to avoid HPE_HEADER_OVERFLOW on the upstream. */
 const WS_PASSTHROUGH_HEADERS = new Set([
@@ -63,9 +68,15 @@ function stripHeaders(req: IncomingMessage): IncomingHttpHeaders {
 export function registerExtractHttpProxyRoutes(app: Express): void {
   async function proxyToExtract(req: Request, res: Response): Promise<void> {
     const targetUrl = `${UPSTREAM_HTTP.replace(/\/$/, "")}${req.originalUrl}`;
-    log.info("Proxying extract HTTP request", { method: req.method, path: req.originalUrl, target: targetUrl });
+    log.info("Proxying extract HTTP request", {
+      method: req.method,
+      path: req.originalUrl,
+      target: targetUrl,
+    });
     try {
-      const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(60_000) });
+      const upstream = await fetch(targetUrl, {
+        signal: AbortSignal.timeout(60_000),
+      });
       res.status(upstream.status);
       const ct = upstream.headers.get("content-type");
       if (ct) res.setHeader("Content-Type", ct);
@@ -74,9 +85,18 @@ export function registerExtractHttpProxyRoutes(app: Express): void {
       const body = await upstream.arrayBuffer();
       res.send(Buffer.from(body));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown proxy error";
-      log.error("Extract HTTP proxy failed", err instanceof Error ? err : new Error(message));
-      res.status(502).json({ ok: false, error: "Extract backend unreachable", details: message, target: targetUrl });
+      const message =
+        err instanceof Error ? err.message : "Unknown proxy error";
+      log.error(
+        "Extract HTTP proxy failed",
+        err instanceof Error ? err : new Error(message),
+      );
+      res.status(502).json({
+        ok: false,
+        error: "Extract backend unreachable",
+        details: message,
+        target: targetUrl,
+      });
     }
   }
 
@@ -85,13 +105,21 @@ export function registerExtractHttpProxyRoutes(app: Express): void {
 }
 
 export function registerWsExtractProxy(server: Server): void {
-  log.info("WebSocket /ws/extract proxy will forward to upstream", { target: UPSTREAM_WS });
+  log.info("WebSocket /ws/extract proxy will forward to upstream", {
+    target: UPSTREAM_WS,
+  });
 
   const proxy = httpProxy.createProxyServer({ ws: true });
 
   proxy.on("error", (err: NodeJS.ErrnoException, req, _res) => {
     const code = err.code ?? "";
-    const msg = (err.message || String(err) || code || "Unknown WebSocket proxy error").trim() || "Unknown WebSocket proxy error";
+    const msg =
+      (
+        err.message ||
+        String(err) ||
+        code ||
+        "Unknown WebSocket proxy error"
+      ).trim() || "Unknown WebSocket proxy error";
     const hint =
       code === "ECONNREFUSED"
         ? " Upstream extract service is not running or unreachable. Start it on Railway or set EXTRACT_WS_UPSTREAM (use Railway internal URL if same project: http://servicename.railway.internal:PORT)."
@@ -117,7 +145,10 @@ export function registerWsExtractProxy(server: Server): void {
 
     const proxyOptions: Record<string, unknown> = { target: UPSTREAM_WS };
     if (upstreamAgent) proxyOptions.agent = upstreamAgent;
-    log.info("Proxying WebSocket /ws/extract to upstream", { target: UPSTREAM_WS, path: req.url });
+    log.info("Proxying WebSocket /ws/extract to upstream", {
+      target: UPSTREAM_WS,
+      path: req.url,
+    });
     proxy.ws(req, socket, head, proxyOptions);
   });
 }

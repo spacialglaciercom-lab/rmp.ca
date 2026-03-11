@@ -4,7 +4,10 @@
  * Uses existing cache (AsyncStorage + in-memory) via weatherService / googleWeatherService.
  */
 
-import { getGoogleCurrentConditions, isGoogleWeatherConfigured } from "@/services/googleWeatherService";
+import {
+  getGoogleCurrentConditions,
+  isGoogleWeatherConfigured,
+} from "@/services/googleWeatherService";
 import { getCurrentWeather } from "@/services/weatherService";
 import type { GoogleCurrentConditions } from "@/services/googleWeatherService";
 import type { CurrentWeather } from "@/services/weatherService";
@@ -18,7 +21,10 @@ export type WeatherDataResult =
  * Fetch current weather for (lat, lon). Uses Google first, then OpenWeather.
  * Caching and offline behavior are handled by the underlying services.
  */
-export async function fetchWeather(lat: number, lon: number): Promise<WeatherDataResult> {
+export async function fetchWeather(
+  lat: number,
+  lon: number,
+): Promise<WeatherDataResult> {
   try {
     const useGoogle = await isGoogleWeatherConfigured();
     if (useGoogle) {

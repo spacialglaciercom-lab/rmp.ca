@@ -20,10 +20,7 @@ export function PriorityOrderDisplay({ order }: PriorityOrderDisplayProps) {
 
   return (
     <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.primary + "12" },
-      ]}
+      style={[styles.container, { backgroundColor: colors.primary + "12" }]}
     >
       <Text style={[styles.label, { color: colors.primary }]}>
         Turn Priority Order

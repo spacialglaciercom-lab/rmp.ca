@@ -12,8 +12,12 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
-const { withPodfile, withDangerousMod, withPlugins } = requireFromRoot("expo/config-plugins");
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
+const { withPodfile, withDangerousMod, withPlugins } = requireFromRoot(
+  "expo/config-plugins",
+);
 
 // Firebase Swift pods that require modular headers to be imported correctly.
 // These are the pods that ship as Swift modules and need strict module semantics.
@@ -75,13 +79,14 @@ function applyPodfilePatches(contents) {
   if (typeof contents !== "string") return contents;
 
   // 0. Add pre_install to remove lstm-model-downloader
-  const LSTM_PRE_INSTALL_MARKER = "Removed modules/lstm-model-downloader to avoid FirebaseMLModelDownloader";
+  const LSTM_PRE_INSTALL_MARKER =
+    "Removed modules/lstm-model-downloader to avoid FirebaseMLModelDownloader";
   if (!contents.includes(LSTM_PRE_INSTALL_MARKER)) {
     const afterPlatform = contents.match(/^(platform\s+:ios[^\n]*\n)/m);
     if (afterPlatform) {
       contents = contents.replace(
         afterPlatform[1],
-        afterPlatform[1] + "\n" + PRE_INSTALL_LSTM_REMOVAL + "\n"
+        afterPlatform[1] + "\n" + PRE_INSTALL_LSTM_REMOVAL + "\n",
       );
     } else {
       contents = PRE_INSTALL_LSTM_REMOVAL + "\n" + contents;
@@ -92,19 +97,25 @@ function applyPodfilePatches(contents) {
   // Per-pod :modular_headers => true for Firebase Swift pods is injected in post_install instead.
   if (contents.includes("use_modular_headers!")) {
     contents = contents.replace(/^\s*use_modular_headers!\s*\n/gm, "");
-    console.log("[withFirebaseModularHeaders] Removed global use_modular_headers! (breaks RNFB ObjC)");
+    console.log(
+      "[withFirebaseModularHeaders] Removed global use_modular_headers! (breaks RNFB ObjC)",
+    );
   }
 
   // 2. Add CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES in post_install
-  if (!contents.includes("CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES")) {
+  if (
+    !contents.includes("CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES")
+  ) {
     let applied = false;
 
     // A: Inject at start of post_install block
-    const postInstallStart = contents.match(/^(\s*post_install\s+do\s+\|[^|]+\|\s*\n)/m);
+    const postInstallStart = contents.match(
+      /^(\s*post_install\s+do\s+\|[^|]+\|\s*\n)/m,
+    );
     if (postInstallStart) {
       contents = contents.replace(
         postInstallStart[1],
-        postInstallStart[1] + RNFB_SNIPPET + "\n"
+        postInstallStart[1] + RNFB_SNIPPET + "\n",
       );
       applied = true;
     }
@@ -112,12 +123,12 @@ function applyPodfilePatches(contents) {
     // B: Inject after react_native_post_install(...)
     if (!applied) {
       const rnfBlock = contents.match(
-        /(react_native_post_install\s*\([\s\S]*?\n\s+\))\s*\n(\s+end\b)/m
+        /(react_native_post_install\s*\([\s\S]*?\n\s+\))\s*\n(\s+end\b)/m,
       );
       if (rnfBlock) {
         contents = contents.replace(
           rnfBlock[0],
-          `${rnfBlock[1]}\n${RNFB_SNIPPET}\n${rnfBlock[2]}`
+          `${rnfBlock[1]}\n${RNFB_SNIPPET}\n${rnfBlock[2]}`,
         );
         applied = true;
       }
@@ -134,7 +145,7 @@ function applyPodfilePatches(contents) {
       if (targetClose) {
         contents = contents.replace(
           targetClose[0],
-          targetClose[1] + block + "\n" + targetClose[2]
+          targetClose[1] + block + "\n" + targetClose[2],
         );
       }
     }
@@ -149,9 +160,14 @@ function removeLstmModelDownloaderModule(projectRoot) {
   if (fs.existsSync(lstmPath)) {
     try {
       fs.rmSync(lstmPath, { recursive: true, force: true });
-      console.log("[withFirebaseModularHeaders] Removed modules/lstm-model-downloader to avoid FirebaseMLModelDownloader conflict.");
+      console.log(
+        "[withFirebaseModularHeaders] Removed modules/lstm-model-downloader to avoid FirebaseMLModelDownloader conflict.",
+      );
     } catch (e) {
-      console.warn("[withFirebaseModularHeaders] Could not remove lstm-model-downloader:", (e && (e).message) || e);
+      console.warn(
+        "[withFirebaseModularHeaders] Could not remove lstm-model-downloader:",
+        (e && e.message) || e,
+      );
     }
   }
 }

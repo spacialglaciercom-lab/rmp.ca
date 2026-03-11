@@ -78,7 +78,11 @@ export class OSMParser {
     const doc = this.domParser.parseFromString(osmContent, "text/xml");
     const osm = doc.documentElement;
     if (!osm || osm.tagName !== "osm") {
-      return { nodes: this.nodes, ways: this.ways, turnRestrictions: this.turnRestrictions };
+      return {
+        nodes: this.nodes,
+        ways: this.ways,
+        turnRestrictions: this.turnRestrictions,
+      };
     }
 
     const rawNodes = getChildElements(osm, "node");
@@ -107,13 +111,30 @@ export class OSMParser {
       // Service subtypes to exclude (match Videos app EXCLUDED_SERVICE_TYPES)
       if (highway === "service") {
         const service = tags["service"];
-        if (service && ["driveway", "parking_aisle", "parking", "private", "alley", "emergency_access"].includes(service))
+        if (
+          service &&
+          [
+            "driveway",
+            "parking_aisle",
+            "parking",
+            "private",
+            "alley",
+            "emergency_access",
+          ].includes(service)
+        )
           continue;
       }
       if (tags["area"] === "yes" || tags["area"] === "parking") continue;
-      if (tags["access"] === "private" || tags["access"] === "no" || tags["access"] === "customers" || tags["access"] === "permit") continue;
+      if (
+        tags["access"] === "private" ||
+        tags["access"] === "no" ||
+        tags["access"] === "customers" ||
+        tags["access"] === "permit"
+      )
+        continue;
       if (tags["amenity"] === "parking") continue;
-      if (tags["ownership"] === "private" || tags["private"] === "yes") continue;
+      if (tags["ownership"] === "private" || tags["private"] === "yes")
+        continue;
 
       const nodeRefs: string[] = [];
       const ndEls = getChildElements(wayEl, "nd");
@@ -172,9 +193,15 @@ export class OSMParser {
       waysCount: this.ways.length,
       turnRestrictionsCount: this.turnRestrictions.length,
       sampleNodeIds: Array.from(this.nodes.keys()).slice(0, 5),
-      sampleWayNodeRefs: this.ways.slice(0, 2).map((w) => ({ id: w.id, nodes: w.nodes.slice(0, 4) })),
+      sampleWayNodeRefs: this.ways
+        .slice(0, 2)
+        .map((w) => ({ id: w.id, nodes: w.nodes.slice(0, 4) })),
     });
-    return { nodes: this.nodes, ways: this.ways, turnRestrictions: this.turnRestrictions };
+    return {
+      nodes: this.nodes,
+      ways: this.ways,
+      turnRestrictions: this.turnRestrictions,
+    };
   }
 
   getNodes(): Map<string, Node> {
@@ -208,9 +235,10 @@ export class OSMParser {
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    const binary = typeof Buffer !== "undefined"
-      ? Buffer.from(base64, "base64")
-      : base64ToUint8Array(base64);
+    const binary =
+      typeof Buffer !== "undefined"
+        ? Buffer.from(base64, "base64")
+        : base64ToUint8Array(base64);
     const osmJson = parsePBFToOSMJson(binary);
     return this.buildParseResultFromOSMJson(osmJson);
   }
@@ -239,7 +267,16 @@ export class OSMParser {
       if (!highway || EXCLUDED_HIGHWAYS.has(highway)) continue;
       if (!INCLUDED_HIGHWAYS.has(highway) && highway !== "service") continue;
       const service = tags.service;
-      if (service && ["parking_aisle", "driveway", "parking", "drive-through", "emergency_access"].includes(service))
+      if (
+        service &&
+        [
+          "parking_aisle",
+          "driveway",
+          "parking",
+          "drive-through",
+          "emergency_access",
+        ].includes(service)
+      )
         continue;
       if (tags.area === "yes" || tags.area === "parking") continue;
       if (tags.access === "private") continue;
@@ -261,13 +298,17 @@ export class OSMParser {
       const restriction = tags.restriction ?? tags["restriction:hgv"];
       if (restriction !== "no_u_turn") continue;
 
-      const members = (el.members as Array<{ type?: string; role?: string; ref?: number }>) ?? [];
+      const members =
+        (el.members as Array<{ type?: string; role?: string; ref?: number }>) ??
+        [];
       let fromWayId = "";
       let viaNodeId = "";
       let toWayId = "";
       for (const m of members) {
-        if (m.role === "from" && m.type === "way") fromWayId = String(m.ref ?? "");
-        if (m.role === "via" && m.type === "node") viaNodeId = String(m.ref ?? "");
+        if (m.role === "from" && m.type === "way")
+          fromWayId = String(m.ref ?? "");
+        if (m.role === "via" && m.type === "node")
+          viaNodeId = String(m.ref ?? "");
         if (m.role === "to" && m.type === "way") toWayId = String(m.ref ?? "");
       }
       if (fromWayId && viaNodeId && toWayId) {
@@ -286,7 +327,11 @@ export class OSMParser {
       waysCount: this.ways.length,
       turnRestrictionsCount: this.turnRestrictions.length,
     });
-    return { nodes: this.nodes, ways: this.ways, turnRestrictions: this.turnRestrictions };
+    return {
+      nodes: this.nodes,
+      ways: this.ways,
+      turnRestrictions: this.turnRestrictions,
+    };
   }
 }
 

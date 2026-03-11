@@ -10,7 +10,9 @@ export function NeoSectionHeader({ title }: NeoSectionHeaderProps) {
   return (
     <View style={styles.wrap}>
       <View style={[styles.line, { backgroundColor: colors.border }]} />
-      <Text style={[styles.title, { color: colors.foreground }]}>{title.toUpperCase()}</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>
+        {title.toUpperCase()}
+      </Text>
       <View style={[styles.line, { backgroundColor: colors.border }]} />
     </View>
   );

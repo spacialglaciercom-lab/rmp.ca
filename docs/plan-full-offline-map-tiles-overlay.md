@@ -8,12 +8,12 @@ Make the **map tiles overlay** (base map drawn on top of R2 / Overture) work **f
 
 ## Current State
 
-| Piece | Behavior |
-|-------|----------|
-| **Base style (no Overture)** | `mapStyle={MAPLIBRE_STYLE_OSM}` (demotiles.maplibre.org). Offline pack is keyed by this URL → tiles served from pack when downloaded. |
-| **Overture on (any mode)** | `mapStyle={buildOvertureStyleUri(...)}` → inline style (data URI). Base raster = `tile.openstreetmap.org` → always network. Offline pack is **not** used because the map never loads the pack’s style URL. |
-| **Map tiles as overlay** | Inline style layer order: R2 layers first, then `osm-raster` (OSM tiles) on top with opacity. Same network dependency. |
-| **R2 PMTiles** | Can be downloaded to local file; inline style still uses remote `pmtiles://https://...`. Local file path not used in style today. |
+| Piece                        | Behavior                                                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Base style (no Overture)** | `mapStyle={MAPLIBRE_STYLE_OSM}` (demotiles.maplibre.org). Offline pack is keyed by this URL → tiles served from pack when downloaded.                                                                      |
+| **Overture on (any mode)**   | `mapStyle={buildOvertureStyleUri(...)}` → inline style (data URI). Base raster = `tile.openstreetmap.org` → always network. Offline pack is **not** used because the map never loads the pack’s style URL. |
+| **Map tiles as overlay**     | Inline style layer order: R2 layers first, then `osm-raster` (OSM tiles) on top with opacity. Same network dependency.                                                                                     |
+| **R2 PMTiles**               | Can be downloaded to local file; inline style still uses remote `pmtiles://https://...`. Local file path not used in style today.                                                                          |
 
 So for full offline we need:
 
@@ -127,11 +127,11 @@ So for full offline we need:
    - **RasterSource** with tile URL template(s) that match the **demotiles.maplibre.org** tile endpoints used by `MAPLIBRE_STYLE_OSM` (or the dark style). Use the same tile URL pattern the style uses so the **same offline pack** that was created for that style URL serves these tiles.
    - **RasterLayer** on top with the desired opacity (e.g. 0.55).
 
-5. **Local R2 when downloaded**  
+5. **Local R2 when downloaded**
    - Add a helper e.g. `getOverturePmtilesUrl(cityId: string): Promise<string>` that checks for a downloaded R2 file under `getRegionDir(cityId)` and returns either a **local** URL (for the custom protocol) or the remote `pmtiles://https://...` URL.
    - Use that in the VectorSource so that when the user has downloaded R2 for the current city, the map uses the local file and works offline.
 
-6. **Settings / UX**  
+6. **Settings / UX**
    - In **Offline tile pack** (or Map Layers), clarify: “For offline map with Overture and ‘Map tiles on top’, download both: (1) MapLibre offline tiles (this section) and (2) R2 tiles for your region (Offline Map Download).”
    - Optionally: when Overture is on and “Map tiles on top” is on, show a small hint if no pack or no R2 is downloaded (“Download offline tiles and R2 for full offline”).
 
@@ -142,15 +142,15 @@ So for full offline we need:
 
 ## File touch list (for path A)
 
-| File / area | Change |
-|-------------|--------|
-| `app/_layout.tsx` or map screen | Register pmtiles protocol once; extend for local file when URL indicates local path. |
-| `lib/offline-map-download.ts` | Add `getOverturePmtilesUrl(cityId)` (or similar) returning remote URL or local file URL for current city. |
-| `components/maplibre/MapLibreRouteMap.tsx` | When `showOverture`: use base style URL; render VectorSource + Overture layers; when `mapTilesAsOverlay`, render RasterSource + RasterLayer (demotiles URLs, opacity). Use `getOverturePmtilesUrl(resolvedCity)` for VectorSource url. |
-| `components/maplibre/overture-style.ts` | Keep `buildOvertureStyle` for web or fallback; optional: export demotiles tile URL template for the overlay RasterSource. |
-| `components/maplibre/constants.ts` | Optional: export demotiles tile template for overlay (e.g. from style or a constant). |
-| `components/settings/OfflineTilePackSection.tsx` | Short copy update: “Also download R2 in Offline Map Download for full offline with Overture and map tiles on top.” |
-| `components/mapTab/layers/LayerPicker.tsx` | Optional: when “Map tiles on top” is on, show hint “Download offline tiles + R2 for offline.” |
+| File / area                                      | Change                                                                                                                                                                                                                                 |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/_layout.tsx` or map screen                  | Register pmtiles protocol once; extend for local file when URL indicates local path.                                                                                                                                                   |
+| `lib/offline-map-download.ts`                    | Add `getOverturePmtilesUrl(cityId)` (or similar) returning remote URL or local file URL for current city.                                                                                                                              |
+| `components/maplibre/MapLibreRouteMap.tsx`       | When `showOverture`: use base style URL; render VectorSource + Overture layers; when `mapTilesAsOverlay`, render RasterSource + RasterLayer (demotiles URLs, opacity). Use `getOverturePmtilesUrl(resolvedCity)` for VectorSource url. |
+| `components/maplibre/overture-style.ts`          | Keep `buildOvertureStyle` for web or fallback; optional: export demotiles tile URL template for the overlay RasterSource.                                                                                                              |
+| `components/maplibre/constants.ts`               | Optional: export demotiles tile template for overlay (e.g. from style or a constant).                                                                                                                                                  |
+| `components/settings/OfflineTilePackSection.tsx` | Short copy update: “Also download R2 in Offline Map Download for full offline with Overture and map tiles on top.”                                                                                                                     |
+| `components/mapTab/layers/LayerPicker.tsx`       | Optional: when “Map tiles on top” is on, show hint “Download offline tiles + R2 for offline.”                                                                                                                                          |
 
 ---
 

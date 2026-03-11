@@ -1,7 +1,15 @@
 import { TouchableOpacity, Text, View, Alert, Platform } from "react-native";
-import { impactAsync as hapticImpact, notificationAsync as hapticNotification, NotificationFeedbackType } from "@/lib/safe-haptics";
+import {
+  impactAsync as hapticImpact,
+  notificationAsync as hapticNotification,
+  NotificationFeedbackType,
+} from "@/lib/safe-haptics";
 import { useRouting } from "@/lib/routing-context";
-import { exportRouteAsZip, exportRouteAsZipNative, type ExportData } from "@/lib/zip-export";
+import {
+  exportRouteAsZip,
+  exportRouteAsZipNative,
+  type ExportData,
+} from "@/lib/zip-export";
 import { useColors } from "@/hooks/use-colors";
 import { useState } from "react";
 
@@ -33,7 +41,7 @@ export function ExportButton({
       if (!state.gpxData && !state.statistics && !state.report) {
         Alert.alert(
           "No Route Data",
-          "Please generate a route first before exporting. Import an OSM file and optimize a route."
+          "Please generate a route first before exporting. Import an OSM file and optimize a route.",
         );
         return;
       }
@@ -57,14 +65,14 @@ export function ExportButton({
         hapticNotification(NotificationFeedbackType.Success);
         Alert.alert(
           "Export Successful",
-          "Your route has been exported as a ZIP file and should appear in your downloads folder."
+          "Your route has been exported as a ZIP file and should appear in your downloads folder.",
         );
       } else {
         await exportRouteAsZipNative(exportData, filename);
         hapticNotification(NotificationFeedbackType.Success);
         Alert.alert(
           "Export Successful",
-          "Share or save the ZIP file to Files, Drive, or another app."
+          "Share or save the ZIP file to Files, Drive, or another app.",
         );
       }
 
@@ -73,7 +81,8 @@ export function ExportButton({
       // Error feedback
       hapticNotification(NotificationFeedbackType.Error);
 
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
       console.error("Export failed:", errorMessage);
 
       Alert.alert("Export Failed", `Unable to export route: ${errorMessage}`);

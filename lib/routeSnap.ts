@@ -35,9 +35,7 @@ export type MatchedPoint = {
 /**
  * Pre-compute once when you load the route (from GPX or optimizer).
  */
-export function createRouteLine(
-  coords: Position[] | RouteLine
-): RouteLine {
+export function createRouteLine(coords: Position[] | RouteLine): RouteLine {
   if (Array.isArray(coords)) {
     return turf.lineString(coords) as RouteLine;
   }
@@ -59,7 +57,7 @@ export function snapToRoute(
   gps: GPSPoint,
   routeLine: RouteLine,
   previousMatch?: MatchedPoint,
-  offRouteThresholdMeters: number = 30
+  offRouteThresholdMeters: number = 30,
 ): MatchedPoint {
   const point = turf.point([gps.lon, gps.lat]);
 
@@ -68,15 +66,13 @@ export function snapToRoute(
   });
 
   const props = snapped.properties as Record<string, number | undefined>;
-  const distanceToRoute =
-    props.pointDistance ?? props.dist ?? 0;
-  const routeProgressMeters =
-    props.lineDistance ?? props.location ?? 0;
+  const distanceToRoute = props.pointDistance ?? props.dist ?? 0;
+  const routeProgressMeters = props.lineDistance ?? props.location ?? 0;
 
   const totalLength = turf.length(routeLine, { units: "meters" });
   const routeProgressPercent = Math.min(
     totalLength > 0 ? (routeProgressMeters / totalLength) * 100 : 0,
-    100
+    100,
   );
 
   const currentSegmentIndex = props.segmentIndex ?? props.index ?? 0;
@@ -84,7 +80,7 @@ export function snapToRoute(
   const coords = routeLine.geometry.coordinates;
   const bearing = turf.bearing(
     turf.point(coords[currentSegmentIndex]),
-    turf.point(coords[Math.min(currentSegmentIndex + 1, coords.length - 1)])
+    turf.point(coords[Math.min(currentSegmentIndex + 1, coords.length - 1)]),
   );
 
   const isOffRoute = distanceToRoute > offRouteThresholdMeters;
@@ -110,20 +106,14 @@ export function snapToRoute(
 /**
  * Next turn instruction (uses the segmentIndex Turf already gives us).
  */
-export function getNextTurn(
-  match: MatchedPoint,
-  routeLine: RouteLine
-): string {
+export function getNextTurn(match: MatchedPoint, routeLine: RouteLine): string {
   const coords = routeLine.geometry.coordinates;
-  const nextIndex = Math.min(
-    match.currentSegmentIndex + 1,
-    coords.length - 2
-  );
+  const nextIndex = Math.min(match.currentSegmentIndex + 1, coords.length - 2);
 
   const currentBearing = match.bearing;
   const nextBearing = turf.bearing(
     turf.point(coords[nextIndex]),
-    turf.point(coords[nextIndex + 1])
+    turf.point(coords[nextIndex + 1]),
   );
 
   const turnAngle = ((nextBearing - currentBearing + 540) % 360) - 180;

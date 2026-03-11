@@ -17,7 +17,9 @@ export interface UseElevationProfileResult {
   /** Error message if fetch failed. */
   error: string | null;
   /** Call to fetch elevation for the given points. Resets error and sets loading. */
-  fetchProfile: (points: Array<{ lat: number; lon: number }>) => Promise<ElevationProfile | null>;
+  fetchProfile: (
+    points: Array<{ lat: number; lon: number }>,
+  ) => Promise<ElevationProfile | null>;
   /** Clear profile and error. */
   clear: () => void;
 }
@@ -44,7 +46,7 @@ export function useElevationProfile(): UseElevationProfileResult {
         setLoading(false);
       }
     },
-    []
+    [],
   );
 
   const clear = useCallback(() => {

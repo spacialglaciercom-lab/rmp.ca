@@ -62,12 +62,11 @@ export function parseOSMXML(xmlContent: string): OSMData {
   let bounds: OSMData["bounds"] | undefined;
 
   // Parse bounds - handle various attribute orders
-  const boundsMatch = xmlContent.match(
-    /<bounds[^>]*minlat="([^"]+)"[^>]*minlon="([^"]+)"[^>]*maxlat="([^"]+)"[^>]*maxlon="([^"]+)"/
-  ) || xmlContent.match(
-    /<bounds[^>]*>/
-  );
-  
+  const boundsMatch =
+    xmlContent.match(
+      /<bounds[^>]*minlat="([^"]+)"[^>]*minlon="([^"]+)"[^>]*maxlat="([^"]+)"[^>]*maxlon="([^"]+)"/,
+    ) || xmlContent.match(/<bounds[^>]*>/);
+
   if (boundsMatch && boundsMatch.length >= 5) {
     bounds = {
       minLat: parseFloat(boundsMatch[1]),
@@ -79,27 +78,36 @@ export function parseOSMXML(xmlContent: string): OSMData {
 
   // Parse nodes - handle various attribute orders and formats
   // Pattern 1: id before lat/lon
-  const nodeRegex1 = /<node[^>]*\bid="(\d+)"[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*(?:\/>|>([\s\S]*?)<\/node>)/g;
+  const nodeRegex1 =
+    /<node[^>]*\bid="(\d+)"[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*(?:\/>|>([\s\S]*?)<\/node>)/g;
   // Pattern 2: lat/lon before id
-  const nodeRegex2 = /<node[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*\bid="(\d+)"[^>]*(?:\/>|>([\s\S]*?)<\/node>)/g;
-  
+  const nodeRegex2 =
+    /<node[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*\bid="(\d+)"[^>]*(?:\/>|>([\s\S]*?)<\/node>)/g;
+
   let nodeMatch;
   const processedNodeIds = new Set<string>();
-  
+
   // Try pattern 1
   while ((nodeMatch = nodeRegex1.exec(xmlContent)) !== null) {
     const nodeId = nodeMatch[1];
     if (processedNodeIds.has(nodeId)) continue;
     processedNodeIds.add(nodeId);
-    
+
     const lat = parseFloat(nodeMatch[2]);
     const lon = parseFloat(nodeMatch[3]);
-    
+
     // Validate coordinates
-    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    if (
+      isNaN(lat) ||
+      isNaN(lon) ||
+      lat < -90 ||
+      lat > 90 ||
+      lon < -180 ||
+      lon > 180
+    ) {
       continue;
     }
-    
+
     const node: OSMNode = {
       id: nodeId,
       lat,
@@ -116,21 +124,28 @@ export function parseOSMXML(xmlContent: string): OSMData {
 
     nodes.push(node);
   }
-  
+
   // Try pattern 2 if we didn't find many nodes
   if (nodes.length < 10) {
     while ((nodeMatch = nodeRegex2.exec(xmlContent)) !== null) {
       const nodeId = nodeMatch[3];
       if (processedNodeIds.has(nodeId)) continue;
       processedNodeIds.add(nodeId);
-      
+
       const lat = parseFloat(nodeMatch[1]);
       const lon = parseFloat(nodeMatch[2]);
-      
-      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+
+      if (
+        isNaN(lat) ||
+        isNaN(lon) ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180
+      ) {
         continue;
       }
-      
+
       const node: OSMNode = {
         id: nodeId,
         lat,
@@ -189,7 +204,7 @@ function parseTags(content: string): Record<string, string> {
 // Extract collection points from OSM data
 export function extractCollectionPoints(
   osmData: OSMData,
-  options: ImportOptions = {}
+  options: ImportOptions = {},
 ): CollectionPoint[] {
   const {
     maxPoints = 0, // 0 = unlimited
@@ -198,7 +213,7 @@ export function extractCollectionPoints(
     includeHighwayEndpoints = true,
     highwaySampleRate = 1, // Changed from 10 to 1 to include all highway nodes
   } = options;
-  
+
   const points: CollectionPoint[] = [];
   const nodeMap = new Map(osmData.nodes.map((n) => [n.id, n]));
   const usedNodeIds = new Set<string>();
@@ -210,7 +225,9 @@ export function extractCollectionPoints(
 
     if (!node.tags) continue;
 
-    const isAddress = includeAddresses && (node.tags["addr:street"] || node.tags["addr:housenumber"]);
+    const isAddress =
+      includeAddresses &&
+      (node.tags["addr:street"] || node.tags["addr:housenumber"]);
     const isAmenity = includeAmenities && node.tags["amenity"];
     const isBuilding = node.tags["building"];
     const isShop = node.tags["shop"];
@@ -232,7 +249,7 @@ export function extractCollectionPoints(
 
       // Only process highways (roads)
       if (!way.tags?.highway) continue;
-      
+
       // Skip footways, cycleways, etc. for trash collection
       const skipTypes = ["footway", "cycleway", "path", "steps", "pedestrian"];
       if (skipTypes.includes(way.tags.highway)) continue;
@@ -240,14 +257,18 @@ export function extractCollectionPoints(
       // Sample nodes along the way
       for (let i = 0; i < way.nodeRefs.length; i += highwaySampleRate) {
         if (maxPoints > 0 && points.length >= maxPoints) break;
-        
+
         const nodeId = way.nodeRefs[i];
         if (usedNodeIds.has(nodeId)) continue;
-        
+
         const node = nodeMap.get(nodeId);
         if (!node) continue;
 
-        const point = createCollectionPointFromWayNode(node, way, points.length);
+        const point = createCollectionPointFromWayNode(
+          node,
+          way,
+          points.length,
+        );
         if (point) {
           points.push(point);
           usedNodeIds.add(nodeId);
@@ -261,10 +282,10 @@ export function extractCollectionPoints(
     const sampleRate = Math.max(1, Math.floor(osmData.nodes.length / 50));
     for (let i = 0; i < osmData.nodes.length; i += sampleRate) {
       if (maxPoints > 0 && points.length >= maxPoints) break;
-      
+
       const node = osmData.nodes[i];
       if (usedNodeIds.has(node.id)) continue;
-      
+
       const point: CollectionPoint = {
         id: node.id,
         address: `Point ${points.length + 1}`,
@@ -275,7 +296,7 @@ export function extractCollectionPoints(
         status: "pending",
         scheduledTime: generateScheduledTime(points.length),
       };
-      
+
       points.push(point);
       usedNodeIds.add(node.id);
     }
@@ -284,9 +305,12 @@ export function extractCollectionPoints(
   return points;
 }
 
-function createCollectionPointFromNode(node: OSMNode, index: number): CollectionPoint | null {
+function createCollectionPointFromNode(
+  node: OSMNode,
+  index: number,
+): CollectionPoint | null {
   const tags = node.tags || {};
-  
+
   let address = tags.name || "";
   if (!address && tags["addr:street"]) {
     address = `${tags["addr:housenumber"] || ""} ${tags["addr:street"]}`.trim();
@@ -295,7 +319,11 @@ function createCollectionPointFromNode(node: OSMNode, index: number): Collection
     address = `Point ${index + 1}`;
   }
 
-  let locationName = tags["addr:city"] || tags["addr:suburb"] || tags["addr:neighbourhood"] || "";
+  let locationName =
+    tags["addr:city"] ||
+    tags["addr:suburb"] ||
+    tags["addr:neighbourhood"] ||
+    "";
   if (!locationName && tags.amenity) {
     locationName = tags.amenity.replace(/_/g, " ");
   }
@@ -321,13 +349,13 @@ function createCollectionPointFromNode(node: OSMNode, index: number): Collection
 function createCollectionPointFromWayNode(
   node: OSMNode,
   way: OSMWay,
-  index: number
+  index: number,
 ): CollectionPoint | null {
   const wayTags = way.tags || {};
   const roadName = wayTags.name || wayTags.ref || "";
   const roadType = wayTags.highway || "road";
-  
-  const address = roadName 
+
+  const address = roadName
     ? `${roadName} (${roadType})`
     : `${roadType.charAt(0).toUpperCase() + roadType.slice(1)} Point ${index + 1}`;
 
@@ -343,12 +371,16 @@ function createCollectionPointFromWayNode(
   };
 }
 
-function determineCollectionType(
-  tags: Record<string, string>
-): CollectionType {
+function determineCollectionType(tags: Record<string, string>): CollectionType {
   if (tags.amenity === "recycling" || tags.recycling) return "recycling";
   if (tags.amenity === "waste_disposal" || tags.waste) return "bulk";
-  if (tags.shop || tags.office || tags.amenity === "restaurant" || tags.amenity === "cafe" || tags.amenity === "bank") {
+  if (
+    tags.shop ||
+    tags.office ||
+    tags.amenity === "restaurant" ||
+    tags.amenity === "cafe" ||
+    tags.amenity === "bank"
+  ) {
     return "commercial";
   }
   if (tags.building === "industrial" || tags.landuse === "industrial") {
@@ -385,7 +417,7 @@ export function validateOSMData(data: OSMData): string[] {
       invalidCount++;
     }
   }
-  
+
   if (invalidCount > 0) {
     errors.push(`Found ${invalidCount} nodes with invalid coordinates`);
   }
@@ -397,7 +429,7 @@ export function validateOSMData(data: OSMData): string[] {
 export async function importOSMFile(
   content: string,
   onProgress?: (progress: ImportProgress) => void,
-  options?: ImportOptions
+  options?: ImportOptions,
 ): Promise<ImportResult> {
   const errors: string[] = [];
 
@@ -437,7 +469,9 @@ export async function importOSMFile(
           extractedPoints: 0,
           bounds: undefined,
         },
-        errors: ["No valid nodes found in file. Please check the OSM file format."],
+        errors: [
+          "No valid nodes found in file. Please check the OSM file format.",
+        ],
       };
     }
 
@@ -459,8 +493,8 @@ export async function importOSMFile(
     // Calculate bounds if not provided
     let finalBounds = osmData.bounds;
     if (!finalBounds && collectionPoints.length > 0) {
-      const lats = collectionPoints.map(p => p.latitude);
-      const lons = collectionPoints.map(p => p.longitude);
+      const lats = collectionPoints.map((p) => p.latitude);
+      const lons = collectionPoints.map((p) => p.longitude);
       finalBounds = {
         minLat: Math.min(...lats),
         maxLat: Math.max(...lats),
@@ -503,7 +537,9 @@ export async function importOSMFile(
         extractedPoints: 0,
         bounds: undefined,
       },
-      errors: [error instanceof Error ? error.message : "Unknown error occurred"],
+      errors: [
+        error instanceof Error ? error.message : "Unknown error occurred",
+      ],
     };
   }
 }

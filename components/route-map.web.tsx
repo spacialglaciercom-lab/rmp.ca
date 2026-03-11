@@ -3,9 +3,19 @@
  * Metro resolves @/components/route-map to this file on web and to route-map.native.tsx on native.
  * Do not import react-native-maps here; use leaflet + react-leaflet only.
  */
-import React, { useRef, useMemo, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
+import React, {
+  useRef,
+  useMemo,
+  useEffect,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
+} from "react";
 import { View, Text } from "react-native";
-import { buildOvertureOverlayStyle, PMTILES_CITIES } from "@/components/maplibre/overture-style";
+import {
+  buildOvertureOverlayStyle,
+  PMTILES_CITIES,
+} from "@/components/maplibre/overture-style";
 import { useColors } from "@/hooks/use-colors";
 import {
   getDefaultPerformanceUtils,
@@ -37,9 +47,12 @@ function loadLeafletWhenReady() {
     require("leaflet.markercluster");
     delete (L.Icon.Default.prototype as any)._getIconUrl;
     L.Icon.Default.mergeOptions({
-      iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-      iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-      shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+      iconRetinaUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+      iconUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+      shadowUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
     });
     MapContainer = leaflet.MapContainer;
     TileLayer = leaflet.TileLayer;
@@ -76,7 +89,13 @@ function MapRefBridge({
   return null;
 }
 
-function InvalidateSizeOnMount({ width, height }: { width?: number; height?: number }) {
+function InvalidateSizeOnMount({
+  width,
+  height,
+}: {
+  width?: number;
+  height?: number;
+}) {
   const map = useMapHook?.();
   useEffect(() => {
     if (!map || typeof map.invalidateSize !== "function") return;
@@ -93,10 +112,7 @@ function InvalidateSizeOnMount({ width, height }: { width?: number; height?: num
 
 const FIT_OPTIONS = { padding: [80, 80] as [number, number], maxZoom: 14 };
 
-function doFitBounds(
-  map: any,
-  bounds: [[number, number], [number, number]]
-) {
+function doFitBounds(map: any, bounds: [[number, number], [number, number]]) {
   try {
     const container = map.getContainer?.();
     if (container?.parentNode && map.fitBounds) {
@@ -255,10 +271,14 @@ function LeafletGeoJSONOverlay({
           if (!props) return;
           const parts: string[] = [];
           if (props.name) parts.push(`<strong>${props.name}</strong>`);
-          if (props.distance != null) parts.push(`Distance: ${(props.distance / 1000).toFixed(2)} km`);
-          if (props.duration != null) parts.push(`Duration: ${Math.round(props.duration / 60)} min`);
+          if (props.distance != null)
+            parts.push(`Distance: ${(props.distance / 1000).toFixed(2)} km`);
+          if (props.duration != null)
+            parts.push(`Duration: ${Math.round(props.duration / 60)} min`);
           if (props.maneuverType && props.maneuverType !== "unknown") {
-            parts.push(`Maneuver: ${props.maneuverType}${props.maneuverModifier ? ` (${props.maneuverModifier})` : ""}`);
+            parts.push(
+              `Maneuver: ${props.maneuverType}${props.maneuverModifier ? ` (${props.maneuverModifier})` : ""}`,
+            );
           }
           if (parts.length > 0) {
             layer.bindPopup(parts.join("<br/>"), { maxWidth: 250 });
@@ -287,7 +307,11 @@ function LeafletGeoJSONOverlay({
   return null;
 }
 
-function MapClickHandler({ onMapPress }: { onMapPress: (lat: number, lon: number) => void }) {
+function MapClickHandler({
+  onMapPress,
+}: {
+  onMapPress: (lat: number, lon: number) => void;
+}) {
   const map = useMapHook?.();
   const onMapPressRef = React.useRef(onMapPress);
   onMapPressRef.current = onMapPress;
@@ -327,28 +351,41 @@ function MapClickOverlaySibling({
         const L = require("leaflet");
         const point = L.point ? L.point(x, y) : [x, y];
         const latLng = map.containerPointToLatLng(point);
-        if (latLng && typeof latLng.lat === "number" && typeof latLng.lng === "number") {
+        if (
+          latLng &&
+          typeof latLng.lat === "number" &&
+          typeof latLng.lng === "number"
+        ) {
           onPressRef.current(latLng.lat, latLng.lng);
         }
       } catch (_) {
         const latLng = map.containerPointToLatLng([x, y] as [number, number]);
-        if (latLng && typeof latLng.lat === "number" && typeof latLng.lng === "number") {
+        if (
+          latLng &&
+          typeof latLng.lat === "number" &&
+          typeof latLng.lng === "number"
+        ) {
           onPressRef.current(latLng.lat, latLng.lng);
         }
       }
     },
-    [mapRef]
+    [mapRef],
   );
   const handleWheel = React.useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
       const map = mapRef.current;
-      if (!map || typeof map.getZoom !== "function" || typeof map.setZoom !== "function") return;
+      if (
+        !map ||
+        typeof map.getZoom !== "function" ||
+        typeof map.setZoom !== "function"
+      )
+        return;
       e.preventDefault();
       const zoom = map.getZoom();
       const delta = e.deltaY > 0 ? -1 : 1;
       map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
     },
-    [mapRef]
+    [mapRef],
   );
   return (
     <div
@@ -398,13 +435,19 @@ export interface SegmentRisk {
   riskScore: number;
 }
 
-const ROUTE_COLORS_BY_VEHICLE = ["#F97316", "#3b82f6", "#22c55e", "#eab308", "#a855f7"];
+const ROUTE_COLORS_BY_VEHICLE = [
+  "#F97316",
+  "#3b82f6",
+  "#22c55e",
+  "#eab308",
+  "#a855f7",
+];
 
 export interface RouteMapProps {
   collectionPoints: CollectionPoint[];
-  routePoints?: Array<{ lat: number; lon: number; label?: string }>;
+  routePoints?: { lat: number; lon: number; label?: string }[];
   /** When set (e.g. VRP multi-vehicle), one polyline per vehicle with distinct colors. */
-  routePointsByVehicle?: Array<Array<{ lat: number; lon: number; label?: string }>>;
+  routePointsByVehicle?: { lat: number; lon: number; label?: string }[][];
   /** When set with routePoints, draws route in segment colors by risk (weather overlay). */
   segmentRisks?: SegmentRisk[];
   height?: number;
@@ -429,14 +472,17 @@ export interface RouteMapProps {
   /** Native only: show traffic overlay. Ignored on web. */
   showTraffic?: boolean;
   /** OSM Extractor: boundary polygon (closed when ≥3 points). */
-  osmExtractionPolygon?: Array<{ latitude: number; longitude: number }>;
+  osmExtractionPolygon?: { latitude: number; longitude: number }[];
   /** OSM Extractor: individual boundary points to display as markers. */
-  osmExtractionPoints?: Array<{ latitude: number; longitude: number }>;
+  osmExtractionPoints?: { latitude: number; longitude: number }[];
   /** OSM Extractor: extracted features to draw. */
-  osmExtractedFeatures?: Array<{
+  osmExtractedFeatures?: {
     id: string;
-    geometry: { type: "Point" | "LineString" | "Polygon"; coordinates: number[] | number[][] | number[][][] };
-  }>;
+    geometry: {
+      type: "Point" | "LineString" | "Polygon";
+      coordinates: number[] | number[][] | number[][][];
+    };
+  }[];
   /** OSM Extractor panel open. */
   osmExtractorVisible?: boolean;
   /** Overture Maps overlay (native + web). */
@@ -453,11 +499,16 @@ export interface RouteMapProps {
   /** Fill color for GeoJSON polygon features. Defaults to "rgba(33,150,243,0.15)". */
   geojsonFillColor?: string;
   /** Zones panel: preview polygon (boundary of selected zone result). */
-  zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
+  zonesPreviewPolygon?: { latitude: number; longitude: number }[];
   /** Zones panel: sector division — one polygon per zone. */
-  zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
+  zonesPreviewPolygons?: { latitude: number; longitude: number }[][];
   /** Optional initial bounds to fit map on load (e.g. zone polygons). When set, used when there are no route/collection points. */
-  initialBounds?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
+  initialBounds?: {
+    minLat: number;
+    minLon: number;
+    maxLat: number;
+    maxLon: number;
+  };
   /** When set (>= 0), highlight current route segment (green) vs completed (gray) vs upcoming (white). */
   navigationSegmentIndex?: number;
   /** Live user GPS position; when set, a user location marker is shown. */
@@ -484,14 +535,18 @@ const DEFAULT_ZOOM = 10;
 /**
  * Map component for displaying collection points and routes (Web version - Leaflet)
  */
-function segmentRiskToColor(riskScore: number, colors: ReturnType<typeof useColors>): string {
+function segmentRiskToColor(
+  riskScore: number,
+  colors: ReturnType<typeof useColors>,
+): string {
   if (riskScore >= 70) return colors.error ?? "#ef4444";
   if (riskScore >= 40) return colors.warning ?? "#ff6b4a";
   return colors.success ?? "#22c55e";
 }
 
 const LEAFLET_CSS_ID = "leaflet-css-cdn";
-const LEAFLET_CSS_HREF = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
+const LEAFLET_CSS_HREF =
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
 const MAPLIBRE_CSS_ID = "maplibre-gl-css-cdn";
 
 /** Overture PMTiles overlay for web: MapLibre GL layer synced to Leaflet view. */
@@ -512,7 +567,12 @@ function OvertureOverlay({
   const perfCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !containerRef.current || !leafletMapRef.current) return;
+    if (
+      typeof window === "undefined" ||
+      !containerRef.current ||
+      !leafletMapRef.current
+    )
+      return;
     const leafletMap = leafletMapRef.current;
     let mlMap: any = null;
     const init = () => {
@@ -546,7 +606,10 @@ function OvertureOverlay({
           sync();
           if (mlMap && typeof mlMap.on === "function") {
             perfCleanupRef.current?.();
-            perfCleanupRef.current = attachToMapRender(mlMap, getDefaultPerformanceUtils());
+            perfCleanupRef.current = attachToMapRender(
+              mlMap,
+              getDefaultPerformanceUtils(),
+            );
           }
         });
         return () => {
@@ -603,7 +666,8 @@ function injectPluginStyles() {
       const link = document.createElement("link");
       link.id = MARKERCLUSTER_CSS_ID;
       link.rel = "stylesheet";
-      link.href = "https://unpkg.com/react-leaflet-markercluster@5.0.0-rc.0/dist/styles.min.css";
+      link.href =
+        "https://unpkg.com/react-leaflet-markercluster@5.0.0-rc.0/dist/styles.min.css";
       link.crossOrigin = "anonymous";
       document.head.appendChild(link);
     } catch (_) {
@@ -612,565 +676,793 @@ function injectPluginStyles() {
   }
 }
 
-export const RouteMap = React.memo(forwardRef<RouteMapRef, RouteMapProps>(function RouteMap({
-  collectionPoints,
-  routePoints: routePointsProp,
-  routePointsByVehicle,
-  segmentRisks,
-  height = 400,
-  width,
-  onPointClick,
-  onMapPress,
-  onMapLongPress,
-  tapDestination,
-  onLoad,
-  onError,
-  osmExtractionPolygon,
-  osmExtractionPoints,
-  osmExtractedFeatures,
-  osmExtractorVisible: _osmExtractorVisible,
-  showOverture = false,
-  navigationSegmentIndex: _navigationSegmentIndex,
-  userPosition,
-  geojsonOverlay,
-  geojsonStrokeColor = "#2196F3",
-  geojsonStrokeWidth = 4,
-  geojsonFillColor = "rgba(33,150,243,0.15)",
-  zonesPreviewPolygon,
-  zonesPreviewPolygons,
-  initialBounds,
-  wastePoints = [],
-}, _ref) {
-  const colors = useColors();
-  const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
-  const showRouteLine = useMapDisplayStore((s) => s.showRouteLine);
+export const RouteMap = React.memo(
+  forwardRef<RouteMapRef, RouteMapProps>(function RouteMap(
+    {
+      collectionPoints,
+      routePoints: routePointsProp,
+      routePointsByVehicle,
+      segmentRisks,
+      height = 400,
+      width,
+      onPointClick,
+      onMapPress,
+      onMapLongPress,
+      tapDestination,
+      onLoad,
+      onError,
+      osmExtractionPolygon,
+      osmExtractionPoints,
+      osmExtractedFeatures,
+      osmExtractorVisible: _osmExtractorVisible,
+      showOverture = false,
+      navigationSegmentIndex: _navigationSegmentIndex,
+      userPosition,
+      geojsonOverlay,
+      geojsonStrokeColor = "#2196F3",
+      geojsonStrokeWidth = 4,
+      geojsonFillColor = "rgba(33,150,243,0.15)",
+      zonesPreviewPolygon,
+      zonesPreviewPolygons,
+      initialBounds,
+      wastePoints = [],
+    },
+    _ref,
+  ) {
+    const colors = useColors();
+    const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
+    const showRouteLine = useMapDisplayStore((s) => s.showRouteLine);
 
-  const routePoints = useMemo(() => {
-    if (routePointsByVehicle?.length === 1) return routePointsByVehicle[0];
-    return routePointsProp;
-  }, [routePointsByVehicle, routePointsProp]);
-  const mapRef = useRef<any>(null);
-  const leafletMapRef = useRef<any>(null);
-  const boundsRef = useRef<[[number, number], [number, number]] | null>(null);
-  const markerClusteringEnabled = useMapWebPluginsStore((s) => s.markerClusteringEnabled);
-  const mapControls = useMemo(() => ({
-    zoomIn: () => {
-      const map = leafletMapRef.current;
-      if (map && typeof map.zoomIn === "function") map.zoomIn();
-    },
-    zoomOut: () => {
-      const map = leafletMapRef.current;
-      if (map && typeof map.zoomOut === "function") map.zoomOut();
-    },
-    centerOnUser: async () => {
-      const map = leafletMapRef.current;
-      if (!map || typeof navigator === "undefined" || !navigator.geolocation) return;
-      return new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            if (leafletMapRef.current && typeof leafletMapRef.current.setView === "function") {
-              const z = Math.max(leafletMapRef.current.getZoom?.() ?? 14, 14);
-              leafletMapRef.current.setView([latitude, longitude], z);
-            }
-            resolve();
-          },
-          () => resolve(),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-        );
-      });
-    },
-    resetNorth: () => {
-      const map = leafletMapRef.current;
-      if (map && typeof map.setBearing === "function") map.setBearing(0);
-      // Standard Leaflet has no rotation; no-op is fine
-    },
-    fitToRoute: () => {
-      const map = leafletMapRef.current;
-      const b = boundsRef.current;
-      if (map && b) doFitBounds(map, b);
-    },
-    centerOnPoint: (lat: number, lon: number) => {
-      const map = leafletMapRef.current;
-      if (map && typeof map.setView === "function") {
-        map.setView([lat, lon], 15);
+    const routePoints = useMemo(() => {
+      if (routePointsByVehicle?.length === 1) return routePointsByVehicle[0];
+      return routePointsProp;
+    }, [routePointsByVehicle, routePointsProp]);
+    const mapRef = useRef<any>(null);
+    const leafletMapRef = useRef<any>(null);
+    const boundsRef = useRef<[[number, number], [number, number]] | null>(null);
+    const markerClusteringEnabled = useMapWebPluginsStore(
+      (s) => s.markerClusteringEnabled,
+    );
+    const mapControls = useMemo(
+      () => ({
+        zoomIn: () => {
+          const map = leafletMapRef.current;
+          if (map && typeof map.zoomIn === "function") map.zoomIn();
+        },
+        zoomOut: () => {
+          const map = leafletMapRef.current;
+          if (map && typeof map.zoomOut === "function") map.zoomOut();
+        },
+        centerOnUser: async () => {
+          const map = leafletMapRef.current;
+          if (
+            !map ||
+            typeof navigator === "undefined" ||
+            !navigator.geolocation
+          )
+            return;
+          return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const { latitude, longitude } = pos.coords;
+                if (
+                  leafletMapRef.current &&
+                  typeof leafletMapRef.current.setView === "function"
+                ) {
+                  const z = Math.max(
+                    leafletMapRef.current.getZoom?.() ?? 14,
+                    14,
+                  );
+                  leafletMapRef.current.setView([latitude, longitude], z);
+                }
+                resolve();
+              },
+              () => resolve(),
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+            );
+          });
+        },
+        resetNorth: () => {
+          const map = leafletMapRef.current;
+          if (map && typeof map.setBearing === "function") map.setBearing(0);
+          // Standard Leaflet has no rotation; no-op is fine
+        },
+        fitToRoute: () => {
+          const map = leafletMapRef.current;
+          const b = boundsRef.current;
+          if (map && b) doFitBounds(map, b);
+        },
+        centerOnPoint: (lat: number, lon: number) => {
+          const map = leafletMapRef.current;
+          if (map && typeof map.setView === "function") {
+            map.setView([lat, lon], 15);
+          }
+        },
+      }),
+      [],
+    );
+    const [leafletReady, setLeafletReady] = React.useState(false);
+    const [leafletMapReady, setLeafletMapReady] = React.useState(false);
+
+    // Load Leaflet only when window is defined (fixes "window is not defined" on web bundle/SSR).
+    useEffect(() => {
+      if (loadLeafletWhenReady()) {
+        injectPluginStyles();
+        useMapWebPluginsStore.getState().hydrate();
+        setLeafletReady(true);
+      } else {
+        onError?.("Leaflet failed to load");
       }
-    },
-  }), []);
-  const [leafletReady, setLeafletReady] = React.useState(false);
-  const [leafletMapReady, setLeafletMapReady] = React.useState(false);
+    }, [onError]);
 
-  // Load Leaflet only when window is defined (fixes "window is not defined" on web bundle/SSR).
-  useEffect(() => {
-    if (loadLeafletWhenReady()) {
-      injectPluginStyles();
-      useMapWebPluginsStore.getState().hydrate();
-      setLeafletReady(true);
-    } else {
-      onError?.("Leaflet failed to load");
-    }
-  }, [onError]);
+    // Phase 1.2: Inject Leaflet CSS only when a map is first rendered (not on initial app load).
+    useEffect(() => {
+      if (typeof document === "undefined") return;
+      if (document.getElementById(LEAFLET_CSS_ID)) return;
+      const link = document.createElement("link");
+      link.id = LEAFLET_CSS_ID;
+      link.rel = "stylesheet";
+      link.href = LEAFLET_CSS_HREF;
+      link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+    }, []);
+    const [mapTypePreference] = useMapType();
+    const activeBaseLayer = useMapLayerStore((s) => s.activeBaseLayer);
+    const activeOverlays = useMapLayerStore((s) => s.activeOverlays);
+    const availableLayers = useMapLayerStore((s) => s.availableLayers);
 
-  // Phase 1.2: Inject Leaflet CSS only when a map is first rendered (not on initial app load).
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (document.getElementById(LEAFLET_CSS_ID)) return;
-    const link = document.createElement("link");
-    link.id = LEAFLET_CSS_ID;
-    link.rel = "stylesheet";
-    link.href = LEAFLET_CSS_HREF;
-    link.crossOrigin = "anonymous";
-    document.head.appendChild(link);
-  }, []);
-  const [mapTypePreference] = useMapType();
-  const activeBaseLayer = useMapLayerStore((s) => s.activeBaseLayer);
-  const activeOverlays = useMapLayerStore((s) => s.activeOverlays);
-  const availableLayers = useMapLayerStore((s) => s.availableLayers);
-
-
-  const currentBaseLayer = availableLayers.find((layer) => layer.id === activeBaseLayer);
-  const baseUrl = currentBaseLayer
-    ? (currentBaseLayer.url || (mapTypePreference === "dark"
+    const currentBaseLayer = availableLayers.find(
+      (layer) => layer.id === activeBaseLayer,
+    );
+    const baseUrl = currentBaseLayer
+      ? currentBaseLayer.url ||
+        (mapTypePreference === "dark"
+          ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
+      : mapTypePreference === "dark"
         ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"))
-    : (mapTypePreference === "dark"
-        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-  const attribution = currentBaseLayer
-    ? (currentBaseLayer.attribution || (mapTypePreference === "dark"
-        ? "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> &copy; <a href=\"https://carto.com/attributions\">CARTO</a>"
-        : "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"))
-    : (mapTypePreference === "dark"
-        ? "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> &copy; <a href=\"https://carto.com/attributions\">CARTO</a>"
-        : "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors");
+        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const attribution = currentBaseLayer
+      ? currentBaseLayer.attribution ||
+        (mapTypePreference === "dark"
+          ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
+      : mapTypePreference === "dark"
+        ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-  const tileUrl = baseUrl;
-  const tileAttribution = attribution;
+    const tileUrl = baseUrl;
+    const tileAttribution = attribution;
 
-  const hasCollectionPoints = collectionPoints.length > 0;
-  const hasRoutePoints = routePoints && routePoints.length > 0;
-  const hasRoutePointsByVehicle = routePointsByVehicle && routePointsByVehicle.length > 1;
-  const bounds = useMemo(() => {
-    let points: [number, number][] = [];
-    if (hasCollectionPoints) {
-      points = collectionPoints.map((p) => [p.latitude, p.longitude] as [number, number]);
-    } else if (hasRoutePointsByVehicle) {
-      points = routePointsByVehicle!.flat().map((p) => [p.lat, p.lon] as [number, number]);
-    } else if (hasRoutePoints) {
-      points = routePoints!.map((p) => [p.lat, p.lon] as [number, number]);
-    } else if (wastePoints && wastePoints.length > 0) {
-      // Zones page: use waste points so map fits and bins/dumpsters are visible after CSV import
-      points = wastePoints.map((p) => [p.lat, p.lon] as [number, number]);
-    }
-    if (points.length === 0 && initialBounds) {
-      const padLat = Math.max((initialBounds.maxLat - initialBounds.minLat) * 0.2, 0.01);
-      const padLon = Math.max((initialBounds.maxLon - initialBounds.minLon) * 0.2, 0.01);
+    const hasCollectionPoints = collectionPoints.length > 0;
+    const hasRoutePoints = routePoints && routePoints.length > 0;
+    const hasRoutePointsByVehicle =
+      routePointsByVehicle && routePointsByVehicle.length > 1;
+    const bounds = useMemo(() => {
+      let points: [number, number][] = [];
+      if (hasCollectionPoints) {
+        points = collectionPoints.map(
+          (p) => [p.latitude, p.longitude] as [number, number],
+        );
+      } else if (hasRoutePointsByVehicle) {
+        points = routePointsByVehicle!
+          .flat()
+          .map((p) => [p.lat, p.lon] as [number, number]);
+      } else if (hasRoutePoints) {
+        points = routePoints!.map((p) => [p.lat, p.lon] as [number, number]);
+      } else if (wastePoints && wastePoints.length > 0) {
+        // Zones page: use waste points so map fits and bins/dumpsters are visible after CSV import
+        points = wastePoints.map((p) => [p.lat, p.lon] as [number, number]);
+      }
+      if (points.length === 0 && initialBounds) {
+        const padLat = Math.max(
+          (initialBounds.maxLat - initialBounds.minLat) * 0.2,
+          0.01,
+        );
+        const padLon = Math.max(
+          (initialBounds.maxLon - initialBounds.minLon) * 0.2,
+          0.01,
+        );
+        return [
+          [initialBounds.minLat - padLat, initialBounds.minLon - padLon],
+          [initialBounds.maxLat + padLat, initialBounds.maxLon + padLon],
+        ] as [[number, number], [number, number]];
+      }
+      if (points.length === 0) return null;
+      const lats = points.map((p) => p[0]);
+      const lons = points.map((p) => p[1]);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLon = Math.min(...lons);
+      const maxLon = Math.max(...lons);
+      const latPadding = Math.max((maxLat - minLat) * 0.2, 0.01);
+      const lonPadding = Math.max((maxLon - minLon) * 0.2, 0.01);
       return [
-        [initialBounds.minLat - padLat, initialBounds.minLon - padLon],
-        [initialBounds.maxLat + padLat, initialBounds.maxLon + padLon],
+        [minLat - latPadding, minLon - lonPadding],
+        [maxLat + latPadding, maxLon + lonPadding],
       ] as [[number, number], [number, number]];
+    }, [
+      collectionPoints,
+      hasCollectionPoints,
+      routePoints,
+      hasRoutePoints,
+      routePointsByVehicle,
+      hasRoutePointsByVehicle,
+      wastePoints,
+      initialBounds,
+    ]);
+
+    useEffect(() => {
+      boundsRef.current = bounds;
+    }, [bounds]);
+
+    // Leaflet needs explicit pixel dimensions; 100% alone can fail when parent is flex
+    const pixelHeight = height && height > 0 ? height : 400;
+    const pixelWidth =
+      width && width > 0
+        ? width
+        : typeof window !== "undefined"
+          ? window.innerWidth
+          : 800;
+    const containerStyle = useMemo(
+      () => ({
+        height: pixelHeight,
+        width: pixelWidth,
+        minHeight: 200,
+        minWidth: 200,
+      }),
+      [pixelHeight, pixelWidth],
+    );
+
+    // Call onLoad when map is ready (must be before early return so hook order is stable).
+    useEffect(() => {
+      if (leafletReady && MapContainer) onLoad?.();
+    }, [leafletReady, onLoad]);
+
+    // Must be before early return so hook count is stable every render (Rules of Hooks).
+    const handleWrapperWheel = useCallback(
+      (e: React.WheelEvent<HTMLDivElement>) => {
+        const map = leafletMapRef.current;
+        if (
+          !map ||
+          typeof map.getZoom !== "function" ||
+          typeof map.setZoom !== "function"
+        )
+          return;
+        e.preventDefault();
+        e.stopPropagation();
+        const zoom = map.getZoom();
+        const delta = e.deltaY > 0 ? -1 : 1;
+        map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
+      },
+      [],
+    );
+
+    if (!leafletReady || !MapContainer) {
+      return (
+        <View
+          style={{
+            ...containerStyle,
+            backgroundColor: colors.surface,
+            justifyContent: "center",
+            alignItems: "center",
+            borderRadius: 12,
+          }}
+        >
+          <Text
+            style={{ color: colors.muted, textAlign: "center", padding: 16 }}
+          >
+            Map loading...
+          </Text>
+        </View>
+      );
     }
-    if (points.length === 0) return null;
-    const lats = points.map((p) => p[0]);
-    const lons = points.map((p) => p[1]);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons);
-    const maxLon = Math.max(...lons);
-    const latPadding = Math.max((maxLat - minLat) * 0.2, 0.01);
-    const lonPadding = Math.max((maxLon - minLon) * 0.2, 0.01);
-    return [
-      [minLat - latPadding, minLon - lonPadding],
-      [maxLat + latPadding, maxLon + lonPadding],
-    ] as [[number, number], [number, number]];
-  }, [collectionPoints, hasCollectionPoints, routePoints, hasRoutePoints, routePointsByVehicle, hasRoutePointsByVehicle, wastePoints, initialBounds]);
 
-  useEffect(() => {
-    boundsRef.current = bounds;
-  }, [bounds]);
+    // Plain div wrapper avoids RN View passing pointerEvents/etc to Leaflet (fixes deprecation + layout)
+    const wrapperStyle = {
+      ...containerStyle,
+      borderRadius: 12,
+      overflow: "hidden" as const,
+      backgroundColor: colors.surface,
+    };
 
-  // Leaflet needs explicit pixel dimensions; 100% alone can fail when parent is flex
-  const pixelHeight = height && height > 0 ? height : 400;
-  const pixelWidth = width && width > 0 ? width : typeof window !== "undefined" ? window.innerWidth : 800;
-  const containerStyle = useMemo(
-    () => ({
-      height: pixelHeight,
-      width: pixelWidth,
-      minHeight: 200,
-      minWidth: 200,
-    }),
-    [pixelHeight, pixelWidth]
-  );
+    const overtureCity = PMTILES_CITIES[0] ?? "montreal";
 
-  // Call onLoad when map is ready (must be before early return so hook order is stable).
-  useEffect(() => {
-    if (leafletReady && MapContainer) onLoad?.();
-  }, [leafletReady, onLoad]);
-
-  // Must be before early return so hook count is stable every render (Rules of Hooks).
-  const handleWrapperWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
-      const map = leafletMapRef.current;
-      if (!map || typeof map.getZoom !== "function" || typeof map.setZoom !== "function") return;
-      e.preventDefault();
-      e.stopPropagation();
-      const zoom = map.getZoom();
-      const delta = e.deltaY > 0 ? -1 : 1;
-      map.setZoom(Math.max(2, Math.min(20, zoom + delta)));
-    },
-    []
-  );
-
-  if (!leafletReady || !MapContainer) {
     return (
       <View
-        style={{
-          ...containerStyle,
-          backgroundColor: colors.surface,
-          justifyContent: "center",
-          alignItems: "center",
-          borderRadius: 12,
-        }}
+        style={[
+          wrapperStyle,
+          onMapPress
+            ? { pointerEvents: "auto" }
+            : { pointerEvents: "box-none" },
+        ]}
       >
-        <Text style={{ color: colors.muted, textAlign: "center", padding: 16 }}>
-          Map loading...
-        </Text>
-      </View>
-    );
-  }
-
-  // Plain div wrapper avoids RN View passing pointerEvents/etc to Leaflet (fixes deprecation + layout)
-  const wrapperStyle = {
-    ...containerStyle,
-    borderRadius: 12,
-    overflow: "hidden" as const,
-    backgroundColor: colors.surface,
-  };
-
-  const overtureCity = PMTILES_CITIES[0] ?? "montreal";
-
-  return (
-    <View style={[wrapperStyle, onMapPress ? { pointerEvents: "auto" } : { pointerEvents: "box-none" }]}>
-      <div
-        style={{
-          width: pixelWidth,
-          height: pixelHeight,
-          minWidth: 200,
-          minHeight: 200,
-          position: "relative",
-          pointerEvents: "auto",
-        }}
-        onWheel={handleWrapperWheel}
-      >
-        <MapContainer
-          ref={mapRef}
-          {...(bounds
-            ? { bounds, boundsOptions: { padding: [80, 80], maxZoom: 14 } }
-            : { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM })}
-          style={{ height: pixelHeight, width: pixelWidth }}
+        <div
+          style={{
+            width: pixelWidth,
+            height: pixelHeight,
+            minWidth: 200,
+            minHeight: 200,
+            position: "relative",
+            pointerEvents: "auto",
+          }}
+          onWheel={handleWrapperWheel}
         >
-          <TileLayer attribution={tileAttribution} url={tileUrl} />
-          {useMapHook ? (
-            <MapRefBridge
-              mapRef={leafletMapRef}
-              onMapReady={setLeafletMapReady}
-            />
-          ) : null}
-          {useMapHook ? <InvalidateSizeOnMount width={pixelWidth} height={pixelHeight} /> : null}
-          {useMapHook && bounds ? <FitBoundsToContent bounds={bounds} /> : null}
-          {useMapHook && onMapPress ? <MapClickHandler onMapPress={onMapPress} /> : null}
-          {useMapHook && onMapLongPress ? (
-            <MapContextMenuHandler onMapLongPress={onMapLongPress} />
-          ) : null}
-
-          {tapDestination != null && (
-            <Marker position={[tapDestination.lat, tapDestination.lon]} title="Directions here" />
-          )}
-
-          {userPosition != null && !isNaN(userPosition.latitude) && !isNaN(userPosition.longitude) && (() => {
-            const L = require("leaflet");
-            const icon = L.divIcon({
-              className: "user-position-marker",
-              html: `<div style="width:14px;height:14px;border-radius:50%;background:${colors.primary ?? "#3b82f6"};border:3px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);" />`,
-              iconSize: [14, 14],
-              iconAnchor: [7, 7],
-            });
-            return <Marker position={[userPosition.latitude, userPosition.longitude]} icon={icon} zIndexOffset={25} />;
-          })()}
-
-          {osmExtractionPoints?.map((point, index) => (
-            <Marker
-              key={`osm-pt-${index}`}
-              position={[point.latitude, point.longitude]}
-              title={`Point ${index + 1}`}
-              zIndexOffset={500}
-            >
-              <Popup>
-                <span style={{ fontWeight: 600 }}>Point {index + 1}</span>
-              </Popup>
-            </Marker>
-          ))}
-
-          {osmExtractedFeatures?.length ? (() => {
-            const maxLine = 800;
-            const maxPoly = 800;
-            const maxPoint = 300;
-            const lines: Array<{ key: string; positions: [number, number][] }> = [];
-            const polys: Array<{ key: string; positions: [number, number][] }> = [];
-            const points: Array<{ key: string; lat: number; lon: number }> = [];
-            for (const f of osmExtractedFeatures) {
-              const geom = f.geometry;
-              if (!geom) continue;
-              if (geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
-                if (points.length < maxPoint) points.push({ key: f.id, lon: geom.coordinates[0], lat: geom.coordinates[1] });
-              } else               if (geom.type === "LineString" && Array.isArray(geom.coordinates)) {
-                if (lines.length >= maxLine) continue;
-                const positions = (geom.coordinates as number[][]).map((c) => [c[1], c[0]] as [number, number]);
-                if (positions.length >= 2) lines.push({ key: f.id, positions });
-              } else if (geom.type === "Polygon" && Array.isArray(geom.coordinates) && geom.coordinates[0]) {
-                if (polys.length >= maxPoly) continue;
-                const ring = (geom.coordinates[0] as number[][]).map((c) => [c[1], c[0]] as [number, number]);
-                if (ring.length >= 3) polys.push({ key: f.id, positions: ring });
-              }
-            }
-            return (
-              <>
-                {lines.map(({ key, positions }) => (
-                  <Polyline key={`osm-l-${key}`} positions={positions} pathOptions={{ color: "#22c55e", weight: 2, opacity: 0.9 }} />
-                ))}
-                {polys.map(({ key, positions }) => (
-                  <Polyline key={`osm-p-${key}`} positions={positions} pathOptions={{ color: "#eab308", weight: 1, fill: true, fillOpacity: 0.25, fillColor: "#eab308" }} />
-                ))}
-                {points.map(({ key, lat, lon }) => (
-                  <Marker key={`osm-m-${key}`} position={[lat, lon]} zIndexOffset={400} />
-                ))}
-              </>
-            );
-          })() : null}
-
-          {osmExtractionPolygon && osmExtractionPolygon.length >= 3 && (() => {
-            const closed = [...osmExtractionPolygon.map((p) => [p.latitude, p.longitude] as [number, number]), [osmExtractionPolygon[0].latitude, osmExtractionPolygon[0].longitude]];
-            return (
-              <Polyline
-                positions={closed}
-                pathOptions={{ color: "#3b82f6", weight: 4, fill: true, fillOpacity: 0.25, fillColor: "#3b82f6", opacity: 1 }}
-                key="osm-extraction-boundary"
+          <MapContainer
+            ref={mapRef}
+            {...(bounds
+              ? { bounds, boundsOptions: { padding: [80, 80], maxZoom: 14 } }
+              : { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM })}
+            style={{ height: pixelHeight, width: pixelWidth }}
+          >
+            <TileLayer attribution={tileAttribution} url={tileUrl} />
+            {useMapHook ? (
+              <MapRefBridge
+                mapRef={leafletMapRef}
+                onMapReady={setLeafletMapReady}
               />
-            );
-          })()}
+            ) : null}
+            {useMapHook ? (
+              <InvalidateSizeOnMount width={pixelWidth} height={pixelHeight} />
+            ) : null}
+            {useMapHook && bounds ? (
+              <FitBoundsToContent bounds={bounds} />
+            ) : null}
+            {useMapHook && onMapPress ? (
+              <MapClickHandler onMapPress={onMapPress} />
+            ) : null}
+            {useMapHook && onMapLongPress ? (
+              <MapContextMenuHandler onMapLongPress={onMapLongPress} />
+            ) : null}
 
-          {zonesPreviewPolygons && zonesPreviewPolygons.length > 0
-            ? (() => {
-                const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
-                const nonInteractive = !!onMapPress; // when picking location, let map receive clicks
-                return zonesPreviewPolygons.map((poly, idx) => {
-                  if (poly.length < 3) return null;
-                  const closed = [...poly.map((p) => [p.latitude, p.longitude] as [number, number]), [poly[0].latitude, poly[0].longitude]];
-                  const stroke = zoneStrokeColors[idx % zoneStrokeColors.length];
-                  return (
-                    <Polyline
-                      key={`zones-preview-${idx}`}
-                      positions={closed}
-                      pathOptions={{ color: stroke, weight: 3, fill: true, fillOpacity: 0.3, fillColor: stroke, opacity: 1, interactive: !nonInteractive }}
-                    />
-                  );
-                });
-              })()
-            : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (() => {
-              const nonInteractive = !!onMapPress;
-              const closed = [...zonesPreviewPolygon.map((p) => [p.latitude, p.longitude] as [number, number]), [zonesPreviewPolygon[0].latitude, zonesPreviewPolygon[0].longitude]];
-              return (
-                <Polyline
-                  positions={closed}
-                  pathOptions={{ color: "#f97316", weight: 4, fill: true, fillOpacity: 0.25, fillColor: "#f97316", opacity: 1, interactive: !nonInteractive }}
-                  key="zones-preview-boundary"
-                />
-              );
-            })()}
-
-          {wastePoints.length > 0 && (() => {
-            const useCluster = wastePoints.length > 20 && MarkerClusterGroup;
-            const list = wastePoints.map((p) => (
+            {tapDestination != null && (
               <Marker
-                key={p.id}
-                position={[p.lat, p.lon]}
-                icon={getWasteIcon(p.type)}
-                zIndexOffset={800}
-              >
-                <Popup>
-                  <div style={{ fontSize: "12px", maxWidth: "200px" }}>
-                    <strong>{p.type === "bin" ? "Bin" : "Dumpster"}</strong>
-                    <br />
-                    {p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`}
-                    {p.capacityLiters != null && <><br />Capacity: {p.capacityLiters} L</>}
-                    {p.condition && <><br />Condition: {p.condition}</>}
-                  </div>
-                </Popup>
-              </Marker>
-            ));
-            return useCluster ? (
-              <MarkerClusterGroup key="waste-points-cluster">{list}</MarkerClusterGroup>
-            ) : (
-              <React.Fragment key="waste-points">{list}</React.Fragment>
-            );
-          })()}
+                position={[tapDestination.lat, tapDestination.lon]}
+                title="Directions here"
+              />
+            )}
 
-          {useMapHook && geojsonOverlay && geojsonOverlay.features.length > 0 && (
-            <LeafletGeoJSONOverlay
-              data={geojsonOverlay}
-              strokeColor={geojsonStrokeColor}
-              strokeWidth={geojsonStrokeWidth}
-              fillColor={geojsonFillColor}
-            />
-          )}
-
-          {showRouteLine && (routePointsByVehicle && routePointsByVehicle.length > 1
-            ? routePointsByVehicle.map((vehiclePoints, vIdx) => {
-                if (vehiclePoints.length < 2) return null;
-                const positions = vehiclePoints.map((p) => [p.lat, p.lon] as [number, number]);
-                const color = ROUTE_COLORS_BY_VEHICLE[vIdx % ROUTE_COLORS_BY_VEHICLE.length];
+            {userPosition != null &&
+              !isNaN(userPosition.latitude) &&
+              !isNaN(userPosition.longitude) &&
+              (() => {
+                const L = require("leaflet");
+                const icon = L.divIcon({
+                  className: "user-position-marker",
+                  html: `<div style="width:14px;height:14px;border-radius:50%;background:${colors.primary ?? "#3b82f6"};border:3px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);" />`,
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+                });
                 return (
-                  <Polyline
-                    key={`vehicle-${vIdx}`}
-                    positions={positions}
-                    pathOptions={{ color, weight: 6, opacity: 1 }}
+                  <Marker
+                    position={[userPosition.latitude, userPosition.longitude]}
+                    icon={icon}
+                    zIndexOffset={25}
                   />
                 );
-              })
-            : routePoints && routePoints.length > 1 && (segmentRisks && segmentRisks.length > 0 ? (
-              (() => {
-                const riskByIndex = new Map(segmentRisks.map((s) => [s.segmentIndex, s.riskScore]));
-                return routePoints.slice(0, -1).map((_, i) => {
-                  const p1 = routePoints[i];
-                  const p2 = routePoints[i + 1];
-                  const risk = riskByIndex.get(i) ?? 0;
-                  const color = segmentRiskToColor(risk, colors);
-                  const key = `seg-${i}-${p1.lat}-${p1.lon}-${p2.lat}-${p2.lon}`;
-                  return (
-                    <Polyline
-                      key={key}
-                      positions={[[p1.lat, p1.lon], [p2.lat, p2.lon]]}
-                      color={color}
-                      weight={6}
-                      opacity={0.95}
-                    />
-                  );
-                });
-              })()
-            ) : (
-              <Polyline
-                positions={routePoints.map((p) => [p.lat, p.lon])}
-                color="#F97316"
-                weight={6}
-                opacity={1}
-              />
-            )))}
+              })()}
 
-          {routePoints && routePoints.length === 1 && (
-            <Marker
-              key="preview-single"
-              position={[routePoints[0].lat, routePoints[0].lon]}
-              icon={getSeqIcon("P")}
-            />
-          )}
-
-          {routePoints && routePoints.length >= 2 && !(routePointsByVehicle && routePointsByVehicle.length > 1) &&
-            (showRouteMarkers && routePoints.some((p) => p.label != null) ? (
-              routePoints.map((p, i) =>
-                p.label != null ? (
-                  <Marker
-                    key={`seq-${i}`}
-                    position={[p.lat, p.lon]}
-                    icon={getSeqIcon(p.label)}
-                  />
-                ) : null
-              )
-            ) : (
-              <>
-                <Marker
-                  key="route-start"
-                  position={[routePoints[0].lat, routePoints[0].lon]}
-                  icon={getSeqIcon("S")}
-                />
-                <Marker
-                  key="route-end"
-                  position={[routePoints[routePoints.length - 1].lat, routePoints[routePoints.length - 1].lon]}
-                  icon={getSeqIcon("E")}
-                />
-              </>
-            ))}
-
-          {showRouteMarkers && (MarkerClusterGroup && markerClusteringEnabled && collectionPoints.length > 0 ? (
-            <MarkerClusterGroup>
-              {collectionPoints.map((point) => (
-                <Marker
-                  key={point.id}
-                  position={[point.latitude, point.longitude]}
-                  title={point.address}
-                  zIndexOffset={1000}
-                  eventHandlers={{
-                    click: () => onPointClick?.(point),
-                  }}
-                >
-                  <Popup>
-                    <div style={{ fontSize: "12px", maxWidth: "200px" }}>
-                      <strong>{point.address}</strong>
-                      <br />
-                      Type: {point.collectionType}
-                      <br />
-                      Status: {point.status}
-                      <br />
-                      Time:{" "}
-                      {point.scheduledTime
-                        ? new Date(point.scheduledTime).toLocaleTimeString()
-                        : "N/A"}
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MarkerClusterGroup>
-          ) : (
-            collectionPoints.map((point) => (
+            {osmExtractionPoints?.map((point, index) => (
               <Marker
-                key={point.id}
+                key={`osm-pt-${index}`}
                 position={[point.latitude, point.longitude]}
-                title={point.address}
-                zIndexOffset={1000}
-                eventHandlers={{
-                  click: () => onPointClick?.(point),
-                }}
+                title={`Point ${index + 1}`}
+                zIndexOffset={500}
               >
                 <Popup>
-                  <div style={{ fontSize: "12px", maxWidth: "200px" }}>
-                    <strong>{point.address}</strong>
-                    <br />
-                    Type: {point.collectionType}
-                    <br />
-                    Status: {point.status}
-                    <br />
-                    Time:{" "}
-                    {point.scheduledTime
-                      ? new Date(point.scheduledTime).toLocaleTimeString()
-                      : "N/A"}
-                  </div>
+                  <span style={{ fontWeight: 600 }}>Point {index + 1}</span>
                 </Popup>
               </Marker>
-            ))
-          ))}
-        </MapContainer>
-        {showOverture && PMTILES_CITIES.length > 0 && leafletMapReady && (
-          <OvertureOverlay
-            leafletMapRef={leafletMapRef}
-            width={pixelWidth}
-            height={pixelHeight}
-            city={overtureCity}
-          />
-        )}
-        {/* No overlay on web: map must receive pointer events for pan and click. MapClickHandler inside MapContainer handles onMapPress. */}
-      </div>
-    </View>
-  );
-}));
+            ))}
+
+            {osmExtractedFeatures?.length
+              ? (() => {
+                  const maxLine = 800;
+                  const maxPoly = 800;
+                  const maxPoint = 300;
+                  const lines: {
+                    key: string;
+                    positions: [number, number][];
+                  }[] = [];
+                  const polys: {
+                    key: string;
+                    positions: [number, number][];
+                  }[] = [];
+                  const points: { key: string; lat: number; lon: number }[] =
+                    [];
+                  for (const f of osmExtractedFeatures) {
+                    const geom = f.geometry;
+                    if (!geom) continue;
+                    if (
+                      geom.type === "Point" &&
+                      Array.isArray(geom.coordinates) &&
+                      geom.coordinates.length >= 2
+                    ) {
+                      if (points.length < maxPoint)
+                        points.push({
+                          key: f.id,
+                          lon: geom.coordinates[0],
+                          lat: geom.coordinates[1],
+                        });
+                    } else if (
+                      geom.type === "LineString" &&
+                      Array.isArray(geom.coordinates)
+                    ) {
+                      if (lines.length >= maxLine) continue;
+                      const positions = (geom.coordinates as number[][]).map(
+                        (c) => [c[1], c[0]] as [number, number],
+                      );
+                      if (positions.length >= 2)
+                        lines.push({ key: f.id, positions });
+                    } else if (
+                      geom.type === "Polygon" &&
+                      Array.isArray(geom.coordinates) &&
+                      geom.coordinates[0]
+                    ) {
+                      if (polys.length >= maxPoly) continue;
+                      const ring = (geom.coordinates[0] as number[][]).map(
+                        (c) => [c[1], c[0]] as [number, number],
+                      );
+                      if (ring.length >= 3)
+                        polys.push({ key: f.id, positions: ring });
+                    }
+                  }
+                  return (
+                    <>
+                      {lines.map(({ key, positions }) => (
+                        <Polyline
+                          key={`osm-l-${key}`}
+                          positions={positions}
+                          pathOptions={{
+                            color: "#22c55e",
+                            weight: 2,
+                            opacity: 0.9,
+                          }}
+                        />
+                      ))}
+                      {polys.map(({ key, positions }) => (
+                        <Polyline
+                          key={`osm-p-${key}`}
+                          positions={positions}
+                          pathOptions={{
+                            color: "#eab308",
+                            weight: 1,
+                            fill: true,
+                            fillOpacity: 0.25,
+                            fillColor: "#eab308",
+                          }}
+                        />
+                      ))}
+                      {points.map(({ key, lat, lon }) => (
+                        <Marker
+                          key={`osm-m-${key}`}
+                          position={[lat, lon]}
+                          zIndexOffset={400}
+                        />
+                      ))}
+                    </>
+                  );
+                })()
+              : null}
+
+            {osmExtractionPolygon &&
+              osmExtractionPolygon.length >= 3 &&
+              (() => {
+                const closed = [
+                  ...osmExtractionPolygon.map(
+                    (p) => [p.latitude, p.longitude] as [number, number],
+                  ),
+                  [
+                    osmExtractionPolygon[0].latitude,
+                    osmExtractionPolygon[0].longitude,
+                  ],
+                ];
+                return (
+                  <Polyline
+                    positions={closed}
+                    pathOptions={{
+                      color: "#3b82f6",
+                      weight: 4,
+                      fill: true,
+                      fillOpacity: 0.25,
+                      fillColor: "#3b82f6",
+                      opacity: 1,
+                    }}
+                    key="osm-extraction-boundary"
+                  />
+                );
+              })()}
+
+            {zonesPreviewPolygons && zonesPreviewPolygons.length > 0
+              ? (() => {
+                  const zoneStrokeColors = [
+                    "#f97316",
+                    "#3b82f6",
+                    "#22c55e",
+                    "#a855f7",
+                    "#eab308",
+                    "#ef4444",
+                  ];
+                  const nonInteractive = !!onMapPress; // when picking location, let map receive clicks
+                  return zonesPreviewPolygons.map((poly, idx) => {
+                    if (poly.length < 3) return null;
+                    const closed = [
+                      ...poly.map(
+                        (p) => [p.latitude, p.longitude] as [number, number],
+                      ),
+                      [poly[0].latitude, poly[0].longitude],
+                    ];
+                    const stroke =
+                      zoneStrokeColors[idx % zoneStrokeColors.length];
+                    return (
+                      <Polyline
+                        key={`zones-preview-${idx}`}
+                        positions={closed}
+                        pathOptions={{
+                          color: stroke,
+                          weight: 3,
+                          fill: true,
+                          fillOpacity: 0.3,
+                          fillColor: stroke,
+                          opacity: 1,
+                          interactive: !nonInteractive,
+                        }}
+                      />
+                    );
+                  });
+                })()
+              : zonesPreviewPolygon &&
+                zonesPreviewPolygon.length >= 3 &&
+                (() => {
+                  const nonInteractive = !!onMapPress;
+                  const closed = [
+                    ...zonesPreviewPolygon.map(
+                      (p) => [p.latitude, p.longitude] as [number, number],
+                    ),
+                    [
+                      zonesPreviewPolygon[0].latitude,
+                      zonesPreviewPolygon[0].longitude,
+                    ],
+                  ];
+                  return (
+                    <Polyline
+                      positions={closed}
+                      pathOptions={{
+                        color: "#f97316",
+                        weight: 4,
+                        fill: true,
+                        fillOpacity: 0.25,
+                        fillColor: "#f97316",
+                        opacity: 1,
+                        interactive: !nonInteractive,
+                      }}
+                      key="zones-preview-boundary"
+                    />
+                  );
+                })()}
+
+            {wastePoints.length > 0 &&
+              (() => {
+                const useCluster =
+                  wastePoints.length > 20 && MarkerClusterGroup;
+                const list = wastePoints.map((p) => (
+                  <Marker
+                    key={p.id}
+                    position={[p.lat, p.lon]}
+                    icon={getWasteIcon(p.type)}
+                    zIndexOffset={800}
+                  >
+                    <Popup>
+                      <div style={{ fontSize: "12px", maxWidth: "200px" }}>
+                        <strong>{p.type === "bin" ? "Bin" : "Dumpster"}</strong>
+                        <br />
+                        {p.address ||
+                          `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`}
+                        {p.capacityLiters != null && (
+                          <>
+                            <br />
+                            Capacity: {p.capacityLiters} L
+                          </>
+                        )}
+                        {p.condition && (
+                          <>
+                            <br />
+                            Condition: {p.condition}
+                          </>
+                        )}
+                      </div>
+                    </Popup>
+                  </Marker>
+                ));
+                return useCluster ? (
+                  <MarkerClusterGroup key="waste-points-cluster">
+                    {list}
+                  </MarkerClusterGroup>
+                ) : (
+                  <React.Fragment key="waste-points">{list}</React.Fragment>
+                );
+              })()}
+
+            {useMapHook &&
+              geojsonOverlay &&
+              geojsonOverlay.features.length > 0 && (
+                <LeafletGeoJSONOverlay
+                  data={geojsonOverlay}
+                  strokeColor={geojsonStrokeColor}
+                  strokeWidth={geojsonStrokeWidth}
+                  fillColor={geojsonFillColor}
+                />
+              )}
+
+            {showRouteLine &&
+              (routePointsByVehicle && routePointsByVehicle.length > 1
+                ? routePointsByVehicle.map((vehiclePoints, vIdx) => {
+                    if (vehiclePoints.length < 2) return null;
+                    const positions = vehiclePoints.map(
+                      (p) => [p.lat, p.lon] as [number, number],
+                    );
+                    const color =
+                      ROUTE_COLORS_BY_VEHICLE[
+                        vIdx % ROUTE_COLORS_BY_VEHICLE.length
+                      ];
+                    return (
+                      <Polyline
+                        key={`vehicle-${vIdx}`}
+                        positions={positions}
+                        pathOptions={{ color, weight: 6, opacity: 1 }}
+                      />
+                    );
+                  })
+                : routePoints &&
+                  routePoints.length > 1 &&
+                  (segmentRisks && segmentRisks.length > 0 ? (
+                    (() => {
+                      const riskByIndex = new Map(
+                        segmentRisks.map((s) => [s.segmentIndex, s.riskScore]),
+                      );
+                      return routePoints.slice(0, -1).map((_, i) => {
+                        const p1 = routePoints[i];
+                        const p2 = routePoints[i + 1];
+                        const risk = riskByIndex.get(i) ?? 0;
+                        const color = segmentRiskToColor(risk, colors);
+                        const key = `seg-${i}-${p1.lat}-${p1.lon}-${p2.lat}-${p2.lon}`;
+                        return (
+                          <Polyline
+                            key={key}
+                            positions={[
+                              [p1.lat, p1.lon],
+                              [p2.lat, p2.lon],
+                            ]}
+                            color={color}
+                            weight={6}
+                            opacity={0.95}
+                          />
+                        );
+                      });
+                    })()
+                  ) : (
+                    <Polyline
+                      positions={routePoints.map((p) => [p.lat, p.lon])}
+                      color="#F97316"
+                      weight={6}
+                      opacity={1}
+                    />
+                  )))}
+
+            {routePoints && routePoints.length === 1 && (
+              <Marker
+                key="preview-single"
+                position={[routePoints[0].lat, routePoints[0].lon]}
+                icon={getSeqIcon("P")}
+              />
+            )}
+
+            {routePoints &&
+              routePoints.length >= 2 &&
+              !(routePointsByVehicle && routePointsByVehicle.length > 1) &&
+              (showRouteMarkers && routePoints.some((p) => p.label != null) ? (
+                routePoints.map((p, i) =>
+                  p.label != null ? (
+                    <Marker
+                      key={`seq-${i}`}
+                      position={[p.lat, p.lon]}
+                      icon={getSeqIcon(p.label)}
+                    />
+                  ) : null,
+                )
+              ) : (
+                <>
+                  <Marker
+                    key="route-start"
+                    position={[routePoints[0].lat, routePoints[0].lon]}
+                    icon={getSeqIcon("S")}
+                  />
+                  <Marker
+                    key="route-end"
+                    position={[
+                      routePoints[routePoints.length - 1].lat,
+                      routePoints[routePoints.length - 1].lon,
+                    ]}
+                    icon={getSeqIcon("E")}
+                  />
+                </>
+              ))}
+
+            {showRouteMarkers &&
+              (MarkerClusterGroup &&
+              markerClusteringEnabled &&
+              collectionPoints.length > 0 ? (
+                <MarkerClusterGroup>
+                  {collectionPoints.map((point) => (
+                    <Marker
+                      key={point.id}
+                      position={[point.latitude, point.longitude]}
+                      title={point.address}
+                      zIndexOffset={1000}
+                      eventHandlers={{
+                        click: () => onPointClick?.(point),
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ fontSize: "12px", maxWidth: "200px" }}>
+                          <strong>{point.address}</strong>
+                          <br />
+                          Type: {point.collectionType}
+                          <br />
+                          Status: {point.status}
+                          <br />
+                          Time:{" "}
+                          {point.scheduledTime
+                            ? new Date(point.scheduledTime).toLocaleTimeString()
+                            : "N/A"}
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MarkerClusterGroup>
+              ) : (
+                collectionPoints.map((point) => (
+                  <Marker
+                    key={point.id}
+                    position={[point.latitude, point.longitude]}
+                    title={point.address}
+                    zIndexOffset={1000}
+                    eventHandlers={{
+                      click: () => onPointClick?.(point),
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ fontSize: "12px", maxWidth: "200px" }}>
+                        <strong>{point.address}</strong>
+                        <br />
+                        Type: {point.collectionType}
+                        <br />
+                        Status: {point.status}
+                        <br />
+                        Time:{" "}
+                        {point.scheduledTime
+                          ? new Date(point.scheduledTime).toLocaleTimeString()
+                          : "N/A"}
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))
+              ))}
+          </MapContainer>
+          {showOverture && PMTILES_CITIES.length > 0 && leafletMapReady && (
+            <OvertureOverlay
+              leafletMapRef={leafletMapRef}
+              width={pixelWidth}
+              height={pixelHeight}
+              city={overtureCity}
+            />
+          )}
+          {/* No overlay on web: map must receive pointer events for pan and click. MapClickHandler inside MapContainer handles onMapPress. */}
+        </div>
+      </View>
+    );
+  }),
+);
 
 /**
  * Fit map bounds to collection points
@@ -1192,4 +1484,3 @@ export function FitBoundsButton({ mapRef }: { mapRef: React.RefObject<any> }) {
     />
   );
 }
-

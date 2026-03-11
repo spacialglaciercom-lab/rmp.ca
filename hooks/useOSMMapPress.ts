@@ -14,7 +14,7 @@ const DEBOUNCE_MS = 500;
  * (with debounce and haptic). Otherwise the optional fallback is called.
  */
 export function useOSMMapPress(
-  fallback?: (lat: number, lon: number) => void
+  fallback?: (lat: number, lon: number) => void,
 ): (lat: number, lon: number) => void {
   const osmExtractorVisible = useMapSidebarStore((s) => s.osmExtractorVisible);
   const actions = useMapActions();
@@ -32,6 +32,6 @@ export function useOSMMapPress(
       }
       fallback?.(lat, lon);
     },
-    [osmExtractorVisible, actions, fallback]
+    [osmExtractorVisible, actions, fallback],
   );
 }

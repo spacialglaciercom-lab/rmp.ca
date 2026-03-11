@@ -40,7 +40,8 @@ export class PerformanceUtils {
     windowSize?: number;
     maxTileLoadEntries?: number;
   }) {
-    this.frameTimeTarget = options?.frameTimeTargetMs ?? FRAME_TIME_TARGET_60FPS;
+    this.frameTimeTarget =
+      options?.frameTimeTargetMs ?? FRAME_TIME_TARGET_60FPS;
     this.windowSize = options?.windowSize ?? DEFAULT_WINDOW_SIZE;
     this.maxTileLoadEntries = options?.maxTileLoadEntries ?? 100;
   }
@@ -66,20 +67,21 @@ export class PerformanceUtils {
    */
   recordTileLoad(key: string, durationMs: number): void {
     this.tileLoadTimes.push({ key, durationMs, timestamp: performance.now() });
-    if (this.tileLoadTimes.length > this.maxTileLoadEntries) this.tileLoadTimes.shift();
+    if (this.tileLoadTimes.length > this.maxTileLoadEntries)
+      this.tileLoadTimes.shift();
   }
 
   getMetrics(): PerformanceMetrics {
     const len = this.frameTimes.length;
-    const avgFrameTime = len > 0
-      ? this.frameTimes.reduce((a, b) => a + b, 0) / len
-      : 0;
+    const avgFrameTime =
+      len > 0 ? this.frameTimes.reduce((a, b) => a + b, 0) / len : 0;
     const fps = avgFrameTime > 0 ? 1000 / avgFrameTime : 0;
     return {
       fps,
       droppedFrames: this.droppedCount,
       totalFrames: this.totalCount,
-      percentDropped: this.totalCount > 0 ? (this.droppedCount / this.totalCount) * 100 : 0,
+      percentDropped:
+        this.totalCount > 0 ? (this.droppedCount / this.totalCount) * 100 : 0,
       avgFrameTime,
       minFrameTime: len > 0 ? Math.min(...this.frameTimes) : 0,
       maxFrameTime: len > 0 ? Math.max(...this.frameTimes) : 0,
@@ -123,8 +125,11 @@ export function getDefaultPerformanceUtils(): PerformanceUtils {
  * Call once when the map is created. Returns cleanup function.
  */
 export function attachToMapRender(
-  map: { on: (e: string, fn: () => void) => void; off: (e: string, fn: () => void) => void },
-  utils: PerformanceUtils
+  map: {
+    on: (e: string, fn: () => void) => void;
+    off: (e: string, fn: () => void) => void;
+  },
+  utils: PerformanceUtils,
 ): () => void {
   utils.start();
   const onRender = () => utils.recordFrame(performance.now());

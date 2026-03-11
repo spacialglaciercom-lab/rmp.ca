@@ -96,9 +96,7 @@ export function ApiKeySection({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.foreground }]}>
-        {label}
-      </Text>
+      <Text style={[styles.label, { color: colors.foreground }]}>{label}</Text>
       <Text style={[styles.description, { color: colors.muted }]}>
         {description}
       </Text>

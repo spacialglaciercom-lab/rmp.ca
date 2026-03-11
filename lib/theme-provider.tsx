@@ -1,10 +1,26 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Appearance, View, useColorScheme as useSystemColorScheme } from "react-native";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  Appearance,
+  View,
+  useColorScheme as useSystemColorScheme,
+} from "react-native";
 import { colorScheme as nativewindColorScheme, vars } from "nativewind";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { SchemeColors, type ColorScheme } from "@/shared/theme";
-import { APP_THEME_STORAGE_KEY, darkTheme, lightTheme, type MinimalTheme } from "@/lib/minimal-theme";
+import {
+  APP_THEME_STORAGE_KEY,
+  darkTheme,
+  lightTheme,
+  type MinimalTheme,
+} from "@/lib/minimal-theme";
 
 type ThemeContextValue = {
   colorScheme: ColorScheme;
@@ -16,7 +32,8 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function getInitialColorScheme(systemScheme: ColorScheme): ColorScheme {
-  if (typeof window === "undefined" || typeof document === "undefined") return systemScheme;
+  if (typeof window === "undefined" || typeof document === "undefined")
+    return systemScheme;
   try {
     const stored = localStorage.getItem(APP_THEME_STORAGE_KEY);
     if (stored === "light" || stored === "dark") return stored;
@@ -26,8 +43,8 @@ function getInitialColorScheme(systemScheme: ColorScheme): ColorScheme {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useSystemColorScheme() ?? "light";
-  const [colorScheme, setColorSchemeState] = useState<ColorScheme>(
-    () => getInitialColorScheme(systemScheme)
+  const [colorScheme, setColorSchemeState] = useState<ColorScheme>(() =>
+    getInitialColorScheme(systemScheme),
   );
   const [hydrated, setHydrated] = useState(false);
 
@@ -61,11 +78,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const setColorScheme = useCallback((scheme: ColorScheme) => {
-    setColorSchemeState(scheme);
-    applyScheme(scheme);
-    AsyncStorage.setItem(APP_THEME_STORAGE_KEY, scheme).catch(() => {});
-  }, [applyScheme]);
+  const setColorScheme = useCallback(
+    (scheme: ColorScheme) => {
+      setColorSchemeState(scheme);
+      applyScheme(scheme);
+      AsyncStorage.setItem(APP_THEME_STORAGE_KEY, scheme).catch(() => {});
+    },
+    [applyScheme],
+  );
 
   useEffect(() => {
     applyScheme(colorScheme);

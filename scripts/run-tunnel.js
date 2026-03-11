@@ -17,13 +17,21 @@ if (fs.existsSync(envPath)) {
     if (!line || line.trim().startsWith("#")) return;
     const match = line.match(/^([^=]+)=(.*)$/);
     if (match && !process.env[match[1].trim()]) {
-      process.env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, "");
+      process.env[match[1].trim()] = match[2]
+        .trim()
+        .replace(/^["']|["']$/g, "");
     }
   });
 }
 
-const maxRetries = Math.max(1, parseInt(process.env.TUNNEL_MAX_RETRIES || "10", 10));
-const retryDelayMs = Math.max(1000, parseInt(process.env.TUNNEL_RETRY_DELAY_MS || "12000", 10));
+const maxRetries = Math.max(
+  1,
+  parseInt(process.env.TUNNEL_MAX_RETRIES || "10", 10),
+);
+const retryDelayMs = Math.max(
+  1000,
+  parseInt(process.env.TUNNEL_RETRY_DELAY_MS || "12000", 10),
+);
 
 function runOne() {
   return new Promise((resolve) => {
@@ -47,7 +55,7 @@ function sleep(ms) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     if (attempt > 1) {
       console.warn(
-        `\n[Tunnel] Retry ${attempt}/${maxRetries} in ${retryDelayMs / 1000}s (ngrok can be slow or flaky)…\n`
+        `\n[Tunnel] Retry ${attempt}/${maxRetries} in ${retryDelayMs / 1000}s (ngrok can be slow or flaky)…\n`,
       );
       await sleep(retryDelayMs);
     }

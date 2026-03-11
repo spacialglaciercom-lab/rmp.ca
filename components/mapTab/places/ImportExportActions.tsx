@@ -32,7 +32,12 @@ export function ImportExportActions() {
     try {
       hapticImpact();
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/gpx+xml", "application/vnd.google-earth.kml+xml", "application/xml", "text/xml"],
+        type: [
+          "application/gpx+xml",
+          "application/vnd.google-earth.kml+xml",
+          "application/xml",
+          "text/xml",
+        ],
         copyToCacheDirectory: true,
       });
 
@@ -80,8 +85,11 @@ export function ImportExportActions() {
             totalDist += haversineDistance(trackPoints[i - 1], trackPoints[i]);
           }
           const firstTs = trackPoints[0]?.timestamp ?? Date.now();
-          const lastTs = trackPoints[trackPoints.length - 1]?.timestamp ?? Date.now();
-          trackStorage.saveTrack(name, trackPoints, totalDist, lastTs - firstTs).catch(() => {});
+          const lastTs =
+            trackPoints[trackPoints.length - 1]?.timestamp ?? Date.now();
+          trackStorage
+            .saveTrack(name, trackPoints, totalDist, lastTs - firstTs)
+            .catch(() => {});
           routeAdded = true;
         }
         // Waypoints-only GPX: do not add individual points to favorites (user wants only complete routes).
@@ -91,12 +99,12 @@ export function ImportExportActions() {
       if (routeAdded) {
         Alert.alert(
           "Import complete",
-          "Added 1 route to favorites. Open the Map tab to see the route and use Download GPX to export the full file."
+          "Added 1 route to favorites. Open the Map tab to see the route and use Download GPX to export the full file.",
         );
       } else {
         Alert.alert(
           "No route added",
-          "Only complete GPX routes (track or route with 2+ points) are added to favorites. This file has waypoints or points only — use the Map tab to load and export if needed."
+          "Only complete GPX routes (track or route with 2+ points) are added to favorites. This file has waypoints or points only — use the Map tab to load and export if needed.",
         );
       }
     } catch (err) {
@@ -107,7 +115,12 @@ export function ImportExportActions() {
 
   return (
     <View style={[styles.container, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.sectionTitle, { color: colors.accentCyan ?? colors.primary }]}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: colors.accentCyan ?? colors.primary },
+        ]}
+      >
         IMPORT / EXPORT
       </Text>
       <TouchableOpacity

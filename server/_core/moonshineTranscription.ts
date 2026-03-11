@@ -27,14 +27,22 @@ export async function transcribeAudioMoonshine(
 ): Promise<TranscriptionResponse | TranscriptionError> {
   const sidecarUrl = ENV.moonshineSidecarUrl;
   if (!sidecarUrl) {
-    return { error: "Moonshine sidecar not configured", code: "SERVICE_ERROR", details: "MOONSHINE_SIDECAR_URL is not set" };
+    return {
+      error: "Moonshine sidecar not configured",
+      code: "SERVICE_ERROR",
+      details: "MOONSHINE_SIDECAR_URL is not set",
+    };
   }
 
   try {
     // Step 1: Download audio from URL and convert to base64
     const response = await fetch(options.audioUrl);
     if (!response.ok) {
-      return { error: "Failed to download audio file", code: "INVALID_FORMAT", details: `HTTP ${response.status}` };
+      return {
+        error: "Failed to download audio file",
+        code: "INVALID_FORMAT",
+        details: `HTTP ${response.status}`,
+      };
     }
 
     const audioBuffer = Buffer.from(await response.arrayBuffer());
@@ -48,7 +56,12 @@ export async function transcribeAudioMoonshine(
     const audioBase64 = audioBuffer.toString("base64");
 
     // Step 2: POST to sidecar
-    return await callSidecar(sidecarUrl, audioBase64, mimeType, options.language);
+    return await callSidecar(
+      sidecarUrl,
+      audioBase64,
+      mimeType,
+      options.language,
+    );
   } catch (error) {
     return {
       error: "Moonshine transcription failed",
@@ -68,7 +81,11 @@ export async function transcribeBase64Moonshine(
 ): Promise<TranscriptionResponse | TranscriptionError> {
   const sidecarUrl = ENV.moonshineSidecarUrl;
   if (!sidecarUrl) {
-    return { error: "Moonshine sidecar not configured", code: "SERVICE_ERROR", details: "MOONSHINE_SIDECAR_URL is not set" };
+    return {
+      error: "Moonshine sidecar not configured",
+      code: "SERVICE_ERROR",
+      details: "MOONSHINE_SIDECAR_URL is not set",
+    };
   }
 
   // Size check
@@ -100,7 +117,10 @@ export async function transcribeWithFallback(
     if (!("error" in result)) return result;
 
     // Moonshine failed — fall through to Whisper
-    console.warn("[moonshine] Sidecar failed, falling back to Whisper:", (result as TranscriptionError).details);
+    console.warn(
+      "[moonshine] Sidecar failed, falling back to Whisper:",
+      (result as TranscriptionError).details,
+    );
   }
 
   return transcribeAudio(options);
@@ -117,10 +137,17 @@ export async function transcribeBase64WithFallback(
   prompt?: string,
 ): Promise<TranscriptionResponse | TranscriptionError> {
   if (ENV.moonshineSidecarUrl && ENV.moonshineSttEnabled) {
-    const result = await transcribeBase64Moonshine(base64Data, mimeType, language);
+    const result = await transcribeBase64Moonshine(
+      base64Data,
+      mimeType,
+      language,
+    );
     if (!("error" in result)) return result;
 
-    console.warn("[moonshine] Sidecar failed, falling back to Whisper:", (result as TranscriptionError).details);
+    console.warn(
+      "[moonshine] Sidecar failed, falling back to Whisper:",
+      (result as TranscriptionError).details,
+    );
   }
 
   return transcribeAudioFromBase64(base64Data, mimeType, language, prompt);
@@ -166,17 +193,19 @@ async function callSidecar(
     language: data.language || "en",
     duration: data.duration || 0,
     text: data.text || "",
-    segments: (data.segments || []).map((seg: { id: number; start: number; end: number; text: string }) => ({
-      id: seg.id,
-      seek: 0,
-      start: seg.start,
-      end: seg.end,
-      text: seg.text,
-      tokens: [],
-      temperature: 0,
-      avg_logprob: 0,
-      compression_ratio: 0,
-      no_speech_prob: 0,
-    })),
+    segments: (data.segments || []).map(
+      (seg: { id: number; start: number; end: number; text: string }) => ({
+        id: seg.id,
+        seek: 0,
+        start: seg.start,
+        end: seg.end,
+        text: seg.text,
+        tokens: [],
+        temperature: 0,
+        avg_logprob: 0,
+        compression_ratio: 0,
+        no_speech_prob: 0,
+      }),
+    ),
   };
 }

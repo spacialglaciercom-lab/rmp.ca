@@ -20,7 +20,10 @@ interface MapErrorBoundaryState {
  * Error boundary specifically for map-related components
  * Handles map loading errors, tile errors, and navigation failures
  */
-export class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, MapErrorBoundaryState> {
+export class MapErrorBoundary extends React.Component<
+  MapErrorBoundaryProps,
+  MapErrorBoundaryState
+> {
   constructor(props: MapErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -30,7 +33,9 @@ export class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, Map
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<MapErrorBoundaryState> {
+  static getDerivedStateFromError(
+    error: Error,
+  ): Partial<MapErrorBoundaryState> {
     return { hasError: true };
   }
 
@@ -40,9 +45,9 @@ export class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, Map
       component: "map",
       errorType: this.classifyMapError(error),
     });
-    reportErrorToServer(error, { 
+    reportErrorToServer(error, {
       name: "MapErrorBoundary",
-      isFatal: false 
+      isFatal: false,
     }).catch(() => {});
 
     this.setState({
@@ -144,21 +149,24 @@ function MapErrorFallback({
   };
 
   return (
-    <View 
-      className="flex-1 items-center justify-center p-6" 
+    <View
+      className="flex-1 items-center justify-center p-6"
       style={{ backgroundColor: MAP_FALLBACK_COLORS.background }}
     >
       <View className="items-center mb-6">
-        <MaterialCommunityIcons 
-          name={getErrorIcon()} 
-          size={64} 
-          color={MAP_FALLBACK_COLORS.error} 
+        <MaterialCommunityIcons
+          name={getErrorIcon()}
+          size={64}
+          color={MAP_FALLBACK_COLORS.error}
         />
-        <Text className="text-2xl font-bold mt-4 mb-2" style={{ color: MAP_FALLBACK_COLORS.text }}>
+        <Text
+          className="text-2xl font-bold mt-4 mb-2"
+          style={{ color: MAP_FALLBACK_COLORS.text }}
+        >
           Map Error
         </Text>
-        <Text 
-          className="text-center text-base mb-4 px-4" 
+        <Text
+          className="text-center text-base mb-4 px-4"
           style={{ color: MAP_FALLBACK_COLORS.muted }}
         >
           {getErrorDescription()}
@@ -166,20 +174,27 @@ function MapErrorFallback({
       </View>
 
       {isDev && (
-        <View 
+        <View
           className="rounded-xl p-4 mb-6 w-full max-w-md"
           style={{ backgroundColor: MAP_FALLBACK_COLORS.surface }}
         >
-          <Text className="text-sm font-mono mb-2" style={{ color: MAP_FALLBACK_COLORS.error }}>
+          <Text
+            className="text-sm font-mono mb-2"
+            style={{ color: MAP_FALLBACK_COLORS.error }}
+          >
             Error Details:
           </Text>
-          <Text className="text-xs font-mono" selectable style={{ color: MAP_FALLBACK_COLORS.muted }}>
+          <Text
+            className="text-xs font-mono"
+            selectable
+            style={{ color: MAP_FALLBACK_COLORS.muted }}
+          >
             {errorMessage}
           </Text>
           {error?.stack && (
-            <Text 
-              className="text-xs font-mono mt-2" 
-              selectable 
+            <Text
+              className="text-xs font-mono mt-2"
+              selectable
               style={{ color: MAP_FALLBACK_COLORS.muted }}
             >
               {error.stack.slice(0, 200)}...
@@ -194,11 +209,14 @@ function MapErrorFallback({
           className="flex-1 py-3 rounded-xl"
           style={{ backgroundColor: MAP_FALLBACK_COLORS.primary }}
         >
-          <Text className="text-center font-semibold" style={{ color: "#ffffff" }}>
+          <Text
+            className="text-center font-semibold"
+            style={{ color: "#ffffff" }}
+          >
             Retry
           </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           onPress={() => {
             // In a real app, this could open settings or contact support
@@ -207,7 +225,10 @@ function MapErrorFallback({
           className="flex-1 py-3 rounded-xl"
           style={{ backgroundColor: MAP_FALLBACK_COLORS.surface }}
         >
-          <Text className="text-center font-semibold" style={{ color: MAP_FALLBACK_COLORS.text }}>
+          <Text
+            className="text-center font-semibold"
+            style={{ color: MAP_FALLBACK_COLORS.text }}
+          >
             Help
           </Text>
         </TouchableOpacity>

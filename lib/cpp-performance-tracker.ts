@@ -47,9 +47,9 @@ export interface CPPPerformanceMetrics {
     timeSaved: number;
   };
   routeCharacteristics: {
-    urbanDensity: 'low' | 'medium' | 'high';
-    roadConditions: 'good' | 'fair' | 'poor';
-    trafficLevel: 'low' | 'medium' | 'high';
+    urbanDensity: "low" | "medium" | "high";
+    roadConditions: "good" | "fair" | "poor";
+    trafficLevel: "low" | "medium" | "high";
     weatherImpact: number;
   };
 }
@@ -96,18 +96,22 @@ export interface PerformanceTrend {
   costReduction: number;
   timeReduction: number;
   efficiencyGain: number;
-  trendDirection: 'improving' | 'declining' | 'stable';
+  trendDirection: "improving" | "declining" | "stable";
 }
 
 export interface OptimizationRecommendation {
-  type: 'weight_adjustment' | 'algorithm_tuning' | 'data_collection' | 'parameter_optimization';
+  type:
+    | "weight_adjustment"
+    | "algorithm_tuning"
+    | "data_collection"
+    | "parameter_optimization";
   target: string;
   currentValue: number;
   recommendedValue: number;
   expectedImpact: number;
   confidence: number;
   reasoning: string;
-  implementationComplexity: 'low' | 'medium' | 'high';
+  implementationComplexity: "low" | "medium" | "high";
 }
 
 /**
@@ -131,77 +135,79 @@ export class CPPPerformanceTracker {
   private initializeBenchmarks(): void {
     this.benchmarks = [
       {
-        benchmarkId: 'urban_short',
-        name: 'Urban Short Routes',
-        description: 'Short routes (< 5km) in urban areas with medium complexity',
+        benchmarkId: "urban_short",
+        name: "Urban Short Routes",
+        description:
+          "Short routes (< 5km) in urban areas with medium complexity",
         routeCharacteristics: {
           distanceRange: [0.5, 5.0],
           complexityRange: [0.3, 0.7],
-          urbanDensity: ['medium', 'high'],
-          weatherConditions: ['clear', 'clouds', 'rain']
+          urbanDensity: ["medium", "high"],
+          weatherConditions: ["clear", "clouds", "rain"],
         },
         baselineMetrics: {
           averageCost: 45.0,
           averageTime: 25.0,
           averageEfficiency: 75.0,
-          sampleSize: 0
+          sampleSize: 0,
         },
         currentMetrics: {
           averageCost: 0,
           averageTime: 0,
           averageEfficiency: 0,
           sampleSize: 0,
-          improvement: 0
-        }
+          improvement: 0,
+        },
       },
       {
-        benchmarkId: 'suburban_medium',
-        name: 'Suburban Medium Routes',
-        description: 'Medium routes (5-15km) in suburban areas with mixed complexity',
+        benchmarkId: "suburban_medium",
+        name: "Suburban Medium Routes",
+        description:
+          "Medium routes (5-15km) in suburban areas with mixed complexity",
         routeCharacteristics: {
           distanceRange: [5.0, 15.0],
           complexityRange: [0.4, 0.8],
-          urbanDensity: ['low', 'medium'],
-          weatherConditions: ['clear', 'clouds', 'rain', 'snow']
+          urbanDensity: ["low", "medium"],
+          weatherConditions: ["clear", "clouds", "rain", "snow"],
         },
         baselineMetrics: {
           averageCost: 120.0,
           averageTime: 65.0,
           averageEfficiency: 78.0,
-          sampleSize: 0
+          sampleSize: 0,
         },
         currentMetrics: {
           averageCost: 0,
           averageTime: 0,
           averageEfficiency: 0,
           sampleSize: 0,
-          improvement: 0
-        }
+          improvement: 0,
+        },
       },
       {
-        benchmarkId: 'rural_long',
-        name: 'Rural Long Routes',
-        description: 'Long routes (> 15km) in rural areas with high complexity',
+        benchmarkId: "rural_long",
+        name: "Rural Long Routes",
+        description: "Long routes (> 15km) in rural areas with high complexity",
         routeCharacteristics: {
           distanceRange: [15.0, 50.0],
           complexityRange: [0.6, 1.0],
-          urbanDensity: ['low'],
-          weatherConditions: ['clear', 'clouds', 'rain', 'snow', 'fog']
+          urbanDensity: ["low"],
+          weatherConditions: ["clear", "clouds", "rain", "snow", "fog"],
         },
         baselineMetrics: {
           averageCost: 280.0,
           averageTime: 150.0,
           averageEfficiency: 72.0,
-          sampleSize: 0
+          sampleSize: 0,
         },
         currentMetrics: {
           averageCost: 0,
           averageTime: 0,
           averageEfficiency: 0,
           sampleSize: 0,
-          improvement: 0
-        }
-      }
+          improvement: 0,
+        },
+      },
     ];
   }
 
@@ -221,11 +227,16 @@ export class CPPPerformanceTracker {
     await this.collectPerformanceData();
 
     // Schedule periodic collection
-    this.trackingInterval = setInterval(async () => {
-      await this.collectPerformanceData();
-    }, this.config.analysisInterval * 60 * 60 * 1000);
+    this.trackingInterval = setInterval(
+      async () => {
+        await this.collectPerformanceData();
+      },
+      this.config.analysisInterval * 60 * 60 * 1000,
+    );
 
-    console.log(`✅ CPP performance tracking started with ${this.config.analysisInterval} hour intervals`);
+    console.log(
+      `✅ CPP performance tracking started with ${this.config.analysisInterval} hour intervals`,
+    );
   }
 
   /**
@@ -253,7 +264,7 @@ export class CPPPerformanceTracker {
     routeId: string,
     optimizationResult: any,
     weightUpdateId: string,
-    routeCharacteristics: any
+    routeCharacteristics: any,
   ): Promise<void> {
     if (!this.isTracking) return;
 
@@ -262,25 +273,26 @@ export class CPPPerformanceTracker {
         routeId,
         optimizationResult,
         weightUpdateId,
-        routeCharacteristics
+        routeCharacteristics,
       );
 
       if (metrics) {
         // Store locally
         this.performanceData.push(metrics);
-        
+
         // Store in database
         await this.storePerformanceMetrics(metrics);
-        
+
         // Update benchmarks
         await this.updateBenchmarks(metrics);
-        
+
         // Keep only recent data
         this.cleanupOldData();
-        
-        console.log(`📊 Performance recorded for route ${routeId}: ${metrics.performanceComparison.efficiencyGain.toFixed(1)}% improvement`);
-      }
 
+        console.log(
+          `📊 Performance recorded for route ${routeId}: ${metrics.performanceComparison.efficiencyGain.toFixed(1)}% improvement`,
+        );
+      }
     } catch (error) {
       console.error(`Error recording performance for route ${routeId}:`, error);
     }
@@ -293,21 +305,23 @@ export class CPPPerformanceTracker {
     routeId: string,
     optimizationResult: any,
     weightUpdateId: string,
-    routeCharacteristics: any
+    routeCharacteristics: any,
   ): Promise<CPPPerformanceMetrics | null> {
     try {
       // Extract optimization metrics
-      const optimizationMetrics = this.extractOptimizationMetrics(optimizationResult);
-      
+      const optimizationMetrics =
+        this.extractOptimizationMetrics(optimizationResult);
+
       // Calculate cost metrics
       const costMetrics = await this.calculateCostMetrics(optimizationResult);
-      
+
       // Extract weight metrics
       const weightMetrics = this.extractWeightMetrics(optimizationResult);
-      
+
       // Calculate performance comparison
-      const performanceComparison = await this.calculatePerformanceComparison(optimizationResult);
-      
+      const performanceComparison =
+        await this.calculatePerformanceComparison(optimizationResult);
+
       return {
         metricsId: `cpp_perf_${routeId}_${Date.now()}`,
         timestamp: new Date(),
@@ -317,9 +331,8 @@ export class CPPPerformanceTracker {
         costMetrics,
         weightMetrics,
         performanceComparison,
-        routeCharacteristics
+        routeCharacteristics,
       };
-
     } catch (error) {
       console.error("Error calculating performance metrics:", error);
       return null;
@@ -329,15 +342,17 @@ export class CPPPerformanceTracker {
   /**
    * Extract optimization metrics from result
    */
-  private extractOptimizationMetrics(result: any): CPPPerformanceMetrics['optimizationMetrics'] {
+  private extractOptimizationMetrics(
+    result: any,
+  ): CPPPerformanceMetrics["optimizationMetrics"] {
     return {
       totalDistance: result.totalDistance || 0,
       estimatedTime: result.estimatedTime || 0,
       turnCount: result.turns?.total || 0,
       complexityScore: this.calculateComplexityScore(result),
-      algorithm: result.algorithm || 'cpp',
+      algorithm: result.algorithm || "cpp",
       iterations: result.iterations || 0,
-      convergenceTime: result.convergenceTime || 0
+      convergenceTime: result.convergenceTime || 0,
     };
   }
 
@@ -345,23 +360,30 @@ export class CPPPerformanceTracker {
    * Calculate complexity score
    */
   private calculateComplexityScore(result: any): number {
-    const turnRatio = (result.turns?.total || 0) / Math.max(1, result.totalDistance);
-    const segmentRatio = (result.segmentsRouted || 0) / Math.max(1, result.totalDistance);
-    
+    const turnRatio =
+      (result.turns?.total || 0) / Math.max(1, result.totalDistance);
+    const segmentRatio =
+      (result.segmentsRouted || 0) / Math.max(1, result.totalDistance);
+
     // Normalize to 0-1 scale
-    const complexity = (turnRatio * 0.6) + (segmentRatio * 0.4);
+    const complexity = turnRatio * 0.6 + segmentRatio * 0.4;
     return Math.min(1.0, complexity);
   }
 
   /**
    * Calculate cost metrics
    */
-  private async calculateCostMetrics(result: any): Promise<CPPPerformanceMetrics['costMetrics']> {
+  private async calculateCostMetrics(
+    result: any,
+  ): Promise<CPPPerformanceMetrics["costMetrics"]> {
     const predictedCost = result.predictedCost || result.estimatedCost || 0;
     const actualCost = result.actualCost || predictedCost; // Use predicted if actual not available
-    
-    const costAccuracy = predictedCost > 0 ? 1 - (Math.abs(actualCost - predictedCost) / predictedCost) : 0;
-    
+
+    const costAccuracy =
+      predictedCost > 0
+        ? 1 - Math.abs(actualCost - predictedCost) / predictedCost
+        : 0;
+
     // Estimate cost breakdown
     const totalCost = actualCost;
     const fuel = totalCost * 0.3;
@@ -373,38 +395,42 @@ export class CPPPerformanceTracker {
       predictedCost,
       actualCost,
       costAccuracy,
-      costBreakdown: { fuel, labor, maintenance, overhead }
+      costBreakdown: { fuel, labor, maintenance, overhead },
     };
   }
 
   /**
    * Extract weight metrics
    */
-  private extractWeightMetrics(result: any): CPPPerformanceMetrics['weightMetrics'] {
+  private extractWeightMetrics(
+    result: any,
+  ): CPPPerformanceMetrics["weightMetrics"] {
     const weightData = result.weightMetrics || {};
-    
+
     return {
       correctionFactor: weightData.correctionFactor || 1.0,
       confidence: weightData.confidence || 0.5,
-      dataSource: weightData.dataSource || 'original',
+      dataSource: weightData.dataSource || "original",
       mlPenalty: weightData.mlPenalty || 0,
-      validationScore: weightData.validationScore || 0
+      validationScore: weightData.validationScore || 0,
     };
   }
 
   /**
    * Calculate performance comparison
    */
-  private async calculatePerformanceComparison(result: any): Promise<CPPPerformanceMetrics['performanceComparison']> {
+  private async calculatePerformanceComparison(
+    result: any,
+  ): Promise<CPPPerformanceMetrics["performanceComparison"]> {
     // Compare with original weights (baseline)
-    const vsOriginal = this.calculateImprovement(result, 'original');
-    
+    const vsOriginal = this.calculateImprovement(result, "original");
+
     // Compare with previous version
-    const vsPrevious = this.calculateImprovement(result, 'previous');
-    
+    const vsPrevious = this.calculateImprovement(result, "previous");
+
     // Calculate efficiency gain
     const efficiencyGain = (vsOriginal + vsPrevious) / 2;
-    
+
     // Calculate time saved
     const timeSaved = result.timeSaved || 0;
 
@@ -412,7 +438,7 @@ export class CPPPerformanceTracker {
       vsOriginalWeights: vsOriginal,
       vsPreviousVersion: vsPrevious,
       efficiencyGain,
-      timeSaved
+      timeSaved,
     };
   }
 
@@ -424,7 +450,7 @@ export class CPPPerformanceTracker {
     // For now, use simple improvement calculation
     const baselineCost = result.baselineCost || result.predictedCost * 1.1; // 10% buffer
     const actualCost = result.actualCost || result.predictedCost;
-    
+
     return baselineCost > 0 ? (baselineCost - actualCost) / baselineCost : 0;
   }
 
@@ -433,10 +459,10 @@ export class CPPPerformanceTracker {
    */
   private async collectPerformanceData(): Promise<void> {
     console.log("\n📊 Collecting CPP performance data...");
-    
+
     try {
       const recentData = await this.getRecentPerformanceData();
-      
+
       if (recentData.length === 0) {
         console.log("No recent performance data available");
         return;
@@ -444,10 +470,11 @@ export class CPPPerformanceTracker {
 
       // Process and analyze data
       await this.analyzePerformanceData(recentData);
-      
+
       const duration = (Date.now() - Date.now()) / 1000; // Placeholder
-      console.log(`✅ Performance data collection completed in ${duration.toFixed(2)}s`);
-      
+      console.log(
+        `✅ Performance data collection completed in ${duration.toFixed(2)}s`,
+      );
     } catch (error) {
       console.error("❌ Error collecting performance data:", error);
     }
@@ -463,9 +490,11 @@ export class CPPPerformanceTracker {
     try {
       const db = client.db("trashroute");
       const collection = db.collection("cpp_performance_metrics");
-      
-      const since = new Date(Date.now() - this.config.analysisInterval * 60 * 60 * 1000);
-      
+
+      const since = new Date(
+        Date.now() - this.config.analysisInterval * 60 * 60 * 1000,
+      );
+
       return await collection
         .find({ timestamp: { $gte: since } })
         .sort({ timestamp: -1 })
@@ -482,21 +511,28 @@ export class CPPPerformanceTracker {
    */
   private async analyzePerformanceData(data: any[]): Promise<void> {
     if (data.length < this.config.minSampleSize) {
-      console.log(`Insufficient data for analysis (${data.length} < ${this.config.minSampleSize})`);
+      console.log(
+        `Insufficient data for analysis (${data.length} < ${this.config.minSampleSize})`,
+      );
       return;
     }
 
     // Update benchmarks
     await this.updateBenchmarksFromData(data);
-    
+
     // Generate recommendations
-    const recommendations = await this.generateOptimizationRecommendations(data);
-    
+    const recommendations =
+      await this.generateOptimizationRecommendations(data);
+
     if (recommendations.length > 0) {
       console.log("💡 Optimization recommendations:");
-      recommendations.forEach(rec => {
-        console.log(`   ${rec.type}: ${rec.target} (${rec.currentValue.toFixed(3)} → ${rec.recommendedValue.toFixed(3)})`);
-        console.log(`   Expected impact: ${(rec.expectedImpact * 100).toFixed(1)}%`);
+      recommendations.forEach((rec) => {
+        console.log(
+          `   ${rec.type}: ${rec.target} (${rec.currentValue.toFixed(3)} → ${rec.recommendedValue.toFixed(3)})`,
+        );
+        console.log(
+          `   Expected impact: ${(rec.expectedImpact * 100).toFixed(1)}%`,
+        );
         console.log(`   Confidence: ${(rec.confidence * 100).toFixed(0)}%`);
       });
     }
@@ -507,25 +543,44 @@ export class CPPPerformanceTracker {
    */
   private async updateBenchmarksFromData(data: any[]): Promise<void> {
     for (const benchmark of this.benchmarks) {
-      const matchingData = data.filter(d => this.matchesBenchmark(d, benchmark));
-      
+      const matchingData = data.filter((d) =>
+        this.matchesBenchmark(d, benchmark),
+      );
+
       if (matchingData.length >= this.config.benchmarkRoutes) {
         benchmark.currentMetrics = {
-          averageCost: matchingData.reduce((sum, d) => sum + d.costMetrics.actualCost, 0) / matchingData.length,
-          averageTime: matchingData.reduce((sum, d) => sum + d.optimizationMetrics.estimatedTime, 0) / matchingData.length,
-          averageEfficiency: matchingData.reduce((sum, d) => sum + d.performanceComparison.efficiencyGain, 0) / matchingData.length,
+          averageCost:
+            matchingData.reduce((sum, d) => sum + d.costMetrics.actualCost, 0) /
+            matchingData.length,
+          averageTime:
+            matchingData.reduce(
+              (sum, d) => sum + d.optimizationMetrics.estimatedTime,
+              0,
+            ) / matchingData.length,
+          averageEfficiency:
+            matchingData.reduce(
+              (sum, d) => sum + d.performanceComparison.efficiencyGain,
+              0,
+            ) / matchingData.length,
           sampleSize: matchingData.length,
-          improvement: matchingData.reduce((sum, d) => sum + d.performanceComparison.vsOriginalWeights, 0) / matchingData.length
+          improvement:
+            matchingData.reduce(
+              (sum, d) => sum + d.performanceComparison.vsOriginalWeights,
+              0,
+            ) / matchingData.length,
         };
-        
+
         // Update baseline if significant improvement
-        if (benchmark.currentMetrics.improvement > this.config.significanceThreshold) {
+        if (
+          benchmark.currentMetrics.improvement >
+          this.config.significanceThreshold
+        ) {
           benchmark.baselineMetrics = {
             ...benchmark.baselineMetrics,
             averageCost: benchmark.currentMetrics.averageCost,
             averageTime: benchmark.currentMetrics.averageTime,
             averageEfficiency: benchmark.currentMetrics.averageEfficiency,
-            sampleSize: benchmark.currentMetrics.sampleSize
+            sampleSize: benchmark.currentMetrics.sampleSize,
           };
         }
       }
@@ -535,68 +590,80 @@ export class CPPPerformanceTracker {
   /**
    * Check if data matches benchmark
    */
-  private matchesBenchmark(data: any, benchmark: PerformanceBenchmark): boolean {
+  private matchesBenchmark(
+    data: any,
+    benchmark: PerformanceBenchmark,
+  ): boolean {
     const distance = data.optimizationMetrics.totalDistance;
     const complexity = data.optimizationMetrics.complexityScore;
-    
-    const [minDistance, maxDistance] = benchmark.routeCharacteristics.distanceRange;
-    const [minComplexity, maxComplexity] = benchmark.routeCharacteristics.complexityRange;
-    
-    return distance >= minDistance && distance <= maxDistance &&
-           complexity >= minComplexity && complexity <= maxComplexity;
+
+    const [minDistance, maxDistance] =
+      benchmark.routeCharacteristics.distanceRange;
+    const [minComplexity, maxComplexity] =
+      benchmark.routeCharacteristics.complexityRange;
+
+    return (
+      distance >= minDistance &&
+      distance <= maxDistance &&
+      complexity >= minComplexity &&
+      complexity <= maxComplexity
+    );
   }
 
   /**
    * Generate optimization recommendations
    */
-  private async generateOptimizationRecommendations(data: any[]): Promise<OptimizationRecommendation[]> {
+  private async generateOptimizationRecommendations(
+    data: any[],
+  ): Promise<OptimizationRecommendation[]> {
     const recommendations: OptimizationRecommendation[] = [];
-    
+
     // Analyze performance patterns
     const patterns = this.analyzePerformancePatterns(data);
-    
+
     // Weight adjustment recommendations
     if (patterns.lowConfidenceWeights > 0.3) {
       recommendations.push({
-        type: 'weight_adjustment',
-        target: 'confidence_threshold',
+        type: "weight_adjustment",
+        target: "confidence_threshold",
         currentValue: 0.6,
         recommendedValue: 0.75,
         expectedImpact: 0.05,
         confidence: 0.8,
-        reasoning: "High percentage of low-confidence weights affecting performance",
-        implementationComplexity: 'low'
+        reasoning:
+          "High percentage of low-confidence weights affecting performance",
+        implementationComplexity: "low",
       });
     }
-    
+
     // Algorithm tuning recommendations
     if (patterns.highComplexityRoutes > 0.4) {
       recommendations.push({
-        type: 'algorithm_tuning',
-        target: 'complexity_penalty',
+        type: "algorithm_tuning",
+        target: "complexity_penalty",
         currentValue: 1.0,
         recommendedValue: 1.2,
         expectedImpact: 0.08,
         confidence: 0.7,
         reasoning: "Many high-complexity routes showing suboptimal performance",
-        implementationComplexity: 'medium'
+        implementationComplexity: "medium",
       });
     }
-    
+
     // Data collection recommendations
     if (patterns.insufficientWeatherData > 0.2) {
       recommendations.push({
-        type: 'data_collection',
-        target: 'weather_coverage',
+        type: "data_collection",
+        target: "weather_coverage",
         currentValue: 0.8,
         recommendedValue: 0.95,
         expectedImpact: 0.03,
         confidence: 0.6,
         reasoning: "Insufficient weather data for accurate predictions",
-        implementationComplexity: 'medium'
+        implementationComplexity: "medium",
       });
     }
-    
+
     return recommendations;
   }
 
@@ -605,34 +672,39 @@ export class CPPPerformanceTracker {
    */
   private analyzePerformancePatterns(data: any[]): any {
     const total = data.length;
-    
-    const lowConfidenceWeights = data.filter(d => d.weightMetrics.confidence < 0.6).length / total;
-    const highComplexityRoutes = data.filter(d => d.optimizationMetrics.complexityScore > 0.7).length / total;
-    const insufficientWeatherData = data.filter(d => !d.routeCharacteristics.weatherImpact).length / total;
-    
+
+    const lowConfidenceWeights =
+      data.filter((d) => d.weightMetrics.confidence < 0.6).length / total;
+    const highComplexityRoutes =
+      data.filter((d) => d.optimizationMetrics.complexityScore > 0.7).length /
+      total;
+    const insufficientWeatherData =
+      data.filter((d) => !d.routeCharacteristics.weatherImpact).length / total;
+
     return {
       lowConfidenceWeights,
       highComplexityRoutes,
-      insufficientWeatherData
+      insufficientWeatherData,
     };
   }
 
   /**
    * Store performance metrics
    */
-  private async storePerformanceMetrics(metrics: CPPPerformanceMetrics): Promise<void> {
+  private async storePerformanceMetrics(
+    metrics: CPPPerformanceMetrics,
+  ): Promise<void> {
     const client = getMongoClient();
     if (!client) return;
 
     try {
       const db = client.db("trashroute");
       const collection = db.collection("cpp_performance_metrics");
-      
+
       await collection.insertOne({
         ...metrics,
-        _id: new ObjectId()
+        _id: new ObjectId(),
       });
-      
     } catch (error) {
       console.error("Error storing performance metrics:", error);
     }
@@ -643,18 +715,20 @@ export class CPPPerformanceTracker {
    */
   private cleanupOldData(): void {
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // Keep 90 days
-    this.performanceData = this.performanceData.filter(d => d.timestamp > cutoff);
+    this.performanceData = this.performanceData.filter(
+      (d) => d.timestamp > cutoff,
+    );
   }
 
   /**
    * Get performance trends
    */
-  getPerformanceTrends(period: '24h' | '7d' | '30d'): PerformanceTrend {
-    const hours = period === '24h' ? 24 : period === '7d' ? 7 * 24 : 30 * 24;
+  getPerformanceTrends(period: "24h" | "7d" | "30d"): PerformanceTrend {
+    const hours = period === "24h" ? 24 : period === "7d" ? 7 * 24 : 30 * 24;
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
-    
-    const periodData = this.performanceData.filter(d => d.timestamp > cutoff);
-    
+
+    const periodData = this.performanceData.filter((d) => d.timestamp > cutoff);
+
     if (periodData.length === 0) {
       return {
         period,
@@ -664,16 +738,33 @@ export class CPPPerformanceTracker {
         costReduction: 0,
         timeReduction: 0,
         efficiencyGain: 0,
-        trendDirection: 'stable'
+        trendDirection: "stable",
       };
     }
 
     const totalRoutes = periodData.length;
-    const improvedRoutes = periodData.filter(d => d.performanceComparison.overallImprovement > 0).length;
-    const averageImprovement = periodData.reduce((sum, d) => sum + d.performanceComparison.overallImprovement, 0) / totalRoutes;
+    const improvedRoutes = periodData.filter(
+      (d) => d.performanceComparison.overallImprovement > 0,
+    ).length;
+    const averageImprovement =
+      periodData.reduce(
+        (sum, d) => sum + d.performanceComparison.overallImprovement,
+        0,
+      ) / totalRoutes;
     const improvementRate = improvedRoutes / totalRoutes;
-    const costReduction = periodData.reduce((sum, d) => sum + d.performanceComparison.vsOriginalWeights, 0) / totalRoutes;
-    const timeReduction = periodData.reduce((sum, d) => sum + (d.optimizationMetrics.estimatedTime * d.performanceComparison.vsOriginalWeights), 0) / totalRoutes;
+    const costReduction =
+      periodData.reduce(
+        (sum, d) => sum + d.performanceComparison.vsOriginalWeights,
+        0,
+      ) / totalRoutes;
+    const timeReduction =
+      periodData.reduce(
+        (sum, d) =>
+          sum +
+          d.optimizationMetrics.estimatedTime *
+            d.performanceComparison.vsOriginalWeights,
+        0,
+      ) / totalRoutes;
     const efficiencyGain = averageImprovement; // Simplified
 
     // Determine trend direction
@@ -687,37 +778,51 @@ export class CPPPerformanceTracker {
       costReduction,
       timeReduction,
       efficiencyGain,
-      trendDirection
+      trendDirection,
     };
   }
 
   /**
    * Calculate trend direction
    */
-  private calculateTrendDirection(data: CPPPerformanceMetrics[]): 'improving' | 'declining' | 'stable' {
-    if (data.length < 5) return 'stable';
+  private calculateTrendDirection(
+    data: CPPPerformanceMetrics[],
+  ): "improving" | "declining" | "stable" {
+    if (data.length < 5) return "stable";
 
     const recent = data.slice(-5);
     const older = data.slice(-10, -5);
-    
-    const recentAvg = recent.reduce((sum, d) => sum + d.performanceComparison.overallImprovement, 0) / recent.length;
-    const olderAvg = older.reduce((sum, d) => sum + d.performanceComparison.overallImprovement, 0) / older.length;
-    
+
+    const recentAvg =
+      recent.reduce(
+        (sum, d) => sum + d.performanceComparison.overallImprovement,
+        0,
+      ) / recent.length;
+    const olderAvg =
+      older.reduce(
+        (sum, d) => sum + d.performanceComparison.overallImprovement,
+        0,
+      ) / older.length;
+
     const difference = recentAvg - olderAvg;
-    
-    if (Math.abs(difference) < 0.02) return 'stable';
-    return difference > 0 ? 'improving' : 'declining';
+
+    if (Math.abs(difference) < 0.02) return "stable";
+    return difference > 0 ? "improving" : "declining";
   }
 
   /**
    * Get benchmark performance
    */
   getBenchmarkPerformance(): PerformanceBenchmark[] {
-    return this.benchmarks.map(b => ({
+    return this.benchmarks.map((b) => ({
       ...b,
       improvement: b.currentMetrics.improvement,
-      status: b.currentMetrics.improvement > this.config.significanceThreshold ? 'exceeding' :
-              b.currentMetrics.improvement > 0 ? 'meeting' : 'below'
+      status:
+        b.currentMetrics.improvement > this.config.significanceThreshold
+          ? "exceeding"
+          : b.currentMetrics.improvement > 0
+            ? "meeting"
+            : "below",
     }));
   }
 
@@ -739,21 +844,39 @@ export class CPPPerformanceTracker {
         averageEfficiency: 0,
         averageAccuracy: 0,
         bestPerformingRoute: null,
-        worstPerformingRoute: null
+        worstPerformingRoute: null,
       };
     }
 
     const totalRoutes = this.performanceData.length;
-    const averageImprovement = this.performanceData.reduce((sum, d) => sum + d.performanceComparison.overallImprovement, 0) / totalRoutes;
-    const averageEfficiency = this.performanceData.reduce((sum, d) => sum + d.performanceComparison.efficiencyGain, 0) / totalRoutes;
-    const averageAccuracy = this.performanceData.reduce((sum, d) => sum + d.costMetrics.costAccuracy, 0) / totalRoutes;
-    
-    const bestRoute = this.performanceData.reduce((best, current) => 
-      current.performanceComparison.overallImprovement > best.performanceComparison.overallImprovement ? current : best
+    const averageImprovement =
+      this.performanceData.reduce(
+        (sum, d) => sum + d.performanceComparison.overallImprovement,
+        0,
+      ) / totalRoutes;
+    const averageEfficiency =
+      this.performanceData.reduce(
+        (sum, d) => sum + d.performanceComparison.efficiencyGain,
+        0,
+      ) / totalRoutes;
+    const averageAccuracy =
+      this.performanceData.reduce(
+        (sum, d) => sum + d.costMetrics.costAccuracy,
+        0,
+      ) / totalRoutes;
+
+    const bestRoute = this.performanceData.reduce((best, current) =>
+      current.performanceComparison.overallImprovement >
+      best.performanceComparison.overallImprovement
+        ? current
+        : best,
     );
-    
-    const worstRoute = this.performanceData.reduce((worst, current) => 
-      current.performanceComparison.overallImprovement < worst.performanceComparison.overallImprovement ? current : worst
+
+    const worstRoute = this.performanceData.reduce((worst, current) =>
+      current.performanceComparison.overallImprovement <
+      worst.performanceComparison.overallImprovement
+        ? current
+        : worst,
     );
 
     return {
@@ -762,18 +885,20 @@ export class CPPPerformanceTracker {
       averageEfficiency,
       averageAccuracy,
       bestPerformingRoute: bestRoute.routeId,
-      worstPerformingRoute: worstRoute.routeId
+      worstPerformingRoute: worstRoute.routeId,
     };
   }
 
   /**
    * Generate comprehensive performance report
    */
-  async generatePerformanceReport(period: 'daily' | 'weekly' | 'monthly'): Promise<string> {
+  async generatePerformanceReport(
+    period: "daily" | "weekly" | "monthly",
+  ): Promise<string> {
     const stats = this.getPerformanceStats();
     const trends = this.getPerformanceTrends(period);
     const benchmarks = this.getBenchmarkPerformance();
-    
+
     return `
 # CPP Performance Report
 **Period:** ${period}
@@ -793,20 +918,20 @@ export class CPPPerformanceTracker {
 - **Trend Direction:** ${trends.trendDirection.toUpperCase()}
 
 ## Benchmark Performance
-${benchmarks.map(b => `- **${b.name}:** ${(b.currentMetrics.improvement * 100).toFixed(2)}% improvement (${b.status})`).join('\n')}
+${benchmarks.map((b) => `- **${b.name}:** ${(b.currentMetrics.improvement * 100).toFixed(2)}% improvement (${b.status})`).join("\n")}
 
 ## Top Performers
-- **Best Route:** ${stats.bestPerformingRoute || 'N/A'}
-- **Worst Route:** ${stats.worstPerformingRoute || 'N/A'}
+- **Best Route:** ${stats.bestPerformingRoute || "N/A"}
+- **Worst Route:** ${stats.worstPerformingRoute || "N/A"}
 
 ## System Status
-- Tracking Status: ${this.isTracking ? 'Active' : 'Inactive'}
-- Data Quality: ${stats.averageAccuracy > 0.8 ? 'Good' : stats.averageAccuracy > 0.6 ? 'Fair' : 'Poor'}
+- Tracking Status: ${this.isTracking ? "Active" : "Inactive"}
+- Data Quality: ${stats.averageAccuracy > 0.8 ? "Good" : stats.averageAccuracy > 0.6 ? "Fair" : "Poor"}
 - Trend Direction: ${trends.trendDirection}
 
 ## Key Insights
-- Weight integration is ${trends.improvementRate > 0.7 ? 'highly effective' : trends.improvementRate > 0.5 ? 'moderately effective' : 'showing room for improvement'}
-- ${trends.trendDirection === 'improving' ? 'Performance is trending upward' : trends.trendDirection === 'declining' ? 'Performance decline detected - investigation recommended' : 'Performance remains stable'}
+- Weight integration is ${trends.improvementRate > 0.7 ? "highly effective" : trends.improvementRate > 0.5 ? "moderately effective" : "showing room for improvement"}
+- ${trends.trendDirection === "improving" ? "Performance is trending upward" : trends.trendDirection === "declining" ? "Performance decline detected - investigation recommended" : "Performance remains stable"}
 - Cost reduction averaging ${(trends.costReduction * 100).toFixed(2)}% across all routes
 
 ## Next Steps
@@ -825,8 +950,10 @@ export const defaultPerformanceConfig: PerformanceAnalysisConfig = {
   benchmarkRoutes: 50,
   significanceThreshold: 0.05,
   minSampleSize: 20,
-  autoOptimize: true
+  autoOptimize: true,
 };
 
 // Export singleton instance
-export const cppPerformanceTracker = new CPPPerformanceTracker(defaultPerformanceConfig);
+export const cppPerformanceTracker = new CPPPerformanceTracker(
+  defaultPerformanceConfig,
+);

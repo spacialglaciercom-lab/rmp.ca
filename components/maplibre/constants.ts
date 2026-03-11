@@ -12,7 +12,8 @@ export const MAPLIBRE_STYLE_STREETS =
   "https://tiles.openfreemap.org/styles/bright";
 
 /** Overture Maps R2 public bucket base URL. */
-export const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
+export const R2_PUBLIC_BASE =
+  "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
 
 /**
  * Tile URL template for the "map tiles overlay" (raster on top of R2).

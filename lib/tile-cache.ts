@@ -95,7 +95,11 @@ async function saveManifest(manifest: Manifest): Promise<void> {
 }
 
 /** Evict least-recently-accessed tiles until total size is at or below maxBytes. */
-async function evictLRU(manifest: Manifest, currentTotal: number, maxBytes: number): Promise<Manifest> {
+async function evictLRU(
+  manifest: Manifest,
+  currentTotal: number,
+  maxBytes: number,
+): Promise<Manifest> {
   if (currentTotal <= maxBytes) return manifest;
   const dir = getCacheDir();
   if (!dir) return manifest;
@@ -129,7 +133,7 @@ export async function getTile(
   z: number,
   x: number,
   y: number,
-  urlTemplate: string
+  urlTemplate: string,
 ): Promise<string | null> {
   const dir = await ensureCacheDir();
   if (!dir) return null;
@@ -179,7 +183,7 @@ export async function getTileDataUrl(
   z: number,
   x: number,
   y: number,
-  urlTemplate: string
+  urlTemplate: string,
 ): Promise<string | null> {
   const path = await getTile(z, x, y, urlTemplate);
   if (!path) return null;
@@ -228,7 +232,9 @@ export async function ensureTileCacheUnderLimit(): Promise<void> {
 
   // Emergency clear: cache grew abnormally large (crash or bug)
   if (size >= LAUNCH_CLEAR_THRESHOLD_BYTES) {
-    console.warn(`[TileCache] Cache size ${size} exceeds threshold, clearing entirely`);
+    console.warn(
+      `[TileCache] Cache size ${size} exceeds threshold, clearing entirely`,
+    );
     await clearTileCache();
     return;
   }

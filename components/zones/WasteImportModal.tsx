@@ -31,7 +31,11 @@ interface WasteImportModalProps {
 const NOMINATIM_RATE_MS = 1100;
 const MAX_PREVIEW_ROWS = 5;
 
-export function WasteImportModal({ visible, onClose, onImport }: WasteImportModalProps) {
+export function WasteImportModal({
+  visible,
+  onClose,
+  onImport,
+}: WasteImportModalProps) {
   const colors = useColors();
   const [rows, setRows] = useState<WasteImportRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,8 +43,16 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
-  const needGeocode = rows.filter((r) => (r.lat == null || r.lon == null) && r.address?.trim()).length;
-  const readyCount = rows.filter((r) => r.lat != null && r.lon != null && !Number.isNaN(r.lat) && !Number.isNaN(r.lon)).length;
+  const needGeocode = rows.filter(
+    (r) => (r.lat == null || r.lon == null) && r.address?.trim(),
+  ).length;
+  const readyCount = rows.filter(
+    (r) =>
+      r.lat != null &&
+      r.lon != null &&
+      !Number.isNaN(r.lat) &&
+      !Number.isNaN(r.lon),
+  ).length;
   const invalidCount = rows.length - readyCount - needGeocode;
 
   const processFileContent = useCallback((text: string, name: string) => {
@@ -48,9 +60,9 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
     if (parsed.length === 0) {
       setError(
         "No valid rows found.\n\n" +
-        "CSV format: columns named lat/latitude, lon/longitude (or x/y, coords, location)\n" +
-        "GeoJSON format: FeatureCollection with Point features\n\n" +
-        "Example CSV:\nlat,lon,type\n45.5087,-73.5540,bin"
+          "CSV format: columns named lat/latitude, lon/longitude (or x/y, coords, location)\n" +
+          "GeoJSON format: FeatureCollection with Point features\n\n" +
+          "Example CSV:\nlat,lon,type\n45.5087,-73.5540,bin",
       );
       setRows([]);
     } else {
@@ -64,7 +76,14 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
     setFileName(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/csv", "application/csv", "application/geo+json", "application/json", "text/plain", "*/*"],
+        type: [
+          "text/csv",
+          "application/csv",
+          "application/geo+json",
+          "application/json",
+          "text/plain",
+          "*/*",
+        ],
         copyToCacheDirectory: Platform.OS !== "web",
       });
       if (result.canceled) {
@@ -79,11 +98,17 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
       let text: string;
       if (Platform.OS === "web") {
         const assetWithFile = file as { file?: File; uri?: string };
-        if (assetWithFile.file && typeof (assetWithFile.file as Blob).slice === "function") {
+        if (
+          assetWithFile.file &&
+          typeof (assetWithFile.file as Blob).slice === "function"
+        ) {
           text = await readFileAsText(assetWithFile.file);
         } else if (uri) {
           const response = await fetch(uri);
-          if (typeof (response as { blob?: () => Promise<Blob> }).blob !== "function") {
+          if (
+            typeof (response as { blob?: () => Promise<Blob> }).blob !==
+            "function"
+          ) {
             throw new Error("Cannot read file: response.blob is not available");
           }
           const blob = await (response as { blob: () => Promise<Blob> }).blob();
@@ -92,7 +117,9 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
           throw new Error("No file or URI available to read");
         }
       } else {
-        text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+        text = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
       }
 
       processFileContent(text, name);
@@ -105,7 +132,12 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   }, [processFileContent]);
 
   const handleGeocode = useCallback(async () => {
-    const toGeocode = rows.map((r, i) => ({ row: r, index: i })).filter(({ row }) => (row.lat == null || row.lon == null) && row.address?.trim());
+    const toGeocode = rows
+      .map((r, i) => ({ row: r, index: i }))
+      .filter(
+        ({ row }) =>
+          (row.lat == null || row.lon == null) && row.address?.trim(),
+      );
     if (toGeocode.length === 0) return;
     setGeocoding(true);
     setError(null);
@@ -119,7 +151,9 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
           updated[index] = { ...row, lat: results[0].lat, lon: results[0].lon };
         }
       } catch (e) {
-        setError(`Geocode failed for "${(row.address || "").slice(0, 30)}…": ${e instanceof Error ? e.message : String(e)}`);
+        setError(
+          `Geocode failed for "${(row.address || "").slice(0, 30)}…": ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
       done++;
     }
@@ -128,9 +162,18 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   }, [rows]);
 
   const handleImport = useCallback(() => {
-    const valid = rows.filter((r) => r.lat != null && r.lon != null && !Number.isNaN(r.lat!) && !Number.isNaN(r.lon!));
+    const valid = rows.filter(
+      (r) =>
+        r.lat != null &&
+        r.lon != null &&
+        !Number.isNaN(r.lat!) &&
+        !Number.isNaN(r.lon!),
+    );
     if (valid.length === 0) {
-      Alert.alert("No valid points", "Geocode rows with only an address, or ensure lat/lon columns are present in your CSV.");
+      Alert.alert(
+        "No valid points",
+        "Geocode rows with only an address, or ensure lat/lon columns are present in your CSV.",
+      );
       return;
     }
     onImport(valid);
@@ -155,13 +198,28 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
   return (
     <Modal transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
-          <Text style={[styles.title, { color: colors.text }]}>Import CSV / GeoJSON</Text>
+        <Pressable
+          style={[
+            styles.box,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <Text style={[styles.title, { color: colors.text }]}>
+            Import CSV / GeoJSON
+          </Text>
 
           {rows.length === 0 && !loading && (
             <>
-              <TouchableOpacity onPress={handlePickFile} style={[styles.primaryBtn, { backgroundColor: colors.primary }]}>
-                <MaterialCommunityIcons name="file-upload-outline" size={20} color="#fff" />
+              <TouchableOpacity
+                onPress={handlePickFile}
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+              >
+                <MaterialCommunityIcons
+                  name="file-upload-outline"
+                  size={20}
+                  color="#fff"
+                />
                 <Text style={styles.primaryBtnLabel}>Choose file</Text>
               </TouchableOpacity>
               <Text style={[styles.formatHint, { color: colors.muted }]}>
@@ -173,52 +231,92 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
           {loading && (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.hint, { color: colors.muted }]}>Reading file…</Text>
+              <Text style={[styles.hint, { color: colors.muted }]}>
+                Reading file…
+              </Text>
             </View>
           )}
 
           {rows.length > 0 && (
             <ScrollView style={styles.preview} showsVerticalScrollIndicator>
               {fileName && (
-                <Text style={[styles.fileName, { color: colors.text }]}>{fileName}</Text>
+                <Text style={[styles.fileName, { color: colors.text }]}>
+                  {fileName}
+                </Text>
               )}
 
               {/* Summary */}
-              <View style={[styles.summaryBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <View
+                style={[
+                  styles.summaryBox,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <Text style={[styles.summaryText, { color: colors.text }]}>
-                  <Text style={{ fontWeight: "700" }}>{rows.length}</Text> rows parsed
+                  <Text style={{ fontWeight: "700" }}>{rows.length}</Text> rows
+                  parsed
                 </Text>
                 {readyCount > 0 && (
                   <Text style={[styles.summaryText, { color: "#22c55e" }]}>
-                    <Text style={{ fontWeight: "700" }}>{readyCount}</Text> with valid coordinates
+                    <Text style={{ fontWeight: "700" }}>{readyCount}</Text> with
+                    valid coordinates
                   </Text>
                 )}
                 {needGeocode > 0 && (
                   <Text style={[styles.summaryText, { color: colors.primary }]}>
-                    <Text style={{ fontWeight: "700" }}>{needGeocode}</Text> need geocoding (have address only)
+                    <Text style={{ fontWeight: "700" }}>{needGeocode}</Text>{" "}
+                    need geocoding (have address only)
                   </Text>
                 )}
                 {invalidCount > 0 && (
-                  <Text style={[styles.summaryText, { color: colors.error ?? "#ef4444" }]}>
-                    <Text style={{ fontWeight: "700" }}>{invalidCount}</Text> invalid (no coords or address)
+                  <Text
+                    style={[
+                      styles.summaryText,
+                      { color: colors.error ?? "#ef4444" },
+                    ]}
+                  >
+                    <Text style={{ fontWeight: "700" }}>{invalidCount}</Text>{" "}
+                    invalid (no coords or address)
                   </Text>
                 )}
               </View>
 
               {/* Preview table */}
               {previewRows.length > 0 && (
-                <View style={[styles.previewTable, { borderColor: colors.border }]}>
-                  <Text style={[styles.previewHeader, { color: colors.muted }]}>Preview (first {previewRows.length}):</Text>
+                <View
+                  style={[styles.previewTable, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.previewHeader, { color: colors.muted }]}>
+                    Preview (first {previewRows.length}):
+                  </Text>
                   {previewRows.map((row, i) => (
-                    <View key={i} style={[styles.previewRow, { borderTopColor: colors.border }]}>
-                      <Text style={[styles.previewCoord, { color: row.lat != null ? colors.text : colors.muted }]}>
+                    <View
+                      key={i}
+                      style={[
+                        styles.previewRow,
+                        { borderTopColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.previewCoord,
+                          {
+                            color: row.lat != null ? colors.text : colors.muted,
+                          },
+                        ]}
+                      >
                         {row.lat != null && row.lon != null
                           ? `${row.lat.toFixed(4)}, ${row.lon.toFixed(4)}`
                           : row.address
                             ? `📍 ${row.address.slice(0, 25)}${row.address.length > 25 ? "…" : ""}`
                             : "❌ No coords"}
                       </Text>
-                      <Text style={[styles.previewType, { color: colors.muted }]}>
+                      <Text
+                        style={[styles.previewType, { color: colors.muted }]}
+                      >
                         {row.type === "dumpster" ? "D" : "B"}
                       </Text>
                     </View>
@@ -235,34 +333,76 @@ export function WasteImportModal({ visible, onClose, onImport }: WasteImportModa
                 <TouchableOpacity
                   onPress={handleGeocode}
                   disabled={geocoding}
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 12, opacity: geocoding ? 0.7 : 1 }]}
+                  style={[
+                    styles.primaryBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      marginTop: 12,
+                      opacity: geocoding ? 0.7 : 1,
+                    },
+                  ]}
                 >
-                  {geocoding ? <ActivityIndicator size="small" color="#fff" /> : <MaterialCommunityIcons name="map-marker-radius" size={20} color="#fff" />}
-                  <Text style={styles.primaryBtnLabel}>{geocoding ? "Geocoding…" : `Geocode ${needGeocode} address(es)`}</Text>
+                  {geocoding ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="map-marker-radius"
+                      size={20}
+                      color="#fff"
+                    />
+                  )}
+                  <Text style={styles.primaryBtnLabel}>
+                    {geocoding
+                      ? "Geocoding…"
+                      : `Geocode ${needGeocode} address(es)`}
+                  </Text>
                 </TouchableOpacity>
               )}
 
               <TouchableOpacity
                 onPress={handleImport}
                 disabled={readyCount === 0}
-                style={[styles.primaryBtn, { backgroundColor: "#22c55e", marginTop: 12, opacity: readyCount === 0 ? 0.5 : 1 }]}
+                style={[
+                  styles.primaryBtn,
+                  {
+                    backgroundColor: "#22c55e",
+                    marginTop: 12,
+                    opacity: readyCount === 0 ? 0.5 : 1,
+                  },
+                ]}
               >
                 <MaterialCommunityIcons name="check" size={20} color="#fff" />
-                <Text style={styles.primaryBtnLabel}>Import {readyCount} point(s)</Text>
+                <Text style={styles.primaryBtnLabel}>
+                  Import {readyCount} point(s)
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handlePickFile} style={[styles.secondaryBtn, { borderColor: colors.border }]}>
-                <Text style={[styles.secondaryBtnLabel, { color: colors.muted }]}>Choose another file</Text>
+              <TouchableOpacity
+                onPress={handlePickFile}
+                style={[styles.secondaryBtn, { borderColor: colors.border }]}
+              >
+                <Text
+                  style={[styles.secondaryBtnLabel, { color: colors.muted }]}
+                >
+                  Choose another file
+                </Text>
               </TouchableOpacity>
             </ScrollView>
           )}
 
           {error && (
-            <Text style={[styles.error, { color: colors.error ?? "#ef4444" }]}>{error}</Text>
+            <Text style={[styles.error, { color: colors.error ?? "#ef4444" }]}>
+              {error}
+            </Text>
           )}
 
-          <TouchableOpacity onPress={handleClose} style={[styles.cancelBtn, { borderColor: colors.border }]}>
-            <Text style={[styles.cancelBtnLabel, { color: colors.text }]}>Cancel</Text>
+          <TouchableOpacity
+            onPress={handleClose}
+            style={[styles.cancelBtn, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.cancelBtnLabel, { color: colors.text }]}>
+              Cancel
+            </Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

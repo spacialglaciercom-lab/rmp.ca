@@ -18,7 +18,10 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component for catching and recovering from crashes
  */
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -46,9 +49,13 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       const err = error;
       const info = errorInfo;
       setTimeout(() => {
-        console.error("[ErrorBoundary] Rethrowing so dev tools show this error:", err.message);
+        console.error(
+          "[ErrorBoundary] Rethrowing so dev tools show this error:",
+          err.message,
+        );
         if (err && typeof err === "object" && "stack" in err) {
-          (err as Error & { componentStack?: string }).componentStack = info?.componentStack ?? undefined;
+          (err as Error & { componentStack?: string }).componentStack =
+            info?.componentStack ?? undefined;
         }
         throw err;
       }, 0);
@@ -109,13 +116,22 @@ function ErrorFallback({
   const isDev = __DEV__;
 
   return (
-    <View className="flex-1 p-4" style={{ backgroundColor: FALLBACK_COLORS.background }}>
+    <View
+      className="flex-1 p-4"
+      style={{ backgroundColor: FALLBACK_COLORS.background }}
+    >
       <ScrollView className="flex-1" style={{ flex: 1 }}>
         <View className="mt-8 mb-6">
-          <Text className="text-3xl font-bold mb-2" style={{ color: FALLBACK_COLORS.error }}>
+          <Text
+            className="text-3xl font-bold mb-2"
+            style={{ color: FALLBACK_COLORS.error }}
+          >
             ⚠️ Something went wrong
           </Text>
-          <Text className="text-base mb-4" style={{ color: FALLBACK_COLORS.muted }}>
+          <Text
+            className="text-base mb-4"
+            style={{ color: FALLBACK_COLORS.muted }}
+          >
             The app encountered an error and needs to recover.
           </Text>
         </View>
@@ -124,15 +140,25 @@ function ErrorFallback({
           className="rounded-2xl p-4 mb-6"
           style={{ backgroundColor: FALLBACK_COLORS.surface }}
         >
-          <Text className="text-sm font-mono mb-2" style={{ color: FALLBACK_COLORS.error }}>
+          <Text
+            className="text-sm font-mono mb-2"
+            style={{ color: FALLBACK_COLORS.error }}
+          >
             Error Details:
           </Text>
-          <Text className="text-xs font-mono" selectable style={{ color: FALLBACK_COLORS.muted }}>
+          <Text
+            className="text-xs font-mono"
+            selectable
+            style={{ color: FALLBACK_COLORS.muted }}
+          >
             {error?.message || "Unknown error"}
           </Text>
           {isDev && error?.stack && (
             <>
-              <Text className="text-sm font-mono mt-3 mb-1" style={{ color: FALLBACK_COLORS.error }}>
+              <Text
+                className="text-sm font-mono mt-3 mb-1"
+                style={{ color: FALLBACK_COLORS.error }}
+              >
                 Stack:
               </Text>
               <Text
@@ -146,10 +172,17 @@ function ErrorFallback({
           )}
           {isDev && errorInfo?.componentStack && (
             <>
-              <Text className="text-sm font-mono mb-1" style={{ color: FALLBACK_COLORS.error }}>
+              <Text
+                className="text-sm font-mono mb-1"
+                style={{ color: FALLBACK_COLORS.error }}
+              >
                 Component stack:
               </Text>
-              <Text className="text-xs font-mono" selectable style={{ color: FALLBACK_COLORS.muted }}>
+              <Text
+                className="text-xs font-mono"
+                selectable
+                style={{ color: FALLBACK_COLORS.muted }}
+              >
                 {errorInfo.componentStack}
               </Text>
             </>
@@ -157,13 +190,22 @@ function ErrorFallback({
         </View>
 
         <View className="mb-4">
-          <Text className="text-sm font-semibold mb-2" style={{ color: FALLBACK_COLORS.text }}>
+          <Text
+            className="text-sm font-semibold mb-2"
+            style={{ color: FALLBACK_COLORS.text }}
+          >
             What you can do:
           </Text>
-          <Text className="text-sm mb-2" style={{ color: FALLBACK_COLORS.muted }}>
+          <Text
+            className="text-sm mb-2"
+            style={{ color: FALLBACK_COLORS.muted }}
+          >
             • Try resetting the app by tapping the button below
           </Text>
-          <Text className="text-sm mb-2" style={{ color: FALLBACK_COLORS.muted }}>
+          <Text
+            className="text-sm mb-2"
+            style={{ color: FALLBACK_COLORS.muted }}
+          >
             • Close and reopen the app if the issue persists
           </Text>
           <Text className="text-sm" style={{ color: FALLBACK_COLORS.muted }}>
@@ -177,7 +219,10 @@ function ErrorFallback({
         className="py-4 rounded-xl mb-4"
         style={{ backgroundColor: FALLBACK_COLORS.primary }}
       >
-        <Text className="text-center font-semibold" style={{ color: "#ffffff" }}>
+        <Text
+          className="text-center font-semibold"
+          style={{ color: "#ffffff" }}
+        >
           Reset App
         </Text>
       </TouchableOpacity>

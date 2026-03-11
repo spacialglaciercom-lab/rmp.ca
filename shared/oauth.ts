@@ -17,7 +17,10 @@ const env = {
   appId: process.env.EXPO_PUBLIC_APP_ID ?? "",
   ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
-  apiBaseUrl: typeof rawApiBase === "string" && rawApiBase.trim() ? rawApiBase : DEFAULT_API_BASE_URL,
+  apiBaseUrl:
+    typeof rawApiBase === "string" && rawApiBase.trim()
+      ? rawApiBase
+      : DEFAULT_API_BASE_URL,
   deepLinkScheme: schemeFromBundleId,
 };
 
@@ -47,7 +50,11 @@ export function getApiBaseUrl(): string {
 
   // Web: same-origin so deployed Vercel app does not hit deleted Railway.
   // Local dev: Expo/Metro often runs on 8081 or 19007; API/optimizer proxy lives on Node server :3000.
-  if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
+  if (
+    ReactNative.Platform.OS === "web" &&
+    typeof window !== "undefined" &&
+    window.location
+  ) {
     const { protocol, hostname, port } = window.location;
     const devPortsUsingBackend3000 = ["19007", "8081", "8080"];
     if (port && devPortsUsingBackend3000.includes(port)) {
@@ -67,7 +74,9 @@ const encodeState = (value: string) => {
     return globalThis.btoa(value);
   }
   const BufferImpl = (globalThis as Record<string, unknown>).Buffer as
-    | { from: (v: string, enc: string) => { toString: (enc: string) => string } }
+    | {
+        from: (v: string, enc: string) => { toString: (enc: string) => string };
+      }
     | undefined;
   if (BufferImpl) {
     return BufferImpl.from(value, "utf-8").toString("base64");

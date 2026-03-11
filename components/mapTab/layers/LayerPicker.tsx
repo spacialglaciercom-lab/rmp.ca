@@ -1,12 +1,22 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Platform,
+} from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import { useColors } from "@/hooks/use-colors";
 import { useMapType, type MapTypePreference } from "@/lib/map-type-preference";
 import { useMapDisplayStore } from "@/stores/mapDisplayStore";
-import { useMapLayerStore, SLOW_LOADING_BASE_LAYERS } from "@/stores/mapLayerStore";
+import {
+  useMapLayerStore,
+  SLOW_LOADING_BASE_LAYERS,
+} from "@/stores/mapLayerStore";
 import { useRecordingSettingsStore } from "@/stores/recordingSettingsStore";
 import { RecOptionsModal } from "@/components/RecOptionsModal";
 
@@ -34,7 +44,7 @@ const GOOGLE_MAP_LAYERS: MapLayer[] = [
     url: "",
     attribution: "© Google",
     icon: "google-maps",
-    preview: "Standard road map with labels"
+    preview: "Standard road map with labels",
   },
   {
     id: "google-satellite",
@@ -42,7 +52,7 @@ const GOOGLE_MAP_LAYERS: MapLayer[] = [
     url: "",
     attribution: "© Google",
     icon: "satellite-variant",
-    preview: "Photorealistic map based on aerial imagery"
+    preview: "Photorealistic map based on aerial imagery",
   },
   {
     id: "google-hybrid",
@@ -50,7 +60,7 @@ const GOOGLE_MAP_LAYERS: MapLayer[] = [
     url: "",
     attribution: "© Google",
     icon: "satellite",
-    preview: "Satellite view with road labels overlay"
+    preview: "Satellite view with road labels overlay",
   },
   {
     id: "google-terrain",
@@ -58,7 +68,7 @@ const GOOGLE_MAP_LAYERS: MapLayer[] = [
     url: "",
     attribution: "© Google",
     icon: "terrain",
-    preview: "Physical map based on terrain information"
+    preview: "Physical map based on terrain information",
   },
 ];
 
@@ -70,7 +80,7 @@ const OSM_MAP_LAYERS: MapLayer[] = [
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors",
     icon: "map-outline",
-    preview: "Standard street map with clear labels and roads"
+    preview: "Standard street map with clear labels and roads",
   },
   {
     id: "dark",
@@ -78,7 +88,7 @@ const OSM_MAP_LAYERS: MapLayer[] = [
     url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
     attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
     icon: "theme-light-dark",
-    preview: "Dark theme for better visibility in low light"
+    preview: "Dark theme for better visibility in low light",
   },
   {
     id: "satellite",
@@ -86,7 +96,7 @@ const OSM_MAP_LAYERS: MapLayer[] = [
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "&copy; Esri &copy; DigitalGlobe",
     icon: "satellite-variant",
-    preview: "Aerial imagery for detailed terrain view"
+    preview: "Aerial imagery for detailed terrain view",
   },
   {
     id: "terrain",
@@ -94,34 +104,35 @@ const OSM_MAP_LAYERS: MapLayer[] = [
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenTopoMap &copy; OpenStreetMap contributors",
     icon: "terrain",
-    preview: "Topographic map with elevation contours"
-  }
+    preview: "Topographic map with elevation contours",
+  },
 ];
 
 // On Android, use Google Maps native types; on iOS/Web, show both Google and OSM options
-const MAP_LAYERS: MapLayer[] = Platform.OS === "android" 
-  ? GOOGLE_MAP_LAYERS
-  : [...GOOGLE_MAP_LAYERS, ...OSM_MAP_LAYERS];
+const MAP_LAYERS: MapLayer[] =
+  Platform.OS === "android"
+    ? GOOGLE_MAP_LAYERS
+    : [...GOOGLE_MAP_LAYERS, ...OSM_MAP_LAYERS];
 
 const OVERLAY_LAYERS: LayerOption[] = [
   {
     id: "traffic",
     label: "Traffic",
     icon: "traffic-light",
-    description: "Show traffic conditions"
+    description: "Show traffic conditions",
   },
   {
     id: "collection-points",
     label: "Collection Points",
     icon: "map-marker",
-    description: "Show waste collection points"
+    description: "Show waste collection points",
   },
   {
     id: "overture",
     label: "Overture Roads",
     icon: "road-variant",
-    description: "Overture Maps transportation overlay (PMTiles)"
-  }
+    description: "Overture Maps transportation overlay (PMTiles)",
+  },
 ];
 
 const DISPLAY_OPTIONS: LayerOption[] = [
@@ -129,26 +140,26 @@ const DISPLAY_OPTIONS: LayerOption[] = [
     id: "showZoomControls",
     label: "Zoom Controls",
     icon: "magnify-plus-outline",
-    description: "Show zoom in/out buttons"
+    description: "Show zoom in/out buttons",
   },
   {
     id: "showCompass",
     label: "Compass",
     icon: "compass-outline",
-    description: "Show compass button"
+    description: "Show compass button",
   },
   {
     id: "showScaleBar",
     label: "Scale Bar",
     icon: "ruler",
-    description: "Show distance scale"
+    description: "Show distance scale",
   },
   {
     id: "showTraffic",
     label: "Traffic Layer",
     icon: "traffic-light",
-    description: "Show traffic information"
-  }
+    description: "Show traffic information",
+  },
 ];
 
 const styles = StyleSheet.create({
@@ -283,13 +294,13 @@ interface LayerPickerProps {
 function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
   const colors = useColors();
   const [mapType, setMapType] = useMapType();
-  
+
   // Map layer store
   const activeBaseLayer = useMapLayerStore((s) => s.activeBaseLayer);
   const activeOverlays = useMapLayerStore((s) => s.activeOverlays);
   const setActiveBaseLayer = useMapLayerStore((s) => s.setActiveBaseLayer);
   const toggleOverlay = useMapLayerStore((s) => s.toggleOverlay);
-  
+
   // Get display options from store (use setters as fallback when toggles missing, e.g. before rehydration)
   const showZoomControls = useMapDisplayStore((s) => s.showZoomControls);
   const showCompass = useMapDisplayStore((s) => s.showCompass);
@@ -307,24 +318,29 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
   const [selectedBaseLayer, setSelectedBaseLayer] = useState(activeBaseLayer);
   const [recOptionsVisible, setRecOptionsVisible] = useState(false);
 
-  const loggingIntervalSeconds = useRecordingSettingsStore((s) => s.loggingIntervalSeconds);
+  const loggingIntervalSeconds = useRecordingSettingsStore(
+    (s) => s.loggingIntervalSeconds,
+  );
 
   const handleBaseLayerSelect = async (layerId: string) => {
     if (Platform.OS !== "web") hapticImpact();
     setSelectedBaseLayer(layerId);
-    
+
     // Update map layer store
     setActiveBaseLayer(layerId);
-    
+
     // Update map type preference for compatibility
-    const newMapType: MapTypePreference = layerId === "dark" ? "dark" : "standard";
+    const newMapType: MapTypePreference =
+      layerId === "dark" ? "dark" : "standard";
     await setMapType(newMapType);
   };
 
   const showOverture = useMapDisplayStore((s) => s.showOverture);
   const toggleOverture = useMapDisplayStore((s) => s.toggleOverture);
   const mapTilesAsOverlay = useMapDisplayStore((s) => s.mapTilesAsOverlay);
-  const toggleMapTilesAsOverlay = useMapDisplayStore((s) => s.toggleMapTilesAsOverlay);
+  const toggleMapTilesAsOverlay = useMapDisplayStore(
+    (s) => s.toggleMapTilesAsOverlay,
+  );
 
   const availableLayers = useMapLayerStore((s) => s.availableLayers);
   const pluginLayerIds = useMapLayerStore((s) => s.pluginLayerIds);
@@ -334,7 +350,8 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
       id: l.id,
       label: l.name,
       icon: l.id === "weather-overlay" ? "weather-partly-cloudy" : "layers",
-      description: l.id === "weather-overlay" ? "Current conditions on map" : undefined,
+      description:
+        l.id === "weather-overlay" ? "Current conditions on map" : undefined,
     }));
 
   const handleOverlayToggle = (overlayId: string) => {
@@ -390,11 +407,21 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
   };
 
   const renderSwitch = (isActive: boolean) => (
-    <View style={[styles.switch, { backgroundColor: isActive ? colors.primary : colors.border }]}>
-      <View style={[styles.switchThumb, { 
-        backgroundColor: "white",
-        alignSelf: isActive ? "flex-end" : "flex-start"
-      }]} />
+    <View
+      style={[
+        styles.switch,
+        { backgroundColor: isActive ? colors.primary : colors.border },
+      ]}
+    >
+      <View
+        style={[
+          styles.switchThumb,
+          {
+            backgroundColor: "white",
+            alignSelf: isActive ? "flex-end" : "flex-start",
+          },
+        ]}
+      />
     </View>
   );
 
@@ -406,7 +433,11 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
         </Text>
         {onClose && (
           <TouchableOpacity onPress={onClose}>
-            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+            <MaterialCommunityIcons
+              name="close"
+              size={24}
+              color={colors.text}
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -443,14 +474,25 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
                     {layer.name}
                   </Text>
                   {layer.preview && (
-                    <Text style={[styles.layerDescription, { color: colors.muted }]}>
+                    <Text
+                      style={[styles.layerDescription, { color: colors.muted }]}
+                    >
                       {layer.preview}
                     </Text>
                   )}
                 </View>
                 {isSelected && (
-                  <View style={[styles.selectedIndicator, { backgroundColor: colors.primary }]}>
-                    <MaterialCommunityIcons name="check" size={14} color="white" />
+                  <View
+                    style={[
+                      styles.selectedIndicator,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={14}
+                      color="white"
+                    />
                   </View>
                 )}
               </View>
@@ -470,7 +512,12 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
           Overlays
         </Text>
         {[...OVERLAY_LAYERS, ...pluginOverlayOptions].map((overlay) => {
-          const isActive = overlay.id === "traffic" ? showTraffic : overlay.id === "overture" ? showOverture : activeOverlays.includes(overlay.id);
+          const isActive =
+            overlay.id === "traffic"
+              ? showTraffic
+              : overlay.id === "overture"
+                ? showOverture
+                : activeOverlays.includes(overlay.id);
           return (
             <TouchableOpacity
               key={overlay.id}
@@ -492,11 +539,23 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
                   color={isActive ? colors.primary : colors.muted}
                 />
                 <View>
-                  <Text style={{ color: colors.text, fontSize: 15, fontWeight: "500" }}>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 15,
+                      fontWeight: "500",
+                    }}
+                  >
                     {overlay.label}
                   </Text>
                   {overlay.description && (
-                    <Text style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.muted,
+                        fontSize: 12,
+                        marginTop: 1,
+                      }}
+                    >
                       {overlay.description}
                     </Text>
                   )}
@@ -532,14 +591,25 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
                 color={mapTilesAsOverlay ? colors.primary : colors.muted}
               />
               <View>
-                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "500" }}>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 15,
+                    fontWeight: "500",
+                  }}
+                >
                   Map tiles on top
                 </Text>
-                <Text style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>
-                  Draw base map tiles over R2/Overture (overlay to R2 or OSM PBF)
+                <Text
+                  style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}
+                >
+                  Draw base map tiles over R2/Overture (overlay to R2 or OSM
+                  PBF)
                 </Text>
                 {mapTilesAsOverlay && (
-                  <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
+                  <Text
+                    style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}
+                  >
                     Download offline tiles + R2 for full offline.
                   </Text>
                 )}
@@ -576,14 +646,20 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
             <View style={styles.recCircleInner} />
           </View>
           <View style={styles.overlayLeft}>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}>
+            <Text
+              style={{ color: colors.text, fontSize: 15, fontWeight: "600" }}
+            >
               REC
             </Text>
             <Text style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>
               Logging interval: {loggingIntervalSeconds} sec
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={24}
+            color={colors.muted}
+          />
         </TouchableOpacity>
         {DISPLAY_OPTIONS.map((option) => {
           const isActive = getDisplayOptionState(option.id);
@@ -608,11 +684,23 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
                   color={isActive ? colors.primary : colors.muted}
                 />
                 <View>
-                  <Text style={{ color: colors.text, fontSize: 15, fontWeight: "500" }}>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 15,
+                      fontWeight: "500",
+                    }}
+                  >
                     {option.label}
                   </Text>
                   {option.description && (
-                    <Text style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.muted,
+                        fontSize: 12,
+                        marginTop: 1,
+                      }}
+                    >
                       {option.description}
                     </Text>
                   )}
@@ -641,8 +729,14 @@ function LayerPickerInner({ onClose, onPreviewOnMap }: LayerPickerProps) {
         ]}
         onPress={onPreviewOnMap ?? onClose}
       >
-        <MaterialCommunityIcons name="eye-outline" size={20} color={colors.primary} />
-        <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}>
+        <MaterialCommunityIcons
+          name="eye-outline"
+          size={20}
+          color={colors.primary}
+        />
+        <Text
+          style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}
+        >
           Preview on Map
         </Text>
       </TouchableOpacity>

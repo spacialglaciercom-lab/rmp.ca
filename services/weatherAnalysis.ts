@@ -78,7 +78,9 @@ export interface WeatherAnalysisResult {
  * Global weather penalty multiplier for edge costs (0 = no penalty, max ~0.2).
  * Use when applying weather to all segments (e.g. area forecast).
  */
-export function getWeatherPenaltyMultiplier(weather: CurrentWeather | null): number {
+export function getWeatherPenaltyMultiplier(
+  weather: CurrentWeather | null,
+): number {
   if (!weather) return 0;
   const { riskScore } = scoreWeather(weather);
   return Math.min(0.2, riskScore / 500);
@@ -87,7 +89,11 @@ export function getWeatherPenaltyMultiplier(weather: CurrentWeather | null): num
 /**
  * Rule-based weather risk score (0-100) and delay estimate from a single weather reading.
  */
-function scoreWeather(w: CurrentWeather): { riskScore: number; delayMinutesPerHour: number; condition: string } {
+function scoreWeather(w: CurrentWeather): {
+  riskScore: number;
+  delayMinutesPerHour: number;
+  condition: string;
+} {
   let risk = 0;
   let delayPerHour = 0;
   const cond = w.condition.main.toLowerCase();
@@ -158,7 +164,7 @@ function scoreWeather(w: CurrentWeather): { riskScore: number; delayMinutesPerHo
 export async function analyzeRouteWeather(
   segments: RouteSegmentForWeather[],
   weatherByPoint: Map<string, CurrentWeather | null>,
-  options: { useLeap?: boolean } = {}
+  options: { useLeap?: boolean } = {},
 ): Promise<WeatherAnalysisResult> {
   const segmentRisks: SegmentWeatherRisk[] = [];
   const alerts: string[] = [];
@@ -201,7 +207,8 @@ export async function analyzeRouteWeather(
     segmentRisks.length === 0
       ? 0
       : Math.round(
-          segmentRisks.reduce((sum, s) => sum + s.riskScore, 0) / segmentRisks.length
+          segmentRisks.reduce((sum, s) => sum + s.riskScore, 0) /
+            segmentRisks.length,
         );
 
   let recommendations: string[] = [];
@@ -212,23 +219,35 @@ export async function analyzeRouteWeather(
         { lat: segments[0].fromLat, lon: segments[0].fromLon },
         ...segments.map((s) => ({ lat: s.toLat, lon: s.toLon })),
       ];
-      const estimatedTotalMinutes = segments.reduce((s, seg) => s + seg.estimatedMinutes, 0);
+      const estimatedTotalMinutes = segments.reduce(
+        (s, seg) => s + seg.estimatedMinutes,
+        0,
+      );
       const totalDistanceKm = (estimatedTotalMinutes / 60) * 25; // rough 25 km/h
-      const { getLeapWeatherRecommendations, buildLeapWeatherInput } = await import("@/services/leapAIService");
+      const { getLeapWeatherRecommendations, buildLeapWeatherInput } =
+        await import("@/services/leapAIService");
       const input = buildLeapWeatherInput(
         points,
         estimatedTotalMinutes,
         totalDistanceKm,
-        weatherByPoint as Map<string, import("@/types/weather").WeatherData | null>
+        weatherByPoint as Map<
+          string,
+          import("@/types/weather").WeatherData | null
+        >,
       );
       const recs = await getLeapWeatherRecommendations(input);
       if (recs.length > 0) recommendations = recs;
       else if (__DEV__) {
-        console.log("[weatherAnalysis] Leap returned no recommendations; using rule-based fallback");
+        console.log(
+          "[weatherAnalysis] Leap returned no recommendations; using rule-based fallback",
+        );
       }
     } catch (e) {
       if (__DEV__) {
-        console.warn("[weatherAnalysis] Leap weather recommendations failed:", e);
+        console.warn(
+          "[weatherAnalysis] Leap weather recommendations failed:",
+          e,
+        );
       }
       // Fallback to rule-based recommendations only
     }
@@ -237,19 +256,25 @@ export async function analyzeRouteWeather(
   if (recommendations.length === 0) {
     if (totalDelayMinutes >= 60) {
       const hours = Math.round(totalDelayMinutes / 60);
-      recommendations.push(`Expect ~${hours} hour(s) of weather-related delay. Consider starting earlier.`);
+      recommendations.push(
+        `Expect ~${hours} hour(s) of weather-related delay. Consider starting earlier.`,
+      );
     }
     if (alerts.length > 0) {
-      recommendations.push("Some segments have high weather risk. Drive with extra caution.");
+      recommendations.push(
+        "Some segments have high weather risk. Drive with extra caution.",
+      );
     }
     if (overallRiskScore >= 70 && totalDelayMinutes > 0) {
-      recommendations.push("Delay start by 1–2 hours if possible to avoid peak adverse conditions.");
+      recommendations.push(
+        "Delay start by 1–2 hours if possible to avoid peak adverse conditions.",
+      );
     }
   }
 
   // Build real weather summary from all points along route
   const weatherValues = Array.from(weatherByPoint.values()).filter(
-    (w): w is CurrentWeather => w != null
+    (w): w is CurrentWeather => w != null,
   );
   let routeWeatherSummary: RouteWeatherSummary | undefined;
   if (weatherValues.length > 0) {
@@ -267,7 +292,7 @@ export async function analyzeRouteWeather(
     const humidity =
       weatherValues.reduce((s, w) => s + w.humidity, 0) / weatherValues.length;
     const conditionSet = new Set(
-      weatherValues.map((w) => w.condition?.main || "Unknown").filter(Boolean)
+      weatherValues.map((w) => w.condition?.main || "Unknown").filter(Boolean),
     );
     routeWeatherSummary = {
       tempMin,
@@ -299,16 +324,18 @@ export async function analyzeRouteWeather(
  */
 export function buildSegmentsFromPoints(
   points: Array<{ lat: number; lon: number }>,
-  estimatedTotalMinutes: number
+  estimatedTotalMinutes: number,
 ): RouteSegmentForWeather[] {
   if (points.length < 2) return [];
   const minutesPerSegment = estimatedTotalMinutes / (points.length - 1);
-  return (points as Array<{ lat: number; lon: number }>).slice(0, -1).map((p, i) => ({
-    index: i,
-    fromLat: p.lat,
-    fromLon: p.lon,
-    toLat: points[i + 1].lat,
-    toLon: points[i + 1].lon,
-    estimatedMinutes: minutesPerSegment,
-  }));
+  return (points as Array<{ lat: number; lon: number }>)
+    .slice(0, -1)
+    .map((p, i) => ({
+      index: i,
+      fromLat: p.lat,
+      fromLon: p.lon,
+      toLat: points[i + 1].lat,
+      toLon: points[i + 1].lon,
+      estimatedMinutes: minutesPerSegment,
+    }));
 }

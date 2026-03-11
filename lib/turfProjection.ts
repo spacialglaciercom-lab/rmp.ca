@@ -95,7 +95,8 @@ export function projectOntoLineWindow(
   result.distanceAlong += prefixDist;
 
   const totalLength = computeLineLength(line);
-  result.fractionAlong = totalLength > 0 ? result.distanceAlong / totalLength : 0;
+  result.fractionAlong =
+    totalLength > 0 ? result.distanceAlong / totalLength : 0;
 
   return result;
 }
@@ -112,4 +113,3 @@ function computeLineLength(
   }
   return total;
 }
-

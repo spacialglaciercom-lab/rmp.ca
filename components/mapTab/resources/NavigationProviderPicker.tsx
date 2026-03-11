@@ -48,9 +48,7 @@ export function NavigationProviderPicker() {
     hapticImpact();
     setProvider(p);
     await setNavigationProvider(p);
-    setMessage(
-      `Switched to ${p === "google" ? "Google Maps" : "OSRM"}.`
-    );
+    setMessage(`Switched to ${p === "google" ? "Google Maps" : "OSRM"}.`);
   };
 
   const handleSaveKey = async () => {
@@ -132,8 +130,12 @@ export function NavigationProviderPicker() {
 
       {provider === "google" && (
         <>
-          <Text style={[styles.description, { marginTop: 12, color: colors.muted }]}>
-            Google Maps API key (set GOOGLE_MAPS_API_KEY on Railway for web). Same key for Directions, Elevation, Weather, Places — enable in Cloud Console.
+          <Text
+            style={[styles.description, { marginTop: 12, color: colors.muted }]}
+          >
+            Google Maps API key (set GOOGLE_MAPS_API_KEY on Railway for web).
+            Same key for Directions, Elevation, Weather, Places — enable in
+            Cloud Console.
           </Text>
           <TextInput
             style={[
@@ -156,7 +158,10 @@ export function NavigationProviderPicker() {
             <TouchableOpacity
               style={[
                 styles.button,
-                { backgroundColor: colors.primary + "40", borderColor: colors.primary },
+                {
+                  backgroundColor: colors.primary + "40",
+                  borderColor: colors.primary,
+                },
                 saving && styles.buttonDisabled,
               ]}
               onPress={handleSaveKey}

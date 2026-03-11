@@ -46,12 +46,16 @@ function HomeWeatherSectionIfPlugin() {
   const weatherPlugin = getPlugin("weather");
   const enabled = usePluginStore((s) => s.isPluginEnabled("weather", true));
   if (!weatherPlugin || !enabled) return null;
-  const Widget = weatherPlugin.getFeatures().widget as React.ComponentType | undefined;
+  const Widget = weatherPlugin.getFeatures().widget as
+    | React.ComponentType
+    | undefined;
   if (!Widget) return null;
   return (
     <Suspense
       fallback={
-        <MinimalCard style={{ marginHorizontal: 16, marginBottom: 16, padding: 16 }}>
+        <MinimalCard
+          style={{ marginHorizontal: 16, marginBottom: 16, padding: 16 }}
+        >
           <ActivityIndicator size="small" color={theme.text} />
         </MinimalCard>
       }
@@ -86,7 +90,8 @@ export default function HomeScreen() {
     try {
       const currentRoute = await storage.loadRoute();
       if (!currentRoute || isMockRoute(currentRoute)) {
-        if (currentRoute && isMockRoute(currentRoute)) await storage.clearRoute();
+        if (currentRoute && isMockRoute(currentRoute))
+          await storage.clearRoute();
         setRoute(null);
         return;
       }
@@ -129,7 +134,11 @@ export default function HomeScreen() {
             "Expo Go: Add redirect URI in Mapillary",
             `In Mapillary Developer Applications, add this exact Redirect URI:\n\n${redirectUri}\n\nThen tap OK to open the Mapillary login.`,
             [
-              { text: "Cancel", style: "cancel", onPress: () => setContributingLoading(false) },
+              {
+                text: "Cancel",
+                style: "cancel",
+                onPress: () => setContributingLoading(false),
+              },
               {
                 text: "OK",
                 onPress: async () => {
@@ -138,14 +147,17 @@ export default function HomeScreen() {
                     const token = await MapillaryAuthService.login();
                     if (token) router.push("/contribution");
                   } catch (e) {
-                    const msg = e instanceof Error ? e.message : "Could not connect to Mapillary.";
+                    const msg =
+                      e instanceof Error
+                        ? e.message
+                        : "Could not connect to Mapillary.";
                     Alert.alert("Mapillary sign-in failed", msg);
                   } finally {
                     setContributingLoading(false);
                   }
                 },
               },
-            ]
+            ],
           );
           return;
         }
@@ -154,7 +166,8 @@ export default function HomeScreen() {
       }
       router.push("/contribution");
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not connect to Mapillary.";
+      const message =
+        e instanceof Error ? e.message : "Could not connect to Mapillary.";
       if (__DEV__) console.warn("[Home] Mapillary login error:", e);
       Alert.alert("Mapillary sign-in failed", message);
     } finally {
@@ -174,11 +187,14 @@ export default function HomeScreen() {
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Text style={[styles.title, { color: theme.text }]}>Route OS</Text>
-          {subtitle ? <Text style={[styles.subtitle, { color: theme.textTertiary }]}>{subtitle}</Text> : null}
+          {subtitle ? (
+            <Text style={[styles.subtitle, { color: theme.textTertiary }]}>
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
         <HeaderWeatherIfPlugin textColor={theme.text} />
       </View>
-
 
       <HomeWeatherSectionIfPlugin />
 
@@ -190,20 +206,45 @@ export default function HomeScreen() {
 
   const renderPoint = ({ item }: { item: CollectionPoint }) => {
     const statusColor =
-      item.status === "completed" ? colors.success : item.status === "pending" ? colors.warning : theme.textTertiary;
+      item.status === "completed"
+        ? colors.success
+        : item.status === "pending"
+          ? colors.warning
+          : theme.textTertiary;
     return (
-      <TouchableOpacity onPress={() => handlePointPress(item)} activeOpacity={0.85} style={styles.pointWrap}>
+      <TouchableOpacity
+        onPress={() => handlePointPress(item)}
+        activeOpacity={0.85}
+        style={styles.pointWrap}
+      >
         <MinimalCard style={styles.pointCard}>
           <View style={styles.pointRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.pointAddress, { color: theme.text }]}>{item.address}</Text>
+              <Text style={[styles.pointAddress, { color: theme.text }]}>
+                {item.address}
+              </Text>
               {item.locationName && (
-                <Text style={[styles.pointLocation, { color: theme.textSecondary }]}>{item.locationName}</Text>
+                <Text
+                  style={[styles.pointLocation, { color: theme.textSecondary }]}
+                >
+                  {item.locationName}
+                </Text>
               )}
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: theme.surfaceAlt }]}>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: theme.surfaceAlt },
+              ]}
+            >
               <Text style={[styles.statusText, { color: statusColor }]}>
-                {item.status === "completed" ? "Completed" : item.status === "pending" ? "Pending" : item.status === "skipped" ? "Skipped" : "Issue"}
+                {item.status === "completed"
+                  ? "Completed"
+                  : item.status === "pending"
+                    ? "Pending"
+                    : item.status === "skipped"
+                      ? "Skipped"
+                      : "Issue"}
               </Text>
             </View>
           </View>
@@ -212,7 +253,12 @@ export default function HomeScreen() {
               onPress={() => handleMarkComplete(item)}
               style={[styles.processBtn, { backgroundColor: theme.accent }]}
             >
-              <Text style={[styles.processBtnText, { color: theme.bg === "#0C0C0C" ? "#0C0C0C" : "#fff" }]}>
+              <Text
+                style={[
+                  styles.processBtnText,
+                  { color: theme.bg === "#0C0C0C" ? "#0C0C0C" : "#fff" },
+                ]}
+              >
                 Mark complete
               </Text>
             </TouchableOpacity>
@@ -242,8 +288,16 @@ export default function HomeScreen() {
             <View style={styles.webHeader}>
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
-                  <Text style={[styles.title, { color: theme.text }]}>Route OS</Text>
-                  {subtitle ? <Text style={[styles.subtitle, { color: theme.textTertiary }]}>{subtitle}</Text> : null}
+                  <Text style={[styles.title, { color: theme.text }]}>
+                    Route OS
+                  </Text>
+                  {subtitle ? (
+                    <Text
+                      style={[styles.subtitle, { color: theme.textTertiary }]}
+                    >
+                      {subtitle}
+                    </Text>
+                  ) : null}
                 </View>
                 <HeaderWeatherIfPlugin textColor={theme.text} />
               </View>
@@ -272,8 +326,13 @@ export default function HomeScreen() {
       <ScreenContainer style={{ backgroundColor: theme.bg }}>
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingBottom: 24 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingHorizontal: 16, paddingBottom: 24 },
+          ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
           showsVerticalScrollIndicator={false}
         >
           {header}
@@ -302,14 +361,20 @@ export default function HomeScreen() {
             {header}
             <SectionLabel>Processing Queue</SectionLabel>
             {isTruncated && (
-              <Text style={[styles.truncatedNotice, { color: theme.textTertiary }]}>
-                Showing first {MAX_PROCESSING_QUEUE_DISPLAY} of {allPoints.length} stops. Use the Map tab to navigate and mark the rest.
+              <Text
+                style={[styles.truncatedNotice, { color: theme.textTertiary }]}
+              >
+                Showing first {MAX_PROCESSING_QUEUE_DISPLAY} of{" "}
+                {allPoints.length} stops. Use the Map tab to navigate and mark
+                the rest.
               </Text>
             )}
           </>
         }
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       />
@@ -354,12 +419,22 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, paddingBottom: 24 },
   pointWrap: { marginBottom: 12 },
   pointCard: {},
-  pointRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  pointRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   pointAddress: { fontSize: 16, fontWeight: "600", marginBottom: 2 },
   pointLocation: { fontSize: 14 },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999 },
   statusText: { fontSize: 12, fontWeight: "500" },
-  processBtn: { marginTop: 8, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, alignSelf: "flex-start" },
+  processBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+  },
   processBtnText: { fontSize: 14, fontWeight: "500" },
   truncatedNotice: { fontSize: 13, marginBottom: 12, lineHeight: 18 },
   navOnlyCard: { padding: 16 },

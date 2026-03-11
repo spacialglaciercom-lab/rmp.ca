@@ -68,7 +68,10 @@ export interface RouteOptimizerOptions {
 
 function ensureNode(graph: AdjGraph, node: string): AdjEntry[] {
   let list = graph.get(node);
-  if (!list) { list = []; graph.set(node, list); }
+  if (!list) {
+    list = [];
+    graph.set(node, list);
+  }
   return list;
 }
 
@@ -77,7 +80,11 @@ function outDegree(graph: AdjGraph, node: string): number {
 }
 
 /** Return the first edge from `from` to `target`, or undefined. */
-function findEdge(graph: AdjGraph, from: string, target: string): AdjEntry | undefined {
+function findEdge(
+  graph: AdjGraph,
+  from: string,
+  target: string,
+): AdjEntry | undefined {
   return graph.get(from)?.find((e) => e.target === target);
 }
 
@@ -93,7 +100,9 @@ function neighborIds(graph: AdjGraph, node: string): string[] {
 /** Total edge count across the entire graph. */
 function totalEdges(graph: AdjGraph): number {
   let count = 0;
-  graph.forEach((list) => { count += list.length; });
+  graph.forEach((list) => {
+    count += list.length;
+  });
   return count;
 }
 
@@ -101,7 +110,10 @@ function totalEdges(graph: AdjGraph): number {
 function copyGraph(graph: AdjGraph): AdjGraph {
   const copy: AdjGraph = new Map();
   graph.forEach((list, node) => {
-    copy.set(node, list.map((e) => ({ ...e, data: { ...e.data } })));
+    copy.set(
+      node,
+      list.map((e) => ({ ...e, data: { ...e.data } })),
+    );
   });
   return copy;
 }
@@ -130,11 +142,11 @@ const NON_VEHICLE_ROAD_CLASSES = new Set([
   // Cycling-only (unless access=yes for vehicles)
   "cycleway",
   // Other non-vehicle
-  "bridleway",  // Horse paths
+  "bridleway", // Horse paths
   "elevator",
   "escalator",
-  "platform",  // Transit platforms
-  "raceway",  // Racing circuits (not public roads)
+  "platform", // Transit platforms
+  "raceway", // Racing circuits (not public roads)
 ]);
 
 /**
@@ -143,7 +155,10 @@ const NON_VEHICLE_ROAD_CLASSES = new Set([
 function isNonVehicleRoad(way: Way): boolean {
   const highway = way.tags?.highway?.toLowerCase()?.trim() ?? "";
   const roadClass = way.tags?.class?.toLowerCase()?.trim() ?? "";
-  return NON_VEHICLE_ROAD_CLASSES.has(highway) || NON_VEHICLE_ROAD_CLASSES.has(roadClass);
+  return (
+    NON_VEHICLE_ROAD_CLASSES.has(highway) ||
+    NON_VEHICLE_ROAD_CLASSES.has(roadClass)
+  );
 }
 
 // ─── RouteOptimizer ───────────────────────────────────────────────
@@ -157,13 +172,15 @@ function genEdgeId(wayId: string, from: string, to: string): string {
  * Generate a canonical segment key for deduplication.
  * For two-way streets: sorted tuple of endpoints (order-independent)
  * For one-way streets: ordered tuple (preserves direction)
- * 
+ *
  * Uses 5 decimal places (~1.1m precision) to catch near-duplicate roads.
  */
 function segmentKey(
-  lat1: number, lon1: number,
-  lat2: number, lon2: number,
-  isOneway: boolean
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+  isOneway: boolean,
 ): string {
   const p1 = `${lat1.toFixed(5)},${lon1.toFixed(5)}`;
   const p2 = `${lat2.toFixed(5)},${lon2.toFixed(5)}`;
@@ -176,7 +193,12 @@ function segmentKey(
 /**
  * Haversine distance in meters between two lat/lon points.
  */
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function haversineMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -194,13 +216,13 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
  * Merge nearby nodes within a threshold distance.
  * This handles roads that are slightly offset (like divided highways where
  * each direction has different coordinates but represents the same intersection).
- * 
+ *
  * Uses a simple grid-based spatial index for O(n) performance.
  */
 function mergeNearbyNodes(
   nodes: Map<string, Node>,
   ways: Way[],
-  thresholdM: number = 15
+  thresholdM: number = 15,
 ): { nodes: Map<string, Node>; nodeMapping: Map<string, string> } {
   if (thresholdM <= 0) {
     return { nodes, nodeMapping: new Map() };
@@ -279,7 +301,7 @@ function mergeNearbyNodes(
   // Find pairs of nodes within threshold
   for (const [cellKey, cellNodes] of grid) {
     const [cx, cy] = cellKey.split(",").map(Number);
-    
+
     // Check this cell and 8 neighbors
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
@@ -293,7 +315,12 @@ function mergeNearbyNodes(
             // Do not merge nodes that are consecutive on the same way — preserves road curves
             const pairKey = id1 < id2 ? `${id1},${id2}` : `${id2},${id1}`;
             if (consecutiveOnSameWay.has(pairKey)) continue;
-            const dist = haversineMeters(node1.lat, node1.lon, node2.lat, node2.lon);
+            const dist = haversineMeters(
+              node1.lat,
+              node1.lon,
+              node2.lat,
+              node2.lon,
+            );
             if (dist <= thresholdM) {
               union(id1, id2);
             }
@@ -347,7 +374,11 @@ export class RouteOptimizer {
   private onewayMode: string = "A";
   private route: string[] = [];
   private deadEndNodes: Set<string> = new Set();
-  private turnPenalties: TurnPenaltyWeights = { leftTurn: 50, uTurn: 200, rightTurn: 0 };
+  private turnPenalties: TurnPenaltyWeights = {
+    leftTurn: 50,
+    uTurn: 200,
+    rightTurn: 0,
+  };
   /** Track recent U-turns to apply cumulative penalty */
   private recentUturnCount: number = 0;
   /** Nodes where we made a U-turn (to detect re-traversal patterns) */
@@ -386,7 +417,7 @@ export class RouteOptimizer {
     onewayMode: string = "A",
     turnRestrictions: TurnRestriction[] = [],
     edgePenaltyMultipliers?: Map<string, number>,
-    options?: RouteOptimizerOptions
+    options?: RouteOptimizerOptions,
   ) {
     this.options = options ?? {};
     // Merge nearby nodes (within 15m) to handle offset road data
@@ -397,7 +428,8 @@ export class RouteOptimizer {
     this.ways = ways;
     this.turnRestrictions = turnRestrictions;
     this.onewayMode = onewayMode;
-    if (edgePenaltyMultipliers?.size) this.edgePenaltyMultipliers = edgePenaltyMultipliers;
+    if (edgePenaltyMultipliers?.size)
+      this.edgePenaltyMultipliers = edgePenaltyMultipliers;
     this.buildOriginalGraph();
   }
 
@@ -451,7 +483,10 @@ export class RouteOptimizer {
       if (isNonVehicleRoad(way)) {
         nonVehicleFiltered++;
         const roadClass = way.tags?.highway || way.tags?.class || "unknown";
-        filteredClasses.set(roadClass, (filteredClasses.get(roadClass) ?? 0) + 1);
+        filteredClasses.set(
+          roadClass,
+          (filteredClasses.get(roadClass) ?? 0) + 1,
+        );
         continue;
       }
 
@@ -506,7 +541,8 @@ export class RouteOptimizer {
           if (!n) break;
           geometry.push([n.lat, n.lon]);
           if (prevLat != null && prevLon != null) {
-            length += this.haversineDistance(prevLat, prevLon, n.lat, n.lon) * 1000;
+            length +=
+              this.haversineDistance(prevLat, prevLon, n.lat, n.lon) * 1000;
           }
           prevLat = n.lat;
           prevLon = n.lon;
@@ -521,9 +557,11 @@ export class RouteOptimizer {
         length = length * (1 + penalty);
 
         const segKey = segmentKey(
-          geometry[0]![0], geometry[0]![1],
-          geometry[geometry.length - 1]![0], geometry[geometry.length - 1]![1],
-          oneway
+          geometry[0]![0],
+          geometry[0]![1],
+          geometry[geometry.length - 1]![0],
+          geometry[geometry.length - 1]![1],
+          oneway,
         );
         const waySegKey = `${wayId}:${segKey}`;
         if (seenSegments.has(waySegKey)) {
@@ -713,7 +751,9 @@ export class RouteOptimizer {
     }
     if (unbalanced.length > 0) {
       warn("verifyBalance", `Found ${unbalanced.length} unbalanced nodes`, {
-        sample: unbalanced.slice(0, 6).map(([n, i, o]) => `${n}(in=${i},out=${o})`),
+        sample: unbalanced
+          .slice(0, 6)
+          .map(([n, i, o]) => `${n}(in=${i},out=${o})`),
       });
     } else {
       debug("verifyBalance", { balanced: true });
@@ -733,7 +773,7 @@ export class RouteOptimizer {
       this.ways,
       this.turnRestrictions,
       graphAccess,
-      this.deadEndNodes
+      this.deadEndNodes,
     );
   }
 
@@ -776,27 +816,40 @@ export class RouteOptimizer {
       iterations++;
       const current = stack[stack.length - 1]!;
       const edges = graphCopy.get(current);
-      
+
       // Check for infinite loop patterns using cycle detector (counter maintained incrementally)
       let loopEscapeMode = false;
       if (this.cycleDetector) {
-        const detection = this.cycleDetector.enterNode(current, remainingEdgeCount);
+        const detection = this.cycleDetector.enterNode(
+          current,
+          remainingEdgeCount,
+        );
         if (detection.isLooping) {
           this.cycleDiagnostics.loopsDetected++;
           // Only log every 10th loop to reduce spam
           const logEvery = this.options.logLoopEvery ?? 10;
-          if (logEvery > 0 && this.cycleDiagnostics.loopsDetected % logEvery === 1) {
-            warn("hierholzer", `Loop detected (${detection.loopType}) at ${current}`, {
-              stagnantIterations: detection.stagnantIterations,
-              tabuNodes: detection.tabuNodes.size,
-            });
+          if (
+            logEvery > 0 &&
+            this.cycleDiagnostics.loopsDetected % logEvery === 1
+          ) {
+            warn(
+              "hierholzer",
+              `Loop detected (${detection.loopType}) at ${current}`,
+              {
+                stagnantIterations: detection.stagnantIterations,
+                tabuNodes: detection.tabuNodes.size,
+              },
+            );
           }
           this.cycleDiagnostics.escapeAttempts++;
           loopEscapeMode = true;
-          
+
           // If severely stuck, force backtrack to break circular patterns earlier
           const backtrackThreshold = strict ? 12 : 35;
-          if (detection.stagnantIterations > backtrackThreshold && stack.length > 3) {
+          if (
+            detection.stagnantIterations > backtrackThreshold &&
+            stack.length > 3
+          ) {
             // Force backtrack by treating current as having no edges
             if (this.cycleDetector) {
               this.cycleDetector.leaveNode(current);
@@ -808,7 +861,11 @@ export class RouteOptimizer {
       }
 
       // Detect simple oscillation in the recent stack and mark culprit tabu
-      const osc = detectSimpleOscillation(stack, strict ? 6 : 12, strict ? 2 : 3);
+      const osc = detectSimpleOscillation(
+        stack,
+        strict ? 6 : 12,
+        strict ? 2 : 3,
+      );
       if (osc.isOscillating && osc.culprit) {
         this.localTabuNodes.add(osc.culprit);
         loopEscapeMode = true;
@@ -825,7 +882,7 @@ export class RouteOptimizer {
             current,
             edges,
             stack,
-            loopEscapeMode
+            loopEscapeMode,
           );
         } else {
           chosen = edges[0]!;
@@ -842,7 +899,7 @@ export class RouteOptimizer {
             this.recentUturnCount = Math.max(0, this.recentUturnCount - 0.5);
           }
         }
-        
+
         // Update cycle detector with edge traversal
         if (this.cycleDetector) {
           this.cycleDetector.updateLowlink(current, chosen.target);
@@ -863,7 +920,7 @@ export class RouteOptimizer {
         circuit.push(stack.pop()!);
       }
     }
-    
+
     if (iterations >= maxIterations) {
       warn("hierholzer", `Hit iteration cap (${maxIterations})`, {
         circuitLength: circuit.length,
@@ -875,7 +932,7 @@ export class RouteOptimizer {
         warn("hierholzer", "Cycle detector diagnostics", diag);
       }
     }
-    
+
     // Check final circuit for repeating patterns
     const cycleCheck = detectRouteCycle(circuit, 5, 30);
     if (cycleCheck.hasCycle) {
@@ -900,7 +957,7 @@ export class RouteOptimizer {
     current: string,
     candidates: AdjEntry[],
     stack: string[],
-    loopEscapeMode: boolean = false
+    loopEscapeMode: boolean = false,
   ): AdjEntry {
     const incomingBearing = this.calculateBearing(prevNode, current);
 
@@ -914,12 +971,16 @@ export class RouteOptimizer {
 
     let best: AdjEntry | null = null;
     let bestScore = Infinity;
-    
+
     // In loop escape mode, build a set of nodes to strongly avoid
     const recentStackNodes = new Set<string>();
     if (loopEscapeMode && stack.length > 5) {
       const avoidDepth = this.options.antiLoopMode === "strict" ? 35 : 20;
-      for (let i = Math.max(0, stack.length - avoidDepth); i < stack.length; i++) {
+      for (
+        let i = Math.max(0, stack.length - avoidDepth);
+        i < stack.length;
+        i++
+      ) {
         recentStackNodes.add(stack[i]!);
       }
     }
@@ -943,7 +1004,7 @@ export class RouteOptimizer {
         // Base U-turn penalty + cumulative penalty for repeated U-turns
         const cumulativePenalty = this.recentUturnCount * 150;
         score += 1000 + this.turnPenalties.uTurn + cumulativePenalty;
-        
+
         // Extra penalty if we already made a U-turn at this location
         if (this.uturnLocations.has(current)) {
           score += 500;
@@ -957,7 +1018,8 @@ export class RouteOptimizer {
       }
 
       // Apply local tabu and edge traversal quota penalties (after base score exists)
-      const edgeTraversalCount = this.edgeTraversalCounts.get(entry.edgeId) ?? 0;
+      const edgeTraversalCount =
+        this.edgeTraversalCounts.get(entry.edgeId) ?? 0;
       const strict = this.options.antiLoopMode === "strict";
       if (edgeTraversalCount > (strict ? 1 : 3)) {
         // Heavily discourage repeatedly traversed edges (strict: after first revisit)
@@ -978,7 +1040,7 @@ export class RouteOptimizer {
           score -= 50;
         }
       }
-      
+
       // If current node is a dead-end, strongly prefer leaving via the exit
       // rather than making unnecessary moves
       if (this.deadEndNodes.has(current) && !isUturn) {
@@ -1011,7 +1073,7 @@ export class RouteOptimizer {
           }
         }
       }
-      
+
       // Apply cycle detector penalties (Tarjan-inspired SCC tracking)
       if (this.cycleDetector) {
         // Check if neighbor is in tabu list (detected as part of a cycle)
@@ -1022,18 +1084,18 @@ export class RouteOptimizer {
         const penalty = this.cycleDetector.getPenalty(neighbor);
         score += loopEscapeMode ? penalty * 3 : penalty; // Triple penalty in escape mode
       }
-      
+
       // In loop escape mode, heavily penalize returning to recent stack nodes
       if (loopEscapeMode && recentStackNodes.has(neighbor)) {
         score += strict ? 2500 : 1500;
       }
-      
+
       // Look-ahead: check if this choice will force a U-turn next step
       if (!isUturn && neighborRemaining > 0) {
         const neighborEdges = graph.get(neighbor);
         if (neighborEdges && neighborEdges.length > 0) {
           // Check if all remaining edges from neighbor lead back to current
-          const allLeadBack = neighborEdges.every(e => e.target === current);
+          const allLeadBack = neighborEdges.every((e) => e.target === current);
           if (allLeadBack) {
             // This move will force a U-turn - penalize it
             score += 400;
@@ -1078,8 +1140,10 @@ export class RouteOptimizer {
   }
 
   private haversineDistance(
-    lat1: number, lon1: number,
-    lat2: number, lon2: number
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
   ): number {
     const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -1149,16 +1213,26 @@ export class RouteOptimizer {
   private findStartNodeInComponent(
     component: string[],
     customLat?: number,
-    customLon?: number
+    customLon?: number,
   ): string | null {
     if (component.length === 0) return null;
-    if (customLat !== undefined && customLon !== undefined && !Number.isNaN(customLat) && !Number.isNaN(customLon)) {
+    if (
+      customLat !== undefined &&
+      customLon !== undefined &&
+      !Number.isNaN(customLat) &&
+      !Number.isNaN(customLon)
+    ) {
       let closestNode: string | null = null;
       let minDistance = Infinity;
       for (const nodeId of component) {
         const node = this.nodes.get(nodeId);
         if (!node) continue;
-        const distance = this.haversineDistance(customLat, customLon, node.lat, node.lon);
+        const distance = this.haversineDistance(
+          customLat,
+          customLon,
+          node.lat,
+          node.lon,
+        );
         if (distance < minDistance) {
           minDistance = distance;
           closestNode = nodeId;
@@ -1182,10 +1256,16 @@ export class RouteOptimizer {
   }
 
   private findStartNode(customLat?: number, customLon?: number): string | null {
-    if (customLat !== undefined && customLon !== undefined && !Number.isNaN(customLat) && !Number.isNaN(customLon)) {
+    if (
+      customLat !== undefined &&
+      customLon !== undefined &&
+      !Number.isNaN(customLat) &&
+      !Number.isNaN(customLon)
+    ) {
       debug("findStartNode", {
         message: "Using custom start coordinates",
-        customLat, customLon,
+        customLat,
+        customLon,
         graphNodes: this.doubledGraph.size,
       });
 
@@ -1196,7 +1276,12 @@ export class RouteOptimizer {
         if (list.length === 0) continue;
         const node = this.nodes.get(nodeId);
         if (!node) continue;
-        const distance = this.haversineDistance(customLat, customLon, node.lat, node.lon);
+        const distance = this.haversineDistance(
+          customLat,
+          customLon,
+          node.lat,
+          node.lon,
+        );
         if (distance < minDistance) {
           minDistance = distance;
           closestNode = nodeId;
@@ -1216,12 +1301,17 @@ export class RouteOptimizer {
         });
 
         if (snapDistanceM > 500) {
-          warn("findStartNode", `Start point snapped ${Math.round(snapDistanceM)}m from custom coordinates`, {
-            customCoords: [customLat, customLon],
-            snappedCoords: [snappedNode?.lat, snappedNode?.lon],
-            snapDistanceM: Math.round(snapDistanceM),
-            message: "Graph may not cover the starting area. Consider using a larger OSM extract.",
-          });
+          warn(
+            "findStartNode",
+            `Start point snapped ${Math.round(snapDistanceM)}m from custom coordinates`,
+            {
+              customCoords: [customLat, customLon],
+              snappedCoords: [snappedNode?.lat, snappedNode?.lon],
+              snapDistanceM: Math.round(snapDistanceM),
+              message:
+                "Graph may not cover the starting area. Consider using a larger OSM extract.",
+            },
+          );
         }
       }
 
@@ -1230,7 +1320,8 @@ export class RouteOptimizer {
 
     debug("findStartNode", {
       message: "No custom coordinates - selecting high-degree non-dead-end",
-      customLat, customLon,
+      customLat,
+      customLon,
       doubledGraphSize: this.doubledGraph.size,
     });
 
@@ -1248,7 +1339,10 @@ export class RouteOptimizer {
     const allNodes = Array.from(this.doubledGraph.keys());
     for (const start of allNodes) {
       if (visited.has(start)) continue;
-      if ((this.doubledGraph.get(start)?.length ?? 0) === 0) { visited.add(start); continue; }
+      if ((this.doubledGraph.get(start)?.length ?? 0) === 0) {
+        visited.add(start);
+        continue;
+      }
       const q: string[] = [start];
       visited.add(start);
       const comp: string[] = [];
@@ -1257,11 +1351,17 @@ export class RouteOptimizer {
         comp.push(v);
         const outs = this.doubledGraph.get(v) ?? [];
         for (const e of outs) {
-          if (!visited.has(e.target)) { visited.add(e.target); q.push(e.target); }
+          if (!visited.has(e.target)) {
+            visited.add(e.target);
+            q.push(e.target);
+          }
         }
         const revs = reverseAdj.get(v) ?? new Set<string>();
         for (const r of revs) {
-          if (!visited.has(r)) { visited.add(r); q.push(r); }
+          if (!visited.has(r)) {
+            visited.add(r);
+            q.push(r);
+          }
         }
       }
       if (comp.length > largestComp.length) largestComp = comp;
@@ -1275,7 +1375,10 @@ export class RouteOptimizer {
       if (deg === 0) continue;
       const isDead = this.deadEndNodes.has(nodeId);
       const score = isDead ? deg - 2 : deg; // discourage dead-ends
-      if (score > bestDeg) { bestDeg = score; bestNode = nodeId; }
+      if (score > bestDeg) {
+        bestDeg = score;
+        bestNode = nodeId;
+      }
     }
     if (bestNode) {
       const fallbackNode = this.nodes.get(bestNode);
@@ -1305,7 +1408,9 @@ export class RouteOptimizer {
     for (let i = 0; i < circuit.length - 1; i++) {
       const fromId = circuit[i]!;
       const toId = circuit[i + 1]!;
-      const entry = this.originalGraph.get(fromId)?.find((e) => e.target === toId);
+      const entry = this.originalGraph
+        .get(fromId)
+        ?.find((e) => e.target === toId);
       const geometry = entry?.data?.geometry;
       if (geometry && geometry.length >= 2) {
         const startIdx = routePoints.length === 0 ? 0 : 1;
@@ -1372,8 +1477,14 @@ export class RouteOptimizer {
         : 0;
 
     for (let i = 1; i < this.route.length - 1; i++) {
-      const incomingBearing = this.calculateBearing(this.route[i - 1]!, this.route[i]!);
-      const outgoingBearing = this.calculateBearing(this.route[i]!, this.route[i + 1]!);
+      const incomingBearing = this.calculateBearing(
+        this.route[i - 1]!,
+        this.route[i]!,
+      );
+      const outgoingBearing = this.calculateBearing(
+        this.route[i]!,
+        this.route[i + 1]!,
+      );
       const turnAngle = (outgoingBearing - incomingBearing + 360) % 360;
 
       if (turnAngle < 30 || turnAngle > 330) {
@@ -1393,7 +1504,7 @@ export class RouteOptimizer {
   optimize(
     customLat?: number,
     customLon?: number,
-    turnPenalties?: TurnPenaltyWeights
+    turnPenalties?: TurnPenaltyWeights,
   ): OptimizationResult {
     if (turnPenalties) {
       this.turnPenalties = {
@@ -1418,9 +1529,13 @@ export class RouteOptimizer {
     this.doubleEdges();
 
     if (this.doubledGraph.size === 0) {
-      warn("optimize", "early exit: doubledGraph.size === 0 after doubleEdges", {
-        originalGraphSize: this.originalGraph.size,
-      });
+      warn(
+        "optimize",
+        "early exit: doubledGraph.size === 0 after doubleEdges",
+        {
+          originalGraphSize: this.originalGraph.size,
+        },
+      );
       return {
         route: [],
         totalDistance: 0,
@@ -1432,7 +1547,8 @@ export class RouteOptimizer {
     const originalOnewayMode = this.onewayMode;
     if (!this.isBalanced()) {
       debug("optimize", {
-        fallback: "rebuilding with onewayMode=A (was " + originalOnewayMode + ")",
+        fallback:
+          "rebuilding with onewayMode=A (was " + originalOnewayMode + ")",
       });
       this.onewayMode = "A";
       this.stats.oneway_violations = [];
@@ -1446,7 +1562,8 @@ export class RouteOptimizer {
     const hasMultipleComponents = components.length > 1;
     if (hasMultipleComponents) {
       debug("optimize", {
-        message: "Multiple connected components – will run Hierholzer per component to cover all segments",
+        message:
+          "Multiple connected components – will run Hierholzer per component to cover all segments",
         componentCount: components.length,
         componentSizes: components.map((c) => c.length),
       });
@@ -1454,37 +1571,54 @@ export class RouteOptimizer {
 
     // Order components: if custom start, put the component containing the closest node first; else largest first
     const orderedComponents = [...components].sort((a, b) => {
-      if (customLat == null || customLon == null || Number.isNaN(customLat) || Number.isNaN(customLon)) {
+      if (
+        customLat == null ||
+        customLon == null ||
+        Number.isNaN(customLat) ||
+        Number.isNaN(customLon)
+      ) {
         return b.length - a.length;
       }
       const distA = Math.min(
         ...a.map((id) => {
           const n = this.nodes.get(id);
-          return n ? this.haversineDistance(customLat, customLon, n.lat, n.lon) : Infinity;
-        })
+          return n
+            ? this.haversineDistance(customLat, customLon, n.lat, n.lon)
+            : Infinity;
+        }),
       );
       const distB = Math.min(
         ...b.map((id) => {
           const n = this.nodes.get(id);
-          return n ? this.haversineDistance(customLat, customLon, n.lat, n.lon) : Infinity;
-        })
+          return n
+            ? this.haversineDistance(customLat, customLon, n.lat, n.lon)
+            : Infinity;
+        }),
       );
       return distA - distB;
     });
 
     const circuits: string[][] = [];
     for (const comp of orderedComponents) {
-      const startNode = this.findStartNodeInComponent(comp, customLat, customLon);
+      const startNode = this.findStartNodeInComponent(
+        comp,
+        customLat,
+        customLon,
+      );
       if (!startNode) continue;
       const circuit = this.hierholzerWithTurnOptimization(startNode);
       if (circuit.length > 0) circuits.push(circuit);
     }
 
     if (circuits.length === 0) {
-      warn("optimize", "early exit: no start node with outgoing edges in any component", {
-        doubledGraphSize: this.doubledGraph.size,
-        componentCount: components.length,
-      });
+      warn(
+        "optimize",
+        "early exit: no start node with outgoing edges in any component",
+        {
+          doubledGraphSize: this.doubledGraph.size,
+          componentCount: components.length,
+        },
+      );
       return {
         route: [],
         totalDistance: 0,
@@ -1496,11 +1630,12 @@ export class RouteOptimizer {
     const startNode = this.findStartNodeInComponent(
       orderedComponents[0]!,
       customLat,
-      customLon
+      customLon,
     );
     debug("optimize", {
       startNode: startNode ?? null,
-      customStart: customLat != null && customLon != null ? [customLat, customLon] : null,
+      customStart:
+        customLat != null && customLon != null ? [customLat, customLon] : null,
       doubledGraphSize: this.doubledGraph.size,
       componentCount: circuits.length,
       totalCircuitNodes: circuits.reduce((sum, c) => sum + c.length, 0),
@@ -1527,19 +1662,29 @@ export class RouteOptimizer {
         ? { lat: startNodeData.lat, lon: startNodeData.lon }
         : null,
       customStartInput:
-        customLat != null && customLon != null ? { lat: customLat, lon: customLon } : null,
+        customLat != null && customLon != null
+          ? { lat: customLat, lon: customLon }
+          : null,
     });
     if (missingNodeIds.length > 0) {
-      warn("optimize", `${missingNodeIds.length} circuit nodeIds not found in nodes Map`, {
-        sampleMissing: sampleIds(missingNodeIds, 10),
-      });
+      warn(
+        "optimize",
+        `${missingNodeIds.length} circuit nodeIds not found in nodes Map`,
+        {
+          sampleMissing: sampleIds(missingNodeIds, 10),
+        },
+      );
     }
     if (routePoints.length === 0 && circuit.length > 0) {
-      warn("optimize", "routePoints is empty but circuit had nodes – all lookups failed?", {
-        circuitLength: circuit.length,
-        nodesMapSize: this.nodes.size,
-        sampleCircuitIds: circuit.slice(0, 5),
-      });
+      warn(
+        "optimize",
+        "routePoints is empty but circuit had nodes – all lookups failed?",
+        {
+          circuitLength: circuit.length,
+          nodesMapSize: this.nodes.size,
+          sampleCircuitIds: circuit.slice(0, 5),
+        },
+      );
     }
 
     return {

@@ -1,8 +1,14 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import { useColors } from "@/hooks/use-colors";
 
 export interface MarkerItem {
@@ -63,7 +69,10 @@ function MarkerListItemInner({
 
   return (
     <TouchableOpacity
-      style={[styles.container, { borderColor: colors.border, backgroundColor: colors.surface }]}
+      style={[
+        styles.container,
+        { borderColor: colors.border, backgroundColor: colors.surface },
+      ]}
       onPress={handlePress}
       activeOpacity={0.7}
     >
@@ -77,15 +86,23 @@ function MarkerListItemInner({
             {marker.lat.toFixed(5)}, {marker.lon.toFixed(5)}
           </Text>
           {marker.location ? (
-            <Text style={[styles.location, { color: colors.muted }]} numberOfLines={1}>
+            <Text
+              style={[styles.location, { color: colors.muted }]}
+              numberOfLines={1}
+            >
               {marker.location}
             </Text>
           ) : null}
           {marker.mediaNotesCount && marker.mediaNotesCount > 0 ? (
             <View style={styles.noteBadge}>
-              <MaterialCommunityIcons name="microphone" size={12} color={colors.primary} />
+              <MaterialCommunityIcons
+                name="microphone"
+                size={12}
+                color={colors.primary}
+              />
               <Text style={[styles.noteCount, { color: colors.primary }]}>
-                {marker.mediaNotesCount} note{marker.mediaNotesCount > 1 ? "s" : ""}
+                {marker.mediaNotesCount} note
+                {marker.mediaNotesCount > 1 ? "s" : ""}
               </Text>
             </View>
           ) : null}
@@ -100,7 +117,11 @@ function MarkerListItemInner({
           style={styles.actionBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <MaterialCommunityIcons name="microphone-plus" size={20} color={colors.primary} />
+          <MaterialCommunityIcons
+            name="microphone-plus"
+            size={20}
+            color={colors.primary}
+          />
         </TouchableOpacity>
       )}
       {showDelete && onRename && (
@@ -112,7 +133,11 @@ function MarkerListItemInner({
           style={styles.actionBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.primary} />
+          <MaterialCommunityIcons
+            name="pencil-outline"
+            size={20}
+            color={colors.primary}
+          />
         </TouchableOpacity>
       )}
       {showDelete && onDelete && (
@@ -121,7 +146,11 @@ function MarkerListItemInner({
           style={styles.actionBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <MaterialCommunityIcons name="close-circle-outline" size={22} color={colors.muted} />
+          <MaterialCommunityIcons
+            name="close-circle-outline"
+            size={22}
+            color={colors.muted}
+          />
         </TouchableOpacity>
       )}
     </TouchableOpacity>

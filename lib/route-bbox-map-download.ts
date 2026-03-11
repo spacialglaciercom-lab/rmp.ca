@@ -25,11 +25,26 @@ const MAX_ZOOM = 14;
 const PROGRESS_THROTTLE_MS = 250;
 
 const AVAILABLE_CITIES: { id: string; bounds: RouteBBox }[] = [
-  { id: "montreal", bounds: { minLat: 45.41, maxLat: 45.70, minLon: -73.85, maxLon: -73.50 } },
-  { id: "laval", bounds: { minLat: 45.53, maxLat: 45.63, minLon: -73.80, maxLon: -73.65 } },
-  { id: "longueuil", bounds: { minLat: 45.43, maxLat: 45.55, minLon: -73.55, maxLon: -73.42 } },
-  { id: "toronto", bounds: { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.11 } },
-  { id: "vancouver", bounds: { minLat: 49.20, maxLat: 49.35, minLon: -123.25, maxLon: -123.00 } },
+  {
+    id: "montreal",
+    bounds: { minLat: 45.41, maxLat: 45.7, minLon: -73.85, maxLon: -73.5 },
+  },
+  {
+    id: "laval",
+    bounds: { minLat: 45.53, maxLat: 45.63, minLon: -73.8, maxLon: -73.65 },
+  },
+  {
+    id: "longueuil",
+    bounds: { minLat: 45.43, maxLat: 45.55, minLon: -73.55, maxLon: -73.42 },
+  },
+  {
+    id: "toronto",
+    bounds: { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.11 },
+  },
+  {
+    id: "vancouver",
+    bounds: { minLat: 49.2, maxLat: 49.35, minLon: -123.25, maxLon: -123.0 },
+  },
 ];
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -161,8 +176,12 @@ export function enumerateTiles(
 // ─── City matching ────────────────────────────────────────────────
 
 function bboxOverlaps(a: RouteBBox, b: RouteBBox): boolean {
-  return a.minLat <= b.maxLat && a.maxLat >= b.minLat &&
-    a.minLon <= b.maxLon && a.maxLon >= b.minLon;
+  return (
+    a.minLat <= b.maxLat &&
+    a.maxLat >= b.minLat &&
+    a.minLon <= b.maxLon &&
+    a.maxLon >= b.minLon
+  );
 }
 
 /**
@@ -224,7 +243,10 @@ async function loadRouteMaps(): Promise<DownloadedRouteMap[]> {
   if (routeMapsCache) return routeMapsCache;
   try {
     const raw = await AsyncStorage.getItem(ROUTE_MAPS_KEY);
-    if (!raw) { routeMapsCache = []; return []; }
+    if (!raw) {
+      routeMapsCache = [];
+      return [];
+    }
     const parsed = JSON.parse(raw) as DownloadedRouteMap[];
     routeMapsCache = Array.isArray(parsed) ? parsed : [];
     return routeMapsCache;
@@ -246,7 +268,11 @@ export async function getDownloadedRouteMaps(): Promise<DownloadedRouteMap[]> {
 // ─── PMTiles tile fetching via HTTP Range ─────────────────────────
 
 interface PMTilesInstance {
-  getZxy(z: number, x: number, y: number): Promise<{ data: ArrayBuffer } | undefined>;
+  getZxy(
+    z: number,
+    x: number,
+    y: number,
+  ): Promise<{ data: ArrayBuffer } | undefined>;
 }
 
 function getPMTilesUrl(city: string): string {
@@ -285,7 +311,12 @@ export async function downloadRouteMap(
   gpxString: string,
   onProgress?: ProgressCallback,
   signal?: AbortSignal,
-): Promise<{ success: boolean; tileCount: number; sizeBytes: number; error?: string }> {
+): Promise<{
+  success: boolean;
+  tileCount: number;
+  sizeBytes: number;
+  error?: string;
+}> {
   const bbox = computeBBoxFromGPX(gpxString);
   const city = findCityForBBox(bbox);
   if (!city) {
@@ -293,13 +324,19 @@ export async function downloadRouteMap(
       success: false,
       tileCount: 0,
       sizeBytes: 0,
-      error: "Route is outside available PMTiles coverage. Supported: Montreal, Laval, Longueuil, Toronto, Vancouver.",
+      error:
+        "Route is outside available PMTiles coverage. Supported: Montreal, Laval, Longueuil, Toronto, Vancouver.",
     };
   }
 
   const tiles = enumerateTiles(bbox);
   if (tiles.length === 0) {
-    return { success: false, tileCount: 0, sizeBytes: 0, error: "No tiles in route bbox" };
+    return {
+      success: false,
+      tileCount: 0,
+      sizeBytes: 0,
+      error: "No tiles in route bbox",
+    };
   }
 
   onProgress?.(0, tiles.length, "Opening PMTiles…");
@@ -329,7 +366,12 @@ export async function downloadRouteMap(
 
   for (let i = 0; i < tiles.length; i++) {
     if (signal?.aborted) {
-      return { success: false, tileCount: downloaded, sizeBytes: totalBytes, error: "Cancelled" };
+      return {
+        success: false,
+        tileCount: downloaded,
+        sizeBytes: totalBytes,
+        error: "Cancelled",
+      };
     }
 
     const tile = tiles[i];
@@ -354,19 +396,34 @@ export async function downloadRouteMap(
         skipped++;
       }
     } catch (err) {
-      console.warn(`[RouteMap] Failed tile ${tile.z}/${tile.x}/${tile.y}:`, err);
+      console.warn(
+        `[RouteMap] Failed tile ${tile.z}/${tile.x}/${tile.y}:`,
+        err,
+      );
       skipped++;
     }
 
     const now = Date.now();
-    if (now - lastProgressTime >= PROGRESS_THROTTLE_MS || i === tiles.length - 1) {
-      onProgress?.(i + 1, tiles.length, `Downloading tiles… (${downloaded} saved)`);
+    if (
+      now - lastProgressTime >= PROGRESS_THROTTLE_MS ||
+      i === tiles.length - 1
+    ) {
+      onProgress?.(
+        i + 1,
+        tiles.length,
+        `Downloading tiles… (${downloaded} saved)`,
+      );
       lastProgressTime = now;
     }
   }
 
   if (downloaded === 0) {
-    return { success: false, tileCount: 0, sizeBytes: 0, error: "No tile data returned for this area" };
+    return {
+      success: false,
+      tileCount: 0,
+      sizeBytes: 0,
+      error: "No tile data returned for this area",
+    };
   }
 
   const routeMap: DownloadedRouteMap = {
@@ -438,6 +495,7 @@ export function getRouteMapTileDir(routeId: string): string {
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }

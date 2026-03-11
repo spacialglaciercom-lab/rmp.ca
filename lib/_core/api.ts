@@ -7,7 +7,10 @@ type ApiResponse<T> = {
   error?: string;
 };
 
-export async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function apiCall<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),
@@ -29,7 +32,11 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
       console.log("[API] Authorization header added");
     }
   } else {
-    console.log("[API] apiCall:", { endpoint, platform: "web", method: options.method || "GET" });
+    console.log("[API] apiCall:", {
+      endpoint,
+      platform: "web",
+      method: options.method || "GET",
+    });
   }
 
   const baseUrl = getApiBaseUrl();
@@ -59,7 +66,9 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
 
     // Get response body as text without ever calling response.text() (can be undefined in RN/some envs)
     const getResponseText = async (): Promise<string> => {
-      if (typeof (response as { blob?: () => Promise<Blob> }).blob === "function") {
+      if (
+        typeof (response as { blob?: () => Promise<Blob> }).blob === "function"
+      ) {
         const blob = await (response as { blob: () => Promise<Blob> }).blob();
         const { readFileAsText } = await import("@/lib/readFileAsText");
         return readFileAsText(blob);
@@ -77,7 +86,9 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
       } catch {
         // Not JSON, use text as is
       }
-      throw new Error(errorMessage || `API call failed: ${response.statusText}`);
+      throw new Error(
+        errorMessage || `API call failed: ${response.statusText}`,
+      );
     }
 
     const contentType = response.headers.get("content-type");

@@ -4,11 +4,15 @@
 
 import { Platform } from "react-native";
 
-import { getGoogleMapsApiKey, getNavigationProvider } from "./google-maps-config";
+import {
+  getGoogleMapsApiKey,
+  getNavigationProvider,
+} from "./google-maps-config";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 const OSRM_DEFAULT_URL = "https://router.project-osrm.org";
-const GOOGLE_DIRECTIONS_BASE_URL = "https://maps.googleapis.com/maps/api/directions";
+const GOOGLE_DIRECTIONS_BASE_URL =
+  "https://maps.googleapis.com/maps/api/directions";
 
 export interface RoutingConfig {
   baseUrl: string;

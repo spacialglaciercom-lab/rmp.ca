@@ -16,7 +16,7 @@ export interface RegisterPushOptions {
 }
 
 export async function registerForPushNotificationsAsync(
-  options?: RegisterPushOptions
+  options?: RegisterPushOptions,
 ): Promise<string | null> {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let status = existingStatus;
@@ -26,9 +26,11 @@ export async function registerForPushNotificationsAsync(
   }
   if (status !== "granted") return null;
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId as
+    | string
+    | undefined;
   const tokenResult = await Notifications.getExpoPushTokenAsync(
-    projectId ? { projectId } : undefined
+    projectId ? { projectId } : undefined,
   );
   const expoPushToken = tokenResult.data;
 

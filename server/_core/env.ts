@@ -1,8 +1,11 @@
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? process.env.EXPO_PUBLIC_APP_ID ?? "trashroute",
+  appId:
+    process.env.VITE_APP_ID ?? process.env.EXPO_PUBLIC_APP_ID ?? "trashroute",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
-  mongodbUri: (process.env.MONGODB_URI ?? "").trim().replace(/^["']|["']$/g, ""),
+  mongodbUri: (process.env.MONGODB_URI ?? "")
+    .trim()
+    .replace(/^["']|["']$/g, ""),
   /** Path to GPX training folder (e.g. D:\\gpx_training\\raw_gpx_files). When set, app can list/load GPX files from here. */
   gpxTrainingPath: process.env.GPX_TRAINING_PATH ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
@@ -22,7 +25,9 @@ export const ENV = {
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT ?? "",
   /** Moonshine Voice sidecar URL for server-side STT (e.g. dedicated Railway service). Set to the sidecar's public URL (no trailing slash). */
   moonshineSidecarUrl: (() => {
-    const raw = (process.env.MOONSHINE_SIDECAR_URL ?? "").trim().replace(/\/$/, "");
+    const raw = (process.env.MOONSHINE_SIDECAR_URL ?? "")
+      .trim()
+      .replace(/\/$/, "");
     if (!raw) return "";
     if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
     return `https://${raw}`;

@@ -2,7 +2,11 @@ import { useState } from "react";
 import { View, Text, TouchableOpacity, Alert, Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import { impactAsync as hapticImpact, notificationAsync as hapticNotification, NotificationFeedbackType } from "@/lib/safe-haptics";
+import {
+  impactAsync as hapticImpact,
+  notificationAsync as hapticNotification,
+  NotificationFeedbackType,
+} from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
 import { useRouting } from "@/lib/routing-context";
@@ -29,7 +33,11 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("json");
   const [isExporting, setIsExporting] = useState(false);
 
-  const exportFormats: { id: ExportFormat; label: string; description: string }[] = [
+  const exportFormats: {
+    id: ExportFormat;
+    label: string;
+    description: string;
+  }[] = [
     {
       id: "json",
       label: "JSON",
@@ -53,7 +61,10 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
   ];
 
   const handleExport = async () => {
-    if (collectionPoints.length === 0 || isMockCollectionPoints(collectionPoints)) {
+    if (
+      collectionPoints.length === 0 ||
+      isMockCollectionPoints(collectionPoints)
+    ) {
       Alert.alert("No Data", "No collection points to export");
       return;
     }
@@ -69,13 +80,18 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
       switch (selectedFormat) {
         case "json": {
           const exportData: RouteExportData = {
-            metadata: generateExportMetadata(routeName, collectionPoints.length),
+            metadata: generateExportMetadata(
+              routeName,
+              collectionPoints.length,
+            ),
             configuration: {
               turnPenalties: state.configuration.turnPenalties,
               startPoint: state.configuration.startPoint?.coordinates
                 ? {
-                    latitude: state.configuration.startPoint.coordinates.latitude,
-                    longitude: state.configuration.startPoint.coordinates.longitude,
+                    latitude:
+                      state.configuration.startPoint.coordinates.latitude,
+                    longitude:
+                      state.configuration.startPoint.coordinates.longitude,
                     name: state.configuration.startPoint.name,
                   }
                 : undefined,
@@ -98,7 +114,7 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
           content = exportForFleetManagement(
             collectionPoints,
             state.statistics,
-            routeName
+            routeName,
           );
           filename = `${routeName}_fleet${getExportExtension("fleet")}`;
           break;
@@ -149,7 +165,7 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
       hapticNotification(NotificationFeedbackType.Error);
       Alert.alert(
         "Export Error",
-        error instanceof Error ? error.message : "Failed to export data"
+        error instanceof Error ? error.message : "Failed to export data",
       );
     } finally {
       setIsExporting(false);
@@ -158,7 +174,10 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
 
   const handleExportStatistics = async () => {
     if (!state.statistics) {
-      Alert.alert("No Statistics", "Generate a route first to export statistics");
+      Alert.alert(
+        "No Statistics",
+        "Generate a route first to export statistics",
+      );
       return;
     }
 
@@ -170,7 +189,7 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
       const content = exportStatisticsToCSV(
         state.statistics,
         state.configuration.turnPenalties,
-        routeName
+        routeName,
       );
       const filename = `${routeName}_statistics.csv`;
 
@@ -279,18 +298,25 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
       <View className="gap-3">
         <TouchableOpacity
           onPress={handleExport}
-          disabled={isExporting || collectionPoints.length === 0 || isMockCollectionPoints(collectionPoints)}
+          disabled={
+            isExporting ||
+            collectionPoints.length === 0 ||
+            isMockCollectionPoints(collectionPoints)
+          }
           className="py-3 px-4 rounded-xl items-center"
           style={{
             backgroundColor:
-              collectionPoints.length > 0 && !isMockCollectionPoints(collectionPoints)
+              collectionPoints.length > 0 &&
+              !isMockCollectionPoints(collectionPoints)
                 ? colors.primary
                 : colors.muted + "40",
             opacity: isExporting ? 0.7 : 1,
           }}
         >
           <Text className="font-semibold" style={{ color: "#fff" }}>
-            {isExporting ? "Exporting..." : `Export as ${selectedFormat.toUpperCase()}`}
+            {isExporting
+              ? "Exporting..."
+              : `Export as ${selectedFormat.toUpperCase()}`}
           </Text>
         </TouchableOpacity>
 
@@ -332,7 +358,10 @@ export function ExportOptions({ collectionPoints }: ExportOptionsProps) {
 }
 
 // Helper function to generate basic GPX from collection points
-function generateBasicGPX(points: CollectionPoint[], routeName: string): string {
+function generateBasicGPX(
+  points: CollectionPoint[],
+  routeName: string,
+): string {
   const timestamp = new Date().toISOString();
   const trackPoints = points
     .map(
@@ -340,7 +369,7 @@ function generateBasicGPX(points: CollectionPoint[], routeName: string): string 
         `      <trkpt lat="${p.latitude}" lon="${p.longitude}">
         <time>${timestamp}</time>
         <name>${escapeXML(p.address)}</name>
-      </trkpt>`
+      </trkpt>`,
     )
     .join("\n");
 

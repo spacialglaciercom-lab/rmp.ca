@@ -36,9 +36,9 @@ export interface RawCostData {
   };
   operationalContext: any;
   weatherData?: any;
-  dataSource: 'manual' | 'automatic' | 'import';
+  dataSource: "manual" | "automatic" | "import";
   dataQuality: number;
-  validationStatus: 'pending' | 'validated' | 'rejected';
+  validationStatus: "pending" | "validated" | "rejected";
 }
 
 export interface ProcessedCostData {
@@ -103,8 +103,8 @@ export class CostDataCollector {
     sources: {},
     timeRange: {
       oldest: new Date(),
-      newest: new Date()
-    }
+      newest: new Date(),
+    },
   };
 
   constructor(config: CostDataCollectionConfig) {
@@ -127,11 +127,16 @@ export class CostDataCollector {
     await this.collectBatch();
 
     // Schedule periodic collection
-    this.collectionInterval = setInterval(async () => {
-      await this.collectBatch();
-    }, this.config.collectionInterval * 60 * 1000);
+    this.collectionInterval = setInterval(
+      async () => {
+        await this.collectBatch();
+      },
+      this.config.collectionInterval * 60 * 1000,
+    );
 
-    console.log(`✅ Data collection started with ${this.config.collectionInterval} minute intervals`);
+    console.log(
+      `✅ Data collection started with ${this.config.collectionInterval} minute intervals`,
+    );
   }
 
   /**
@@ -165,11 +170,11 @@ export class CostDataCollector {
         this.collectFromRouteHistory(),
         this.collectFromLiveTracking(),
         this.collectFromManualEntries(),
-        this.collectFromExternalSystems()
+        this.collectFromExternalSystems(),
       ];
 
       const results = await Promise.allSettled(sources);
-      
+
       let totalCollected = 0;
       let totalValidated = 0;
       let totalRejected = 0;
@@ -177,16 +182,23 @@ export class CostDataCollector {
 
       // Process results from each source
       results.forEach((result, index) => {
-        const sourceName = ['route_history', 'live_tracking', 'manual_entries', 'external_systems'][index];
-        
-        if (result.status === 'fulfilled') {
+        const sourceName = [
+          "route_history",
+          "live_tracking",
+          "manual_entries",
+          "external_systems",
+        ][index];
+
+        if (result.status === "fulfilled") {
           const { collected, validated, rejected } = result.value;
           totalCollected += collected;
           totalValidated += validated;
           totalRejected += rejected;
           sourceCounts[sourceName] = collected;
-          
-          console.log(`   ✅ ${sourceName}: ${collected} collected, ${validated} validated, ${rejected} rejected`);
+
+          console.log(
+            `   ✅ ${sourceName}: ${collected} collected, ${validated} validated, ${rejected} rejected`,
+          );
         } else {
           console.log(`   ❌ ${sourceName}: ${result.reason}`);
           sourceCounts[sourceName] = 0;
@@ -194,12 +206,18 @@ export class CostDataCollector {
       });
 
       // Update metrics
-      this.updateMetrics(totalCollected, totalValidated, totalRejected, sourceCounts);
+      this.updateMetrics(
+        totalCollected,
+        totalValidated,
+        totalRejected,
+        sourceCounts,
+      );
 
       const duration = (Date.now() - startTime) / 1000;
       console.log(`✅ Batch collection completed in ${duration.toFixed(2)}s`);
-      console.log(`   Total: ${totalCollected} collected, ${totalValidated} validated, ${totalRejected} rejected`);
-
+      console.log(
+        `   Total: ${totalCollected} collected, ${totalValidated} validated, ${totalRejected} rejected`,
+      );
     } catch (error) {
       console.error("❌ Batch collection failed:", error);
     }
@@ -208,7 +226,11 @@ export class CostDataCollector {
   /**
    * Collect data from route history
    */
-  private async collectFromRouteHistory(): Promise<{ collected: number; validated: number; rejected: number }> {
+  private async collectFromRouteHistory(): Promise<{
+    collected: number;
+    validated: number;
+    rejected: number;
+  }> {
     const client = getMongoClient();
     if (!client) {
       throw new Error("MongoDB not configured");
@@ -218,14 +240,18 @@ export class CostDataCollector {
     const routeHistory = db.collection("route_history");
 
     // Get recent routes that haven't been processed for cost data
-    const since = new Date(Date.now() - this.config.maxCollectionAge * 24 * 60 * 60 * 1000);
-    
-    const cursor = routeHistory.find({
-      timestamp: { $gte: since },
-      "costCorrections.accuracyScore": { $gte: this.config.minDataQuality },
-      "actualCosts.totalCost": { $exists: true, $gt: 0 },
-      "metadata.costDataProcessed": { $ne: true }
-    }).limit(this.config.batchSize);
+    const since = new Date(
+      Date.now() - this.config.maxCollectionAge * 24 * 60 * 60 * 1000,
+    );
+
+    const cursor = routeHistory
+      .find({
+        timestamp: { $gte: since },
+        "costCorrections.accuracyScore": { $gte: this.config.minDataQuality },
+        "actualCosts.totalCost": { $exists: true, $gt: 0 },
+        "metadata.costDataProcessed": { $ne: true },
+      })
+      .limit(this.config.batchSize);
 
     let collected = 0;
     let validated = 0;
@@ -238,19 +264,19 @@ export class CostDataCollector {
       try {
         // Process the route data
         const processed = await this.processRouteHistoryData(doc);
-        
+
         if (processed) {
           // Store processed data
           await this.storeProcessedData(processed);
-          
+
           // Mark as processed
           await routeHistory.updateOne(
             { _id: doc._id },
-            { $set: { "metadata.costDataProcessed": true } }
+            { $set: { "metadata.costDataProcessed": true } },
           );
-          
+
           collected++;
-          
+
           if (processed.metadata.validationScore >= 0.8) {
             validated++;
           } else {
@@ -269,13 +295,17 @@ export class CostDataCollector {
   /**
    * Collect data from live tracking systems
    */
-  private async collectFromLiveTracking(): Promise<{ collected: number; validated: number; rejected: number }> {
+  private async collectFromLiveTracking(): Promise<{
+    collected: number;
+    validated: number;
+    rejected: number;
+  }> {
     // This would integrate with real-time tracking systems
     console.log("   📡 Collecting from live tracking systems...");
-    
+
     // Simulate collecting live data
     const liveData = await this.simulateLiveTrackingData();
-    
+
     let collected = 0;
     let validated = 0;
     let rejected = 0;
@@ -286,7 +316,7 @@ export class CostDataCollector {
         if (this.validateLiveData(data)) {
           await this.storeRawData(data);
           collected++;
-          
+
           // Process if quality is good
           const quality = this.calculateDataQuality(data);
           if (quality >= this.config.minDataQuality) {
@@ -315,7 +345,11 @@ export class CostDataCollector {
   /**
    * Collect manual entries from operators
    */
-  private async collectFromManualEntries(): Promise<{ collected: number; validated: number; rejected: number }> {
+  private async collectFromManualEntries(): Promise<{
+    collected: number;
+    validated: number;
+    rejected: number;
+  }> {
     const client = getMongoClient();
     if (!client) {
       throw new Error("MongoDB not configured");
@@ -325,13 +359,15 @@ export class CostDataCollector {
     const manualEntries = db.collection("manual_cost_entries");
 
     // Get pending manual entries
-    const since = new Date(Date.now() - this.config.maxCollectionAge * 24 * 60 * 60 * 1000);
-    
+    const since = new Date(
+      Date.now() - this.config.maxCollectionAge * 24 * 60 * 60 * 1000,
+    );
+
     const entries = await manualEntries
       .find({
         timestamp: { $gte: since },
-        status: 'pending',
-        "validation.basic": { $ne: false }
+        status: "pending",
+        "validation.basic": { $ne: false },
       })
       .limit(this.config.batchSize)
       .toArray();
@@ -346,18 +382,18 @@ export class CostDataCollector {
         if (this.validateManualEntry(entry)) {
           // Process the entry
           const processed = await this.processManualEntry(entry);
-          
+
           if (processed) {
             await this.storeProcessedData(processed);
-            
+
             // Mark as processed
             await manualEntries.updateOne(
               { _id: entry._id },
-              { $set: { status: 'processed', processedAt: new Date() } }
+              { $set: { status: "processed", processedAt: new Date() } },
             );
-            
+
             collected++;
-            
+
             if (processed.metadata.validationScore >= 0.8) {
               validated++;
             } else {
@@ -370,7 +406,7 @@ export class CostDataCollector {
           rejected++;
           await manualEntries.updateOne(
             { _id: entry._id },
-            { $set: { status: 'rejected', rejectedAt: new Date() } }
+            { $set: { status: "rejected", rejectedAt: new Date() } },
           );
         }
       } catch (error) {
@@ -385,13 +421,17 @@ export class CostDataCollector {
   /**
    * Collect from external systems (fuel cards, GPS, etc.)
    */
-  private async collectFromExternalSystems(): Promise<{ collected: number; validated: number; rejected: number }> {
+  private async collectFromExternalSystems(): Promise<{
+    collected: number;
+    validated: number;
+    rejected: number;
+  }> {
     console.log("   🔗 Collecting from external systems...");
-    
+
     // This would integrate with external APIs
     // For demo, we'll simulate some external data
     const externalData = await this.simulateExternalData();
-    
+
     let collected = 0;
     let validated = 0;
     let rejected = 0;
@@ -400,11 +440,11 @@ export class CostDataCollector {
       try {
         // Validate and process external data
         const processed = await this.processExternalData(data);
-        
+
         if (processed) {
           await this.storeProcessedData(processed);
           collected++;
-          
+
           if (processed.metadata.validationScore >= 0.8) {
             validated++;
           } else {
@@ -425,34 +465,43 @@ export class CostDataCollector {
   /**
    * Process route history data
    */
-  private async processRouteHistoryData(doc: any): Promise<ProcessedCostData | null> {
+  private async processRouteHistoryData(
+    doc: any,
+  ): Promise<ProcessedCostData | null> {
     try {
       // Calculate features
       const routeStats = doc.routeStatistics;
       const weather = doc.costFactors?.weatherConditions || {};
       const operational = doc.costFactors?.operationalContext || {};
       const routeChars = doc.costFactors?.routeCharacteristics || {};
-      
-      const totalTurns = Math.max(1, 
-        routeStats.turns.leftTurns + routeStats.turns.rightTurns + 
-        routeStats.turns.uTurns + routeStats.turns.straightAhead
+
+      const totalTurns = Math.max(
+        1,
+        routeStats.turns.leftTurns +
+          routeStats.turns.rightTurns +
+          routeStats.turns.uTurns +
+          routeStats.turns.straightAhead,
       );
-      
+
       const features = {
         routeDistance: routeStats.totalDistance,
         estimatedTime: routeStats.estimatedTime,
-        turnComplexity: (routeStats.turns.leftTurns * 2 + routeStats.turns.uTurns * 3) / totalTurns,
+        turnComplexity:
+          (routeStats.turns.leftTurns * 2 + routeStats.turns.uTurns * 3) /
+          totalTurns,
         weatherSeverity: weather.severity || 0,
         temperature: weather.temperature || 15,
         precipitation: weather.precipitation || 0,
         windSpeed: weather.windSpeed || 0,
         visibility: weather.visibility || 10000,
-        driverExperience: this.encodeDriverExperience(operational.driverExperience),
+        driverExperience: this.encodeDriverExperience(
+          operational.driverExperience,
+        ),
         timeOfDay: this.encodeTimeOfDay(operational.timeOfDay),
         dayOfWeek: operational.dayOfWeek || 1,
         season: this.encodeSeason(operational.season),
         urbanDensity: this.encodeRouteComplexity(routeChars.urbanDensity),
-        roadConditions: this.encodeRoadConditions(routeChars.roadConditions)
+        roadConditions: this.encodeRoadConditions(routeChars.roadConditions),
       };
 
       // Calculate targets (correction factors)
@@ -462,7 +511,8 @@ export class CostDataCollector {
         fuelCorrection: doc.costCorrections.fuelCorrectionFactor,
         actualCostPerKm: doc.actualCosts.totalCost / routeStats.totalDistance,
         actualTimePerKm: doc.actualCosts.actualTime / routeStats.totalDistance,
-        actualFuelPerKm: doc.actualCosts.actualFuelConsumption / routeStats.totalDistance
+        actualFuelPerKm:
+          doc.actualCosts.actualFuelConsumption / routeStats.totalDistance,
       };
 
       // Calculate data quality
@@ -470,7 +520,7 @@ export class CostDataCollector {
         hasAllFields: true,
         accuracyScore: doc.costCorrections.accuracyScore,
         reasonableValues: this.validateReasonableValues(targets, features),
-        dataCompleteness: this.calculateCompleteness(doc)
+        dataCompleteness: this.calculateCompleteness(doc),
       });
 
       return {
@@ -481,11 +531,10 @@ export class CostDataCollector {
         metadata: {
           dataQuality,
           validationScore: doc.costCorrections.accuracyScore,
-          dataSource: 'route_history',
-          processingTimestamp: new Date()
-        }
+          dataSource: "route_history",
+          processingTimestamp: new Date(),
+        },
       };
-
     } catch (error) {
       console.error("Error processing route history data:", error);
       return null;
@@ -507,7 +556,7 @@ export class CostDataCollector {
     await processedData.insertOne({
       ...data,
       _id: new ObjectId(),
-      createdAt: new Date()
+      createdAt: new Date(),
     });
   }
 
@@ -526,7 +575,7 @@ export class CostDataCollector {
     await rawData.insertOne({
       ...data,
       _id: new ObjectId(),
-      createdAt: new Date()
+      createdAt: new Date(),
     });
   }
 
@@ -537,15 +586,16 @@ export class CostDataCollector {
     collected: number,
     validated: number,
     rejected: number,
-    sourceCounts: Record<string, number>
+    sourceCounts: Record<string, number>,
   ): void {
     this.metrics.totalCollected += collected;
     this.metrics.validated += validated;
     this.metrics.rejected += rejected;
-    
+
     // Update source counts
     Object.entries(sourceCounts).forEach(([source, count]) => {
-      this.metrics.sources[source] = (this.metrics.sources[source] || 0) + count;
+      this.metrics.sources[source] =
+        (this.metrics.sources[source] || 0) + count;
     });
 
     // Update average quality
@@ -574,8 +624,8 @@ export class CostDataCollector {
       sources: {},
       timeRange: {
         oldest: new Date(),
-        newest: new Date()
-      }
+        newest: new Date(),
+      },
     };
   }
 
@@ -584,30 +634,36 @@ export class CostDataCollector {
    */
   private validateLiveData(data: any): boolean {
     // Basic validation for live data
-    return data &&
-           data.actualTime > 0 &&
-           data.actualFuelConsumption >= 0 &&
-           data.totalCost > 0 &&
-           data.routeId;
+    return (
+      data &&
+      data.actualTime > 0 &&
+      data.actualFuelConsumption >= 0 &&
+      data.totalCost > 0 &&
+      data.routeId
+    );
   }
 
   private validateManualEntry(entry: any): boolean {
     // Validation for manual entries
-    return entry &&
-           entry.routeStatistics &&
-           entry.actualCosts &&
-           entry.actualCosts.totalCost > 0 &&
-           entry.actualCosts.actualTime > 0;
+    return (
+      entry &&
+      entry.routeStatistics &&
+      entry.actualCosts &&
+      entry.actualCosts.totalCost > 0 &&
+      entry.actualCosts.actualTime > 0
+    );
   }
 
   private validateReasonableValues(targets: any, features: any): boolean {
     // Check if values are reasonable
-    return targets.actualCostPerKm > 0 &&
-           targets.actualCostPerKm < 50 && // Max $50/km
-           targets.actualTimePerKm > 0 &&
-           targets.actualTimePerKm < 60 && // Max 60min/km
-           targets.actualFuelPerKm > 0 &&
-           targets.actualFuelPerKm < 5; // Max 5L/km
+    return (
+      targets.actualCostPerKm > 0 &&
+      targets.actualCostPerKm < 50 && // Max $50/km
+      targets.actualTimePerKm > 0 &&
+      targets.actualTimePerKm < 60 && // Max 60min/km
+      targets.actualFuelPerKm > 0 &&
+      targets.actualFuelPerKm < 5
+    ); // Max 5L/km
   }
 
   private calculateCompleteness(doc: any): number {
@@ -617,14 +673,14 @@ export class CostDataCollector {
 
     // Check required fields
     const requiredFields = [
-      'routeStatistics.totalDistance',
-      'routeStatistics.estimatedTime',
-      'actualCosts.totalCost',
-      'actualCosts.actualTime',
-      'costFactors.operationalContext'
+      "routeStatistics.totalDistance",
+      "routeStatistics.estimatedTime",
+      "actualCosts.totalCost",
+      "actualCosts.actualTime",
+      "costFactors.operationalContext",
     ];
 
-    requiredFields.forEach(field => {
+    requiredFields.forEach((field) => {
       total++;
       if (this.getNestedValue(doc, field)) score++;
     });
@@ -661,7 +717,7 @@ export class CostDataCollector {
   }
 
   private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
+    return path.split(".").reduce((current, key) => current?.[key], obj);
   }
 
   // Helper methods for data simulation
@@ -669,19 +725,19 @@ export class CostDataCollector {
     // Simulate live tracking data
     return [
       {
-        routeId: 'live_001',
+        routeId: "live_001",
         timestamp: new Date(),
         actualTime: 82,
         actualFuelConsumption: 4.1,
-        totalCost: 162.50,
+        totalCost: 162.5,
         predictedCosts: {
           predictedTime: 85,
-          predictedTotalCost: 165.50,
-          predictedFuelConsumption: 4.2
-        }
+          predictedTotalCost: 165.5,
+          predictedFuelConsumption: 4.2,
+        },
       },
       {
-        routeId: 'live_002',
+        routeId: "live_002",
         timestamp: new Date(),
         actualTime: 95,
         actualFuelConsumption: 4.8,
@@ -689,9 +745,9 @@ export class CostDataCollector {
         predictedCosts: {
           predictedTime: 92,
           predictedTotalCost: 178.25,
-          predictedFuelConsumption: 4.8
-        }
-      }
+          predictedFuelConsumption: 4.8,
+        },
+      },
     ];
   }
 
@@ -699,30 +755,32 @@ export class CostDataCollector {
     // Simulate external system data
     return [
       {
-        routeId: 'external_001',
+        routeId: "external_001",
         timestamp: new Date(),
         fuelCardData: {
           liters: 4.3,
           cost: 6.45,
-          station: 'Station A'
+          station: "Station A",
         },
         gpsData: {
           distance: 12.8,
-          duration: 88
-        }
-      }
+          duration: 88,
+        },
+      },
     ];
   }
 
   // Processing methods for different data types
-  private async processRawData(data: RawCostData): Promise<ProcessedCostData | null> {
+  private async processRawData(
+    data: RawCostData,
+  ): Promise<ProcessedCostData | null> {
     // Convert raw data to processed format
     try {
       const quality = this.calculateDataQuality({
         hasAllFields: true,
         accuracyScore: 0.8, // Assume good quality for demo
         reasonableValues: true,
-        dataCompleteness: 0.9
+        dataCompleteness: 0.9,
       });
 
       return {
@@ -742,22 +800,34 @@ export class CostDataCollector {
           dayOfWeek: 3,
           season: 0,
           urbanDensity: 1,
-          roadConditions: 0
+          roadConditions: 0,
         },
         targets: {
-          timeCorrection: data.actualCosts.actualTime / (data.predictedCosts?.predictedTime || 80),
-          costCorrection: data.actualCosts.totalCost / (data.predictedCosts?.predictedTotalCost || 160),
-          fuelCorrection: data.actualCosts.actualFuelConsumption / (data.predictedCosts?.predictedFuelConsumption || 4),
-          actualCostPerKm: data.actualCosts.totalCost / (data.routeStatistics?.totalDistance || 10),
-          actualTimePerKm: data.actualCosts.actualTime / (data.routeStatistics?.totalDistance || 10),
-          actualFuelPerKm: data.actualCosts.actualFuelConsumption / (data.routeStatistics?.totalDistance || 10)
+          timeCorrection:
+            data.actualCosts.actualTime /
+            (data.predictedCosts?.predictedTime || 80),
+          costCorrection:
+            data.actualCosts.totalCost /
+            (data.predictedCosts?.predictedTotalCost || 160),
+          fuelCorrection:
+            data.actualCosts.actualFuelConsumption /
+            (data.predictedCosts?.predictedFuelConsumption || 4),
+          actualCostPerKm:
+            data.actualCosts.totalCost /
+            (data.routeStatistics?.totalDistance || 10),
+          actualTimePerKm:
+            data.actualCosts.actualTime /
+            (data.routeStatistics?.totalDistance || 10),
+          actualFuelPerKm:
+            data.actualCosts.actualFuelConsumption /
+            (data.routeStatistics?.totalDistance || 10),
         },
         metadata: {
           dataQuality: quality,
           validationScore: 0.8,
           dataSource: data.dataSource,
-          processingTimestamp: new Date()
-        }
+          processingTimestamp: new Date(),
+        },
       };
     } catch (error) {
       console.error("Error processing raw data:", error);
@@ -765,12 +835,14 @@ export class CostDataCollector {
     }
   }
 
-  private async processManualEntry(entry: any): Promise<ProcessedCostData | null> {
+  private async processManualEntry(
+    entry: any,
+  ): Promise<ProcessedCostData | null> {
     // Process manual entry data
     try {
       const routeStats = entry.routeStatistics;
       const actualCosts = entry.actualCosts;
-      
+
       const quality = this.calculateDataQuality({
         hasAllFields: true,
         accuracyScore: entry.qualityScore || 0.8,
@@ -778,11 +850,12 @@ export class CostDataCollector {
           {
             actualCostPerKm: actualCosts.totalCost / routeStats.totalDistance,
             actualTimePerKm: actualCosts.actualTime / routeStats.totalDistance,
-            actualFuelPerKm: actualCosts.actualFuelConsumption / routeStats.totalDistance
+            actualFuelPerKm:
+              actualCosts.actualFuelConsumption / routeStats.totalDistance,
           },
-          {}
+          {},
         ),
-        dataCompleteness: 0.95
+        dataCompleteness: 0.95,
       });
 
       return {
@@ -802,22 +875,26 @@ export class CostDataCollector {
           dayOfWeek: entry.dayOfWeek || 1,
           season: this.encodeSeason(entry.season),
           urbanDensity: this.encodeRouteComplexity(entry.urbanDensity),
-          roadConditions: this.encodeRoadConditions(entry.roadConditions)
+          roadConditions: this.encodeRoadConditions(entry.roadConditions),
         },
         targets: {
           timeCorrection: actualCosts.actualTime / routeStats.estimatedTime,
-          costCorrection: actualCosts.totalCost / (entry.predictedCost || routeStats.estimatedTime * 2),
-          fuelCorrection: actualCosts.actualFuelConsumption / (entry.predictedFuel || 4),
+          costCorrection:
+            actualCosts.totalCost /
+            (entry.predictedCost || routeStats.estimatedTime * 2),
+          fuelCorrection:
+            actualCosts.actualFuelConsumption / (entry.predictedFuel || 4),
           actualCostPerKm: actualCosts.totalCost / routeStats.totalDistance,
           actualTimePerKm: actualCosts.actualTime / routeStats.totalDistance,
-          actualFuelPerKm: actualCosts.actualFuelConsumption / routeStats.totalDistance
+          actualFuelPerKm:
+            actualCosts.actualFuelConsumption / routeStats.totalDistance,
         },
         metadata: {
           dataQuality: quality,
           validationScore: entry.qualityScore || 0.8,
-          dataSource: 'manual_entry',
-          processingTimestamp: new Date()
-        }
+          dataSource: "manual_entry",
+          processingTimestamp: new Date(),
+        },
       };
     } catch (error) {
       console.error("Error processing manual entry:", error);
@@ -825,7 +902,9 @@ export class CostDataCollector {
     }
   }
 
-  private async processExternalData(data: any): Promise<ProcessedCostData | null> {
+  private async processExternalData(
+    data: any,
+  ): Promise<ProcessedCostData | null> {
     // Process external system data
     try {
       // Combine external data sources
@@ -833,14 +912,14 @@ export class CostDataCollector {
         distance: data.gpsData?.distance || 10,
         duration: data.gpsData?.duration || 80,
         fuelLiters: data.fuelCardData?.liters || 4,
-        fuelCost: data.fuelCardData?.cost || 6
+        fuelCost: data.fuelCardData?.cost || 6,
       };
 
       const quality = this.calculateDataQuality({
         hasAllFields: true,
         accuracyScore: 0.75,
         reasonableValues: true,
-        dataCompleteness: 0.8
+        dataCompleteness: 0.8,
       });
 
       return {
@@ -860,22 +939,24 @@ export class CostDataCollector {
           dayOfWeek: 2,
           season: 0,
           urbanDensity: 1,
-          roadConditions: 0
+          roadConditions: 0,
         },
         targets: {
           timeCorrection: 1.0, // No prediction to compare against
           costCorrection: 1.0,
           fuelCorrection: 1.0,
-          actualCostPerKm: (combinedData.fuelCost + combinedData.duration * 1.5) / combinedData.distance,
+          actualCostPerKm:
+            (combinedData.fuelCost + combinedData.duration * 1.5) /
+            combinedData.distance,
           actualTimePerKm: combinedData.duration / combinedData.distance,
-          actualFuelPerKm: combinedData.fuelLiters / combinedData.distance
+          actualFuelPerKm: combinedData.fuelLiters / combinedData.distance,
         },
         metadata: {
           dataQuality: quality,
           validationScore: 0.75,
-          dataSource: 'external_systems',
-          processingTimestamp: new Date()
-        }
+          dataSource: "external_systems",
+          processingTimestamp: new Date(),
+        },
       };
     } catch (error) {
       console.error("Error processing external data:", error);
@@ -886,47 +967,47 @@ export class CostDataCollector {
   // Encoding helper methods
   private encodeDriverExperience(experience?: string): number {
     const mapping: { [key: string]: number } = {
-      "novice": 0,
-      "intermediate": 1,
-      "experienced": 2
+      novice: 0,
+      intermediate: 1,
+      experienced: 2,
     };
     return experience ? (mapping[experience] ?? 1) : 1;
   }
 
   private encodeTimeOfDay(timeOfDay?: string): number {
     const mapping: { [key: string]: number } = {
-      "early_morning": 0,
-      "morning": 1,
-      "afternoon": 2,
-      "evening": 3
+      early_morning: 0,
+      morning: 1,
+      afternoon: 2,
+      evening: 3,
     };
     return timeOfDay ? (mapping[timeOfDay] ?? 1) : 1;
   }
 
   private encodeSeason(season?: string): number {
     const mapping: { [key: string]: number } = {
-      "spring": 0,
-      "summer": 1,
-      "fall": 2,
-      "winter": 3
+      spring: 0,
+      summer: 1,
+      fall: 2,
+      winter: 3,
     };
     return season ? (mapping[season] ?? 1) : 1;
   }
 
   private encodeRouteComplexity(complexity?: string): number {
     const mapping: { [key: string]: number } = {
-      "low": 0,
-      "medium": 1,
-      "high": 2
+      low: 0,
+      medium: 1,
+      high: 2,
     };
     return complexity ? (mapping[complexity] ?? 1) : 1;
   }
 
   private encodeRoadConditions(conditions?: string): number {
     const mapping: { [key: string]: number } = {
-      "good": 0,
-      "fair": 1,
-      "poor": 2
+      good: 0,
+      fair: 1,
+      poor: 2,
     };
     return conditions ? (mapping[conditions] ?? 1) : 1;
   }
@@ -936,11 +1017,13 @@ export class CostDataCollector {
  * Cost data validator
  */
 export class CostDataValidator {
-  
   /**
    * Validate processed cost data
    */
-  static validateProcessedData(data: ProcessedCostData): { isValid: boolean; errors: string[] } {
+  static validateProcessedData(data: ProcessedCostData): {
+    isValid: boolean;
+    errors: string[];
+  } {
     const errors: string[] = [];
 
     // Check required fields
@@ -952,13 +1035,24 @@ export class CostDataValidator {
     // Validate features
     if (data.features) {
       const requiredFeatures = [
-        'routeDistance', 'estimatedTime', 'turnComplexity', 'weatherSeverity',
-        'temperature', 'precipitation', 'windSpeed', 'visibility',
-        'driverExperience', 'timeOfDay', 'dayOfWeek', 'season'
+        "routeDistance",
+        "estimatedTime",
+        "turnComplexity",
+        "weatherSeverity",
+        "temperature",
+        "precipitation",
+        "windSpeed",
+        "visibility",
+        "driverExperience",
+        "timeOfDay",
+        "dayOfWeek",
+        "season",
       ];
-      
-      requiredFeatures.forEach(feature => {
-        if (data.features[feature as keyof typeof data.features] === undefined) {
+
+      requiredFeatures.forEach((feature) => {
+        if (
+          data.features[feature as keyof typeof data.features] === undefined
+        ) {
           errors.push(`Missing feature: ${feature}`);
         }
       });
@@ -967,11 +1061,15 @@ export class CostDataValidator {
     // Validate targets
     if (data.targets) {
       const requiredTargets = [
-        'timeCorrection', 'costCorrection', 'fuelCorrection',
-        'actualCostPerKm', 'actualTimePerKm', 'actualFuelPerKm'
+        "timeCorrection",
+        "costCorrection",
+        "fuelCorrection",
+        "actualCostPerKm",
+        "actualTimePerKm",
+        "actualFuelPerKm",
       ];
-      
-      requiredTargets.forEach(target => {
+
+      requiredTargets.forEach((target) => {
         if (data.targets[target as keyof typeof data.targets] === undefined) {
           errors.push(`Missing target: ${target}`);
         }
@@ -993,7 +1091,7 @@ export class CostDataValidator {
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -1004,18 +1102,23 @@ export class CostDataValidator {
     if (data.length < 10) return []; // Need sufficient data
 
     // Calculate statistics for each target
-    const targets = ['timeCorrection', 'costCorrection', 'fuelCorrection'];
+    const targets = ["timeCorrection", "costCorrection", "fuelCorrection"];
     const outliers: ProcessedCostData[] = [];
 
-    targets.forEach(target => {
-      const values = data.map(d => d.targets[target as keyof typeof d.targets]);
+    targets.forEach((target) => {
+      const values = data.map(
+        (d) => d.targets[target as keyof typeof d.targets],
+      );
       const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-      const std = Math.sqrt(values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length);
-      
+      const std = Math.sqrt(
+        values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+          values.length,
+      );
+
       // Use 2.5 standard deviations for outlier detection
       const threshold = 2.5 * std;
-      
-      data.forEach(item => {
+
+      data.forEach((item) => {
         const value = item.targets[target as keyof typeof item.targets];
         if (Math.abs(value - mean) > threshold) {
           if (!outliers.includes(item)) {
@@ -1036,5 +1139,5 @@ export const costDataCollector = new CostDataCollector({
   maxCollectionAge: 7, // days
   batchSize: 100,
   retryAttempts: 3,
-  validationEnabled: true
+  validationEnabled: true,
 });

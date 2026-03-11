@@ -10,7 +10,9 @@ const path = require("path");
 const { createRequire } = require("module");
 
 // Require from project root so EAS Build and pnpm resolve correctly (same as other plugins)
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withXcodeProject } = requireFromRoot("expo/config-plugins");
 
 const DEFAULT_OPTIONS = {
@@ -65,7 +67,9 @@ function addLeapSdkToMainTarget(config, options) {
 
     // 2. PBXProject.packageReferences (once)
     const projectSection = objects.PBXProject || {};
-    const projectId = Object.keys(projectSection).find((k) => !k.includes("_comment"));
+    const projectId = Object.keys(projectSection).find(
+      (k) => !k.includes("_comment"),
+    );
     if (projectId) {
       const proj = projectSection[projectId];
       if (!proj.packageReferences) proj.packageReferences = [];
@@ -126,7 +130,8 @@ function addLeapSdkToMainTarget(config, options) {
         // 6. Add to this target's frameworks build phase
         if (target.buildPhases) {
           for (const phaseRef of target.buildPhases) {
-            const phaseKey = typeof phaseRef === "string" ? phaseRef : phaseRef.value;
+            const phaseKey =
+              typeof phaseRef === "string" ? phaseRef : phaseRef.value;
             const phase = objects.PBXFrameworksBuildPhase?.[phaseKey];
             if (phase) {
               if (!phase.files) phase.files = [];
@@ -134,7 +139,8 @@ function addLeapSdkToMainTarget(config, options) {
               const fileAlreadyAdded = phase.files.some((f) => {
                 const bf = objects.PBXBuildFile?.[f];
                 if (!bf || !bf.productRef) return false;
-                const dep = objects.XCSwiftPackageProductDependency?.[bf.productRef];
+                const dep =
+                  objects.XCSwiftPackageProductDependency?.[bf.productRef];
                 return dep && dep.productName === productName;
               });
               if (!fileAlreadyAdded) {

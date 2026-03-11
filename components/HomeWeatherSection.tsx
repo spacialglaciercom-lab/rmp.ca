@@ -31,7 +31,10 @@ import type {
   GoogleHistoryHour,
   GoogleWeatherAlert,
 } from "@/services/googleWeatherService";
-import { getCurrentWeather, isWeatherConfigured } from "@/services/weatherService";
+import {
+  getCurrentWeather,
+  isWeatherConfigured,
+} from "@/services/weatherService";
 import type { CurrentWeather } from "@/services/weatherService";
 import { cardinalToAbbrev } from "@/lib/weather-utils";
 
@@ -42,9 +45,10 @@ function getLocation(): Promise<{ lat: number; lon: number }> {
   if (typeof navigator !== "undefined" && "geolocation" in navigator) {
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (pos) =>
+          resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
         () => resolve({ lat: DEFAULT_LAT, lon: DEFAULT_LON }),
-        { timeout: 5000, maximumAge: 300000 }
+        { timeout: 5000, maximumAge: 300000 },
       );
     });
   }
@@ -56,7 +60,13 @@ async function getLocationNative(): Promise<{ lat: number; lon: number }> {
     const Location = await import("expo-location");
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") return { lat: DEFAULT_LAT, lon: DEFAULT_LON };
-    const getPos = (Location as { getCurrentPositionAsync?: (opts?: object) => Promise<{ coords: { latitude: number; longitude: number } }> }).getCurrentPositionAsync;
+    const getPos = (
+      Location as {
+        getCurrentPositionAsync?: (
+          opts?: object,
+        ) => Promise<{ coords: { latitude: number; longitude: number } }>;
+      }
+    ).getCurrentPositionAsync;
     if (getPos) {
       const loc = await getPos({});
       return { lat: loc.coords.latitude, lon: loc.coords.longitude };
@@ -72,10 +82,18 @@ function tempStr(t?: { degrees?: number; unit?: string }): string {
   return `${Math.round(t.degrees)}°`;
 }
 
-function formatDay(d?: { year?: number; month?: number; day?: number }): string {
+function formatDay(d?: {
+  year?: number;
+  month?: number;
+  day?: number;
+}): string {
   if (!d?.year || d.month == null || d.day == null) return "—";
   const date = new Date(d.year, (d.month ?? 1) - 1, d.day);
-  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatHour(d?: { hours?: number }, tz?: string): string {
@@ -84,7 +102,11 @@ function formatHour(d?: { hours?: number }, tz?: string): string {
   return `${h}:00`;
 }
 
-function windStr(w?: { speed?: { value?: number; unit?: string }; gust?: { value?: number; unit?: string }; direction?: { cardinal?: string } }): string | null {
+function windStr(w?: {
+  speed?: { value?: number; unit?: string };
+  gust?: { value?: number; unit?: string };
+  direction?: { cardinal?: string };
+}): string | null {
   if (!w?.speed?.value) return null;
   const spd = Math.round(w.speed.value);
   const unit = w.speed.unit === "MILES_PER_HOUR" ? "mph" : "km/h";
@@ -93,7 +115,10 @@ function windStr(w?: { speed?: { value?: number; unit?: string }; gust?: { value
   return `${dir ? dir + " " : ""}${spd} ${unit}${gust}`;
 }
 
-function windShort(w?: { speed?: { value?: number; unit?: string }; direction?: { cardinal?: string } }): string | null {
+function windShort(w?: {
+  speed?: { value?: number; unit?: string };
+  direction?: { cardinal?: string };
+}): string | null {
   if (!w?.speed?.value) return null;
   const spd = Math.round(w.speed.value);
   const unit = w.speed.unit === "MILES_PER_HOUR" ? "mph" : "km/h";
@@ -108,7 +133,8 @@ export function HomeWeatherSection() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [source, setSource] = useState<WeatherSource | null>(null);
   const [current, setCurrent] = useState<GoogleCurrentConditions | null>(null);
-  const [openWeatherCurrent, setOpenWeatherCurrent] = useState<CurrentWeather | null>(null);
+  const [openWeatherCurrent, setOpenWeatherCurrent] =
+    useState<CurrentWeather | null>(null);
   const [hourly, setHourly] = useState<GoogleForecastHour[]>([]);
   const [daily, setDaily] = useState<GoogleForecastDay[]>([]);
   const [history, setHistory] = useState<GoogleHistoryHour[]>([]);
@@ -131,7 +157,8 @@ export function HomeWeatherSection() {
     else setLoading(true);
     setError(false);
     try {
-      const coords = Platform.OS === "web" ? await getLocation() : await getLocationNative();
+      const coords =
+        Platform.OS === "web" ? await getLocation() : await getLocationNative();
       if (googleOk) {
         const [cur, hourRes, dayRes, histRes, alertList] = await Promise.all([
           getGoogleCurrentConditions(coords.lat, coords.lon),
@@ -185,14 +212,21 @@ export function HomeWeatherSection() {
 
   if (configured === false) return null;
 
-  const colors = { text: theme.text, muted: theme.textTertiary, border: theme.border, surface: theme.surface };
+  const colors = {
+    text: theme.text,
+    muted: theme.textTertiary,
+    border: theme.border,
+    surface: theme.surface,
+  };
 
   if (loading && !refreshing) {
     return (
       <MinimalCard style={styles.card}>
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={theme.text} />
-          <Text style={[styles.loadingText, { color: colors.muted }]}>Loading weather…</Text>
+          <Text style={[styles.loadingText, { color: colors.muted }]}>
+            Loading weather…
+          </Text>
         </View>
       </MinimalCard>
     );
@@ -204,18 +238,30 @@ export function HomeWeatherSection() {
         horizontal={false}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={theme.text} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchAll(true)}
+            tintColor={theme.text}
+          />
         }
       >
         {/* Current */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Current</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Current
+        </Text>
         {error && (
-          <Text style={[styles.muted, { color: colors.muted }]}>Unable to load weather. Pull to retry.</Text>
+          <Text style={[styles.muted, { color: colors.muted }]}>
+            Unable to load weather. Pull to retry.
+          </Text>
         )}
         {current && (
-          <View style={[styles.currentRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[styles.currentRow, { borderBottomColor: colors.border }]}
+          >
             <View>
-              <Text style={[styles.tempBig, { color: colors.text }]}>{tempStr(current.temperature)}</Text>
+              <Text style={[styles.tempBig, { color: colors.text }]}>
+                {tempStr(current.temperature)}
+              </Text>
               <Text style={[styles.condition, { color: colors.muted }]}>
                 {current.weatherCondition?.description?.text ?? "—"}
               </Text>
@@ -227,35 +273,56 @@ export function HomeWeatherSection() {
             </View>
             <View>
               {current.relativeHumidity != null && (
-                <Text style={[styles.detail, { color: colors.muted }]}>Humidity {current.relativeHumidity}%</Text>
+                <Text style={[styles.detail, { color: colors.muted }]}>
+                  Humidity {current.relativeHumidity}%
+                </Text>
               )}
               {windStr(current.wind) && (
-                <Text style={[styles.detail, { color: colors.muted, marginTop: 4 }]}>{windStr(current.wind)}</Text>
+                <Text
+                  style={[styles.detail, { color: colors.muted, marginTop: 4 }]}
+                >
+                  {windStr(current.wind)}
+                </Text>
               )}
             </View>
           </View>
         )}
         {openWeatherCurrent && (
-          <View style={[styles.currentRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[styles.currentRow, { borderBottomColor: colors.border }]}
+          >
             <View>
-              <Text style={[styles.tempBig, { color: colors.text }]}>{Math.round(openWeatherCurrent.temp)}°</Text>
+              <Text style={[styles.tempBig, { color: colors.text }]}>
+                {Math.round(openWeatherCurrent.temp)}°
+              </Text>
               <Text style={[styles.condition, { color: colors.muted }]}>
-                {openWeatherCurrent.condition?.description ?? openWeatherCurrent.condition?.main ?? "—"}
+                {openWeatherCurrent.condition?.description ??
+                  openWeatherCurrent.condition?.main ??
+                  "—"}
               </Text>
               <Text style={[styles.feelsLike, { color: colors.muted }]}>
                 Feels like {Math.round(openWeatherCurrent.feelsLike)}°
               </Text>
             </View>
             <View>
-              <Text style={[styles.detail, { color: colors.muted }]}>Humidity {openWeatherCurrent.humidity}%</Text>
-              {openWeatherCurrent.windSpeed != null && openWeatherCurrent.windSpeed > 0 && (
-                <Text style={[styles.detail, { color: colors.muted, marginTop: 4 }]}>
-                  Wind {Math.round(openWeatherCurrent.windSpeed * 3.6)} km/h
-                  {openWeatherCurrent.visibility != null && openWeatherCurrent.visibility < 10000
-                    ? ` · Vis. ${(openWeatherCurrent.visibility / 1000).toFixed(1)} km`
-                    : ""}
-                </Text>
-              )}
+              <Text style={[styles.detail, { color: colors.muted }]}>
+                Humidity {openWeatherCurrent.humidity}%
+              </Text>
+              {openWeatherCurrent.windSpeed != null &&
+                openWeatherCurrent.windSpeed > 0 && (
+                  <Text
+                    style={[
+                      styles.detail,
+                      { color: colors.muted, marginTop: 4 },
+                    ]}
+                  >
+                    Wind {Math.round(openWeatherCurrent.windSpeed * 3.6)} km/h
+                    {openWeatherCurrent.visibility != null &&
+                    openWeatherCurrent.visibility < 10000
+                      ? ` · Vis. ${(openWeatherCurrent.visibility / 1000).toFixed(1)} km`
+                      : ""}
+                  </Text>
+                )}
             </View>
           </View>
         )}
@@ -263,17 +330,47 @@ export function HomeWeatherSection() {
         {/* Hourly (next 24h) */}
         {hourly.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 16 }]}>Hourly (24h)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, marginTop: 16 },
+              ]}
+            >
+              Hourly (24h)
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.horizontalScroll}
+            >
               {hourly.slice(0, 24).map((h, i) => (
-                <View key={i} style={[styles.hourPill, { backgroundColor: theme.surfaceAlt }]}>
-                  <Text style={[styles.hourLabel, { color: colors.muted }]}>{formatHour(h.displayDateTime)}</Text>
-                  <Text style={[styles.hourTemp, { color: colors.text }]}>{tempStr(h.temperature)}</Text>
-                  <Text style={[styles.hourCond, { color: colors.muted }]} numberOfLines={1}>
+                <View
+                  key={i}
+                  style={[
+                    styles.hourPill,
+                    { backgroundColor: theme.surfaceAlt },
+                  ]}
+                >
+                  <Text style={[styles.hourLabel, { color: colors.muted }]}>
+                    {formatHour(h.displayDateTime)}
+                  </Text>
+                  <Text style={[styles.hourTemp, { color: colors.text }]}>
+                    {tempStr(h.temperature)}
+                  </Text>
+                  <Text
+                    style={[styles.hourCond, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
                     {h.weatherCondition?.description?.text ?? "—"}
                   </Text>
                   {windShort(h.wind) && (
-                    <Text style={[styles.hourCond, { color: colors.muted, marginTop: 2 }]} numberOfLines={1}>
+                    <Text
+                      style={[
+                        styles.hourCond,
+                        { color: colors.muted, marginTop: 2 },
+                      ]}
+                      numberOfLines={1}
+                    >
                       {windShort(h.wind)}
                     </Text>
                   )}
@@ -286,16 +383,35 @@ export function HomeWeatherSection() {
         {/* Daily (10 days) */}
         {daily.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 16 }]}>Daily</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, marginTop: 16 },
+              ]}
+            >
+              Daily
+            </Text>
             {daily.map((d, i) => (
-              <View key={i} style={[styles.dailyRow, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.dayLabel, { color: colors.text }]}>{formatDay(d.displayDate)}</Text>
+              <View
+                key={i}
+                style={[styles.dailyRow, { borderBottomColor: colors.border }]}
+              >
+                <Text style={[styles.dayLabel, { color: colors.text }]}>
+                  {formatDay(d.displayDate)}
+                </Text>
                 <View style={styles.dailyCenter}>
-                  <Text style={[styles.dailyCond, { color: colors.muted }]} numberOfLines={1}>
-                    {d.daytimeForecast?.weatherCondition?.description?.text ?? "—"}
+                  <Text
+                    style={[styles.dailyCond, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
+                    {d.daytimeForecast?.weatherCondition?.description?.text ??
+                      "—"}
                   </Text>
                   <Text style={[styles.precip, { color: theme.accent }]}>
-                    Precip {d.daytimeForecast?.precipitation?.probability?.percent ?? 0}%
+                    Precip{" "}
+                    {d.daytimeForecast?.precipitation?.probability?.percent ??
+                      0}
+                    %
                   </Text>
                   {windShort(d.daytimeForecast?.wind) && (
                     <Text style={[styles.precip, { color: colors.muted }]}>
@@ -314,12 +430,33 @@ export function HomeWeatherSection() {
         {/* History (last 24h) */}
         {history.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 16 }]}>Last 24 hours</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, marginTop: 16 },
+              ]}
+            >
+              Last 24 hours
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.horizontalScroll}
+            >
               {history.slice(0, 12).map((h, i) => (
-                <View key={i} style={[styles.hourPill, { backgroundColor: theme.surfaceAlt }]}>
-                  <Text style={[styles.hourLabel, { color: colors.muted }]}>{formatHour(h.displayDateTime)}</Text>
-                  <Text style={[styles.hourTemp, { color: colors.text }]}>{tempStr(h.temperature)}</Text>
+                <View
+                  key={i}
+                  style={[
+                    styles.hourPill,
+                    { backgroundColor: theme.surfaceAlt },
+                  ]}
+                >
+                  <Text style={[styles.hourLabel, { color: colors.muted }]}>
+                    {formatHour(h.displayDateTime)}
+                  </Text>
+                  <Text style={[styles.hourTemp, { color: colors.text }]}>
+                    {tempStr(h.temperature)}
+                  </Text>
                 </View>
               ))}
             </ScrollView>
@@ -329,18 +466,38 @@ export function HomeWeatherSection() {
         {/* Alerts */}
         {alerts.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 16 }]}>Weather alerts</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, marginTop: 16 },
+              ]}
+            >
+              Weather alerts
+            </Text>
             {alerts.map((a, i) => (
-              <View key={a.alertId ?? i} style={[styles.alertRow, { backgroundColor: theme.surfaceAlt }]}>
-                <Text style={[styles.alertTitle, { color: colors.text }]}>{a.title ?? "Alert"}</Text>
+              <View
+                key={a.alertId ?? i}
+                style={[styles.alertRow, { backgroundColor: theme.surfaceAlt }]}
+              >
+                <Text style={[styles.alertTitle, { color: colors.text }]}>
+                  {a.title ?? "Alert"}
+                </Text>
                 {a.severity && (
-                  <Text style={[styles.alertMeta, { color: colors.muted }]}>Severity: {a.severity}</Text>
+                  <Text style={[styles.alertMeta, { color: colors.muted }]}>
+                    Severity: {a.severity}
+                  </Text>
                 )}
                 {a.summary && (
-                  <Text style={[styles.alertSummary, { color: colors.muted }]}>{a.summary}</Text>
+                  <Text style={[styles.alertSummary, { color: colors.muted }]}>
+                    {a.summary}
+                  </Text>
                 )}
                 {a.instruction && (
-                  <Text style={[styles.alertInstruction, { color: colors.muted }]}>{a.instruction}</Text>
+                  <Text
+                    style={[styles.alertInstruction, { color: colors.muted }]}
+                  >
+                    {a.instruction}
+                  </Text>
                 )}
               </View>
             ))}
@@ -353,7 +510,12 @@ export function HomeWeatherSection() {
 
 const styles = StyleSheet.create({
   card: { marginHorizontal: 16, marginBottom: 16 },
-  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 16 },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 16,
+  },
   loadingText: { fontSize: 14 },
   sectionTitle: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
   muted: { fontSize: 13, marginBottom: 8 },

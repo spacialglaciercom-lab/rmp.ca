@@ -15,7 +15,9 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 const APP_SCHEME =
-  (typeof Constants.expoConfig?.scheme === "string" && Constants.expoConfig?.scheme) || "trashroute";
+  (typeof Constants.expoConfig?.scheme === "string" &&
+    Constants.expoConfig?.scheme) ||
+  "trashroute";
 
 const OSM_ACCESS_TOKEN_KEY = "osm_access_token";
 const OSM_TOKEN_EXPIRY_KEY = "osm_token_expiry";
@@ -27,7 +29,9 @@ const USER_DETAILS_URL = "https://api.openstreetmap.org/api/0.6/user/details";
 
 /** Client ID from OSM OAuth2 application. Set in .env (create app at https://www.openstreetmap.org/oauth2/applications). */
 export const OSM_CLIENT_ID =
-  (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID) || "";
+  (typeof process !== "undefined" &&
+    process.env?.EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID) ||
+  "";
 
 function getClientSecret(): string {
   // SECURITY: OAuth client secrets must NEVER be exposed to the client.
@@ -103,7 +107,9 @@ async function openAuthSession(): Promise<{ url: string } | null> {
   return null;
 }
 
-async function exchangeCodeForToken(code: string): Promise<{ access_token: string; expires_in?: number }> {
+async function exchangeCodeForToken(
+  code: string,
+): Promise<{ access_token: string; expires_in?: number }> {
   // SECURITY: Token exchange must be done through backend to avoid exposing client secret.
   // The backend endpoint at /api/osm/token-exchange handles the actual token exchange.
   const redirectUri = getRedirectUri();
@@ -122,7 +128,10 @@ async function exchangeCodeForToken(code: string): Promise<{ access_token: strin
     throw new Error(`OSM token exchange failed: ${res.status} ${text}`);
   }
 
-  const data = (await res.json()) as { access_token: string; expires_in?: number };
+  const data = (await res.json()) as {
+    access_token: string;
+    expires_in?: number;
+  };
   const expiresIn = Number(data.expires_in) ?? 86400;
   const expiresAt = Date.now() + expiresIn * 1000;
 
@@ -177,7 +186,9 @@ export const OsmAuthService = {
 
   async login(): Promise<string> {
     if (!OSM_CLIENT_ID) {
-      throw new Error("OSM OAuth is not configured (EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID missing).");
+      throw new Error(
+        "OSM OAuth is not configured (EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID missing).",
+      );
     }
     const result = await openAuthSession();
     if (!result?.url) {

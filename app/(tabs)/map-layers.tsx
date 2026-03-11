@@ -6,7 +6,9 @@ import React, { Suspense, lazy } from "react";
 
 import { TabScreenSkeleton } from "@/components/tab-screen-skeleton";
 
-const LayerPickerContent = lazy(() => import("@/components/mapTab/layers/LayerPickerContent"));
+const LayerPickerContent = lazy(
+  () => import("@/components/mapTab/layers/LayerPickerContent"),
+);
 
 export default function MapLayersScreen() {
   return (

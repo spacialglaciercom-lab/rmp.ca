@@ -12,18 +12,35 @@ function findRnmapboxPlugin() {
   const candidates = [];
   try {
     const pkgPath = require.resolve("@rnmapbox/maps/package.json");
-    candidates.push(path.join(path.dirname(pkgPath), "plugin", "build", "withMapbox.js"));
+    candidates.push(
+      path.join(path.dirname(pkgPath), "plugin", "build", "withMapbox.js"),
+    );
   } catch {
     // continue
   }
-  candidates.push(path.join(cwd, "node_modules", "@rnmapbox", "maps", "plugin", "build", "withMapbox.js"));
+  candidates.push(
+    path.join(
+      cwd,
+      "node_modules",
+      "@rnmapbox",
+      "maps",
+      "plugin",
+      "build",
+      "withMapbox.js",
+    ),
+  );
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
   return null;
 }
 
-const patchedPath = path.join(cwd, "scripts", "patches", "withMapbox.patched.js");
+const patchedPath = path.join(
+  cwd,
+  "scripts",
+  "patches",
+  "withMapbox.patched.js",
+);
 const haveCommittedPatch = fs.existsSync(patchedPath);
 
 function findAllWithMapboxPaths() {
@@ -36,7 +53,17 @@ function findAllWithMapboxPaths() {
       const pnpm = fs.readdirSync(path.join(nm, ".pnpm"));
       for (const name of pnpm) {
         if (name.startsWith("@rnmapbox+maps")) {
-          const build = path.join(nm, ".pnpm", name, "node_modules", "@rnmapbox", "maps", "plugin", "build", "withMapbox.js");
+          const build = path.join(
+            nm,
+            ".pnpm",
+            name,
+            "node_modules",
+            "@rnmapbox",
+            "maps",
+            "plugin",
+            "build",
+            "withMapbox.js",
+          );
           if (fs.existsSync(build)) out.push(build);
         }
       }
@@ -44,7 +71,14 @@ function findAllWithMapboxPaths() {
       // ignore
     }
   }
-  const flat = path.join(nm, "@rnmapbox", "maps", "plugin", "build", "withMapbox.js");
+  const flat = path.join(
+    nm,
+    "@rnmapbox",
+    "maps",
+    "plugin",
+    "build",
+    "withMapbox.js",
+  );
   if (fs.existsSync(flat)) out.push(flat);
   return [...new Set(out)];
 }
@@ -54,7 +88,9 @@ if (allPaths.length === 0 && !haveCommittedPatch) {
   process.exit(0);
 }
 
-const targetPaths = allPaths.length ? allPaths : (findRnmapboxPlugin() ? [findRnmapboxPlugin()] : []).filter(Boolean);
+const targetPaths = allPaths.length
+  ? allPaths
+  : (findRnmapboxPlugin() ? [findRnmapboxPlugin()] : []).filter(Boolean);
 if (targetPaths.length === 0) {
   process.exit(0);
 }
@@ -74,7 +110,10 @@ for (const withMapboxPath of targetPaths) {
 
   if (patchedContent) {
     fs.writeFileSync(withMapboxPath, patchedContent, "utf8");
-    console.log("[patch-rnmapbox-podfile] Applied fix to", path.relative(cwd, withMapboxPath));
+    console.log(
+      "[patch-rnmapbox-podfile] Applied fix to",
+      path.relative(cwd, withMapboxPath),
+    );
     continue;
   }
 
@@ -89,11 +128,15 @@ for (const withMapboxPath of targetPaths) {
         _podfileContents = _podfileContents.replace(/^\\s*end\\s+@rnmapbox[^\\n]*\\n?/gm, '');
         await fs_1.promises.writeFile(file, _podfileContents, 'utf-8');`;
 
-  const regex = /await fs_1\.promises\.writeFile\(file, \(0, exports\.applyCocoaPodsModifications\)\(contents, \{\s*RNMapboxMapsImpl,[\s\S]*?\}\), 'utf-8'\);/;
+  const regex =
+    /await fs_1\.promises\.writeFile\(file, \(0, exports\.applyCocoaPodsModifications\)\(contents, \{\s*RNMapboxMapsImpl,[\s\S]*?\}\), 'utf-8'\);/;
   const newCode = code.replace(regex, newBlock);
   if (newCode !== code) {
     fs.writeFileSync(withMapboxPath, newCode, "utf8");
-    console.log("[patch-rnmapbox-podfile] Patched", path.relative(cwd, withMapboxPath));
+    console.log(
+      "[patch-rnmapbox-podfile] Patched",
+      path.relative(cwd, withMapboxPath),
+    );
   }
 }
 

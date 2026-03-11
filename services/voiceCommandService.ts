@@ -46,21 +46,57 @@ interface IntentDef {
 }
 
 export const NAVIGATION_INTENTS: IntentDef[] = [
-  { triggerPhrase: "next turn", intent: "NAV_NEXT_TURN", description: "Announce the next maneuver" },
-  { triggerPhrase: "distance remaining", intent: "NAV_DISTANCE", description: "How far to the next stop" },
-  { triggerPhrase: "what street am I on", intent: "NAV_CURRENT_STREET", description: "Name the current street" },
-  { triggerPhrase: "stop navigation", intent: "NAV_STOP", description: "End turn-by-turn navigation" },
-  { triggerPhrase: "skip this stop", intent: "NAV_SKIP_STOP", description: "Skip the current collection point" },
-  { triggerPhrase: "repeat that", intent: "NAV_REPEAT", description: "Repeat the last announcement" },
-  { triggerPhrase: "mute voice", intent: "NAV_MUTE", description: "Toggle voice announcements" },
-  { triggerPhrase: "hey copilot", intent: "COPILOT_ACTIVATE", description: "Activate AI co-pilot chat" },
+  {
+    triggerPhrase: "next turn",
+    intent: "NAV_NEXT_TURN",
+    description: "Announce the next maneuver",
+  },
+  {
+    triggerPhrase: "distance remaining",
+    intent: "NAV_DISTANCE",
+    description: "How far to the next stop",
+  },
+  {
+    triggerPhrase: "what street am I on",
+    intent: "NAV_CURRENT_STREET",
+    description: "Name the current street",
+  },
+  {
+    triggerPhrase: "stop navigation",
+    intent: "NAV_STOP",
+    description: "End turn-by-turn navigation",
+  },
+  {
+    triggerPhrase: "skip this stop",
+    intent: "NAV_SKIP_STOP",
+    description: "Skip the current collection point",
+  },
+  {
+    triggerPhrase: "repeat that",
+    intent: "NAV_REPEAT",
+    description: "Repeat the last announcement",
+  },
+  {
+    triggerPhrase: "mute voice",
+    intent: "NAV_MUTE",
+    description: "Toggle voice announcements",
+  },
+  {
+    triggerPhrase: "hey copilot",
+    intent: "COPILOT_ACTIVATE",
+    description: "Activate AI co-pilot chat",
+  },
 ];
 
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
-type CommandHandler = (intent: NavIntent, utterance: string, similarity: number) => void;
+type CommandHandler = (
+  intent: NavIntent,
+  utterance: string,
+  similarity: number,
+) => void;
 
 export class VoiceCommandService {
   private handlers: CommandHandler[] = [];
@@ -115,18 +151,30 @@ export class VoiceCommandService {
           log.debug("Intent recognised", event);
           for (const handler of this.handlers) {
             try {
-              handler(event.intent as NavIntent, event.utterance, event.similarity);
+              handler(
+                event.intent as NavIntent,
+                event.utterance,
+                event.similarity,
+              );
             } catch (err) {
-              log.error("Handler error", err instanceof Error ? err : new Error(String(err)));
+              log.error(
+                "Handler error",
+                err instanceof Error ? err : new Error(String(err)),
+              );
             }
           }
         },
       );
 
       this.active = true;
-      log.debug("Voice commands activated", { intents: NAVIGATION_INTENTS.length });
+      log.debug("Voice commands activated", {
+        intents: NAVIGATION_INTENTS.length,
+      });
     } catch (err) {
-      log.error("Failed to activate voice commands", err instanceof Error ? err : new Error(String(err)));
+      log.error(
+        "Failed to activate voice commands",
+        err instanceof Error ? err : new Error(String(err)),
+      );
     }
   }
 

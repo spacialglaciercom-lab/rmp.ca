@@ -44,7 +44,7 @@ if (Platform.OS !== "web") {
 
         // Write to buffer (async, fire-and-forget in background task)
         trackStorage.appendBgBuffer(points).catch(() => {});
-      }
+      },
     );
   } catch {
     // expo-task-manager not available
@@ -56,7 +56,9 @@ export async function startBackgroundTracking(): Promise<void> {
 
   try {
     const { loggingIntervalSeconds } = useRecordingSettingsStore.getState();
-    const distanceInterval = loggingIntervalSecondsToDistanceMeters(loggingIntervalSeconds);
+    const distanceInterval = loggingIntervalSecondsToDistanceMeters(
+      loggingIntervalSeconds,
+    );
     const Location = await import("expo-location");
     const { status } = await Location.requestBackgroundPermissionsAsync();
     if (status !== "granted") {

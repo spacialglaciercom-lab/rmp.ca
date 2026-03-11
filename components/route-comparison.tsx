@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, FlatList } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  FlatList,
+} from "react-native";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
@@ -76,7 +82,7 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
   const getBestValue = (
     routes: SavedRoute[],
     getValue: (r: SavedRoute) => number,
-    lowerIsBetter = true
+    lowerIsBetter = true,
   ) => {
     if (routes.length === 0) return null;
     const values = routes.map(getValue);
@@ -103,7 +109,9 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
         disabled={!state.statistics}
         className="py-3 px-4 rounded-xl items-center mb-4"
         style={{
-          backgroundColor: state.statistics ? colors.primary : colors.muted + "40",
+          backgroundColor: state.statistics
+            ? colors.primary
+            : colors.muted + "40",
           opacity: state.statistics ? 1 : 0.5,
         }}
       >
@@ -150,7 +158,9 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
                 >
                   <Text
                     className="text-sm font-semibold mb-1"
-                    style={{ color: isSelected ? colors.primary : colors.foreground }}
+                    style={{
+                      color: isSelected ? colors.primary : colors.foreground,
+                    }}
                   >
                     {item.name}
                   </Text>
@@ -179,7 +189,9 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
               {/* Header Row */}
               <View className="flex-row border-b border-border pb-2 mb-2">
                 <View style={{ width: 100 }}>
-                  <Text className="text-xs font-semibold text-muted">Metric</Text>
+                  <Text className="text-xs font-semibold text-muted">
+                    Metric
+                  </Text>
                 </View>
                 {comparisonRoutes.map((route) => (
                   <View key={route.id} style={{ width: 100 }}>
@@ -199,7 +211,10 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
                 routes={comparisonRoutes}
                 getValue={(r) => r.statistics.totalDistance}
                 formatValue={formatDistance}
-                bestValue={getBestValue(comparisonRoutes, (r) => r.statistics.totalDistance)}
+                bestValue={getBestValue(
+                  comparisonRoutes,
+                  (r) => r.statistics.totalDistance,
+                )}
                 colors={colors}
               />
 
@@ -209,7 +224,10 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
                 routes={comparisonRoutes}
                 getValue={(r) => r.statistics.estimatedTime}
                 formatValue={formatDuration}
-                bestValue={getBestValue(comparisonRoutes, (r) => r.statistics.estimatedTime)}
+                bestValue={getBestValue(
+                  comparisonRoutes,
+                  (r) => r.statistics.estimatedTime,
+                )}
                 colors={colors}
               />
 
@@ -219,7 +237,10 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
                 routes={comparisonRoutes}
                 getValue={(r) => r.statistics.turns.leftTurns}
                 formatValue={(v) => v.toString()}
-                bestValue={getBestValue(comparisonRoutes, (r) => r.statistics.turns.leftTurns)}
+                bestValue={getBestValue(
+                  comparisonRoutes,
+                  (r) => r.statistics.turns.leftTurns,
+                )}
                 colors={colors}
               />
 
@@ -229,7 +250,10 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
                 routes={comparisonRoutes}
                 getValue={(r) => r.statistics.turns.uTurns}
                 formatValue={(v) => v.toString()}
-                bestValue={getBestValue(comparisonRoutes, (r) => r.statistics.turns.uTurns)}
+                bestValue={getBestValue(
+                  comparisonRoutes,
+                  (r) => r.statistics.turns.uTurns,
+                )}
                 colors={colors}
               />
 
@@ -242,7 +266,7 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
                 bestValue={getBestValue(
                   comparisonRoutes,
                   (r) => r.statistics.turns.rightTurns,
-                  false
+                  false,
                 )}
                 colors={colors}
                 higherIsBetter
@@ -296,7 +320,10 @@ export function RouteComparison({ onSelectRoute }: RouteComparisonProps) {
           className="p-3 rounded-xl"
           style={{ backgroundColor: colors.warning + "15" }}
         >
-          <Text className="text-xs text-center" style={{ color: colors.warning }}>
+          <Text
+            className="text-xs text-center"
+            style={{ color: colors.warning }}
+          >
             Select at least 2 routes to compare (max 3)
           </Text>
         </View>

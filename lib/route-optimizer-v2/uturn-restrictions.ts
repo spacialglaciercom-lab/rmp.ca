@@ -30,7 +30,7 @@ export function buildUturnRestrictions(
   ways: Way[],
   turnRestrictions: TurnRestriction[],
   graph: GraphAccess,
-  deadEndNodes: Set<string>
+  deadEndNodes: Set<string>,
 ): UturnRestrictionSet {
   const midBlockNoUturnNodes = new Set<string>();
   const relationNoUturnNodes = new Set<string>();
@@ -56,8 +56,10 @@ export function buildUturnRestrictions(
     if (deadEndNodes.has(nodeId)) continue;
 
     const [a, b] = neighbors;
-    const wayIdA = graph.getEdgeWayId(nodeId, a) ?? graph.getEdgeWayId(a, nodeId);
-    const wayIdB = graph.getEdgeWayId(nodeId, b) ?? graph.getEdgeWayId(b, nodeId);
+    const wayIdA =
+      graph.getEdgeWayId(nodeId, a) ?? graph.getEdgeWayId(a, nodeId);
+    const wayIdB =
+      graph.getEdgeWayId(nodeId, b) ?? graph.getEdgeWayId(b, nodeId);
     if (wayIdA && wayIdB && wayIdA === wayIdB) {
       midBlockNoUturnNodes.add(nodeId);
     }
@@ -83,10 +85,12 @@ export function isUturnForbidden(
   prevNode: string,
   current: string,
   currentWayId: string | undefined,
-  restrictions: UturnRestrictionSet
+  restrictions: UturnRestrictionSet,
 ): boolean {
   const atMidBlock = restrictions.midBlockNoUturnNodes.has(current);
   const atRelation = restrictions.relationNoUturnNodes.has(current);
-  const wayForbids = Boolean(currentWayId && restrictions.noUturnWayIds.has(currentWayId));
+  const wayForbids = Boolean(
+    currentWayId && restrictions.noUturnWayIds.has(currentWayId),
+  );
   return atMidBlock || atRelation || wayForbids;
 }

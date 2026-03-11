@@ -22,7 +22,9 @@ interface BetaContextType {
 const BetaContext = createContext<BetaContextType | undefined>(undefined);
 const STORAGE_KEY = "@beta_features";
 
-export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [features, setFeatures] = useState<BetaFeatures>({
     enabled: false,
     turnAwareCpp: false,
@@ -55,7 +57,10 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       }
     } catch (e) {
-      log.error("Failed to load beta features", e instanceof Error ? e : new Error(String(e)));
+      log.error(
+        "Failed to load beta features",
+        e instanceof Error ? e : new Error(String(e)),
+      );
     }
   };
 
@@ -117,7 +122,10 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (newCrashCount >= 2) {
       // Auto-disable after 2 crashes
       await disableBeta();
-      await AsyncStorage.setItem("@beta_disabled_reason", "safety_circuit_breaker");
+      await AsyncStorage.setItem(
+        "@beta_disabled_reason",
+        "safety_circuit_breaker",
+      );
     } else {
       await saveFeatures({ ...features, crashCount: newCrashCount });
     }
@@ -156,6 +164,7 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
 export const useBetaFeatures = () => {
   const context = useContext(BetaContext);
-  if (!context) throw new Error("useBetaFeatures must be used within BetaFeaturesProvider");
+  if (!context)
+    throw new Error("useBetaFeatures must be used within BetaFeaturesProvider");
   return context;
 };

@@ -4,7 +4,11 @@
  */
 
 import JSZip from "jszip";
-import type { RouteStatistics, RouteReport, RouteConfiguration } from "@/types/routing";
+import type {
+  RouteStatistics,
+  RouteReport,
+  RouteConfiguration,
+} from "@/types/routing";
 import { sanitizeRouteStatistics, formatDateDeviceLocal } from "./export-utils";
 
 export interface ExportData {
@@ -21,7 +25,10 @@ export interface ExportData {
  * @param filename Base filename for the ZIP (without extension)
  * @returns Promise<Blob> ZIP file blob
  */
-export async function createRouteZip(data: ExportData, filename: string = "trash_route"): Promise<Blob> {
+export async function createRouteZip(
+  data: ExportData,
+  filename: string = "trash_route",
+): Promise<Blob> {
   const zip = new JSZip();
 
   // Add GPX file
@@ -43,11 +50,11 @@ export async function createRouteZip(data: ExportData, filename: string = "trash
         generatedAt: formatDateDeviceLocal(
           data.report.generatedAt instanceof Date
             ? data.report.generatedAt
-            : new Date(data.report.generatedAt)
+            : new Date(data.report.generatedAt),
         ),
       },
       null,
-      2
+      2,
     );
     zip.file("report.json", reportJson);
   }
@@ -80,13 +87,16 @@ export async function createRouteZip(data: ExportData, filename: string = "trash
  */
 export async function createRouteZipBase64(
   data: ExportData,
-  filename: string = "trash_route"
+  filename: string = "trash_route",
 ): Promise<string> {
   const zip = new JSZip();
 
   if (data.gpxData) zip.file(`${filename}.gpx`, data.gpxData);
   if (data.statistics) {
-    zip.file("statistics.json", JSON.stringify(sanitizeRouteStatistics(data.statistics), null, 2));
+    zip.file(
+      "statistics.json",
+      JSON.stringify(sanitizeRouteStatistics(data.statistics), null, 2),
+    );
   }
   if (data.report) {
     zip.file(
@@ -97,12 +107,12 @@ export async function createRouteZipBase64(
           generatedAt: formatDateDeviceLocal(
             data.report.generatedAt instanceof Date
               ? data.report.generatedAt
-              : new Date(data.report.generatedAt)
+              : new Date(data.report.generatedAt),
           ),
         },
         null,
-        2
-      )
+        2,
+      ),
     );
   }
   zip.file("configuration.json", JSON.stringify(data.configuration, null, 2));
@@ -121,8 +131,8 @@ export async function createRouteZipBase64(
         },
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 
   return zip.generateAsync({ type: "base64" });
@@ -156,10 +166,12 @@ export function downloadBlob(blob: Blob, filename: string): void {
  */
 export async function exportRouteAsZip(
   data: ExportData,
-  filename: string = "trash_route"
+  filename: string = "trash_route",
 ): Promise<void> {
   if (!data.gpxData && !data.statistics && !data.report) {
-    throw new Error("No route data available to export. Please generate a route first.");
+    throw new Error(
+      "No route data available to export. Please generate a route first.",
+    );
   }
   const blob = await createRouteZip(data, filename);
   const timestamp = new Date().toISOString().split("T")[0];
@@ -184,10 +196,12 @@ function toShareableFileUri(path: string): string {
  */
 export async function exportRouteAsZipNative(
   data: ExportData,
-  filename: string = "trash_route"
+  filename: string = "trash_route",
 ): Promise<void> {
   if (!data.gpxData && !data.statistics && !data.report) {
-    throw new Error("No route data available to export. Please generate a route first.");
+    throw new Error(
+      "No route data available to export. Please generate a route first.",
+    );
   }
 
   const timestamp = new Date().toISOString().split("T")[0];

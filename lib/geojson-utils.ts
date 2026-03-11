@@ -21,7 +21,9 @@ export interface GeoJSONMultiLineString {
   coordinates: [number, number][][];
 }
 
-export interface GeoJSONFeature<G = GeoJSONLineString | GeoJSONPoint | GeoJSONMultiLineString> {
+export interface GeoJSONFeature<
+  G = GeoJSONLineString | GeoJSONPoint | GeoJSONMultiLineString,
+> {
   type: "Feature";
   geometry: G;
   properties: Record<string, unknown>;
@@ -39,10 +41,15 @@ export interface GeoJSONFeatureCollection {
  * metadata) plus a "full-route" MultiLineString that covers the entire
  * optimized path. Start/end markers are included as Point features.
  */
-export function matchedRouteToGeoJSON(route: MatchedRoute): GeoJSONFeatureCollection {
+export function matchedRouteToGeoJSON(
+  route: MatchedRoute,
+): GeoJSONFeatureCollection {
   const features: GeoJSONFeature[] = [];
 
-  const fullCoords: [number, number][] = route.matchedGeometry.map((p) => [p.lon, p.lat]);
+  const fullCoords: [number, number][] = route.matchedGeometry.map((p) => [
+    p.lon,
+    p.lat,
+  ]);
 
   if (fullCoords.length >= 2) {
     features.push({
@@ -127,7 +134,10 @@ export function routePointsToGeoJSON(
       type: "Feature",
       geometry: {
         type: "Point",
-        coordinates: [points[points.length - 1].lon, points[points.length - 1].lat],
+        coordinates: [
+          points[points.length - 1].lon,
+          points[points.length - 1].lat,
+        ],
       },
       properties: { role: "end", label: "End" },
     });
@@ -164,7 +174,11 @@ export function multiVehicleRoutesToGeoJSON(
     features.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [route[0].lon, route[0].lat] },
-      properties: { role: "vehicle-start", vehicleIndex: vIdx, label: `V${vIdx + 1} Start` },
+      properties: {
+        role: "vehicle-start",
+        vehicleIndex: vIdx,
+        label: `V${vIdx + 1} Start`,
+      },
     });
 
     features.push({
@@ -173,7 +187,11 @@ export function multiVehicleRoutesToGeoJSON(
         type: "Point",
         coordinates: [route[route.length - 1].lon, route[route.length - 1].lat],
       },
-      properties: { role: "vehicle-end", vehicleIndex: vIdx, label: `V${vIdx + 1} End` },
+      properties: {
+        role: "vehicle-end",
+        vehicleIndex: vIdx,
+        label: `V${vIdx + 1} End`,
+      },
     });
   });
 

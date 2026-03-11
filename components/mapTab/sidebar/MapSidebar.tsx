@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, TouchableOpacity, useWindowDimensions } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Platform,
+  TouchableOpacity,
+  useWindowDimensions,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -13,9 +21,13 @@ import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
 import { usePluginStore } from "@/stores/pluginStore";
-import { useDeviceType } from "@/hooks/useDeviceType";
-import { useIsLandscape } from "@/hooks/useDeviceType";
-import { SIDEBAR_MENU_ITEMS, SIDEBAR_WIDTH_IPHONE, SIDEBAR_WIDTH_IPAD } from "@/constants/sidebarConfig";
+import { useDeviceType, useIsLandscape } from "@/hooks/useDeviceType";
+
+import {
+  SIDEBAR_MENU_ITEMS,
+  SIDEBAR_WIDTH_IPHONE,
+  SIDEBAR_WIDTH_IPAD,
+} from "@/constants/sidebarConfig";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { SidebarMenuItemRow } from "./SidebarMenuItem";
 import { useColors } from "@/hooks/use-colors";
@@ -36,15 +48,21 @@ export function MapSidebar() {
   const openZonesPanel = useMapSidebarStore((s) => s.openZonesPanel);
   const openMapMarkersPanel = useMapSidebarStore((s) => s.openMapMarkersPanel);
   const openMapStylePicker = useMapSidebarStore((s) => s.openMapStylePicker);
-  const openRouteParametersPanel = useMapSidebarStore((s) => s.openRouteParametersPanel);
+  const openRouteParametersPanel = useMapSidebarStore(
+    (s) => s.openRouteParametersPanel,
+  );
   const openOSMExtractor = useMapSidebarStore((s) => s.openOSMExtractor);
   const closeOSMExtractor = useMapSidebarStore((s) => s.closeOSMExtractor);
   const openRecordingPanel = useMapSidebarStore((s) => s.openRecordingPanel);
   const isPinned = useMapSidebarStore((s) => s.isPinned);
   const togglePin = useMapSidebarStore((s) => s.togglePin);
-  const overtureExtractionEnabled = usePluginStore((s) => s.isPluginEnabled("overture-extraction", true));
+  const overtureExtractionEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("overture-extraction", true),
+  );
   const zonesEnabled = usePluginStore((s) => s.isPluginEnabled("zones", true));
-  const navigationEnabled = usePluginStore((s) => s.isPluginEnabled("navigation", true));
+  const navigationEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("navigation", true),
+  );
 
   useEffect(() => {
     if (!overtureExtractionEnabled) closeOSMExtractor();
@@ -55,17 +73,19 @@ export function MapSidebar() {
       SIDEBAR_MENU_ITEMS.filter((item) => {
         if (item.id === "osmExtractor") return overtureExtractionEnabled;
         if (item.id === "zones") return zonesEnabled;
-        if (item.id === "navigation" || item.id === "routeParameters") return navigationEnabled;
+        if (item.id === "navigation" || item.id === "routeParameters")
+          return navigationEnabled;
         return true;
       }),
-    [overtureExtractionEnabled, zonesEnabled, navigationEnabled]
+    [overtureExtractionEnabled, zonesEnabled, navigationEnabled],
   );
 
   const isLandscape = useIsLandscape();
   const isCompact = useWindowDimensions().width < 600;
   const showPinButton = deviceType === "ipad" && isLandscape && !isCompact;
 
-  const sidebarWidth = deviceType === "ipad" ? SIDEBAR_WIDTH_IPAD : SIDEBAR_WIDTH_IPHONE;
+  const sidebarWidth =
+    deviceType === "ipad" ? SIDEBAR_WIDTH_IPAD : SIDEBAR_WIDTH_IPHONE;
   const translateX = useSharedValue(-sidebarWidth);
 
   useEffect(() => {
@@ -175,7 +195,13 @@ export function MapSidebar() {
             sidebarAnimatedStyle,
           ]}
         >
-          <View style={[styles.header, styles.headerRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[
+              styles.header,
+              styles.headerRow,
+              { borderBottomColor: colors.border },
+            ]}
+          >
             <Text style={[styles.headerTitle, { color: colors.text }]}>
               trashroute-mobile
             </Text>
@@ -206,7 +232,7 @@ export function MapSidebar() {
                   item={item}
                   onPress={() => handleMenuPress(item.id)}
                 />
-              )
+              ),
             )}
           </View>
         </Animated.View>

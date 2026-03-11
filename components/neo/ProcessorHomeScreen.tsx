@@ -25,7 +25,12 @@ import type { Route, CollectionPoint } from "@/types";
 import { storage } from "@/lib/storage";
 import { isMockRoute } from "@/lib/is-mock-route";
 import { ProcessorBackground } from "@/components/neo/ProcessorBackground";
-import { NeoHeader, NeonCard, NeoPrimaryButton, NeoSectionHeader } from "@/components/neo";
+import {
+  NeoHeader,
+  NeonCard,
+  NeoPrimaryButton,
+  NeoSectionHeader,
+} from "@/components/neo";
 
 /** Max stops shown in the Processing Queue list to avoid UI/performance issues. Use Map tab for the rest. */
 const MAX_PROCESSING_QUEUE_DISPLAY = 500;
@@ -41,7 +46,7 @@ export default function ProcessorHomeScreen() {
     loadRoute();
     // Simulate processor activity
     const interval = setInterval(() => {
-      setProcessorActive(prev => !prev);
+      setProcessorActive((prev) => !prev);
     }, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -150,16 +155,23 @@ export default function ProcessorHomeScreen() {
     : "No active route";
 
   const ProcessorStatusIndicator = () => (
-    <View style={[styles.processorIndicator, { backgroundColor: colors.surface + '80' }]}>
-      <View style={[
-        styles.processorPulse, 
-        { 
-          backgroundColor: processorActive ? colors.success : colors.primary,
-          shadowColor: processorActive ? colors.success : colors.primary,
-        }
-      ]} />
+    <View
+      style={[
+        styles.processorIndicator,
+        { backgroundColor: colors.surface + "80" },
+      ]}
+    >
+      <View
+        style={[
+          styles.processorPulse,
+          {
+            backgroundColor: processorActive ? colors.success : colors.primary,
+            shadowColor: processorActive ? colors.success : colors.primary,
+          },
+        ]}
+      />
       <Text style={[styles.processorText, { color: colors.foreground }]}>
-        PROCESSOR {processorActive ? 'ACTIVE' : 'STANDBY'}
+        PROCESSOR {processorActive ? "ACTIVE" : "STANDBY"}
       </Text>
     </View>
   );
@@ -167,22 +179,33 @@ export default function ProcessorHomeScreen() {
   const processorHeader = (
     <View style={{ marginBottom: 24 }}>
       <ProcessorStatusIndicator />
-      
+
       <NeoHeader
         title="PROCESSOR // ROUTE OS"
         statusLabel="SYSTEM STATUS"
         subtitle={subtitle}
         statusHighlight={true}
       />
-      
+
       {!route ? (
         <NeonCard variant="cyan" padding={20} style={{ marginBottom: 20 }}>
           <View style={styles.processorRow}>
-            <View style={[styles.processorIcon, { backgroundColor: colors.primary + '20' }]}>
-              <Text style={[styles.processorIconText, { color: colors.primary }]}>⚡</Text>
+            <View
+              style={[
+                styles.processorIcon,
+                { backgroundColor: colors.primary + "20" },
+              ]}
+            >
+              <Text
+                style={[styles.processorIconText, { color: colors.primary }]}
+              >
+                ⚡
+              </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.processorTitle, { color: colors.foreground }]}>
+              <Text
+                style={[styles.processorTitle, { color: colors.foreground }]}
+              >
                 Initialize Route Processor
               </Text>
               <Text style={[styles.processorSubtitle, { color: colors.muted }]}>
@@ -190,26 +213,42 @@ export default function ProcessorHomeScreen() {
               </Text>
             </View>
           </View>
-          
+
           <NeoPrimaryButton
             title="Boot Route Processor"
             onPress={() => router.push("/(tabs)/planner")}
             variant="primary"
             style={{ marginTop: 16 }}
           />
-          
-          <Text style={[styles.processorHint, { color: colors.muted, textAlign: "center" }]}>
+
+          <Text
+            style={[
+              styles.processorHint,
+              { color: colors.muted, textAlign: "center" },
+            ]}
+          >
             Import OSM data and generate processing routes
           </Text>
         </NeonCard>
       ) : (
         <NeonCard variant="cyan" padding={20} style={{ marginBottom: 20 }}>
           <View style={styles.processorRow}>
-            <View style={[styles.processorIcon, { backgroundColor: colors.success + '20' }]}>
-              <Text style={[styles.processorIconText, { color: colors.success }]}>▶</Text>
+            <View
+              style={[
+                styles.processorIcon,
+                { backgroundColor: colors.success + "20" },
+              ]}
+            >
+              <Text
+                style={[styles.processorIconText, { color: colors.success }]}
+              >
+                ▶
+              </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.processorTitle, { color: colors.foreground }]}>
+              <Text
+                style={[styles.processorTitle, { color: colors.foreground }]}
+              >
                 Route Processor Active
               </Text>
               <Text style={[styles.processorSubtitle, { color: colors.muted }]}>
@@ -217,40 +256,62 @@ export default function ProcessorHomeScreen() {
               </Text>
             </View>
           </View>
-          
+
           {/* Processor-style progress indicators */}
           <View style={styles.processorMetrics}>
             <View style={styles.processorMetric}>
-              <Text style={[styles.processorMetricLabel, { color: colors.muted }]}>COMPLETED</Text>
-              <Text style={[styles.processorMetricValue, { color: colors.success }]}>
+              <Text
+                style={[styles.processorMetricLabel, { color: colors.muted }]}
+              >
+                COMPLETED
+              </Text>
+              <Text
+                style={[styles.processorMetricValue, { color: colors.success }]}
+              >
                 {route.completedPoints}
               </Text>
             </View>
             <View style={styles.processorMetric}>
-              <Text style={[styles.processorMetricLabel, { color: colors.muted }]}>PENDING</Text>
-              <Text style={[styles.processorMetricValue, { color: colors.warning }]}>
+              <Text
+                style={[styles.processorMetricLabel, { color: colors.muted }]}
+              >
+                PENDING
+              </Text>
+              <Text
+                style={[styles.processorMetricValue, { color: colors.warning }]}
+              >
                 {route.totalPoints - route.completedPoints}
               </Text>
             </View>
             <View style={styles.processorMetric}>
-              <Text style={[styles.processorMetricLabel, { color: colors.muted }]}>EFFICIENCY</Text>
-              <Text style={[styles.processorMetricValue, { color: colors.primary }]}>
+              <Text
+                style={[styles.processorMetricLabel, { color: colors.muted }]}
+              >
+                EFFICIENCY
+              </Text>
+              <Text
+                style={[styles.processorMetricValue, { color: colors.primary }]}
+              >
                 {completionPercentage}%
               </Text>
             </View>
           </View>
-          
+
           {/* Processor-style progress bar */}
           <View style={styles.processorProgressBar}>
-            <View 
+            <View
               style={[
-                styles.processorProgressFill, 
-                { 
+                styles.processorProgressFill,
+                {
                   width: `${completionPercentage}%`,
-                  backgroundColor: completionPercentage >= 80 ? colors.success : 
-                                  completionPercentage >= 50 ? colors.warning : colors.primary
-                }
-              ]} 
+                  backgroundColor:
+                    completionPercentage >= 80
+                      ? colors.success
+                      : completionPercentage >= 50
+                        ? colors.warning
+                        : colors.primary,
+                },
+              ]}
             />
           </View>
         </NeonCard>
@@ -258,8 +319,20 @@ export default function ProcessorHomeScreen() {
 
       <NeonCard variant="magenta" padding={16} style={{ marginBottom: 20 }}>
         <View style={styles.processorRow}>
-          <View style={[styles.processorIcon, { backgroundColor: colors.accentMagenta + '20' }]}>
-            <Text style={[styles.processorIconText, { color: colors.accentMagenta }]}>🔄</Text>
+          <View
+            style={[
+              styles.processorIcon,
+              { backgroundColor: colors.accentMagenta + "20" },
+            ]}
+          >
+            <Text
+              style={[
+                styles.processorIconText,
+                { color: colors.accentMagenta },
+              ]}
+            >
+              🔄
+            </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.processorTitle, { color: colors.foreground }]}>
@@ -276,19 +349,26 @@ export default function ProcessorHomeScreen() {
   );
 
   const renderCollectionPoint = ({ item }: { item: CollectionPoint }) => (
-    <TouchableOpacity 
-      onPress={() => handlePointPress(item)} 
-      style={{ marginBottom: 12 }} 
+    <TouchableOpacity
+      onPress={() => handlePointPress(item)}
+      style={{ marginBottom: 12 }}
       activeOpacity={0.85}
     >
       <NeonCard variant="cyan" padding={16} notchSize={10} borderRadius={12}>
         <View style={styles.processorRow}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={[styles.processorPointAddress, { color: colors.foreground }]}>
+            <Text
+              style={[
+                styles.processorPointAddress,
+                { color: colors.foreground },
+              ]}
+            >
               {item.address}
             </Text>
             {item.locationName && (
-              <Text style={[styles.processorPointLocation, { color: colors.muted }]}>
+              <Text
+                style={[styles.processorPointLocation, { color: colors.muted }]}
+              >
                 {item.locationName}
               </Text>
             )}
@@ -296,10 +376,15 @@ export default function ProcessorHomeScreen() {
           <View
             style={[
               styles.processorStatusBadge,
-              { backgroundColor: getStatusColor(item.status) + "20" }
+              { backgroundColor: getStatusColor(item.status) + "20" },
             ]}
           >
-            <Text style={[styles.processorStatusText, { color: getStatusColor(item.status) }]}>
+            <Text
+              style={[
+                styles.processorStatusText,
+                { color: getStatusColor(item.status) },
+              ]}
+            >
               {getStatusLabel(item.status)}
             </Text>
           </View>
@@ -322,7 +407,7 @@ export default function ProcessorHomeScreen() {
               onPress={() => handleMarkComplete(item)}
               style={[
                 styles.processorActionButton,
-                { backgroundColor: colors.success }
+                { backgroundColor: colors.success },
               ]}
             >
               <Text style={[styles.processorActionText, { color: "#0a0a0a" }]}>
@@ -333,7 +418,9 @@ export default function ProcessorHomeScreen() {
         </View>
 
         {item.specialInstructions && (
-          <View style={[styles.processorNote, { borderTopColor: colors.border }]}>
+          <View
+            style={[styles.processorNote, { borderTopColor: colors.border }]}
+          >
             <Text style={[styles.processorNoteText, { color: colors.muted }]}>
               ⚠️ {item.specialInstructions}
             </Text>
@@ -347,7 +434,10 @@ export default function ProcessorHomeScreen() {
     const scrollContent = (
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.processorContainer, { padding: 16, paddingBottom: 24 }]}
+        contentContainerStyle={[
+          styles.processorContainer,
+          { padding: 16, paddingBottom: 24 },
+        ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -361,7 +451,9 @@ export default function ProcessorHomeScreen() {
         {Platform.OS !== "web" ? (
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "translate-with-padding" : "padding"}
+            behavior={
+              Platform.OS === "ios" ? "translate-with-padding" : "padding"
+            }
             keyboardVerticalOffset={0}
           >
             {scrollContent}
@@ -381,7 +473,9 @@ export default function ProcessorHomeScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
           showsVerticalScrollIndicator={false}
         >
           {processorHeader}
@@ -403,7 +497,9 @@ export default function ProcessorHomeScreen() {
         renderItem={renderCollectionPoint}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -413,7 +509,9 @@ export default function ProcessorHomeScreen() {
             <NeoSectionHeader title="Processing Queue" />
             {(route.points?.length ?? 0) > MAX_PROCESSING_QUEUE_DISPLAY && (
               <Text style={[styles.truncatedNotice, { color: colors.muted }]}>
-                Showing first {MAX_PROCESSING_QUEUE_DISPLAY} of {route.points?.length} stops. Use the Map tab to navigate and mark the rest.
+                Showing first {MAX_PROCESSING_QUEUE_DISPLAY} of{" "}
+                {route.points?.length} stops. Use the Map tab to navigate and
+                mark the rest.
               </Text>
             )}
           </View>
@@ -429,18 +527,18 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   processorIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     marginBottom: 16,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignSelf: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.15)',
-    shadowColor: '#00D9FF',
+    borderColor: "rgba(0, 217, 255, 0.15)",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -458,117 +556,117 @@ const styles = StyleSheet.create({
   },
   processorText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 1,
-    color: '#00D9FF',
+    color: "#00D9FF",
   },
   processorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   processorIcon: {
     width: 40,
     height: 40,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.1)',
+    borderColor: "rgba(0, 217, 255, 0.1)",
   },
   processorIconText: {
     fontSize: 20,
   },
   processorTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 2,
-    color: '#00D9FF',
+    color: "#00D9FF",
   },
   processorSubtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   processorHint: {
     fontSize: 13,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 12,
     lineHeight: 18,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   processorMetrics: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 217, 255, 0.1)',
+    borderTopColor: "rgba(0, 217, 255, 0.1)",
   },
   processorMetric: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   processorMetricLabel: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 1,
     marginBottom: 4,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   processorMetricValue: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#00D9FF',
+    fontWeight: "700",
+    color: "#00D9FF",
   },
   processorProgressBar: {
     height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 2,
     marginTop: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   processorProgressFill: {
-    height: '100%',
+    height: "100%",
     borderRadius: 2,
-    transition: 'width 0.3s ease',
-    backgroundColor: '#00D9FF',
+    transition: "width 0.3s ease",
+    backgroundColor: "#00D9FF",
   },
   processorPointAddress: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 2,
-    color: '#00D9FF',
+    color: "#00D9FF",
   },
   processorPointLocation: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   processorStatusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.1)',
+    borderColor: "rgba(0, 217, 255, 0.1)",
   },
   processorStatusText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#00D9FF',
+    fontWeight: "500",
+    color: "#00D9FF",
   },
   processorMeta: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   processorActionButton: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 217, 255, 0.2)',
+    backgroundColor: "rgba(0, 217, 255, 0.2)",
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.4)',
-    shadowColor: '#00D9FF',
+    borderColor: "rgba(0, 217, 255, 0.4)",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -576,19 +674,19 @@ const styles = StyleSheet.create({
   },
   processorActionText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.5,
-    color: 'white',
+    color: "white",
   },
   processorNote: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 217, 255, 0.1)',
+    borderTopColor: "rgba(0, 217, 255, 0.1)",
   },
   processorNoteText: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   truncatedNotice: {
     fontSize: 13,

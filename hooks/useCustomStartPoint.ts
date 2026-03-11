@@ -24,7 +24,9 @@ export interface UseCustomStartPointReturn {
 export function useCustomStartPoint(): UseCustomStartPointReturn {
   const { state, dispatch } = useRouting();
 
-  const getStartPoint = useCallback((): { latitude: number; longitude: number } | undefined => {
+  const getStartPoint = useCallback(():
+    | { latitude: number; longitude: number }
+    | undefined => {
     const sp = state.configuration.startPoint;
     if (sp?.isValid && sp?.coordinates) {
       const { latitude, longitude } = sp.coordinates;
@@ -43,11 +45,11 @@ export function useCustomStartPoint(): UseCustomStartPointReturn {
   return useMemo(
     () => ({
       getStartPoint,
-      hasStartPoint: !!(state.configuration.startPoint?.isValid),
+      hasStartPoint: !!state.configuration.startPoint?.isValid,
       startPoint: state.configuration.startPoint,
       dispatch,
       state,
     }),
-    [getStartPoint, state.configuration.startPoint, dispatch, state]
+    [getStartPoint, state.configuration.startPoint, dispatch, state],
   );
 }

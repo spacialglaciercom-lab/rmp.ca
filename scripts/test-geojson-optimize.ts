@@ -22,7 +22,8 @@ function parseArgs(argv: string[]) {
     const a = argv[i]!;
     if (a.startsWith("--")) {
       const k = a.slice(2);
-      const v = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i]! : "true";
+      const v =
+        argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i]! : "true";
       args[k] = v;
     } else rest.push(a);
   }
@@ -33,7 +34,9 @@ async function main() {
   const { args, rest } = parseArgs(process.argv);
   const file = rest[0];
   if (!file) {
-    console.error("Usage: pnpm tsx scripts/test-geojson-optimize.ts <file.geojson> [--start-lat <lat>] [--start-lon <lon>]");
+    console.error(
+      "Usage: pnpm tsx scripts/test-geojson-optimize.ts <file.geojson> [--start-lat <lat>] [--start-lon <lon>]",
+    );
     process.exit(1);
   }
   const p = resolve(process.cwd(), file);

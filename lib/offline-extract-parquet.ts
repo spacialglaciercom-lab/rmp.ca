@@ -10,7 +10,11 @@ import type { GeoJSONFeatureCollection } from "@/services/overtureOptimizerServi
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import type { Feature, Polygon } from "geojson";
 
-export type OfflineExtractProgress = { phase: string; done?: number; total?: number };
+export type OfflineExtractProgress = {
+  phase: string;
+  done?: number;
+  total?: number;
+};
 
 export async function extractFromS3ParquetImpl(
   region: DownloadedRegion,
@@ -23,7 +27,9 @@ export async function extractFromS3ParquetImpl(
   const regionDir = getRegionDataDir(region.id);
   const dirInfo = await FileSystem.getInfoAsync(regionDir, { size: false });
   if (!dirInfo.exists) {
-    throw new Error(`Offline S3 data directory not found. Re-download the region in Settings.`);
+    throw new Error(
+      `Offline S3 data directory not found. Re-download the region in Settings.`,
+    );
   }
 
   const allFiles = await FileSystem.readDirectoryAsync(regionDir);
@@ -36,7 +42,9 @@ export async function extractFromS3ParquetImpl(
     });
 
   if (parquetFiles.length === 0) {
-    throw new Error("No Parquet files found in offline region. Re-download S3 Parquet in Settings.");
+    throw new Error(
+      "No Parquet files found in offline region. Re-download S3 Parquet in Settings.",
+    );
   }
 
   const { tableFromIPC } = await import("apache-arrow");
@@ -57,13 +65,18 @@ export async function extractFromS3ParquetImpl(
     throw new Error("parquet-wasm readParquet not available");
   }
 
-  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> =
+    [];
   const seen = new Set<string>();
 
   for (let f = 0; f < parquetFiles.length; f++) {
     const filename = parquetFiles[f];
     const filePath = `${regionDir}/${filename}`;
-    onProgress?.({ phase: "Reading Parquet…", done: f, total: parquetFiles.length });
+    onProgress?.({
+      phase: "Reading Parquet…",
+      done: f,
+      total: parquetFiles.length,
+    });
 
     const base64 = await FileSystem.readAsStringAsync(filePath, {
       encoding: FileSystem.EncodingType.Base64,
@@ -91,11 +104,15 @@ export async function extractFromS3ParquetImpl(
     for (let i = 0; i < n; i++) {
       if (subtypeCol) {
         const sub = subtypeCol.get(i);
-        if (sub !== null && sub !== undefined && String(sub) !== "road") continue;
+        if (sub !== null && sub !== undefined && String(sub) !== "road")
+          continue;
       }
       const geomVal = geometryCol.get(i);
       if (geomVal == null) continue;
-      const wkb = geomVal instanceof Uint8Array ? geomVal : new Uint8Array(geomVal as ArrayBuffer);
+      const wkb =
+        geomVal instanceof Uint8Array
+          ? geomVal
+          : new Uint8Array(geomVal as ArrayBuffer);
       let geom: { toGeoJSON: () => { type: string; coordinates: number[][] } };
       try {
         geom = wkx.Geometry.parse(Buffer.from(wkb)) as unknown as typeof geom;
@@ -103,10 +120,16 @@ export async function extractFromS3ParquetImpl(
         continue;
       }
       const geojsonGeom = geom.toGeoJSON();
-      if (geojsonGeom.type !== "LineString" || !Array.isArray(geojsonGeom.coordinates)) continue;
+      if (
+        geojsonGeom.type !== "LineString" ||
+        !Array.isArray(geojsonGeom.coordinates)
+      )
+        continue;
       const coords = geojsonGeom.coordinates as [number, number][];
       if (coords.length < 2) continue;
-      const inside = coords.some((c) => booleanPointInPolygon([c[0], c[1]], polygon));
+      const inside = coords.some((c) =>
+        booleanPointInPolygon([c[0], c[1]], polygon),
+      );
       if (!inside) continue;
       const key = JSON.stringify(coords);
       if (seen.has(key)) continue;
@@ -123,7 +146,11 @@ export async function extractFromS3ParquetImpl(
     }
   }
 
-  onProgress?.({ phase: "Done", done: parquetFiles.length, total: parquetFiles.length });
+  onProgress?.({
+    phase: "Done",
+    done: parquetFiles.length,
+    total: parquetFiles.length,
+  });
 
   return {
     type: "FeatureCollection",

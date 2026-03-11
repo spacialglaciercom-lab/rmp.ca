@@ -9,18 +9,44 @@ const DB_ROUTES = "routes";
 const DB_GPX_METADATA = "gpx_files";
 const STORAGE_GPX_PREFIX = "gpx_files";
 
-function requireStorage(): () => { ref: (path: string) => { putFile: (uri: string) => Promise<unknown>; getDownloadURL: () => Promise<string> } } {
+function requireStorage(): () => {
+  ref: (path: string) => {
+    putFile: (uri: string) => Promise<unknown>;
+    getDownloadURL: () => Promise<string>;
+  };
+} {
   if (!storage || typeof storage !== "function") {
-    throw new Error("Firebase Storage is not available. Use a development build with Firebase for GPX upload.");
+    throw new Error(
+      "Firebase Storage is not available. Use a development build with Firebase for GPX upload.",
+    );
   }
-  return storage as unknown as () => { ref: (path: string) => { putFile: (uri: string) => Promise<unknown>; getDownloadURL: () => Promise<string> } };
+  return storage as unknown as () => {
+    ref: (path: string) => {
+      putFile: (uri: string) => Promise<unknown>;
+      getDownloadURL: () => Promise<string>;
+    };
+  };
 }
 
-function requireDatabase(): () => { ref: (path: string) => { set: (v: unknown) => Promise<unknown>; get: () => Promise<{ val: () => unknown }>; once: (event: string) => Promise<{ val: () => unknown }> } } {
+function requireDatabase(): () => {
+  ref: (path: string) => {
+    set: (v: unknown) => Promise<unknown>;
+    get: () => Promise<{ val: () => unknown }>;
+    once: (event: string) => Promise<{ val: () => unknown }>;
+  };
+} {
   if (!database || typeof database !== "function") {
-    throw new Error("Firebase Realtime Database is not available. Use a development build with Firebase.");
+    throw new Error(
+      "Firebase Realtime Database is not available. Use a development build with Firebase.",
+    );
   }
-  return database as unknown as () => { ref: (path: string) => { set: (v: unknown) => Promise<unknown>; get: () => Promise<{ val: () => unknown }>; once: (event: string) => Promise<{ val: () => unknown }> } };
+  return database as unknown as () => {
+    ref: (path: string) => {
+      set: (v: unknown) => Promise<unknown>;
+      get: () => Promise<{ val: () => unknown }>;
+      once: (event: string) => Promise<{ val: () => unknown }>;
+    };
+  };
 }
 
 export interface GpxMetadata {
@@ -41,7 +67,7 @@ export interface GpxMetadata {
 export async function uploadGpxFile(
   fileUri: string,
   userId: string,
-  metadata?: Partial<Pick<GpxMetadata, "name">>
+  metadata?: Partial<Pick<GpxMetadata, "name">>,
 ): Promise<GpxMetadata> {
   await ensureAppCheckReady();
   const filename = metadata?.name ?? `route_${Date.now()}.gpx`;
@@ -52,7 +78,10 @@ export async function uploadGpxFile(
   const db = requireDatabase();
   const ref = st().ref(storagePath);
   const task = ref.putFile(fileUri);
-  const snapshot = (await task) as { ref: { getDownloadURL: () => Promise<string> }; metadata?: { name?: string } };
+  const snapshot = (await task) as {
+    ref: { getDownloadURL: () => Promise<string> };
+    metadata?: { name?: string };
+  };
   const downloadUrl = await snapshot.ref.getDownloadURL();
 
   const meta: GpxMetadata = {
@@ -75,7 +104,7 @@ export async function uploadGpxFile(
 export async function saveRouteMetadata(
   userId: string,
   routeId: string,
-  data: Record<string, string | number | boolean>
+  data: Record<string, string | number | boolean>,
 ): Promise<void> {
   await ensureAppCheckReady();
   const db = requireDatabase();
@@ -87,9 +116,14 @@ export async function saveRouteMetadata(
 /**
  * Get metadata for a user's GPX files from Realtime Database.
  */
-export async function getGpxFilesMetadata(userId: string): Promise<Record<string, GpxMetadata>> {
+export async function getGpxFilesMetadata(
+  userId: string,
+): Promise<Record<string, GpxMetadata>> {
   await ensureAppCheckReady();
   const db = requireDatabase();
   const snapshot = await db().ref(`${DB_GPX_METADATA}/${userId}`).once("value");
-  return ((snapshot as { val: () => unknown }).val() ?? {}) as Record<string, GpxMetadata>;
+  return ((snapshot as { val: () => unknown }).val() ?? {}) as Record<
+    string,
+    GpxMetadata
+  >;
 }

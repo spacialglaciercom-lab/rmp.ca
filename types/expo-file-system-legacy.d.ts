@@ -11,29 +11,34 @@ declare module "expo-file-system/legacy" {
   }
   export function readAsStringAsync(
     fileUri: string,
-    options?: { encoding?: EncodingType }
+    options?: { encoding?: EncodingType },
   ): Promise<string>;
   export function writeAsStringAsync(
     fileUri: string,
     contents: string,
-    options?: { encoding?: EncodingType }
+    options?: { encoding?: EncodingType },
   ): Promise<void>;
   export function readDirectoryAsync(dirUri: string): Promise<string[]>;
   export function deleteAsync(
     fileUri: string,
-    options?: { idempotent?: boolean }
+    options?: { idempotent?: boolean },
   ): Promise<void>;
   export function getInfoAsync(
     fileUri: string,
-    options?: { size?: boolean }
-  ): Promise<{ exists: boolean; isDirectory?: boolean; size?: number; uri?: string }>;
+    options?: { size?: boolean },
+  ): Promise<{
+    exists: boolean;
+    isDirectory?: boolean;
+    size?: number;
+    uri?: string;
+  }>;
   export function makeDirectoryAsync(
     fileUri: string,
-    options?: { intermediates?: boolean }
+    options?: { intermediates?: boolean },
   ): Promise<void>;
   export function downloadAsync(
     uri: string,
     fileUri: string,
-    options?: Record<string, unknown>
+    options?: Record<string, unknown>,
   ): Promise<{ uri: string; status: number; headers: Record<string, string> }>;
 }

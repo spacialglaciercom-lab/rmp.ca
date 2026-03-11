@@ -25,7 +25,7 @@ export class TileLifecycleManager {
   updateRetainedTiles(
     visibleIds: string[],
     prefetchIds: string[],
-    parentTileIds?: string[]
+    parentTileIds?: string[],
   ): void {
     const retain = new Set<string>([...visibleIds, ...prefetchIds]);
     if (parentTileIds?.length) parentTileIds.forEach((id) => retain.add(id));

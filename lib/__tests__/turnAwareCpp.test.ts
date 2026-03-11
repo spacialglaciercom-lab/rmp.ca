@@ -7,7 +7,10 @@ import {
 import type { TurnNode, TurnEdge } from "@/types/turnAware";
 
 /** Helper to build a TurnNode. */
-function tn(edgeId: string, direction: "forward" | "backward" = "forward"): TurnNode {
+function tn(
+  edgeId: string,
+  direction: "forward" | "backward" = "forward",
+): TurnNode {
   return { edgeId, direction, intersectionId: `int_${edgeId}` };
 }
 
@@ -19,7 +22,7 @@ function te(
     turnType?: "right" | "left" | "straight" | "u-turn";
     totalCost?: number;
     deadhead?: boolean;
-  } = {}
+  } = {},
 ): TurnEdge {
   return {
     id: `${from.edgeId}:${from.direction}->${to.edgeId}:${to.direction}`,

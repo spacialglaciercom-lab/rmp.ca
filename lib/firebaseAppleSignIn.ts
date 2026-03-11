@@ -24,7 +24,8 @@ function isBundleLoadError(e: unknown): boolean {
 }
 
 /** Cached Firebase Auth module to avoid loading the bundle again on each sign-in attempt. */
-let cachedAuth: typeof import("@react-native-firebase/auth").default | null = null;
+let cachedAuth: typeof import("@react-native-firebase/auth").default | null =
+  null;
 
 /**
  * Preload the Firebase Auth module so Sign in with Apple doesn't trigger a bundle load on tap.
@@ -54,7 +55,10 @@ async function ensureAppCheckReadyIfAvailable(): Promise<void> {
 /**
  * Generate a random nonce and its SHA256 hash (Apple expects the hash).
  */
-async function generateNonce(): Promise<{ rawNonce: string; hashedNonce: string }> {
+async function generateNonce(): Promise<{
+  rawNonce: string;
+  hashedNonce: string;
+}> {
   const rawNonce = Crypto.randomUUID();
   const hashedNonce = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
@@ -108,14 +112,21 @@ export async function signInWithAppleAndGetIdToken(): Promise<string | null> {
         if (isBundleLoadError(e)) {
           throw new Error(BUNDLE_LOAD_ERROR);
         }
-        if (msg.includes("RNFBAppModule") && msg.toLowerCase().includes("not found")) {
-          throw new Error("Sign in with Apple is not available in this build. Use a development build with Firebase configured.");
+        if (
+          msg.includes("RNFBAppModule") &&
+          msg.toLowerCase().includes("not found")
+        ) {
+          throw new Error(
+            "Sign in with Apple is not available in this build. Use a development build with Firebase configured.",
+          );
         }
         throw e;
       }
     }
     if (!auth?.OAuthProvider) {
-      throw new Error("Sign in with Apple is not available in this build. Use a development build with Firebase configured.");
+      throw new Error(
+        "Sign in with Apple is not available in this build. Use a development build with Firebase configured.",
+      );
     }
 
     const credential = auth.OAuthProvider.credential(
@@ -132,12 +143,22 @@ export async function signInWithAppleAndGetIdToken(): Promise<string | null> {
       // User canceled — not an error
       return null;
     }
-    const err = error as { code?: string; message?: string; userInfo?: Record<string, unknown>; nativeErrorCode?: number };
+    const err = error as {
+      code?: string;
+      message?: string;
+      userInfo?: Record<string, unknown>;
+      nativeErrorCode?: number;
+    };
     // User-friendly message when Firebase native module is missing (Expo Go or misconfigured build)
     const msg = typeof err.message === "string" ? err.message : "";
-    if (msg.includes("RNFBAppModule") && msg.toLowerCase().includes("not found")) {
+    if (
+      msg.includes("RNFBAppModule") &&
+      msg.toLowerCase().includes("not found")
+    ) {
       console.warn("[FirebaseApple] Native Firebase not available:", msg);
-      throw new Error("Sign in with Apple is not available in this build. Use a development build with Firebase configured.");
+      throw new Error(
+        "Sign in with Apple is not available in this build. Use a development build with Firebase configured.",
+      );
     }
     console.error("[FirebaseApple] Sign in failed:", {
       code: err.code,

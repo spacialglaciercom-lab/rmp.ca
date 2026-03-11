@@ -70,7 +70,10 @@ export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
   openSidebar: () => set({ isOpen: true }),
   closeSidebar: () => set({ isOpen: false, activeSubScreen: null }),
   toggleSidebar: () =>
-    set((state) => ({ isOpen: !state.isOpen, activeSubScreen: state.isOpen ? null : state.activeSubScreen })),
+    set((state) => ({
+      isOpen: !state.isOpen,
+      activeSubScreen: state.isOpen ? null : state.activeSubScreen,
+    })),
   togglePin: () => set((state) => ({ isPinned: !state.isPinned })),
   openSubScreen: (screen) => set({ activeSubScreen: screen }),
   closeSubScreen: () => set({ activeSubScreen: null }),
@@ -96,7 +99,11 @@ export const useMapSidebarStore = create<MapSidebarStore>((set) => ({
     set({ isOpen: false, activeSubScreen: null, mapStylePickerVisible: true }),
   closeMapStylePicker: () => set({ mapStylePickerVisible: false }),
   openRouteParametersPanel: () =>
-    set({ isOpen: false, activeSubScreen: null, routeParametersPanelVisible: true }),
+    set({
+      isOpen: false,
+      activeSubScreen: null,
+      routeParametersPanelVisible: true,
+    }),
   closeRouteParametersPanel: () => set({ routeParametersPanelVisible: false }),
   openOSMExtractor: () =>
     set({ isOpen: false, activeSubScreen: null, osmExtractorVisible: true }),

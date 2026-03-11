@@ -16,12 +16,18 @@ import {
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useRouter } from "expo-router";
-import { impactAsync as hapticImpact, ImpactFeedbackStyle } from "@/lib/safe-haptics";
+import {
+  impactAsync as hapticImpact,
+  ImpactFeedbackStyle,
+} from "@/lib/safe-haptics";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useColors } from "@/hooks/use-colors";
 import { useRouting } from "@/lib/routing-context";
-import { routeThroughWaypoints, buildOfflineMatchedRoute } from "@/lib/mapMatching";
+import {
+  routeThroughWaypoints,
+  buildOfflineMatchedRoute,
+} from "@/lib/mapMatching";
 import { getRoutingConfigAsync } from "@/lib/routing-config";
 import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { storage } from "@/lib/storage";
@@ -46,7 +52,8 @@ const ALGORITHM_OPTIONS = [
   { value: "two_opt", label: "2-Opt (route untangling)" },
 ] as const;
 
-const VALHALLA_MATRIX_URL = "https://valhalla1.openstreetmap.de/sources_to_targets";
+const VALHALLA_MATRIX_URL =
+  "https://valhalla1.openstreetmap.de/sources_to_targets";
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 const nl = "\n";
 
@@ -119,7 +126,7 @@ const NOMINATIM_DELAY_MS = 1100;
  */
 async function geocodeAddressesBatch(
   addressLines: string[],
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (done: number, total: number) => void,
 ): Promise<VRPStop[]> {
   const trimmed = addressLines.map((l) => l.trim()).filter(Boolean);
   const stops: VRPStop[] = [];
@@ -132,7 +139,9 @@ async function geocodeAddressesBatch(
         const lat = parseFloat(first.lat);
         const lon = parseFloat(first.lon);
         if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
-          const label = first.display_name.split(",").slice(0, 2).join(",").trim() || `Stop ${stops.length + 1}`;
+          const label =
+            first.display_name.split(",").slice(0, 2).join(",").trim() ||
+            `Stop ${stops.length + 1}`;
           stops.push({ lat, lon, label });
         }
       }
@@ -146,7 +155,9 @@ async function geocodeAddressesBatch(
   return stops;
 }
 
-async function getValhallaMatrix(locations: VRPStop[]): Promise<{ distance: number; time: number }[][]> {
+async function getValhallaMatrix(
+  locations: VRPStop[],
+): Promise<{ distance: number; time: number }[][]> {
   const locs = locations.map((l) => ({ lat: l.lat, lon: l.lon }));
 
   const response = await fetch(VALHALLA_MATRIX_URL, {
@@ -161,7 +172,9 @@ async function getValhallaMatrix(locations: VRPStop[]): Promise<{ distance: numb
   });
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = (await response.json()) as { sources_to_targets?: { distance?: number; time?: number }[][] };
+  const data = (await response.json()) as {
+    sources_to_targets?: { distance?: number; time?: number }[][];
+  };
 
   if (!data.sources_to_targets) throw new Error("Invalid response format");
 
@@ -181,7 +194,12 @@ async function getValhallaMatrix(locations: VRPStop[]): Promise<{ distance: numb
 }
 
 /** Haversine distance in km (for clustering only) */
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function haversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -196,14 +214,21 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 /** Build distance/time matrix using haversine (no API). Time estimated at ~40 km/h. */
-function buildHaversineMatrix(locations: VRPStop[]): { distance: number; time: number }[][] {
+function buildHaversineMatrix(
+  locations: VRPStop[],
+): { distance: number; time: number }[][] {
   const n = locations.length;
   const AVG_SPEED_KMH = 40;
   const matrix: { distance: number; time: number }[][] = [];
   for (let i = 0; i < n; i++) {
     matrix[i] = [];
     for (let j = 0; j < n; j++) {
-      const dist = haversineKm(locations[i].lat, locations[i].lon, locations[j].lat, locations[j].lon);
+      const dist = haversineKm(
+        locations[i].lat,
+        locations[i].lon,
+        locations[j].lat,
+        locations[j].lon,
+      );
       const timeSec = (dist / AVG_SPEED_KMH) * 3600;
       matrix[i][j] = { distance: dist, time: timeSec };
     }
@@ -248,12 +273,14 @@ function clusterByZones(locations: VRPStop[], numZones: number): number[][] {
 function orderClustersByStart(
   clusters: number[][],
   locations: VRPStop[],
-  startIndex: number
+  startIndex: number,
 ): number[][] {
   const start = locations[startIndex];
   const withCentroid = clusters.map((indices) => {
-    const lat = indices.reduce((s, i) => s + locations[i].lat, 0) / indices.length;
-    const lon = indices.reduce((s, i) => s + locations[i].lon, 0) / indices.length;
+    const lat =
+      indices.reduce((s, i) => s + locations[i].lat, 0) / indices.length;
+    const lon =
+      indices.reduce((s, i) => s + locations[i].lon, 0) / indices.length;
     const dist = haversineKm(start.lat, start.lon, lat, lon);
     const containsStart = indices.includes(startIndex);
     return { indices, dist, containsStart };
@@ -272,7 +299,7 @@ function orderClustersByStart(
 function nearestNeighborRoute(
   matrix: { distance: number; time: number }[][],
   indices: number[],
-  startIdxInSubset: number
+  startIdxInSubset: number,
 ): number[] {
   if (indices.length <= 1) return [...indices];
   const route: number[] = [];
@@ -306,7 +333,7 @@ function nearestNeighborRoute(
  */
 function twoOptImprove(
   matrix: { distance: number; time: number }[][],
-  routeIndices: number[]
+  routeIndices: number[],
 ): number[] {
   const n = routeIndices.length;
   if (n <= 3) return routeIndices;
@@ -325,8 +352,12 @@ function twoOptImprove(
         const b = route[i + 1];
         const c = route[j];
         const d = route[(j + 1) % n];
-        const before = (matrix[a]?.[b]?.distance ?? Infinity) + (matrix[c]?.[d]?.distance ?? Infinity);
-        const after = (matrix[a]?.[c]?.distance ?? Infinity) + (matrix[b]?.[d]?.distance ?? Infinity);
+        const before =
+          (matrix[a]?.[b]?.distance ?? Infinity) +
+          (matrix[c]?.[d]?.distance ?? Infinity);
+        const after =
+          (matrix[a]?.[c]?.distance ?? Infinity) +
+          (matrix[b]?.[d]?.distance ?? Infinity);
         if (after < before - 1e-6) {
           const segment = route.slice(i + 1, j + 1).reverse();
           route.splice(i + 1, j - i, ...segment);
@@ -357,7 +388,7 @@ export interface VRPConfig {
  */
 function clarkeWrightSavings(
   matrix: { distance: number; time: number }[][],
-  numVehicles: number
+  numVehicles: number,
 ): { routes: number[][]; totalDistance: number; totalTime: number } {
   const n = matrix.length;
   if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
@@ -432,15 +463,16 @@ function clarkeWrightSavings(
         const bEnd = rb[rb.length - 2];
         const bStart = rb[1];
         const candidates: number[][] = [
-          ra.slice(0, -1).concat(rb.slice(1)),           // ...aEnd, bStart...
+          ra.slice(0, -1).concat(rb.slice(1)), // ...aEnd, bStart...
           ra.slice(0, -1).concat(rb.slice(1, -1).reverse(), [0]), // ...aEnd, bEnd..bStart, 0
-          [0].concat(ra.slice(1, -1).reverse(), rb.slice(1)),     // 0, aStart..aEnd, bStart...
-          [0].concat(rb.slice(1, -1).reverse(), ra.slice(1)),     // 0, bStart..bEnd, aStart...
+          [0].concat(ra.slice(1, -1).reverse(), rb.slice(1)), // 0, aStart..aEnd, bStart...
+          [0].concat(rb.slice(1, -1).reverse(), ra.slice(1)), // 0, bStart..bEnd, aStart...
         ];
         for (const merged of candidates) {
           if (merged.length < 3) continue;
           let cost = 0;
-          for (let k = 0; k < merged.length - 1; k++) cost += d(merged[k], merged[k + 1]);
+          for (let k = 0; k < merged.length - 1; k++)
+            cost += d(merged[k], merged[k + 1]);
           if (cost < bestCost) {
             bestCost = cost;
             bestI = i;
@@ -475,7 +507,7 @@ function clarkeWrightSavings(
 function sweepVRP(
   matrix: { distance: number; time: number }[][],
   locations: VRPStop[],
-  numVehicles: number
+  numVehicles: number,
 ): { routes: number[][]; totalDistance: number; totalTime: number } {
   const n = matrix.length;
   if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
@@ -500,7 +532,10 @@ function sweepVRP(
   const perRoute = Math.ceil(indices.length / numVehicles);
   const routeIndices: number[][] = [];
   for (let v = 0; v < numVehicles; v++) {
-    const segment = indices.slice(v * perRoute, Math.min((v + 1) * perRoute, indices.length));
+    const segment = indices.slice(
+      v * perRoute,
+      Math.min((v + 1) * perRoute, indices.length),
+    );
     if (segment.length === 0) continue;
     // Nearest-neighbor within segment: start at depot, repeatedly go to nearest unvisited
     const route: number[] = [0];
@@ -536,7 +571,6 @@ function sweepVRP(
   return { routes: routeIndices, totalDistance, totalTime };
 }
 
-
 /**
  * Or-Opt: nearest-neighbor construction then iterative relocation of chains of
  * 1, 2, or 3 consecutive stops to the best position across all routes.
@@ -545,7 +579,7 @@ function sweepVRP(
 function twoOptVRP(
   matrix: { distance: number; time: number }[][],
   locations: VRPStop[],
-  numVehicles: number
+  numVehicles: number,
 ): { routes: number[][]; totalDistance: number; totalTime: number } {
   const n = matrix.length;
   if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
@@ -577,7 +611,10 @@ function twoOptVRP(
       let bestDist = Infinity;
       for (const node of rem) {
         const dist = d(cur, node);
-        if (dist < bestDist) { bestDist = dist; best = node; }
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = node;
+        }
       }
       if (best < 0) break;
       rem.delete(best);
@@ -596,12 +633,19 @@ function twoOptVRP(
       for (let i = 1; i < r.length - 2; i++) {
         for (let k = i + 1; k < r.length - 1; k++) {
           const delta =
-            d(r[i - 1]!, r[k]!) + d(r[i]!, r[k + 1]!) -
-            d(r[i - 1]!, r[i]!) - d(r[k]!, r[k + 1]!);
+            d(r[i - 1]!, r[k]!) +
+            d(r[i]!, r[k + 1]!) -
+            d(r[i - 1]!, r[i]!) -
+            d(r[k]!, r[k + 1]!);
           if (delta < -1e-9) {
-            let lo = i; let hi = k;
+            let lo = i;
+            let hi = k;
             while (lo < hi) {
-              const tmp = r[lo]!; r[lo] = r[hi]!; r[hi] = tmp; lo++; hi--;
+              const tmp = r[lo]!;
+              r[lo] = r[hi]!;
+              r[hi] = tmp;
+              lo++;
+              hi--;
             }
             improved = true;
           }
@@ -611,7 +655,8 @@ function twoOptVRP(
   }
 
   const finalRoutes = routes.filter((r) => r.length > 2);
-  if (finalRoutes.length === 0) return { routes: [[0, 0]], totalDistance: 0, totalTime: 0 };
+  if (finalRoutes.length === 0)
+    return { routes: [[0, 0]], totalDistance: 0, totalTime: 0 };
 
   let totalDistance = 0;
   let totalTime = 0;
@@ -627,7 +672,7 @@ function orOptVRP(
   matrix: { distance: number; time: number }[][],
   locations: VRPStop[],
   numVehicles: number,
-  balanceLoad: boolean = false
+  balanceLoad: boolean = false,
 ): { routes: number[][]; totalDistance: number; totalTime: number } {
   const n = matrix.length;
   if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
@@ -660,7 +705,10 @@ function orOptVRP(
       let bestDist = Infinity;
       for (const node of rem) {
         const dist = d(cur, node);
-        if (dist < bestDist) { bestDist = dist; best = node; }
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = node;
+        }
       }
       if (best < 0) break;
       rem.delete(best);
@@ -686,8 +734,7 @@ function orOptVRP(
     improved = false;
     passes++;
 
-    outer:
-    for (let ri = 0; ri < routes.length; ri++) {
+    outer: for (let ri = 0; ri < routes.length; ri++) {
       const routeA = routes[ri]!;
       if (routeA.length < 3) continue;
 
@@ -699,7 +746,8 @@ function orOptVRP(
           const next = routeA[pos + k]!;
 
           // Savings from removing this chain from routeA
-          const removeGain = d(prev, chainFirst) + d(chainLast, next) - d(prev, next);
+          const removeGain =
+            d(prev, chainFirst) + d(chainLast, next) - d(prev, next);
 
           let bestGain = 1e-9;
           let bestRj = -1;
@@ -719,7 +767,9 @@ function orOptVRP(
               const costFwd = d(a, chainFirst) + d(chainLast, b) - d(a, b);
               if (removeGain - costFwd > bestGain) {
                 bestGain = removeGain - costFwd;
-                bestRj = rj; bestIns = ins; bestRev = false;
+                bestRj = rj;
+                bestIns = ins;
+                bestRev = false;
               }
 
               // Reversed insertion (only meaningful for k > 1)
@@ -727,7 +777,9 @@ function orOptVRP(
                 const costRev = d(a, chainLast) + d(chainFirst, b) - d(a, b);
                 if (removeGain - costRev > bestGain) {
                   bestGain = removeGain - costRev;
-                  bestRj = rj; bestIns = ins; bestRev = true;
+                  bestRj = rj;
+                  bestIns = ins;
+                  bestRev = true;
                 }
               }
             }
@@ -776,7 +828,8 @@ function orOptVRP(
   }
 
   const finalRoutes = routes.filter((r) => r.length > 2);
-  if (finalRoutes.length === 0) return { routes: [[0, 0]], totalDistance: 0, totalTime: 0 };
+  if (finalRoutes.length === 0)
+    return { routes: [[0, 0]], totalDistance: 0, totalTime: 0 };
 
   let totalDistance = 0;
   let totalTime = 0;
@@ -794,7 +847,7 @@ function orOptVRP(
 function solveVRP(
   matrix: { distance: number; time: number }[][],
   locations: VRPStop[],
-  config?: Partial<VRPConfig>
+  config?: Partial<VRPConfig>,
 ): VRPResult {
   const n = locations.length;
   if (n <= 1) {
@@ -805,14 +858,19 @@ function solveVRP(
     };
   }
 
-  const numVehicles = config?.vehicles != null && config.vehicles > 0
-    ? Math.min(12, Math.max(1, config.vehicles))
-    : 1;
+  const numVehicles =
+    config?.vehicles != null && config.vehicles > 0
+      ? Math.min(12, Math.max(1, config.vehicles))
+      : 1;
 
   if (config?.algorithm === "clarke_wright") {
-    const { routes: routeIndices, totalDistance, totalTime } = clarkeWrightSavings(matrix, numVehicles);
+    const {
+      routes: routeIndices,
+      totalDistance,
+      totalTime,
+    } = clarkeWrightSavings(matrix, numVehicles);
     const routes: VRPStop[][] = routeIndices.map((r) =>
-      r.map((i) => locations[i])
+      r.map((i) => locations[i]),
     );
     const stops: VRPStop[] = routes.flatMap((r) => r);
     return {
@@ -824,9 +882,13 @@ function solveVRP(
   }
 
   if (config?.algorithm === "sweep") {
-    const { routes: routeIndices, totalDistance, totalTime } = sweepVRP(matrix, locations, numVehicles);
+    const {
+      routes: routeIndices,
+      totalDistance,
+      totalTime,
+    } = sweepVRP(matrix, locations, numVehicles);
     const routes: VRPStop[][] = routeIndices.map((r) =>
-      r.map((i) => locations[i])
+      r.map((i) => locations[i]),
     );
     const stops: VRPStop[] = routes.flatMap((r) => r);
     return {
@@ -838,8 +900,14 @@ function solveVRP(
   }
 
   if (config?.algorithm === "two_opt") {
-    const { routes: routeIndices, totalDistance, totalTime } = twoOptVRP(matrix, locations, numVehicles);
-    const routes: VRPStop[][] = routeIndices.map((r) => r.map((i) => locations[i]!));
+    const {
+      routes: routeIndices,
+      totalDistance,
+      totalTime,
+    } = twoOptVRP(matrix, locations, numVehicles);
+    const routes: VRPStop[][] = routeIndices.map((r) =>
+      r.map((i) => locations[i]!),
+    );
     const stops: VRPStop[] = routes.flatMap((r) => r);
     return {
       stops,
@@ -850,8 +918,14 @@ function solveVRP(
   }
   if (config?.algorithm === "or_opt") {
     const balanceLoad = config?.objective === "balance_load";
-    const { routes: routeIndices, totalDistance, totalTime } = orOptVRP(matrix, locations, numVehicles, balanceLoad);
-    const routes: VRPStop[][] = routeIndices.map((r) => r.map((i) => locations[i]!));
+    const {
+      routes: routeIndices,
+      totalDistance,
+      totalTime,
+    } = orOptVRP(matrix, locations, numVehicles, balanceLoad);
+    const routes: VRPStop[][] = routeIndices.map((r) =>
+      r.map((i) => locations[i]!),
+    );
     const stops: VRPStop[] = routes.flatMap((r) => r);
     return {
       stops,
@@ -908,19 +982,38 @@ const DEFAULT_VRP_CONFIG: VRPConfig = {
 };
 
 /** Delivery instructions card: load from one JSON file; list is auto-matched to route stops by address. */
-function DeliveryInstructionsCard({ fillScreen = false }: { fillScreen?: boolean }) {
+function DeliveryInstructionsCard({
+  fillScreen = false,
+}: {
+  fillScreen?: boolean;
+}) {
   const colors = useColors();
-  const { instructions, loadFromFile, loadError, clearLoadError } = useDeliveryInstructions();
+  const { instructions, loadFromFile, loadError, clearLoadError } =
+    useDeliveryInstructions();
   return (
-    <View style={[styles.card, fillScreen && styles.cardFill, { backgroundColor: colors.surface }]}>
+    <View
+      style={[
+        styles.card,
+        fillScreen && styles.cardFill,
+        { backgroundColor: colors.surface },
+      ]}
+    >
       <Text style={[styles.title, { color: colors.foreground }]}>
         Delivery Instructions
       </Text>
       <Text style={[styles.subtitle, { color: colors.muted }]}>
-        {instructions.length} instruction{instructions.length !== 1 ? "s" : ""} loaded. Auto-matched to route stops by address during export.
+        {instructions.length} instruction{instructions.length !== 1 ? "s" : ""}{" "}
+        loaded. Auto-matched to route stops by address during export.
       </Text>
       <TouchableOpacity
-        style={[styles.runButton, { backgroundColor: colors.primary, marginTop: 8, alignSelf: "flex-start" }]}
+        style={[
+          styles.runButton,
+          {
+            backgroundColor: colors.primary,
+            marginTop: 8,
+            alignSelf: "flex-start",
+          },
+        ]}
         onPress={loadFromFile}
         activeOpacity={0.8}
       >
@@ -929,20 +1022,50 @@ function DeliveryInstructionsCard({ fillScreen = false }: { fillScreen?: boolean
       {loadError ? (
         <TouchableOpacity
           onPress={clearLoadError}
-          style={{ marginTop: 8, paddingVertical: 6, paddingHorizontal: 8, backgroundColor: colors.error + "30", borderRadius: 8 }}
+          style={{
+            marginTop: 8,
+            paddingVertical: 6,
+            paddingHorizontal: 8,
+            backgroundColor: colors.error + "30",
+            borderRadius: 8,
+          }}
         >
-          <Text style={[styles.helperText, { color: colors.error }]}>{loadError}</Text>
-          <Text style={[styles.helperText, { color: colors.muted, marginTop: 2 }]}>Tap to dismiss</Text>
+          <Text style={[styles.helperText, { color: colors.error }]}>
+            {loadError}
+          </Text>
+          <Text
+            style={[styles.helperText, { color: colors.muted, marginTop: 2 }]}
+          >
+            Tap to dismiss
+          </Text>
         </TouchableOpacity>
       ) : null}
       {instructions.length > 0 ? (
         <View style={{ marginTop: 8, gap: 6 }}>
           {instructions.slice(0, 5).map((inst, idx) => (
-            <View key={inst.id ?? idx} style={{ paddingVertical: 6, paddingHorizontal: 8, backgroundColor: colors.background + "80", borderRadius: 8, marginBottom: 4 }}>
-              <Text style={[styles.sectionHeaderSmall, { color: colors.foreground, marginBottom: 2 }]} numberOfLines={1}>
+            <View
+              key={inst.id ?? idx}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 8,
+                backgroundColor: colors.background + "80",
+                borderRadius: 8,
+                marginBottom: 4,
+              }}
+            >
+              <Text
+                style={[
+                  styles.sectionHeaderSmall,
+                  { color: colors.foreground, marginBottom: 2 },
+                ]}
+                numberOfLines={1}
+              >
                 {inst.address} · {inst.title}
               </Text>
-              <Text style={[styles.helperText, { color: colors.muted }]} numberOfLines={2}>
+              <Text
+                style={[styles.helperText, { color: colors.muted }]}
+                numberOfLines={2}
+              >
                 {inst.details}
               </Text>
             </View>
@@ -958,7 +1081,9 @@ function DeliveryInstructionsCard({ fillScreen = false }: { fillScreen?: boolean
   );
 }
 
-export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {}) {
+export function VRPPlanner({
+  nestedInScrollView = false,
+}: VRPPlannerProps = {}) {
   const colors = useColors();
   const cyan = colors.accentCyan ?? colors.primary;
   const magenta = colors.accentMagenta ?? "#d946ef";
@@ -980,9 +1105,13 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   const nominatimInputRef = useRef<TextInput | null>(null);
   const vehiclesRef = useRef(String(DEFAULT_VRP_CONFIG.vehicles));
   const capacityRef = useRef(String(DEFAULT_VRP_CONFIG.capacity));
-  const maxRouteTimeHoursRef = useRef(String(DEFAULT_VRP_CONFIG.maxRouteTimeHours));
+  const maxRouteTimeHoursRef = useRef(
+    String(DEFAULT_VRP_CONFIG.maxRouteTimeHours),
+  );
   const depotAddressRef = useRef("");
-  const travelSpeedFactorRef = useRef(String(DEFAULT_VRP_CONFIG.travelSpeedFactor));
+  const travelSpeedFactorRef = useRef(
+    String(DEFAULT_VRP_CONFIG.travelSpeedFactor),
+  );
   const [coordinatesKey, setCoordinatesKey] = useState(0);
   const [addressesKey, setAddressesKey] = useState(0);
   const [nominatimKey, setNominatimKey] = useState(0);
@@ -991,21 +1120,37 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   /** On iOS, use uncontrolled inputs everywhere to prevent keyboard-open freeze from re-renders. */
   const useUncontrolledInputs = Platform.OS === "ios";
 
-  const [geocodeProgress, setGeocodeProgress] = useState<{ done: number; total: number } | null>(null);
+  const [geocodeProgress, setGeocodeProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const [vehicles, setVehicles] = useState(String(DEFAULT_VRP_CONFIG.vehicles));
   const [capacity, setCapacity] = useState(String(DEFAULT_VRP_CONFIG.capacity));
-  const [maxRouteTimeHours, setMaxRouteTimeHours] = useState(String(DEFAULT_VRP_CONFIG.maxRouteTimeHours));
+  const [maxRouteTimeHours, setMaxRouteTimeHours] = useState(
+    String(DEFAULT_VRP_CONFIG.maxRouteTimeHours),
+  );
   const [advancedOpen, setAdvancedOpen] = useState(Platform.OS === "web");
   const [depotAddress, setDepotAddress] = useState("");
-  const [startFromCurrentPosition, setStartFromCurrentPosition] = useState(false);
-  const [travelSpeedFactor, setTravelSpeedFactor] = useState(String(DEFAULT_VRP_CONFIG.travelSpeedFactor));
-  const [objective, setObjective] = useState<(typeof OBJECTIVE_OPTIONS)[number]["value"]>(DEFAULT_VRP_CONFIG.objective);
-  const [algorithm, setAlgorithm] = useState<(typeof ALGORITHM_OPTIONS)[number]["value"]>(DEFAULT_VRP_CONFIG.algorithm);
-  const [pickerOpen, setPickerOpen] = useState<"objective" | "algorithm" | null>(null);
+  const [startFromCurrentPosition, setStartFromCurrentPosition] =
+    useState(false);
+  const [travelSpeedFactor, setTravelSpeedFactor] = useState(
+    String(DEFAULT_VRP_CONFIG.travelSpeedFactor),
+  );
+  const [objective, setObjective] = useState<
+    (typeof OBJECTIVE_OPTIONS)[number]["value"]
+  >(DEFAULT_VRP_CONFIG.objective);
+  const [algorithm, setAlgorithm] = useState<
+    (typeof ALGORITHM_OPTIONS)[number]["value"]
+  >(DEFAULT_VRP_CONFIG.algorithm);
+  const [pickerOpen, setPickerOpen] = useState<
+    "objective" | "algorithm" | null
+  >(null);
 
   const [nominatimQuery, setNominatimQuery] = useState("");
-  const [nominatimResults, setNominatimResults] = useState<NominatimResult[]>([]);
+  const [nominatimResults, setNominatimResults] = useState<NominatimResult[]>(
+    [],
+  );
   const [nominatimLoading, setNominatimLoading] = useState(false);
 
   const router = useRouter();
@@ -1016,31 +1161,43 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
   /** Get road-matched geometry for each route (for GPX export). Falls back to stop-only if routing unavailable. */
   const getRoadMatchedGeometries = useCallback(
-    async (routes: VRPStop[][]): Promise<Array<Array<{ lat: number; lon: number }>>> => {
+    async (routes: VRPStop[][]): Promise<{ lat: number; lon: number }[][]> => {
       const routingConfig = await getRoutingConfigAsync();
-      const canRoute =
-        !!(routingConfig.baseUrl || (routingConfig.provider === "google" && routingConfig.googleApiKey));
-      const geometries: Array<Array<{ lat: number; lon: number }>> = [];
+      const canRoute = !!(
+        routingConfig.baseUrl ||
+        (routingConfig.provider === "google" && routingConfig.googleApiKey)
+      );
+      const geometries: { lat: number; lon: number }[][] = [];
       for (const stopList of routes) {
         const pts = stopList.map((s) => ({ lat: s.lat, lon: s.lon }));
         if (pts.length < 2) {
           geometries.push(pts);
           continue;
         }
-        let matched: { matchedGeometry: Array<{ lat: number; lon: number }> } | null = null;
+        let matched: {
+          matchedGeometry: { lat: number; lon: number }[];
+        } | null = null;
         if (canRoute) {
           try {
-            matched = await routeThroughWaypoints(pts, routingConfig, getRouteOptionsForRouting());
+            matched = await routeThroughWaypoints(
+              pts,
+              routingConfig,
+              getRouteOptionsForRouting(),
+            );
           } catch {
             // fall through to offline
           }
         }
         if (matched && matched.matchedGeometry.length >= 2) {
-          geometries.push(matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })));
+          geometries.push(
+            matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+          );
         } else {
           const offline = buildOfflineMatchedRoute(pts);
           if (offline.matchedGeometry.length >= 2) {
-            geometries.push(offline.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })));
+            geometries.push(
+              offline.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+            );
           } else {
             geometries.push(pts);
           }
@@ -1048,22 +1205,24 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       }
       return geometries;
     },
-    []
+    [],
   );
 
   const handlePreviewRoute = async () => {
     if (!result?.stops?.length) return;
     hapticImpact();
-    const routes = result.routes && result.routes.length > 1 ? result.routes : null;
+    const routes =
+      result.routes && result.routes.length > 1 ? result.routes : null;
     setPreviewLoading(true);
     try {
       const routingConfig = await getRoutingConfigAsync();
       const canRoute =
-        (routingConfig.baseUrl || (routingConfig.provider === "google" && routingConfig.googleApiKey));
+        routingConfig.baseUrl ||
+        (routingConfig.provider === "google" && routingConfig.googleApiKey);
 
       if (routes && routes.length > 1) {
         // Multi-vehicle: compute one road-matched route per vehicle and dispatch separate tracks
-        const routeGeometries: Array<Array<{ lat: number; lon: number }>> = [];
+        const routeGeometries: { lat: number; lon: number }[][] = [];
         for (let v = 0; v < routes.length; v++) {
           const stopList = routes[v];
           const pts = stopList.map((s) => ({ lat: s.lat, lon: s.lon }));
@@ -1071,16 +1230,29 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
             routeGeometries.push(pts);
             continue;
           }
-          let matched: { matchedGeometry: Array<{ lat: number; lon: number }> } | null = null;
+          let matched: {
+            matchedGeometry: { lat: number; lon: number }[];
+          } | null = null;
           if (canRoute) {
-            matched = await routeThroughWaypoints(pts, routingConfig, getRouteOptionsForRouting());
+            matched = await routeThroughWaypoints(
+              pts,
+              routingConfig,
+              getRouteOptionsForRouting(),
+            );
           }
           if (matched && matched.matchedGeometry.length >= 2) {
-            routeGeometries.push(matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })));
+            routeGeometries.push(
+              matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+            );
           } else {
             const offline = buildOfflineMatchedRoute(pts);
             if (offline.matchedGeometry.length >= 2) {
-              routeGeometries.push(offline.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })));
+              routeGeometries.push(
+                offline.matchedGeometry.map((p) => ({
+                  lat: p.lat,
+                  lon: p.lon,
+                })),
+              );
             } else {
               routeGeometries.push(pts);
             }
@@ -1092,17 +1264,24 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         });
       } else {
         // Single route: keep existing behavior (result.stops or first route)
-        const points = result.stops.map((s, i) => ({ lat: s.lat, lon: s.lon, label: `#${i + 1}` }));
+        const points = result.stops.map((s, i) => ({
+          lat: s.lat,
+          lon: s.lon,
+          label: `#${i + 1}`,
+        }));
         if (points.length >= 2 && canRoute) {
           const matched = await routeThroughWaypoints(
             points.map((p) => ({ lat: p.lat, lon: p.lon })),
             routingConfig,
-            getRouteOptionsForRouting()
+            getRouteOptionsForRouting(),
           );
           if (matched && matched.matchedGeometry.length >= 2) {
             dispatch({
               type: "SET_PREVIEW_ROUTE",
-              payload: matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+              payload: matched.matchedGeometry.map((p) => ({
+                lat: p.lat,
+                lon: p.lon,
+              })),
             });
             router.push("/(tabs)/map");
             return;
@@ -1113,16 +1292,25 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         if (offline.matchedGeometry.length >= 2) {
           dispatch({
             type: "SET_PREVIEW_ROUTE",
-            payload: offline.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+            payload: offline.matchedGeometry.map((p) => ({
+              lat: p.lat,
+              lon: p.lon,
+            })),
           });
         } else {
           dispatch({ type: "SET_PREVIEW_ROUTE", payload: points });
         }
       }
     } catch (e) {
-      const points = result.stops.map((s, i) => ({ lat: s.lat, lon: s.lon, label: `#${i + 1}` }));
+      const points = result.stops.map((s, i) => ({
+        lat: s.lat,
+        lon: s.lon,
+        label: `#${i + 1}`,
+      }));
       if (routes && routes.length > 1) {
-        const fallback = routes.map((r) => r.map((s) => ({ lat: s.lat, lon: s.lon })));
+        const fallback = routes.map((r) =>
+          r.map((s) => ({ lat: s.lat, lon: s.lon })),
+        );
         dispatch({ type: "SET_PREVIEW_ROUTES", payload: fallback });
       } else {
         dispatch({ type: "SET_PREVIEW_ROUTE", payload: points });
@@ -1155,7 +1343,10 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       routeSource: "vrp",
     };
     await storage.saveRoute(routeToSave);
-    Alert.alert("Saved", `${points.length} stops saved as current route. Open Home to see the Processing Queue.`);
+    Alert.alert(
+      "Saved",
+      `${points.length} stops saved as current route. Open Home to see the Processing Queue.`,
+    );
     router.push("/(tabs)/");
   };
 
@@ -1166,22 +1357,30 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     return value;
   };
 
-
   const buildGpxForRoute = (
     routeStops: VRPStop[],
     routeNum: number,
     date: string,
-    trackPoints?: Array<{ lat: number; lon: number }>
+    trackPoints?: { lat: number; lon: number }[],
   ): string => {
     const wpts = routeStops
       .map((s, i) => {
-        const name = s.label ? s.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : `Stop ${i + 1}`;
+        const name = s.label
+          ? s.label
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+          : `Stop ${i + 1}`;
         return `  <wpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"><name>${name}</name></wpt>`;
       })
       .join(nl);
-    const track = trackPoints && trackPoints.length >= 2 ? trackPoints : routeStops;
+    const track =
+      trackPoints && trackPoints.length >= 2 ? trackPoints : routeStops;
     const trkpts = track
-      .map((p) => `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`)
+      .map(
+        (p) =>
+          `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`,
+      )
       .join(nl);
     return [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -1190,8 +1389,8 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       wpts,
       `  <trk><name>Vehicle ${routeNum}</name><trkseg>`,
       trkpts,
-      '  </trkseg></trk>',
-      '</gpx>',
+      "  </trkseg></trk>",
+      "</gpx>",
     ].join(nl);
   };
 
@@ -1199,7 +1398,10 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     if (!result?.stops?.length) return;
     hapticImpact();
     const date = new Date().toISOString().slice(0, 10);
-    const routes: VRPStop[][] = result.routes && result.routes.length > 1 ? result.routes : [result.stops];
+    const routes: VRPStop[][] =
+      result.routes && result.routes.length > 1
+        ? result.routes
+        : [result.stops];
 
     setExportGpxLoading(true);
     try {
@@ -1207,7 +1409,10 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
       const allWpts = result.stops
         .map((s, i) => {
-          const name = (s.label ?? `Stop ${i + 1}`).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const name = (s.label ?? `Stop ${i + 1}`)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
           return `  <wpt lat="${s.lat.toFixed(6)}" lon="${s.lon.toFixed(6)}"><name>${name}</name></wpt>`;
         })
         .join(nl);
@@ -1215,11 +1420,19 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       const tracks = routes
         .map((routeStops, ri) => {
           const trackPoints = roadGeometries[ri];
-          const pts = trackPoints && trackPoints.length >= 2 ? trackPoints : routeStops;
+          const pts =
+            trackPoints && trackPoints.length >= 2 ? trackPoints : routeStops;
           const trkpts = pts
-            .map((p) => `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`)
+            .map(
+              (p) =>
+                `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`,
+            )
             .join(nl);
-          return [`  <trk><name>Vehicle ${ri + 1}</name><trkseg>`, trkpts, '  </trkseg></trk>'].join(nl);
+          return [
+            `  <trk><name>Vehicle ${ri + 1}</name><trkseg>`,
+            trkpts,
+            "  </trkseg></trk>",
+          ].join(nl);
         })
         .join(nl);
 
@@ -1229,7 +1442,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         `  <metadata><name>VRP Routes – ${date}</name></metadata>`,
         allWpts,
         tracks,
-        '</gpx>',
+        "</gpx>",
       ].join(nl);
 
       const fileName = `vrp_routes_${date}.gpx`;
@@ -1237,18 +1450,32 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         const blob = new Blob([gpx], { type: "application/gpx+xml" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = fileName;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
         Alert.alert("Exported", `GPX saved as ${fileName} (snapped to roads)`);
       } else {
         const FileSystem = await import("expo-file-system/legacy");
-        const Sharing = (await import("expo-sharing")) as { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: { mimeType?: string; dialogTitle?: string }) => Promise<void> };
+        const Sharing = (await import("expo-sharing")) as {
+          isAvailableAsync: () => Promise<boolean>;
+          shareAsync: (
+            uri: string,
+            opts?: { mimeType?: string; dialogTitle?: string },
+          ) => Promise<void>;
+        };
         const fileUri = `${FileSystem.cacheDirectory ?? ""}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, gpx, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, gpx, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
         const isAvailable = await Sharing.isAvailableAsync();
         if (isAvailable) {
-          await Sharing.shareAsync(fileUri, { mimeType: "application/gpx+xml", dialogTitle: "Export VRP routes (GPX)" });
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/gpx+xml",
+            dialogTitle: "Export VRP routes (GPX)",
+          });
         } else {
           Alert.alert("Saved", `GPX saved to ${fileUri}`);
         }
@@ -1266,10 +1493,16 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     if (!result?.stops?.length) return;
     hapticImpact();
     const date = new Date().toISOString().slice(0, 10);
-    const routes: VRPStop[][] = result.routes && result.routes.length > 1 ? result.routes : [result.stops];
+    const routes: VRPStop[][] =
+      result.routes && result.routes.length > 1
+        ? result.routes
+        : [result.stops];
 
     if (routes.length === 1) {
-      Alert.alert("Single route", "Only one vehicle – exporting as single GPX file.");
+      Alert.alert(
+        "Single route",
+        "Only one vehicle – exporting as single GPX file.",
+      );
       try {
         await handleExportGpx();
       } catch (e) {
@@ -1284,7 +1517,8 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       const roadGeometries = await getRoadMatchedGeometries(routes);
 
       const jszipMod = await import("jszip");
-      const JSZip = (jszipMod as { default?: typeof jszipMod }).default ?? jszipMod;
+      const JSZip =
+        (jszipMod as { default?: typeof jszipMod }).default ?? jszipMod;
       if (typeof JSZip !== "function") {
         throw new Error("JSZip not available");
       }
@@ -1305,7 +1539,9 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       const fileName = `vrp_routes_per_vehicle_${date}.zip`;
 
       if (isWeb) {
-        const blob = new Blob([zipOutput as Uint8Array], { type: "application/zip" });
+        const blob = new Blob([zipOutput as Uint8Array], {
+          type: "application/zip",
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -1315,27 +1551,48 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        Alert.alert("Exported", `${validRoutes.length} GPX files (snapped to roads) saved in ${fileName}`);
+        Alert.alert(
+          "Exported",
+          `${validRoutes.length} GPX files (snapped to roads) saved in ${fileName}`,
+        );
       } else {
         const FileSystem = await import("expo-file-system/legacy");
-        const Sharing = (await import("expo-sharing")) as { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: { mimeType?: string; dialogTitle?: string }) => Promise<void> };
-        const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+        const Sharing = (await import("expo-sharing")) as {
+          isAvailableAsync: () => Promise<boolean>;
+          shareAsync: (
+            uri: string,
+            opts?: { mimeType?: string; dialogTitle?: string },
+          ) => Promise<void>;
+        };
+        const cacheDir =
+          FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
         if (!cacheDir) {
           throw new Error("No cache directory available");
         }
         const fileUri = `${cacheDir}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, zipOutput as string, { encoding: FileSystem.EncodingType.Base64 });
+        await FileSystem.writeAsStringAsync(fileUri, zipOutput as string, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
         const isAvailable = await Sharing.isAvailableAsync();
         if (isAvailable) {
-          await Sharing.shareAsync(fileUri, { mimeType: "application/zip", dialogTitle: "Export GPX per vehicle (ZIP)" });
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/zip",
+            dialogTitle: "Export GPX per vehicle (ZIP)",
+          });
         } else {
           Alert.alert("Saved", `ZIP saved to ${fileUri}`);
         }
-        Alert.alert("Exported", `${validRoutes.length} GPX files (snapped to roads) saved in ${fileName}`);
+        Alert.alert(
+          "Exported",
+          `${validRoutes.length} GPX files (snapped to roads) saved in ${fileName}`,
+        );
       }
     } catch (e) {
       console.error(e);
-      Alert.alert("Export failed", "Could not export GPX files. Please try again.");
+      Alert.alert(
+        "Export failed",
+        "Could not export GPX files. Please try again.",
+      );
     } finally {
       setExportGpxLoading(false);
     }
@@ -1344,7 +1601,8 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
   const handleExportCsv = async () => {
     if (!result?.stops?.length) return;
     hapticImpact();
-    const comment = "# Rows are in drive order per route. Route = vehicle/route number (1, 2, 3...).";
+    const comment =
+      "# Rows are in drive order per route. Route = vehicle/route number (1, 2, 3...).";
     const header = "Route,VisitOrder,StopLabel,Latitude,Longitude";
     const rows: string[] = [];
 
@@ -1388,7 +1646,13 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         Alert.alert("Exported", `CSV saved as ${fileName}`);
       } else {
         const FileSystem = await import("expo-file-system/legacy");
-        const Sharing = (await import("expo-sharing")) as { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: { mimeType?: string; dialogTitle?: string }) => Promise<void> };
+        const Sharing = (await import("expo-sharing")) as {
+          isAvailableAsync: () => Promise<boolean>;
+          shareAsync: (
+            uri: string,
+            opts?: { mimeType?: string; dialogTitle?: string },
+          ) => Promise<void>;
+        };
         const fileUri = `${FileSystem.cacheDirectory ?? ""}${fileName}`;
         await FileSystem.writeAsStringAsync(fileUri, csv, {
           encoding: FileSystem.EncodingType.UTF8,
@@ -1411,27 +1675,38 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
   const runVRP = async () => {
     Keyboard.dismiss();
-    const coordsValue = useUncontrolledInputs ? coordinatesRef.current : coordinates;
-    const addressesValue = useUncontrolledInputs ? addressesTextRef.current : addressesText;
+    const coordsValue = useUncontrolledInputs
+      ? coordinatesRef.current
+      : coordinates;
+    const addressesValue = useUncontrolledInputs
+      ? addressesTextRef.current
+      : addressesText;
     const useCurrentAsDepot = startFromCurrentPosition;
     const minStops = useCurrentAsDepot ? 1 : 2;
-    const locations = inputMode === "coordinates"
-      ? parseCoordinates(coordsValue)
-      : await (async () => {
-          const lines = addressesValue.trim().split("\n").map((l) => l.trim()).filter(Boolean);
-          if (lines.length < minStops) return [];
-          setGeocodeProgress({ done: 0, total: lines.length });
-          const stops = await geocodeAddressesBatch(lines, (d, t) => setGeocodeProgress({ done: d, total: t }));
-          setGeocodeProgress(null);
-          return stops;
-        })();
+    const locations =
+      inputMode === "coordinates"
+        ? parseCoordinates(coordsValue)
+        : await (async () => {
+            const lines = addressesValue
+              .trim()
+              .split("\n")
+              .map((l) => l.trim())
+              .filter(Boolean);
+            if (lines.length < minStops) return [];
+            setGeocodeProgress({ done: 0, total: lines.length });
+            const stops = await geocodeAddressesBatch(lines, (d, t) =>
+              setGeocodeProgress({ done: d, total: t }),
+            );
+            setGeocodeProgress(null);
+            return stops;
+          })();
     if (useCurrentAsDepot) {
       if (!locations || locations.length < 1) {
         Alert.alert(
           "Error",
           inputMode === "coordinates"
             ? "Enter at least 1 coordinate when using Start from current position."
-            : "Enter at least 1 address when using Start from current position."
+            : "Enter at least 1 address when using Start from current position.",
         );
         return;
       }
@@ -1440,7 +1715,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         "Error",
         inputMode === "coordinates"
           ? "Enter at least 2 coordinates (lat,lon or lat,lon,label per line)."
-          : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds."
+          : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds.",
       );
       return;
     }
@@ -1454,11 +1729,16 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         const Location = await import("expo-location");
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert("Location", "Location permission is required to start from current position.");
+          Alert.alert(
+            "Location",
+            "Location permission is required to start from current position.",
+          );
           setLoading(false);
           return;
         }
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
         const current: VRPStop = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
@@ -1470,15 +1750,35 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       const matrix = useValhallaApi
         ? await getValhallaMatrix(locationsForMatrix)
         : buildHaversineMatrix(locationsForMatrix);
-      const vehiclesStr = useUncontrolledInputs ? vehiclesRef.current : vehicles;
-      const capacityStr = useUncontrolledInputs ? capacityRef.current : capacity;
-      const maxRouteTimeHoursStr = useUncontrolledInputs ? maxRouteTimeHoursRef.current : maxRouteTimeHours;
-      const depotStr = useUncontrolledInputs ? depotAddressRef.current : depotAddress;
-      const speedStr = useUncontrolledInputs ? travelSpeedFactorRef.current : travelSpeedFactor;
+      const vehiclesStr = useUncontrolledInputs
+        ? vehiclesRef.current
+        : vehicles;
+      const capacityStr = useUncontrolledInputs
+        ? capacityRef.current
+        : capacity;
+      const maxRouteTimeHoursStr = useUncontrolledInputs
+        ? maxRouteTimeHoursRef.current
+        : maxRouteTimeHours;
+      const depotStr = useUncontrolledInputs
+        ? depotAddressRef.current
+        : depotAddress;
+      const speedStr = useUncontrolledInputs
+        ? travelSpeedFactorRef.current
+        : travelSpeedFactor;
       const config: Partial<VRPConfig> = {
-        vehicles: Math.max(1, parseInt(vehiclesStr, 10) || DEFAULT_VRP_CONFIG.vehicles),
-        capacity: Math.max(1, parseInt(capacityStr, 10) || DEFAULT_VRP_CONFIG.capacity),
-        maxRouteTimeHours: Math.max(1, parseInt(maxRouteTimeHoursStr, 10) || DEFAULT_VRP_CONFIG.maxRouteTimeHours),
+        vehicles: Math.max(
+          1,
+          parseInt(vehiclesStr, 10) || DEFAULT_VRP_CONFIG.vehicles,
+        ),
+        capacity: Math.max(
+          1,
+          parseInt(capacityStr, 10) || DEFAULT_VRP_CONFIG.capacity,
+        ),
+        maxRouteTimeHours: Math.max(
+          1,
+          parseInt(maxRouteTimeHoursStr, 10) ||
+            DEFAULT_VRP_CONFIG.maxRouteTimeHours,
+        ),
         depotAddress: depotStr.trim(),
         travelSpeedFactor: Math.max(0.1, parseFloat(speedStr) || 1),
         objective,
@@ -1491,7 +1791,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
         "Error",
         useValhallaApi
           ? "Failed to calculate route. Check your internet connection."
-          : "Failed to calculate route."
+          : "Failed to calculate route.",
       );
       console.error(error);
     } finally {
@@ -1506,9 +1806,13 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       addressesTextRef.current = "";
       vehiclesRef.current = String(DEFAULT_VRP_CONFIG.vehicles);
       capacityRef.current = String(DEFAULT_VRP_CONFIG.capacity);
-      maxRouteTimeHoursRef.current = String(DEFAULT_VRP_CONFIG.maxRouteTimeHours);
+      maxRouteTimeHoursRef.current = String(
+        DEFAULT_VRP_CONFIG.maxRouteTimeHours,
+      );
       depotAddressRef.current = "";
-      travelSpeedFactorRef.current = String(DEFAULT_VRP_CONFIG.travelSpeedFactor);
+      travelSpeedFactorRef.current = String(
+        DEFAULT_VRP_CONFIG.travelSpeedFactor,
+      );
       setCoordinatesKey((k) => k + 1);
       setAddressesKey((k) => k + 1);
       setNumericInputsKey((k) => k + 1);
@@ -1526,7 +1830,9 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
   const runNominatimSearch = async () => {
     Keyboard.dismiss();
-    const query = useUncontrolledInputs ? nominatimValueRef.current : nominatimQuery;
+    const query = useUncontrolledInputs
+      ? nominatimValueRef.current
+      : nominatimQuery;
     if (!query.trim()) {
       Alert.alert("Search", "Enter a place name or address.");
       return;
@@ -1550,17 +1856,24 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
   const addNominatimToVRP = (place: NominatimResult, label?: string) => {
     hapticImpact();
-    const name = label ?? (place.display_name.split(",").slice(0, 2).join(",").trim() || "Stop");
+    const name =
+      label ??
+      (place.display_name.split(",").slice(0, 2).join(",").trim() || "Stop");
     const line = `${place.lat},${place.lon}, ${name}\n`;
     if (useUncontrolledInputs) {
-      const next = (coordinatesRef.current.trim() ? coordinatesRef.current.trim() + "\n" : "") + line;
+      const next =
+        (coordinatesRef.current.trim()
+          ? coordinatesRef.current.trim() + "\n"
+          : "") + line;
       coordinatesRef.current = next;
       coordinatesInputRef.current?.setNativeProps?.({ text: next });
       nominatimValueRef.current = "";
       setNominatimKey((k) => k + 1);
       nominatimInputRef.current?.setNativeProps?.({ text: "" });
     } else {
-      setCoordinates((prev) => (prev.trim() ? prev.trim() + "\n" + line : line));
+      setCoordinates((prev) =>
+        prev.trim() ? prev.trim() + "\n" + line : line,
+      );
       setNominatimQuery("");
     }
     setNominatimResults([]);
@@ -1568,10 +1881,19 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
 
   const runGeocodeAddresses = async () => {
     Keyboard.dismiss();
-    const addressesValue = useUncontrolledInputs ? addressesTextRef.current : addressesText;
-    const lines = addressesValue.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    const addressesValue = useUncontrolledInputs
+      ? addressesTextRef.current
+      : addressesText;
+    const lines = addressesValue
+      .trim()
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (lines.length === 0) {
-      Alert.alert("No addresses", "Enter one address per line, then tap Geocode and add to VRP.");
+      Alert.alert(
+        "No addresses",
+        "Enter one address per line, then tap Geocode and add to VRP.",
+      );
       return;
     }
     hapticImpact();
@@ -1582,16 +1904,23 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       });
       setGeocodeProgress(null);
       if (stops.length === 0) {
-        Alert.alert("No results", "No addresses could be geocoded. Check the text and try again.");
+        Alert.alert(
+          "No results",
+          "No addresses could be geocoded. Check the text and try again.",
+        );
         return;
       }
-      const newLines = stops.map((s) => `${s.lat},${s.lon},${s.label}`).join("\n");
-      setCoordinates((prev) => (prev.trim() ? prev.trim() + "\n" + newLines : newLines));
+      const newLines = stops
+        .map((s) => `${s.lat},${s.lon},${s.label}`)
+        .join("\n");
+      setCoordinates((prev) =>
+        prev.trim() ? prev.trim() + "\n" + newLines : newLines,
+      );
       setAddressesText("");
       if (stops.length < lines.length) {
         Alert.alert(
           "Partially done",
-          `Geocoded ${stops.length} of ${lines.length} addresses. Failed rows were skipped.`
+          `Geocoded ${stops.length} of ${lines.length} addresses. Failed rows were skipped.`,
         );
       }
     } catch (e) {
@@ -1619,407 +1948,760 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
     }
   }, [nestedInScrollView]);
 
-  const inputBorder = { borderColor: cyan + "66", backgroundColor: colors.background + "F5" };
+  const inputBorder = {
+    borderColor: cyan + "66",
+    backgroundColor: colors.background + "F5",
+  };
 
   /** On web home screen: Plan deliveries + Search place fill the viewport. */
   const fillScreen = nestedInScrollView && Platform.OS === "web";
   /** On web when nested, don't flex the plan card so the full form (including Advanced options) is in the outer scroll and reachable. */
-  const planCardFills = fillScreen && !(Platform.OS === "web" && nestedInScrollView);
-  const planCardStyle = [styles.card, { backgroundColor: colors.surface, borderWidth: 1, borderColor: magenta + "44" }, planCardFills && styles.cardFill];
+  const planCardFills =
+    fillScreen && !(Platform.OS === "web" && nestedInScrollView);
+  const planCardStyle = [
+    styles.card,
+    {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: magenta + "44",
+    },
+    planCardFills && styles.cardFill,
+  ];
 
   const content = (
     <>
-        <View style={planCardStyle}>
-          <Text style={[styles.sectionHeader, { color: colors.foreground }]}>
-            Plan deliveries (VRP)
-          </Text>
+      <View style={planCardStyle}>
+        <Text style={[styles.sectionHeader, { color: colors.foreground }]}>
+          Plan deliveries (VRP)
+        </Text>
 
-          {/* Input mode: Coordinates | Address */}
-          <View style={[styles.segmentedRow, { marginBottom: 12 }]}>
-            <TouchableOpacity
-              style={[
-                styles.segmentedOption,
-                inputMode === "coordinates" && { backgroundColor: cyan + "33", borderColor: cyan },
-                { borderColor: colors.border },
-              ]}
-              onPress={() => { hapticImpact(); setInputMode("coordinates"); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentedLabel, { color: inputMode === "coordinates" ? cyan : colors.muted }]}>
-                Coordinates
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.segmentedOption,
-                inputMode === "address" && { backgroundColor: cyan + "33", borderColor: cyan },
-                { borderColor: colors.border },
-              ]}
-              onPress={() => { hapticImpact(); setInputMode("address"); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentedLabel, { color: inputMode === "address" ? cyan : colors.muted }]}>
-                Address
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {inputMode === "coordinates" ? (
-            <TextInput
-              key={useUncontrolledInputs ? `coords-${coordinatesKey}` : undefined}
-              ref={coordinatesInputRef}
-              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground }, fillScreen && { flex: 1, minHeight: 120 }]}
-              multiline
-              numberOfLines={5}
-              placeholder="45.5017,-73.5673, Downtown\n45.5234,-73.5834, West End"
-              placeholderTextColor={colors.muted}
-              {...(useUncontrolledInputs
-                ? { defaultValue: "", onChangeText: (t) => { coordinatesRef.current = t; } }
-                : { value: coordinates, onChangeText: setCoordinates })}
-              onFocus={handleInputFocus}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textAlignVertical="top"
-            />
-          ) : (
-            <>
-              <TextInput
-                key={useUncontrolledInputs ? `addr-${addressesKey}` : undefined}
-                ref={addressesInputRef}
-                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground, minHeight: 80 }, fillScreen && { flex: 1, minHeight: 120 }]}
-                multiline
-                numberOfLines={4}
-                placeholder="123 Main St, Montreal\n456 Oak Ave, Toronto\n..."
-                placeholderTextColor={colors.muted}
-                {...(useUncontrolledInputs
-                  ? { defaultValue: "", onChangeText: (t) => { addressesTextRef.current = t; } }
-                  : { value: addressesText, onChangeText: setAddressesText })}
-                onFocus={handleInputFocus}
-                autoCapitalize="none"
-                textAlignVertical="top"
-                editable={!geocodeProgress}
-              />
-              <Text style={[styles.helperText, { color: colors.muted, marginTop: 6 }]}>
-                Geocode confidence ≥ 90%; automatically clusters if &gt;1 depot detected.
-              </Text>
-              {geocodeProgress ? (
-                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
-                  <ActivityIndicator size="small" color={cyan} />
-                  <Text style={[styles.helperText, { color: colors.muted, marginLeft: 8 }]}>
-                    Geocoding {geocodeProgress.done}/{geocodeProgress.total}…
-                  </Text>
-                </View>
-              ) : null}
-            </>
-          )}
-
-          {/* Vehicle Configuration */}
-          <Text style={[styles.sectionHeaderSmall, { color: colors.foreground, marginTop: 16, marginBottom: 8 }]}>
-            Vehicle configuration
-          </Text>
-          <View style={styles.vehicleRow}>
-            <View style={[styles.vehicleInputWrap, inputBorder]}>
-              <Text style={[styles.vehicleLabel, { color: colors.muted }]}>Vehicles</Text>
-              <TextInput
-                key={useUncontrolledInputs ? `vehicles-${numericInputsKey}` : undefined}
-                style={[styles.vehicleInput, { color: colors.foreground }]}
-                {...(useUncontrolledInputs
-                  ? { defaultValue: vehicles, onChangeText: (t) => { vehiclesRef.current = t; } }
-                  : { value: vehicles, onChangeText: setVehicles })}
-                keyboardType="number-pad"
-                placeholder="2"
-                placeholderTextColor={colors.muted}
-              />
-            </View>
-            <View style={[styles.vehicleInputWrap, inputBorder]}>
-              <Text style={[styles.vehicleLabel, { color: colors.muted }]}>Capacity (kg/pcs)</Text>
-              <TextInput
-                key={useUncontrolledInputs ? `capacity-${numericInputsKey}` : undefined}
-                style={[styles.vehicleInput, { color: colors.foreground }]}
-                {...(useUncontrolledInputs
-                  ? { defaultValue: capacity, onChangeText: (t) => { capacityRef.current = t; } }
-                  : { value: capacity, onChangeText: setCapacity })}
-                keyboardType="number-pad"
-                placeholder="1000"
-                placeholderTextColor={colors.muted}
-              />
-            </View>
-            <View style={[styles.vehicleInputWrap, inputBorder]}>
-              <Text style={[styles.vehicleLabel, { color: colors.muted }]}>Max Route Time (h)</Text>
-              <TextInput
-                key={useUncontrolledInputs ? `maxRoute-${numericInputsKey}` : undefined}
-                style={[styles.vehicleInput, { color: colors.foreground }]}
-                {...(useUncontrolledInputs
-                  ? { defaultValue: maxRouteTimeHours, onChangeText: (t) => { maxRouteTimeHoursRef.current = t; } }
-                  : { value: maxRouteTimeHours, onChangeText: setMaxRouteTimeHours })}
-                keyboardType="number-pad"
-                placeholder="8"
-                placeholderTextColor={colors.muted}
-              />
-            </View>
-          </View>
-
-          {/* Advanced options (collapsible) */}
+        {/* Input mode: Coordinates | Address */}
+        <View style={[styles.segmentedRow, { marginBottom: 12 }]}>
           <TouchableOpacity
-            style={[styles.advancedHeader, { borderBottomColor: colors.border }]}
-            onPress={() => { hapticImpact(); setAdvancedOpen((o) => !o); }}
-            activeOpacity={0.7}
+            style={[
+              styles.segmentedOption,
+              inputMode === "coordinates" && {
+                backgroundColor: cyan + "33",
+                borderColor: cyan,
+              },
+              { borderColor: colors.border },
+            ]}
+            onPress={() => {
+              hapticImpact();
+              setInputMode("coordinates");
+            }}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.sectionHeaderSmall, { color: colors.foreground }]}>Advanced options</Text>
-            <Ionicons name={advancedOpen ? "chevron-up" : "chevron-down"} size={20} color={colors.muted} />
-          </TouchableOpacity>
-          {advancedOpen && (
-            <View style={[styles.advancedBody, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.helperText, { color: colors.muted, marginBottom: 6 }]}>Depot address</Text>
-              <TextInput
-                key={useUncontrolledInputs ? `depot-${numericInputsKey}` : undefined}
-                style={[styles.input, styles.depotInput, { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground }]}
-                placeholder="Defaults to 1st address"
-                placeholderTextColor={colors.muted}
-                {...(useUncontrolledInputs
-                  ? { defaultValue: depotAddress, onChangeText: (t) => { depotAddressRef.current = t; } }
-                  : { value: depotAddress, onChangeText: setDepotAddress })}
-              />
-              <Text style={[styles.helperText, { color: colors.muted, marginTop: 10, marginBottom: 6 }]}>Travel speed factor</Text>
-              <TextInput
-                key={useUncontrolledInputs ? `speed-${numericInputsKey}` : undefined}
-                style={[styles.vehicleInput, styles.travelSpeedInput, { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground }]}
-                {...(useUncontrolledInputs
-                  ? { defaultValue: travelSpeedFactor, onChangeText: (t) => { travelSpeedFactorRef.current = t; } }
-                  : { value: travelSpeedFactor, onChangeText: setTravelSpeedFactor })}
-                keyboardType="decimal-pad"
-                placeholder="1"
-                placeholderTextColor={colors.muted}
-              />
-              <TouchableOpacity
-                style={[styles.valhallaRow, { marginTop: 12, marginBottom: 4 }]}
-                onPress={() => { hapticImpact(); setStartFromCurrentPosition((prev) => !prev); }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkmark, { backgroundColor: startFromCurrentPosition ? colors.success : "transparent", borderWidth: 1, borderColor: startFromCurrentPosition ? colors.success : colors.border }]}>
-                  {startFromCurrentPosition && <Text style={styles.checkmarkText}>✓</Text>}
-                </View>
-                <Text style={[styles.valhallaText, { color: colors.foreground }]}>
-                  Start from current position
-                </Text>
-              </TouchableOpacity>
-              <Text style={[styles.helperText, { color: colors.muted, marginTop: 10, marginBottom: 6 }]}>Objective</Text>
-              <TouchableOpacity
-                style={[styles.pickerTrigger, { borderColor: colors.border, backgroundColor: colors.background }]}
-                onPress={() => setPickerOpen("objective")}
-              >
-                <Text style={{ color: colors.foreground }}>{OBJECTIVE_OPTIONS.find((o) => o.value === objective)?.label ?? objective}</Text>
-                <Ionicons name="chevron-down" size={18} color={colors.muted} />
-              </TouchableOpacity>
-              <Text style={[styles.helperText, { color: colors.muted, marginTop: 10, marginBottom: 6 }]}>Algorithm</Text>
-              <TouchableOpacity
-                style={[styles.pickerTrigger, { borderColor: colors.border, backgroundColor: colors.background }]}
-                onPress={() => setPickerOpen("algorithm")}
-              >
-                <Text style={{ color: colors.foreground }} numberOfLines={1}>
-                  {ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ?? algorithm}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color={colors.muted} />
-              </TouchableOpacity>
-              <Text style={[styles.helperText, { color: colors.muted, marginTop: 6 }]}>
-                Google OR-Tools metaheuristic strategy
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.valhallaRow}
-            onPress={() => { hapticImpact(); setUseValhallaApi((prev) => !prev); }}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.checkmark, { backgroundColor: useValhallaApi ? colors.success : "transparent", borderWidth: 1, borderColor: useValhallaApi ? colors.success : colors.border }]}>
-              {useValhallaApi && <Text style={styles.checkmarkText}>✓</Text>}
-            </View>
-            <Text style={[styles.valhallaText, { color: colors.foreground }]}>
-              Use Valhalla API (more accurate road distances)
+            <Text
+              style={[
+                styles.segmentedLabel,
+                { color: inputMode === "coordinates" ? cyan : colors.muted },
+              ]}
+            >
+              Coordinates
             </Text>
           </TouchableOpacity>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.optimizeButton, { borderWidth: 2, borderColor: magenta + "99", backgroundColor: colors.primary }, loading && styles.disabled]}
-              onPress={runVRP}
-              disabled={loading}
-              activeOpacity={0.8}
+          <TouchableOpacity
+            style={[
+              styles.segmentedOption,
+              inputMode === "address" && {
+                backgroundColor: cyan + "33",
+                borderColor: cyan,
+              },
+              { borderColor: colors.border },
+            ]}
+            onPress={() => {
+              hapticImpact();
+              setInputMode("address");
+            }}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.segmentedLabel,
+                { color: inputMode === "address" ? cyan : colors.muted },
+              ]}
             >
-              {loading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="navigate" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                  <Text style={[styles.optimizeButtonText, { color: "#ffffff" }]}>Optimize Routes & Export</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.clearButton, { backgroundColor: colors.muted + "40" }]} onPress={clearAll} activeOpacity={0.8}>
-              <Text style={[styles.clearButtonText, { color: colors.foreground }]}>Clear</Text>
-            </TouchableOpacity>
-          </View>
-
+              Address
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Picker modal */}
-        <Modal visible={pickerOpen !== null} transparent animationType="slide">
-          <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(null)}>
-            <View style={[styles.pickerModal, { backgroundColor: colors.surface, borderColor: magenta + "66" }]}>
-              <Text style={[styles.sectionHeaderSmall, { color: colors.foreground, marginBottom: 12 }]}>
-                {pickerOpen === "objective" ? "Objective" : "Algorithm"}
-              </Text>
-              {pickerOpen === "objective" &&
-                OBJECTIVE_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.pickerOption, { borderBottomColor: colors.border }, objective === opt.value && { backgroundColor: cyan + "22" }]}
-                    onPress={() => { setObjective(opt.value); setPickerOpen(null); hapticImpact(); }}
-                  >
-                    <Text style={[styles.pickerOptionText, { color: colors.foreground }]}>{opt.label}</Text>
-                    {objective === opt.value ? <Ionicons name="checkmark" size={20} color={cyan} /> : null}
-                  </TouchableOpacity>
-                ))}
-              {pickerOpen === "algorithm" &&
-                ALGORITHM_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.pickerOption, { borderBottomColor: colors.border }, algorithm === opt.value && { backgroundColor: cyan + "22" }]}
-                    onPress={() => { setAlgorithm(opt.value); setPickerOpen(null); hapticImpact(); }}
-                  >
-                    <Text style={[styles.pickerOptionText, { color: colors.foreground }]} numberOfLines={1}>{opt.label}</Text>
-                    {algorithm === opt.value ? <Ionicons name="checkmark" size={20} color={cyan} /> : null}
-                  </TouchableOpacity>
-                ))}
-            </View>
-          </Pressable>
-        </Modal>
-
-        {/* Delivery instructions – load from one JSON file; auto-matched to route stops by address */}
-        <DeliveryInstructionsCard fillScreen={fillScreen} />
-
-        {/* Nominatim search – place name to coordinates */}
-        <View style={[styles.card, fillScreen && styles.cardFill, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.title, { color: colors.foreground }]}>
-            Search place (Nominatim)
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>
-            Search by place name or address to get coordinates, then add to VRP above.
-          </Text>
+        {inputMode === "coordinates" ? (
           <TextInput
-            key={useUncontrolledInputs ? `nominatim-${nominatimKey}` : undefined}
-            ref={nominatimInputRef}
+            key={useUncontrolledInputs ? `coords-${coordinatesKey}` : undefined}
+            ref={coordinatesInputRef}
             style={[
               styles.input,
               {
                 borderColor: colors.border,
                 backgroundColor: colors.background,
                 color: colors.foreground,
-                minHeight: 48,
               },
+              fillScreen && { flex: 1, minHeight: 120 },
             ]}
-            placeholder="e.g. Downtown Montreal, or 123 Main St, Toronto"
+            multiline
+            numberOfLines={5}
+            placeholder="45.5017,-73.5673, Downtown\n45.5234,-73.5834, West End"
             placeholderTextColor={colors.muted}
             {...(useUncontrolledInputs
-              ? { defaultValue: "", onChangeText: (t) => { nominatimValueRef.current = t; } }
-              : { value: nominatimQuery, onChangeText: setNominatimQuery })}
-            onSubmitEditing={runNominatimSearch}
-            returnKeyType="search"
-          />
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[
-                styles.runButton,
-                { backgroundColor: colors.primary },
-                nominatimLoading && styles.disabled,
-              ]}
-              onPress={runNominatimSearch}
-              disabled={nominatimLoading}
-              activeOpacity={0.8}
-            >
-              {nominatimLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.runButtonText}>Search</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.clearButton, { backgroundColor: colors.muted + "40" }]}
-              onPress={() => {
-                if (useUncontrolledInputs) {
-                  nominatimValueRef.current = "";
-                  setNominatimKey((k) => k + 1);
+              ? {
+                  defaultValue: "",
+                  onChangeText: (t) => {
+                    coordinatesRef.current = t;
+                  },
                 }
-                setNominatimQuery("");
-                setNominatimResults([]);
-                hapticImpact();
-              }}
-              activeOpacity={0.8}
+              : { value: coordinates, onChangeText: setCoordinates })}
+            onFocus={handleInputFocus}
+            autoCapitalize="none"
+            autoCorrect={false}
+            textAlignVertical="top"
+          />
+        ) : (
+          <>
+            <TextInput
+              key={useUncontrolledInputs ? `addr-${addressesKey}` : undefined}
+              ref={addressesInputRef}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                  minHeight: 80,
+                },
+                fillScreen && { flex: 1, minHeight: 120 },
+              ]}
+              multiline
+              numberOfLines={4}
+              placeholder="123 Main St, Montreal\n456 Oak Ave, Toronto\n..."
+              placeholderTextColor={colors.muted}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: "",
+                    onChangeText: (t) => {
+                      addressesTextRef.current = t;
+                    },
+                  }
+                : { value: addressesText, onChangeText: setAddressesText })}
+              onFocus={handleInputFocus}
+              autoCapitalize="none"
+              textAlignVertical="top"
+              editable={!geocodeProgress}
+            />
+            <Text
+              style={[styles.helperText, { color: colors.muted, marginTop: 6 }]}
             >
-              <Text style={[styles.clearButtonText, { color: colors.foreground }]}>
-                Clear
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {nominatimResults.length > 0 ? (
-            <View style={[styles.nominatimResults, { borderTopColor: colors.border }]}>
-              <Text style={[styles.resultTitle, { color: colors.foreground, marginBottom: 8 }]}>
-                Results – tap to add to VRP
-              </Text>
-              {nominatimResults.map((place, idx) => (
-                <TouchableOpacity
-                  key={`${place.lat}-${place.lon}-${idx}`}
-                  style={[styles.nominatimRow, { borderBottomColor: colors.border }]}
-                  onPress={() => addNominatimToVRP(place)}
-                  activeOpacity={0.7}
+              Geocode confidence ≥ 90%; automatically clusters if &gt;1 depot
+              detected.
+            </Text>
+            {geocodeProgress ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 8,
+                }}
+              >
+                <ActivityIndicator size="small" color={cyan} />
+                <Text
+                  style={[
+                    styles.helperText,
+                    { color: colors.muted, marginLeft: 8 },
+                  ]}
                 >
-                  <Text style={[styles.stopLabel, { color: colors.foreground }]} numberOfLines={2}>
-                    {place.display_name}
-                  </Text>
-                  <Text style={[styles.stopCoords, { color: colors.muted }]}>
-                    {place.lat}, {place.lon}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
+                  Geocoding {geocodeProgress.done}/{geocodeProgress.total}…
+                </Text>
+              </View>
+            ) : null}
+          </>
+        )}
+
+        {/* Vehicle Configuration */}
+        <Text
+          style={[
+            styles.sectionHeaderSmall,
+            { color: colors.foreground, marginTop: 16, marginBottom: 8 },
+          ]}
+        >
+          Vehicle configuration
+        </Text>
+        <View style={styles.vehicleRow}>
+          <View style={[styles.vehicleInputWrap, inputBorder]}>
+            <Text style={[styles.vehicleLabel, { color: colors.muted }]}>
+              Vehicles
+            </Text>
+            <TextInput
+              key={
+                useUncontrolledInputs
+                  ? `vehicles-${numericInputsKey}`
+                  : undefined
+              }
+              style={[styles.vehicleInput, { color: colors.foreground }]}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: vehicles,
+                    onChangeText: (t) => {
+                      vehiclesRef.current = t;
+                    },
+                  }
+                : { value: vehicles, onChangeText: setVehicles })}
+              keyboardType="number-pad"
+              placeholder="2"
+              placeholderTextColor={colors.muted}
+            />
+          </View>
+          <View style={[styles.vehicleInputWrap, inputBorder]}>
+            <Text style={[styles.vehicleLabel, { color: colors.muted }]}>
+              Capacity (kg/pcs)
+            </Text>
+            <TextInput
+              key={
+                useUncontrolledInputs
+                  ? `capacity-${numericInputsKey}`
+                  : undefined
+              }
+              style={[styles.vehicleInput, { color: colors.foreground }]}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: capacity,
+                    onChangeText: (t) => {
+                      capacityRef.current = t;
+                    },
+                  }
+                : { value: capacity, onChangeText: setCapacity })}
+              keyboardType="number-pad"
+              placeholder="1000"
+              placeholderTextColor={colors.muted}
+            />
+          </View>
+          <View style={[styles.vehicleInputWrap, inputBorder]}>
+            <Text style={[styles.vehicleLabel, { color: colors.muted }]}>
+              Max Route Time (h)
+            </Text>
+            <TextInput
+              key={
+                useUncontrolledInputs
+                  ? `maxRoute-${numericInputsKey}`
+                  : undefined
+              }
+              style={[styles.vehicleInput, { color: colors.foreground }]}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: maxRouteTimeHours,
+                    onChangeText: (t) => {
+                      maxRouteTimeHoursRef.current = t;
+                    },
+                  }
+                : {
+                    value: maxRouteTimeHours,
+                    onChangeText: setMaxRouteTimeHours,
+                  })}
+              keyboardType="number-pad"
+              placeholder="8"
+              placeholderTextColor={colors.muted}
+            />
+          </View>
         </View>
 
-        {result ? (
-          <View style={[styles.resultCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.resultTitle, { color: colors.foreground }]}>
-              Optimized Route
-            </Text>
-            <View
+        {/* Advanced options (collapsible) */}
+        <TouchableOpacity
+          style={[styles.advancedHeader, { borderBottomColor: colors.border }]}
+          onPress={() => {
+            hapticImpact();
+            setAdvancedOpen((o) => !o);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[styles.sectionHeaderSmall, { color: colors.foreground }]}
+          >
+            Advanced options
+          </Text>
+          <Ionicons
+            name={advancedOpen ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={colors.muted}
+          />
+        </TouchableOpacity>
+        {advancedOpen && (
+          <View
+            style={[styles.advancedBody, { borderBottomColor: colors.border }]}
+          >
+            <Text
               style={[
-                styles.statsRow,
-                { borderBottomColor: colors.border },
+                styles.helperText,
+                { color: colors.muted, marginBottom: 6 },
               ]}
             >
-              <Text style={[styles.stat, { color: colors.muted }]}>
-                📍 {result.stops.length} stops
-                {result.routes && result.routes.length > 1
-                  ? ` · ${result.routes.length} vehicles`
-                  : ""}
+              Depot address
+            </Text>
+            <TextInput
+              key={
+                useUncontrolledInputs ? `depot-${numericInputsKey}` : undefined
+              }
+              style={[
+                styles.input,
+                styles.depotInput,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                },
+              ]}
+              placeholder="Defaults to 1st address"
+              placeholderTextColor={colors.muted}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: depotAddress,
+                    onChangeText: (t) => {
+                      depotAddressRef.current = t;
+                    },
+                  }
+                : { value: depotAddress, onChangeText: setDepotAddress })}
+            />
+            <Text
+              style={[
+                styles.helperText,
+                { color: colors.muted, marginTop: 10, marginBottom: 6 },
+              ]}
+            >
+              Travel speed factor
+            </Text>
+            <TextInput
+              key={
+                useUncontrolledInputs ? `speed-${numericInputsKey}` : undefined
+              }
+              style={[
+                styles.vehicleInput,
+                styles.travelSpeedInput,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                },
+              ]}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: travelSpeedFactor,
+                    onChangeText: (t) => {
+                      travelSpeedFactorRef.current = t;
+                    },
+                  }
+                : {
+                    value: travelSpeedFactor,
+                    onChangeText: setTravelSpeedFactor,
+                  })}
+              keyboardType="decimal-pad"
+              placeholder="1"
+              placeholderTextColor={colors.muted}
+            />
+            <TouchableOpacity
+              style={[styles.valhallaRow, { marginTop: 12, marginBottom: 4 }]}
+              onPress={() => {
+                hapticImpact();
+                setStartFromCurrentPosition((prev) => !prev);
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.checkmark,
+                  {
+                    backgroundColor: startFromCurrentPosition
+                      ? colors.success
+                      : "transparent",
+                    borderWidth: 1,
+                    borderColor: startFromCurrentPosition
+                      ? colors.success
+                      : colors.border,
+                  },
+                ]}
+              >
+                {startFromCurrentPosition && (
+                  <Text style={styles.checkmarkText}>✓</Text>
+                )}
+              </View>
+              <Text style={[styles.valhallaText, { color: colors.foreground }]}>
+                Start from current position
               </Text>
-              <Text style={[styles.stat, { color: colors.muted }]}>
-                🛣️ {result.totalDistance} km
+            </TouchableOpacity>
+            <Text
+              style={[
+                styles.helperText,
+                { color: colors.muted, marginTop: 10, marginBottom: 6 },
+              ]}
+            >
+              Objective
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.pickerTrigger,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              onPress={() => setPickerOpen("objective")}
+            >
+              <Text style={{ color: colors.foreground }}>
+                {OBJECTIVE_OPTIONS.find((o) => o.value === objective)?.label ??
+                  objective}
               </Text>
-              <Text style={[styles.stat, { color: colors.muted }]}>
-                ⏱️ {result.totalTime} min
+              <Ionicons name="chevron-down" size={18} color={colors.muted} />
+            </TouchableOpacity>
+            <Text
+              style={[
+                styles.helperText,
+                { color: colors.muted, marginTop: 10, marginBottom: 6 },
+              ]}
+            >
+              Algorithm
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.pickerTrigger,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              onPress={() => setPickerOpen("algorithm")}
+            >
+              <Text style={{ color: colors.foreground }} numberOfLines={1}>
+                {ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ??
+                  algorithm}
               </Text>
-            </View>
-            {result.routes && result.routes.length > 1 ? (
-              result.routes.map((routeStops, routeIdx) => (
-                <View key={routeIdx} style={[styles.routeBlock, { borderBottomColor: colors.border }]}>
+              <Ionicons name="chevron-down" size={18} color={colors.muted} />
+            </TouchableOpacity>
+            <Text
+              style={[styles.helperText, { color: colors.muted, marginTop: 6 }]}
+            >
+              Google OR-Tools metaheuristic strategy
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.valhallaRow}
+          onPress={() => {
+            hapticImpact();
+            setUseValhallaApi((prev) => !prev);
+          }}
+          activeOpacity={0.7}
+        >
+          <View
+            style={[
+              styles.checkmark,
+              {
+                backgroundColor: useValhallaApi
+                  ? colors.success
+                  : "transparent",
+                borderWidth: 1,
+                borderColor: useValhallaApi ? colors.success : colors.border,
+              },
+            ]}
+          >
+            {useValhallaApi && <Text style={styles.checkmarkText}>✓</Text>}
+          </View>
+          <Text style={[styles.valhallaText, { color: colors.foreground }]}>
+            Use Valhalla API (more accurate road distances)
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[
+              styles.optimizeButton,
+              {
+                borderWidth: 2,
+                borderColor: magenta + "99",
+                backgroundColor: colors.primary,
+              },
+              loading && styles.disabled,
+            ]}
+            onPress={runVRP}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons
+                  name="navigate"
+                  size={18}
+                  color="#ffffff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.optimizeButtonText, { color: "#ffffff" }]}>
+                  Optimize Routes & Export
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.clearButton,
+              { backgroundColor: colors.muted + "40" },
+            ]}
+            onPress={clearAll}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[styles.clearButtonText, { color: colors.foreground }]}
+            >
+              Clear
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Picker modal */}
+      <Modal visible={pickerOpen !== null} transparent animationType="slide">
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setPickerOpen(null)}
+        >
+          <View
+            style={[
+              styles.pickerModal,
+              { backgroundColor: colors.surface, borderColor: magenta + "66" },
+            ]}
+          >
+            <Text
+              style={[
+                styles.sectionHeaderSmall,
+                { color: colors.foreground, marginBottom: 12 },
+              ]}
+            >
+              {pickerOpen === "objective" ? "Objective" : "Algorithm"}
+            </Text>
+            {pickerOpen === "objective" &&
+              OBJECTIVE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.pickerOption,
+                    { borderBottomColor: colors.border },
+                    objective === opt.value && { backgroundColor: cyan + "22" },
+                  ]}
+                  onPress={() => {
+                    setObjective(opt.value);
+                    setPickerOpen(null);
+                    hapticImpact();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  {objective === opt.value ? (
+                    <Ionicons name="checkmark" size={20} color={cyan} />
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            {pickerOpen === "algorithm" &&
+              ALGORITHM_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.pickerOption,
+                    { borderBottomColor: colors.border },
+                    algorithm === opt.value && { backgroundColor: cyan + "22" },
+                  ]}
+                  onPress={() => {
+                    setAlgorithm(opt.value);
+                    setPickerOpen(null);
+                    hapticImpact();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      { color: colors.foreground },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {opt.label}
+                  </Text>
+                  {algorithm === opt.value ? (
+                    <Ionicons name="checkmark" size={20} color={cyan} />
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Delivery instructions – load from one JSON file; auto-matched to route stops by address */}
+      <DeliveryInstructionsCard fillScreen={fillScreen} />
+
+      {/* Nominatim search – place name to coordinates */}
+      <View
+        style={[
+          styles.card,
+          fillScreen && styles.cardFill,
+          { backgroundColor: colors.surface },
+        ]}
+      >
+        <Text style={[styles.title, { color: colors.foreground }]}>
+          Search place (Nominatim)
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>
+          Search by place name or address to get coordinates, then add to VRP
+          above.
+        </Text>
+        <TextInput
+          key={useUncontrolledInputs ? `nominatim-${nominatimKey}` : undefined}
+          ref={nominatimInputRef}
+          style={[
+            styles.input,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+              color: colors.foreground,
+              minHeight: 48,
+            },
+          ]}
+          placeholder="e.g. Downtown Montreal, or 123 Main St, Toronto"
+          placeholderTextColor={colors.muted}
+          {...(useUncontrolledInputs
+            ? {
+                defaultValue: "",
+                onChangeText: (t) => {
+                  nominatimValueRef.current = t;
+                },
+              }
+            : { value: nominatimQuery, onChangeText: setNominatimQuery })}
+          onSubmitEditing={runNominatimSearch}
+          returnKeyType="search"
+        />
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[
+              styles.runButton,
+              { backgroundColor: colors.primary },
+              nominatimLoading && styles.disabled,
+            ]}
+            onPress={runNominatimSearch}
+            disabled={nominatimLoading}
+            activeOpacity={0.8}
+          >
+            {nominatimLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.runButtonText}>Search</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.clearButton,
+              { backgroundColor: colors.muted + "40" },
+            ]}
+            onPress={() => {
+              if (useUncontrolledInputs) {
+                nominatimValueRef.current = "";
+                setNominatimKey((k) => k + 1);
+              }
+              setNominatimQuery("");
+              setNominatimResults([]);
+              hapticImpact();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[styles.clearButtonText, { color: colors.foreground }]}
+            >
+              Clear
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {nominatimResults.length > 0 ? (
+          <View
+            style={[styles.nominatimResults, { borderTopColor: colors.border }]}
+          >
+            <Text
+              style={[
+                styles.resultTitle,
+                { color: colors.foreground, marginBottom: 8 },
+              ]}
+            >
+              Results – tap to add to VRP
+            </Text>
+            {nominatimResults.map((place, idx) => (
+              <TouchableOpacity
+                key={`${place.lat}-${place.lon}-${idx}`}
+                style={[
+                  styles.nominatimRow,
+                  { borderBottomColor: colors.border },
+                ]}
+                onPress={() => addNominatimToVRP(place)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[styles.stopLabel, { color: colors.foreground }]}
+                  numberOfLines={2}
+                >
+                  {place.display_name}
+                </Text>
+                <Text style={[styles.stopCoords, { color: colors.muted }]}>
+                  {place.lat}, {place.lon}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      {result ? (
+        <View style={[styles.resultCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.resultTitle, { color: colors.foreground }]}>
+            Optimized Route
+          </Text>
+          <View style={[styles.statsRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.stat, { color: colors.muted }]}>
+              📍 {result.stops.length} stops
+              {result.routes && result.routes.length > 1
+                ? ` · ${result.routes.length} vehicles`
+                : ""}
+            </Text>
+            <Text style={[styles.stat, { color: colors.muted }]}>
+              🛣️ {result.totalDistance} km
+            </Text>
+            <Text style={[styles.stat, { color: colors.muted }]}>
+              ⏱️ {result.totalTime} min
+            </Text>
+          </View>
+          {result.routes && result.routes.length > 1
+            ? result.routes.map((routeStops, routeIdx) => (
+                <View
+                  key={routeIdx}
+                  style={[
+                    styles.routeBlock,
+                    { borderBottomColor: colors.border },
+                  ]}
+                >
                   <Text style={[styles.routeLabel, { color: cyan }]}>
                     Route {routeIdx + 1}
                   </Text>
                   {routeStops.map((stop, idx) => (
                     <View
                       key={idx}
-                      style={[styles.stopRow, { borderBottomColor: colors.border }]}
+                      style={[
+                        styles.stopRow,
+                        { borderBottomColor: colors.border },
+                      ]}
                     >
                       <View
                         style={[
@@ -2033,14 +2715,25 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
                         ]}
                       >
                         <Text style={styles.stopNumberText}>
-                          {idx === 0 ? "S" : idx === routeStops.length - 1 ? "E" : idx}
+                          {idx === 0
+                            ? "S"
+                            : idx === routeStops.length - 1
+                              ? "E"
+                              : idx}
                         </Text>
                       </View>
                       <View style={styles.stopInfo}>
-                        <Text style={[styles.stopLabel, { color: colors.foreground }]}>
+                        <Text
+                          style={[
+                            styles.stopLabel,
+                            { color: colors.foreground },
+                          ]}
+                        >
                           {stop.label}
                         </Text>
-                        <Text style={[styles.stopCoords, { color: colors.muted }]}>
+                        <Text
+                          style={[styles.stopCoords, { color: colors.muted }]}
+                        >
                           {stop.lat.toFixed(4)}, {stop.lon.toFixed(4)}
                         </Text>
                       </View>
@@ -2048,8 +2741,7 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
                   ))}
                 </View>
               ))
-            ) : (
-              result.stops.map((stop, idx) => (
+            : result.stops.map((stop, idx) => (
                 <View
                   key={idx}
                   style={[styles.stopRow, { borderBottomColor: colors.border }]}
@@ -2066,11 +2758,17 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
                     ]}
                   >
                     <Text style={styles.stopNumberText}>
-                      {idx === 0 ? "S" : idx === result.stops.length - 1 ? "E" : idx}
+                      {idx === 0
+                        ? "S"
+                        : idx === result.stops.length - 1
+                          ? "E"
+                          : idx}
                     </Text>
                   </View>
                   <View style={styles.stopInfo}>
-                    <Text style={[styles.stopLabel, { color: colors.foreground }]}>
+                    <Text
+                      style={[styles.stopLabel, { color: colors.foreground }]}
+                    >
                       {stop.label}
                     </Text>
                     <Text style={[styles.stopCoords, { color: colors.muted }]}>
@@ -2078,74 +2776,157 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
                     </Text>
                   </View>
                 </View>
-              ))
-            )}
-            <View style={[styles.previewButtonRow, { borderTopColor: colors.border }]}>
-              <TouchableOpacity
-                style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
-                onPress={handleExportCsv}
-                activeOpacity={0.8}
+              ))}
+          <View
+            style={[styles.previewButtonRow, { borderTopColor: colors.border }]}
+          >
+            <TouchableOpacity
+              style={[
+                styles.previewButton,
+                styles.previewButtonSecondary,
+                { borderColor: colors.border },
+              ]}
+              onPress={handleExportCsv}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color={colors.foreground}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  styles.previewButtonTextSecondary,
+                  { color: colors.foreground },
+                ]}
               >
-                <Ionicons name="document-text-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
-                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>Export CSV</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
-                onPress={handleExportGpx}
-                activeOpacity={0.8}
-                disabled={exportGpxLoading}
+                Export CSV
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.previewButton,
+                styles.previewButtonSecondary,
+                { borderColor: colors.border },
+              ]}
+              onPress={handleExportGpx}
+              activeOpacity={0.8}
+              disabled={exportGpxLoading}
+            >
+              {exportGpxLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.foreground}
+                  style={{ marginRight: 6 }}
+                />
+              ) : (
+                <Ionicons
+                  name="navigate-outline"
+                  size={18}
+                  color={colors.foreground}
+                  style={{ marginRight: 6 }}
+                />
+              )}
+              <Text
+                style={[
+                  styles.previewButtonTextSecondary,
+                  { color: colors.foreground },
+                ]}
               >
-                {exportGpxLoading ? (
-                  <ActivityIndicator size="small" color={colors.foreground} style={{ marginRight: 6 }} />
-                ) : (
-                  <Ionicons name="navigate-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
-                )}
-                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>
-                  {exportGpxLoading ? "Snapping to roads…" : "Export GPX"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
-                onPress={handleExportGpxPerVehicle}
-                activeOpacity={0.8}
-                disabled={exportGpxLoading}
+                {exportGpxLoading ? "Snapping to roads…" : "Export GPX"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.previewButton,
+                styles.previewButtonSecondary,
+                { borderColor: colors.border },
+              ]}
+              onPress={handleExportGpxPerVehicle}
+              activeOpacity={0.8}
+              disabled={exportGpxLoading}
+            >
+              {exportGpxLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.foreground}
+                  style={{ marginRight: 6 }}
+                />
+              ) : (
+                <Ionicons
+                  name="archive-outline"
+                  size={18}
+                  color={colors.foreground}
+                  style={{ marginRight: 6 }}
+                />
+              )}
+              <Text
+                style={[
+                  styles.previewButtonTextSecondary,
+                  { color: colors.foreground },
+                ]}
               >
-                {exportGpxLoading ? (
-                  <ActivityIndicator size="small" color={colors.foreground} style={{ marginRight: 6 }} />
-                ) : (
-                  <Ionicons name="archive-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
-                )}
-                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>
-                  {exportGpxLoading ? "Snapping to roads…" : "GPX per vehicle"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.previewButton, styles.previewButtonSecondary, { borderColor: colors.border }]}
-                onPress={handleSaveAsCurrentRoute}
-                activeOpacity={0.8}
+                {exportGpxLoading ? "Snapping to roads…" : "GPX per vehicle"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.previewButton,
+                styles.previewButtonSecondary,
+                { borderColor: colors.border },
+              ]}
+              onPress={handleSaveAsCurrentRoute}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="home-outline"
+                size={18}
+                color={colors.foreground}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  styles.previewButtonTextSecondary,
+                  { color: colors.foreground },
+                ]}
               >
-                <Ionicons name="home-outline" size={18} color={colors.foreground} style={{ marginRight: 6 }} />
-                <Text style={[styles.previewButtonTextSecondary, { color: colors.foreground }]}>Save to Home</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.previewButton, { backgroundColor: cyan, borderColor: magenta + "99" }]}
-                onPress={handlePreviewRoute}
-                activeOpacity={0.8}
-                disabled={previewLoading}
-              >
-                {previewLoading ? (
-                  <ActivityIndicator size="small" color="#0a0a0a" style={{ marginRight: 6 }} />
-                ) : (
-                  <Ionicons name="map-outline" size={18} color="#0a0a0a" style={{ marginRight: 6 }} />
-                )}
-                <Text style={styles.previewButtonText}>{previewLoading ? "Snapping to roads…" : "Preview on map"}</Text>
-              </TouchableOpacity>
-            </View>
+                Save to Home
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.previewButton,
+                { backgroundColor: cyan, borderColor: magenta + "99" },
+              ]}
+              onPress={handlePreviewRoute}
+              activeOpacity={0.8}
+              disabled={previewLoading}
+            >
+              {previewLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#0a0a0a"
+                  style={{ marginRight: 6 }}
+                />
+              ) : (
+                <Ionicons
+                  name="map-outline"
+                  size={18}
+                  color="#0a0a0a"
+                  style={{ marginRight: 6 }}
+                />
+              )}
+              <Text style={styles.previewButtonText}>
+                {previewLoading ? "Snapping to roads…" : "Preview on map"}
+              </Text>
+            </TouchableOpacity>
           </View>
-        ) : null}
+        </View>
+      ) : null}
 
-        {/* Extra padding at bottom for keyboard */}
-        <View style={styles.bottomPadding} />
+      {/* Extra padding at bottom for keyboard */}
+      <View style={styles.bottomPadding} />
     </>
   );
 
@@ -2156,7 +2937,10 @@ export function VRPPlanner({ nestedInScrollView = false }: VRPPlannerProps = {})
       fillScreen ? (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, styles.scrollContentFill]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            styles.scrollContentFill,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
         >

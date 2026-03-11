@@ -24,10 +24,30 @@ if (process.platform === "win32") {
 // Fall through via context.resolveRequest (Metro's default resolver chain).
 const projectRoot = __dirname;
 
-const codegenStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-codegen-web.js");
-const rnmapboxStubPath = path.join(projectRoot, "lib", "metro-stubs", "rnmapbox-maps-web.js");
-const rnmapsStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-maps-web.js");
-const rnwebviewStubPath = path.join(projectRoot, "lib", "metro-stubs", "react-native-webview-web.js");
+const codegenStubPath = path.join(
+  projectRoot,
+  "lib",
+  "metro-stubs",
+  "react-native-codegen-web.js",
+);
+const rnmapboxStubPath = path.join(
+  projectRoot,
+  "lib",
+  "metro-stubs",
+  "rnmapbox-maps-web.js",
+);
+const rnmapsStubPath = path.join(
+  projectRoot,
+  "lib",
+  "metro-stubs",
+  "react-native-maps-web.js",
+);
+const rnwebviewStubPath = path.join(
+  projectRoot,
+  "lib",
+  "metro-stubs",
+  "react-native-webview-web.js",
+);
 const extensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
 // Always resolve 'buffer' to our shim (under projectRoot) so Metro never uses module name for SHA-1
 const bufferShimPath = path.resolve(projectRoot, "lib", "buffer-shim.js");
@@ -37,16 +57,28 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
   if (platform === "web") {
     // Stub native-only modules so the web bundle never loads them
-    if (moduleName === "react-native-codegen" || moduleName.startsWith("react-native-codegen/")) {
+    if (
+      moduleName === "react-native-codegen" ||
+      moduleName.startsWith("react-native-codegen/")
+    ) {
       return { type: "sourceFile", filePath: codegenStubPath };
     }
-    if (moduleName === "@rnmapbox/maps" || moduleName.startsWith("@rnmapbox/maps/")) {
+    if (
+      moduleName === "@rnmapbox/maps" ||
+      moduleName.startsWith("@rnmapbox/maps/")
+    ) {
       return { type: "sourceFile", filePath: rnmapboxStubPath };
     }
-    if (moduleName === "react-native-maps" || moduleName.startsWith("react-native-maps/")) {
+    if (
+      moduleName === "react-native-maps" ||
+      moduleName.startsWith("react-native-maps/")
+    ) {
       return { type: "sourceFile", filePath: rnmapsStubPath };
     }
-    if (moduleName === "react-native-webview" || moduleName.startsWith("react-native-webview/")) {
+    if (
+      moduleName === "react-native-webview" ||
+      moduleName.startsWith("react-native-webview/")
+    ) {
       return { type: "sourceFile", filePath: rnwebviewStubPath };
     }
   }

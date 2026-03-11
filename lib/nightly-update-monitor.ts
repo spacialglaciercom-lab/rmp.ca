@@ -36,8 +36,8 @@ export interface TrendAnalysis {
   successRate: number;
   averageDuration: number;
   averageImprovement: number;
-  accuracyTrend: 'improving' | 'declining' | 'stable';
-  performanceTrend: 'improving' | 'declining' | 'stable';
+  accuracyTrend: "improving" | "declining" | "stable";
+  performanceTrend: "improving" | "declining" | "stable";
 }
 
 export interface AlertConfig {
@@ -49,14 +49,14 @@ export interface AlertConfig {
     maxConsecutiveFailures: number;
   };
   recipients: string[];
-  channels: ('email' | 'slack' | 'webhook')[];
+  channels: ("email" | "slack" | "webhook")[];
 }
 
 export interface MonitoringDashboard {
   currentStatus: {
     lastUpdate: UpdatePerformanceMetrics | null;
     nextScheduled: Date;
-    systemHealth: 'healthy' | 'degraded' | 'unhealthy';
+    systemHealth: "healthy" | "degraded" | "unhealthy";
     activeAlerts: number;
   };
   performance: {
@@ -66,7 +66,7 @@ export interface MonitoringDashboard {
   };
   alerts: Array<{
     id: string;
-    type: 'warning' | 'critical';
+    type: "warning" | "critical";
     title: string;
     message: string;
     timestamp: Date;
@@ -94,10 +94,10 @@ export class NightlyUpdateMonitor {
    */
   async recordUpdate(metrics: UpdatePerformanceMetrics): Promise<void> {
     this.metrics.push(metrics);
-    
+
     // Keep only recent metrics (last 90 days)
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    this.metrics = this.metrics.filter(m => m.timestamp > cutoff);
+    this.metrics = this.metrics.filter((m) => m.timestamp > cutoff);
 
     // Update failure counter
     if (metrics.success) {
@@ -113,7 +113,9 @@ export class NightlyUpdateMonitor {
     // Store in database
     await this.storeMetrics(metrics);
 
-    console.log(`📊 Update recorded: ${metrics.action} - ${metrics.success ? '✅ Success' : '❌ Failed'} (${metrics.duration.toFixed(1)}s)`);
+    console.log(
+      `📊 Update recorded: ${metrics.action} - ${metrics.success ? "✅ Success" : "❌ Failed"} (${metrics.duration.toFixed(1)}s)`,
+    );
   }
 
   /**
@@ -124,16 +126,17 @@ export class NightlyUpdateMonitor {
 
     // Check success rate
     const recentMetrics = this.getRecentMetrics(10);
-    const successRate = recentMetrics.filter(m => m.success).length / recentMetrics.length;
-    
+    const successRate =
+      recentMetrics.filter((m) => m.success).length / recentMetrics.length;
+
     if (successRate < this.config.thresholds.minSuccessRate) {
       alerts.push({
         id: `low_success_rate_${Date.now()}`,
-        type: 'critical',
-        title: 'Low Update Success Rate',
+        type: "critical",
+        title: "Low Update Success Rate",
         message: `Success rate dropped to ${(successRate * 100).toFixed(1)}% (threshold: ${(this.config.thresholds.minSuccessRate * 100).toFixed(1)}%)`,
         timestamp: new Date(),
-        acknowledged: false
+        acknowledged: false,
       });
     }
 
@@ -141,35 +144,41 @@ export class NightlyUpdateMonitor {
     if (metrics.duration > this.config.thresholds.maxDuration) {
       alerts.push({
         id: `long_duration_${Date.now()}`,
-        type: 'warning',
-        title: 'Update Duration Too Long',
+        type: "warning",
+        title: "Update Duration Too Long",
         message: `Update took ${metrics.duration.toFixed(1)}s (threshold: ${this.config.thresholds.maxDuration}s)`,
         timestamp: new Date(),
-        acknowledged: false
+        acknowledged: false,
       });
     }
 
     // Check model improvement
-    if (metrics.modelAccuracy.improvement < this.config.thresholds.minImprovement && metrics.modelAccuracy.after > 0) {
+    if (
+      metrics.modelAccuracy.improvement <
+        this.config.thresholds.minImprovement &&
+      metrics.modelAccuracy.after > 0
+    ) {
       alerts.push({
         id: `low_improvement_${Date.now()}`,
-        type: 'warning',
-        title: 'Low Model Improvement',
+        type: "warning",
+        title: "Low Model Improvement",
         message: `Model improvement was only ${(metrics.modelAccuracy.improvement * 100).toFixed(2)}% (threshold: ${(this.config.thresholds.minImprovement * 100).toFixed(2)}%)`,
         timestamp: new Date(),
-        acknowledged: false
+        acknowledged: false,
       });
     }
 
     // Check consecutive failures
-    if (this.consecutiveFailures >= this.config.thresholds.maxConsecutiveFailures) {
+    if (
+      this.consecutiveFailures >= this.config.thresholds.maxConsecutiveFailures
+    ) {
       alerts.push({
         id: `consecutive_failures_${Date.now()}`,
-        type: 'critical',
-        title: 'Consecutive Update Failures',
+        type: "critical",
+        title: "Consecutive Update Failures",
         message: `${this.consecutiveFailures} consecutive update failures detected`,
         timestamp: new Date(),
-        acknowledged: false
+        acknowledged: false,
       });
     }
 
@@ -183,12 +192,12 @@ export class NightlyUpdateMonitor {
   /**
    * Get performance trends
    */
-  getTrendAnalysis(period: '24h' | '7d' | '30d'): TrendAnalysis {
-    const hours = period === '24h' ? 24 : period === '7d' ? 7 * 24 : 30 * 24;
+  getTrendAnalysis(period: "24h" | "7d" | "30d"): TrendAnalysis {
+    const hours = period === "24h" ? 24 : period === "7d" ? 7 * 24 : 30 * 24;
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
-    
-    const periodMetrics = this.metrics.filter(m => m.timestamp > cutoff);
-    
+
+    const periodMetrics = this.metrics.filter((m) => m.timestamp > cutoff);
+
     if (periodMetrics.length === 0) {
       return {
         period,
@@ -196,25 +205,31 @@ export class NightlyUpdateMonitor {
         successRate: 0,
         averageDuration: 0,
         averageImprovement: 0,
-        accuracyTrend: 'stable',
-        performanceTrend: 'stable'
+        accuracyTrend: "stable",
+        performanceTrend: "stable",
       };
     }
 
-    const successCount = periodMetrics.filter(m => m.success).length;
+    const successCount = periodMetrics.filter((m) => m.success).length;
     const successRate = successCount / periodMetrics.length;
-    const averageDuration = periodMetrics.reduce((sum, m) => sum + m.duration, 0) / periodMetrics.length;
-    const averageImprovement = periodMetrics
-      .filter(m => m.modelAccuracy.after > 0)
-      .reduce((sum, m) => sum + m.modelAccuracy.improvement, 0) / periodMetrics.length;
+    const averageDuration =
+      periodMetrics.reduce((sum, m) => sum + m.duration, 0) /
+      periodMetrics.length;
+    const averageImprovement =
+      periodMetrics
+        .filter((m) => m.modelAccuracy.after > 0)
+        .reduce((sum, m) => sum + m.modelAccuracy.improvement, 0) /
+      periodMetrics.length;
 
     // Analyze trends
     const accuracyTrend = this.calculateTrend(
-      periodMetrics.filter(m => m.modelAccuracy.after > 0).map(m => m.modelAccuracy.after)
+      periodMetrics
+        .filter((m) => m.modelAccuracy.after > 0)
+        .map((m) => m.modelAccuracy.after),
     );
-    
+
     const performanceTrend = this.calculateTrend(
-      periodMetrics.map(m => m.duration)
+      periodMetrics.map((m) => m.duration),
     );
 
     return {
@@ -224,15 +239,17 @@ export class NightlyUpdateMonitor {
       averageDuration,
       averageImprovement,
       accuracyTrend,
-      performanceTrend
+      performanceTrend,
     };
   }
 
   /**
    * Calculate trend direction
    */
-  private calculateTrend(values: number[]): 'improving' | 'declining' | 'stable' {
-    if (values.length < 3) return 'stable';
+  private calculateTrend(
+    values: number[],
+  ): "improving" | "declining" | "stable" {
+    if (values.length < 3) return "stable";
 
     // Simple linear regression
     const n = values.length;
@@ -242,24 +259,25 @@ export class NightlyUpdateMonitor {
     const x2Sum = values.reduce((sum, _, i) => sum + i * i, 0);
 
     const slope = (n * xySum - xSum * ySum) / (n * x2Sum - xSum * xSum);
-    
-    if (Math.abs(slope) < 0.01) return 'stable';
-    return slope > 0 ? 'improving' : 'declining';
+
+    if (Math.abs(slope) < 0.01) return "stable";
+    return slope > 0 ? "improving" : "declining";
   }
 
   /**
    * Get monitoring dashboard data
    */
   async getDashboard(): Promise<MonitoringDashboard> {
-    const lastUpdate = this.metrics.length > 0 ? this.metrics[this.metrics.length - 1] : null;
+    const lastUpdate =
+      this.metrics.length > 0 ? this.metrics[this.metrics.length - 1] : null;
     const nextScheduled = this.calculateNextScheduledUpdate();
     const systemHealth = this.calculateSystemHealth();
-    const activeAlerts = this.alerts.filter(a => !a.acknowledged).length;
+    const activeAlerts = this.alerts.filter((a) => !a.acknowledged).length;
 
     const performance = {
-      last24Hours: this.getTrendAnalysis('24h'),
-      last7Days: this.getTrendAnalysis('7d'),
-      last30Days: this.getTrendAnalysis('30d')
+      last24Hours: this.getTrendAnalysis("24h"),
+      last7Days: this.getTrendAnalysis("7d"),
+      last30Days: this.getTrendAnalysis("30d"),
     };
 
     const recommendations = this.generateRecommendations();
@@ -269,33 +287,37 @@ export class NightlyUpdateMonitor {
         lastUpdate,
         nextScheduled,
         systemHealth,
-        activeAlerts
+        activeAlerts,
       },
       performance,
       alerts: this.alerts.slice(-10), // Last 10 alerts
-      recommendations
+      recommendations,
     };
   }
 
   /**
    * Calculate system health
    */
-  private calculateSystemHealth(): 'healthy' | 'degraded' | 'unhealthy' {
+  private calculateSystemHealth(): "healthy" | "degraded" | "unhealthy" {
     const recentMetrics = this.getRecentMetrics(5);
-    
-    if (recentMetrics.length === 0) return 'unhealthy';
 
-    const successRate = recentMetrics.filter(m => m.success).length / recentMetrics.length;
-    const avgDuration = recentMetrics.reduce((sum, m) => sum + m.duration, 0) / recentMetrics.length;
-    const hasRecentUpdate = this.lastSuccessfulUpdate && 
-      (Date.now() - this.lastSuccessfulUpdate.getTime()) < 48 * 60 * 60 * 1000;
+    if (recentMetrics.length === 0) return "unhealthy";
+
+    const successRate =
+      recentMetrics.filter((m) => m.success).length / recentMetrics.length;
+    const avgDuration =
+      recentMetrics.reduce((sum, m) => sum + m.duration, 0) /
+      recentMetrics.length;
+    const hasRecentUpdate =
+      this.lastSuccessfulUpdate &&
+      Date.now() - this.lastSuccessfulUpdate.getTime() < 48 * 60 * 60 * 1000;
 
     if (successRate >= 0.8 && avgDuration < 300 && hasRecentUpdate) {
-      return 'healthy';
+      return "healthy";
     } else if (successRate >= 0.6 && avgDuration < 600) {
-      return 'degraded';
+      return "degraded";
     } else {
-      return 'unhealthy';
+      return "unhealthy";
     }
   }
 
@@ -304,10 +326,12 @@ export class NightlyUpdateMonitor {
    */
   private generateRecommendations(): string[] {
     const recommendations: string[] = [];
-    const trends = this.getTrendAnalysis('7d');
+    const trends = this.getTrendAnalysis("7d");
 
     if (trends.successRate < 0.8) {
-      recommendations.push("Investigate update failures and improve error handling");
+      recommendations.push(
+        "Investigate update failures and improve error handling",
+      );
     }
 
     if (trends.averageImprovement < 0.01) {
@@ -322,12 +346,16 @@ export class NightlyUpdateMonitor {
       recommendations.push("Check system health and resolve update issues");
     }
 
-    if (trends.accuracyTrend === 'declining') {
-      recommendations.push("Model accuracy is declining - consider retraining with more data");
+    if (trends.accuracyTrend === "declining") {
+      recommendations.push(
+        "Model accuracy is declining - consider retraining with more data",
+      );
     }
 
     if (recommendations.length === 0) {
-      recommendations.push("System performance is stable - continue current monitoring");
+      recommendations.push(
+        "System performance is stable - continue current monitoring",
+      );
     }
 
     return recommendations;
@@ -348,11 +376,11 @@ export class NightlyUpdateMonitor {
     const now = new Date();
     const nextUpdate = new Date(now);
     nextUpdate.setHours(2, 0, 0, 0);
-    
+
     if (nextUpdate <= now) {
       nextUpdate.setDate(nextUpdate.getDate() + 1);
     }
-    
+
     return nextUpdate;
   }
 
@@ -366,10 +394,10 @@ export class NightlyUpdateMonitor {
     try {
       const db = client.db("trashroute");
       const collection = db.collection("update_performance_metrics");
-      
+
       await collection.insertOne({
         ...metrics,
-        _id: new ObjectId()
+        _id: new ObjectId(),
       });
     } catch (error) {
       console.error("Error storing metrics:", error);
@@ -388,13 +416,13 @@ export class NightlyUpdateMonitor {
     for (const channel of this.config.channels) {
       try {
         switch (channel) {
-          case 'email':
+          case "email":
             await this.sendEmailAlert(alert);
             break;
-          case 'slack':
+          case "slack":
             await this.sendSlackAlert(alert);
             break;
-          case 'webhook':
+          case "webhook":
             await this.sendWebhookAlert(alert);
             break;
         }
@@ -409,7 +437,9 @@ export class NightlyUpdateMonitor {
    */
   private async sendEmailAlert(alert: Alert): Promise<void> {
     // Email implementation would go here
-    console.log(`📧 Email alert would be sent to: ${this.config.recipients.join(', ')}`);
+    console.log(
+      `📧 Email alert would be sent to: ${this.config.recipients.join(", ")}`,
+    );
     console.log(`Subject: [${alert.type.toUpperCase()}] ${alert.title}`);
     console.log(`Body: ${alert.message}`);
   }
@@ -436,7 +466,7 @@ export class NightlyUpdateMonitor {
    * Acknowledge alert
    */
   acknowledgeAlert(alertId: string): boolean {
-    const alert = this.alerts.find(a => a.id === alertId);
+    const alert = this.alerts.find((a) => a.id === alertId);
     if (alert) {
       alert.acknowledged = true;
       return true;
@@ -456,27 +486,34 @@ export class NightlyUpdateMonitor {
   } {
     return {
       total: this.alerts.length,
-      critical: this.alerts.filter(a => a.type === 'critical').length,
-      warning: this.alerts.filter(a => a.type === 'warning').length,
-      acknowledged: this.alerts.filter(a => a.acknowledged).length,
-      unacknowledged: this.alerts.filter(a => !a.acknowledged).length
+      critical: this.alerts.filter((a) => a.type === "critical").length,
+      warning: this.alerts.filter((a) => a.type === "warning").length,
+      acknowledged: this.alerts.filter((a) => a.acknowledged).length,
+      unacknowledged: this.alerts.filter((a) => !a.acknowledged).length,
     };
   }
 
   /**
    * Export performance data
    */
-  async exportPerformanceData(startDate: Date, endDate: Date): Promise<UpdatePerformanceMetrics[]> {
-    return this.metrics.filter(m => 
-      m.timestamp >= startDate && m.timestamp <= endDate
+  async exportPerformanceData(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UpdatePerformanceMetrics[]> {
+    return this.metrics.filter(
+      (m) => m.timestamp >= startDate && m.timestamp <= endDate,
     );
   }
 
   /**
    * Generate performance report
    */
-  async generateReport(period: 'daily' | 'weekly' | 'monthly'): Promise<string> {
-    const trends = this.getTrendAnalysis(period === 'daily' ? '24h' : period === 'weekly' ? '7d' : '30d');
+  async generateReport(
+    period: "daily" | "weekly" | "monthly",
+  ): Promise<string> {
+    const trends = this.getTrendAnalysis(
+      period === "daily" ? "24h" : period === "weekly" ? "7d" : "30d",
+    );
     const alertStats = this.getAlertStats();
     const dashboard = await this.getDashboard();
 
@@ -503,12 +540,14 @@ export class NightlyUpdateMonitor {
 - **Unacknowledged:** ${alertStats.unacknowledged}
 
 ## Recommendations
-${dashboard.recommendations.map(rec => `- ${rec}`).join('\n')}
+${dashboard.recommendations.map((rec) => `- ${rec}`).join("\n")}
 
 ## Next Steps
-${dashboard.currentStatus.systemHealth === 'healthy' ? 
-  'Continue current monitoring and maintenance schedule.' :
-  'Address system health issues and review update process.'}
+${
+  dashboard.currentStatus.systemHealth === "healthy"
+    ? "Continue current monitoring and maintenance schedule."
+    : "Address system health issues and review update process."
+}
     `;
 
     return report.trim();
@@ -517,7 +556,7 @@ ${dashboard.currentStatus.systemHealth === 'healthy' ?
 
 interface Alert {
   id: string;
-  type: 'warning' | 'critical';
+  type: "warning" | "critical";
   title: string;
   message: string;
   timestamp: Date;
@@ -531,11 +570,13 @@ export const defaultMonitoringConfig: AlertConfig = {
     minSuccessRate: 0.8,
     maxDuration: 300, // 5 minutes
     minImprovement: 0.005, // 0.5%
-    maxConsecutiveFailures: 3
+    maxConsecutiveFailures: 3,
   },
-  recipients: ['admin@trashroute.com'],
-  channels: ['email', 'webhook']
+  recipients: ["admin@trashroute.com"],
+  channels: ["email", "webhook"],
 };
 
 // Export singleton instance
-export const nightlyUpdateMonitor = new NightlyUpdateMonitor(defaultMonitoringConfig);
+export const nightlyUpdateMonitor = new NightlyUpdateMonitor(
+  defaultMonitoringConfig,
+);

@@ -1,5 +1,12 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native';
-import { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Animated,
+} from "react-native";
+import { useEffect, useRef } from "react";
 
 // Holographic Glass UI Demo Component
 const HolographicUIDemo = () => {
@@ -20,7 +27,7 @@ const HolographicUIDemo = () => {
           duration: 1500,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
 
     // Glow pulse for buttons
@@ -36,7 +43,7 @@ const HolographicUIDemo = () => {
           duration: 2000,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -51,16 +58,16 @@ const HolographicUIDemo = () => {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        
         {/* Header Panel */}
         <View style={styles.headerPanel}>
           <Text style={styles.headerTitle}>Holographic Interface</Text>
-          <Text style={styles.headerSubtitle}>Deep Space Navigation System</Text>
+          <Text style={styles.headerSubtitle}>
+            Deep Space Navigation System
+          </Text>
         </View>
 
         {/* Main Content Grid */}
         <View style={styles.gridContainer}>
-          
           {/* Control Panel 1 */}
           <View style={styles.controlPanel}>
             <Text style={styles.panelTitle}>System Status</Text>
@@ -108,7 +115,9 @@ const HolographicUIDemo = () => {
               <Text style={styles.logEntry}>[INFO] System initialized</Text>
               <Text style={styles.logEntry}>[INFO] Sensors online</Text>
               <Text style={styles.logEntry}>[INFO] Navigation ready</Text>
-              <Text style={styles.logEntry}>[INFO] Communications established</Text>
+              <Text style={styles.logEntry}>
+                [INFO] Communications established
+              </Text>
             </View>
           </View>
 
@@ -124,9 +133,7 @@ const HolographicUIDemo = () => {
               <Text style={styles.buttonText}>Jump</Text>
             </TouchableOpacity>
           </View>
-
         </View>
-
       </ScrollView>
     </View>
   );
@@ -135,20 +142,20 @@ const HolographicUIDemo = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: "#0B0F19",
     padding: 20,
   },
   scrollContent: {
     paddingBottom: 40,
   },
   headerPanel: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 16,
     padding: 24,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.2)',
-    shadowColor: '#00D9FF',
+    borderColor: "rgba(0, 217, 255, 0.2)",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -156,27 +163,27 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#00D9FF',
+    fontWeight: "bold",
+    color: "#00D9FF",
     marginBottom: 8,
-    textShadowColor: 'rgba(0, 217, 255, 0.5)',
+    textShadowColor: "rgba(0, 217, 255, 0.5)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   gridContainer: {
     gap: 16,
   },
   controlPanel: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.15)',
-    shadowColor: '#00D9FF',
+    borderColor: "rgba(0, 217, 255, 0.15)",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -184,133 +191,133 @@ const styles = StyleSheet.create({
   },
   panelTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#00D9FF',
+    fontWeight: "600",
+    color: "#00D9FF",
     marginBottom: 12,
   },
   statusIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   statusDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#00D9FF',
-    shadowColor: '#00D9FF',
+    backgroundColor: "#00D9FF",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 4,
   },
   statusText: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: "rgba(255, 255, 255, 0.9)",
     fontSize: 14,
   },
   glowButton: {
-    backgroundColor: 'rgba(0, 217, 255, 0.2)',
+    backgroundColor: "rgba(0, 217, 255, 0.2)",
     borderRadius: 25,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.4)',
-    shadowColor: '#00D9FF',
+    borderColor: "rgba(0, 217, 255, 0.4)",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 6,
   },
   glowButtonSecondary: {
-    backgroundColor: 'rgba(123, 97, 255, 0.2)',
+    backgroundColor: "rgba(123, 97, 255, 0.2)",
     borderRadius: 25,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'rgba(123, 97, 255, 0.4)',
-    shadowColor: '#7B61FF',
+    borderColor: "rgba(123, 97, 255, 0.4)",
+    shadowColor: "#7B61FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 6,
   },
   buttonText: {
-    color: 'white',
-    fontWeight: '600',
+    color: "white",
+    fontWeight: "600",
     fontSize: 14,
   },
   sensorDisplay: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: 4,
   },
   sensorValue: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#00D9FF',
+    fontWeight: "bold",
+    color: "#00D9FF",
   },
   sensorLabel: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   prismContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: "rgba(255, 255, 255, 0.15)",
   },
   prismGradient: {
     width: 100,
     height: 60,
     borderRadius: 8,
-    backgroundColor: '#FF006E',
-    position: 'relative',
-    overflow: 'hidden',
+    backgroundColor: "#FF006E",
+    position: "relative",
+    overflow: "hidden",
   },
   prismText: {
     marginTop: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     fontSize: 14,
   },
   terminalPanel: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.1)',
+    borderColor: "rgba(0, 217, 255, 0.1)",
   },
   terminalTitle: {
-    color: '#00D9FF',
+    color: "#00D9FF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 12,
   },
   terminalContent: {
     gap: 4,
   },
   logEntry: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: "monospace",
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   actionButton: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 20,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    shadowColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    shadowColor: "rgba(255, 255, 255, 0.1)",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

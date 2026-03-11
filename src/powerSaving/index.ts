@@ -2,7 +2,15 @@
  * Power Saving Mode context and provider.
  * Manages battery-aware power modes for navigation to optimize battery life.
  */
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -71,12 +79,16 @@ export function PowerSavingProvider({ children }: PowerSavingProviderProps) {
     if (Platform.OS === "web") {
       // Web Battery API (if available)
       if (typeof navigator !== "undefined" && "getBattery" in navigator) {
-        (navigator as any).getBattery?.().then((battery: any) => {
-          setBatteryLevel(battery.level ?? 1);
-          const handleLevelChange = () => setBatteryLevel(battery.level ?? 1);
-          battery.addEventListener?.("levelchange", handleLevelChange);
-          return () => battery.removeEventListener?.("levelchange", handleLevelChange);
-        }).catch(() => {});
+        (navigator as any)
+          .getBattery?.()
+          .then((battery: any) => {
+            setBatteryLevel(battery.level ?? 1);
+            const handleLevelChange = () => setBatteryLevel(battery.level ?? 1);
+            battery.addEventListener?.("levelchange", handleLevelChange);
+            return () =>
+              battery.removeEventListener?.("levelchange", handleLevelChange);
+          })
+          .catch(() => {});
       }
       return;
     }
@@ -88,10 +100,12 @@ export function PowerSavingProvider({ children }: PowerSavingProviderProps) {
         const Battery = await import("expo-battery");
         const level = await Battery.getBatteryLevelAsync();
         if (level >= 0) setBatteryLevel(level);
-        
-        const subscription = Battery.addBatteryLevelListener(({ batteryLevel: level }) => {
-          if (level >= 0) setBatteryLevel(level);
-        });
+
+        const subscription = Battery.addBatteryLevelListener(
+          ({ batteryLevel: level }) => {
+            if (level >= 0) setBatteryLevel(level);
+          },
+        );
         unsubscribe = () => subscription.remove();
       } catch (e) {
         // expo-battery not available
@@ -128,30 +142,39 @@ export function PowerSavingProvider({ children }: PowerSavingProviderProps) {
     }
   }, []);
 
-  const setMode = useCallback((mode: PowerMode) => {
-    setState((prev) => {
-      const newState = { ...prev, mode };
-      persistState(newState);
-      return newState;
-    });
-  }, [persistState]);
+  const setMode = useCallback(
+    (mode: PowerMode) => {
+      setState((prev) => {
+        const newState = { ...prev, mode };
+        persistState(newState);
+        return newState;
+      });
+    },
+    [persistState],
+  );
 
-  const setAutoSwitchEnabled = useCallback((enabled: boolean) => {
-    setState((prev) => {
-      const newState = { ...prev, autoSwitchEnabled: enabled };
-      persistState(newState);
-      return newState;
-    });
-  }, [persistState]);
+  const setAutoSwitchEnabled = useCallback(
+    (enabled: boolean) => {
+      setState((prev) => {
+        const newState = { ...prev, autoSwitchEnabled: enabled };
+        persistState(newState);
+        return newState;
+      });
+    },
+    [persistState],
+  );
 
-  const value = useMemo<PowerSavingContextValue>(() => ({
-    mode: state.mode,
-    state,
-    batteryLevel,
-    isReady,
-    setMode,
-    setAutoSwitchEnabled,
-  }), [state, batteryLevel, isReady, setMode, setAutoSwitchEnabled]);
+  const value = useMemo<PowerSavingContextValue>(
+    () => ({
+      mode: state.mode,
+      state,
+      batteryLevel,
+      isReady,
+      setMode,
+      setAutoSwitchEnabled,
+    }),
+    [state, batteryLevel, isReady, setMode, setAutoSwitchEnabled],
+  );
 
   return React.createElement(PowerSavingContext.Provider, { value }, children);
 }

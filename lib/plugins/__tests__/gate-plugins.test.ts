@@ -33,7 +33,7 @@ describe("gate plugins", () => {
       expect(getPlugin(id)).toBe(plugin);
       unloadPlugin(id);
       expect(getPlugin(id)).toBeUndefined();
-    }
+    },
   );
 
   it.each(GATE_PLUGINS.map((p) => [p.id, p] as [string, Plugin]))(
@@ -41,7 +41,7 @@ describe("gate plugins", () => {
     (_id, plugin) => {
       registerPlugin(plugin, mockContext);
       expect(typeof plugin.getFeatures()).toBe("object");
-    }
+    },
   );
 
   it.each(GATE_PLUGINS.map((p) => [p.id, p] as [string, Plugin]))(
@@ -52,6 +52,6 @@ describe("gate plugins", () => {
       expect(typeof plugin.name).toBe("string");
       expect(typeof plugin.description).toBe("string");
       expect(typeof plugin.version).toBe("string");
-    }
+    },
   );
 });

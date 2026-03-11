@@ -4,12 +4,12 @@ If `pnpm run mobile:tunnel` fails with "ngrok tunnel took too long to connect", 
 
 ## Domains to allow (outbound HTTPS)
 
-| Domain / pattern | Purpose |
-|-----------------|--------|
-| `*.ngrok.com` | ngrok API and dashboard |
-| `*.ngrok-agent.com` | ngrok tunnel agent |
-| `*.equinox.io` | ngrok backend (Equinox) |
-| `cloud.google.com` | Optional; some Expo/Google services |
+| Domain / pattern    | Purpose                             |
+| ------------------- | ----------------------------------- |
+| `*.ngrok.com`       | ngrok API and dashboard             |
+| `*.ngrok-agent.com` | ngrok tunnel agent                  |
+| `*.equinox.io`      | ngrok backend (Equinox)             |
+| `cloud.google.com`  | Optional; some Expo/Google services |
 
 **Port:** 443 (HTTPS)  
 **Direction:** Outbound (your PC → internet)
@@ -71,7 +71,7 @@ If NordVPN is on, tunnel traffic can fail or time out. **Exclude Node from the V
 
 Then run `pnpm run mobile:tunnel` again; Node will use your normal connection for ngrok.
 
-*Note: Split tunneling is available on NordVPN for Windows and Android; not on macOS/iOS.*
+_Note: Split tunneling is available on NordVPN for Windows and Android; not on macOS/iOS._
 
 ---
 
@@ -84,7 +84,7 @@ If your company uses a secure web gateway that inspects HTTPS:
    - `*.ngrok-agent.com`
    - `*.equinox.io`
    - `cloud.google.com`
-2. Wording they often use: *“SSL do not decrypt for *.ngrok.com, *.ngrok-agent.com, *.equinox.io”*.
+2. Wording they often use: _“SSL do not decrypt for _.ngrok.com, _.ngrok-agent.com, _.equinox.io”\*.
 
 After they add the exception, run `ngrok diagnose` (if you have ngrok CLI) or `pnpm run mobile:tunnel` again.
 
@@ -94,24 +94,29 @@ After they add the exception, run `ngrok diagnose` (if you have ngrok CLI) or `p
 
 When `pnpm run mobile:tunnel` keeps failing with "ngrok took too long to connect", use **two terminals** and run ngrok yourself (no timeout from Expo):
 
-**Terminal 1 – start Metro (Expo dev server)**  
+**Terminal 1 – start Metro (Expo dev server)**
+
 ```bash
 pnpm run mobile
 ```
+
 Leave this running. Metro will listen on port **8081** by default.
 
-**Terminal 2 – start ngrok to that port**  
+**Terminal 2 – start ngrok to that port**
+
 ```bash
 pnpm run mobile:tunnel:manual
 ```
+
 Or: `node scripts/run-ngrok-manual.js`  
 Or, if you have ngrok installed globally: `ngrok http 8081`  
 (Set `NGROK_AUTHTOKEN` in `.env` so ngrok can authenticate.)
 
 The script (or ngrok) will print a public URL like `https://xxxx.ngrok-free.app`.
 
-**On your phone (Expo Go)**  
-- Open Expo Go → **Enter URL manually** (or “Connect”), and paste the **https** URL from Terminal 2.  
+**On your phone (Expo Go)**
+
+- Open Expo Go → **Enter URL manually** (or “Connect”), and paste the **https** URL from Terminal 2.
 - The app will load from your machine via the tunnel.
 
 This avoids Expo’s built-in tunnel timeout; ngrok has no short limit.

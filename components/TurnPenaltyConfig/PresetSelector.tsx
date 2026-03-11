@@ -34,7 +34,9 @@ export function PresetSelector({
             style={[
               styles.presetButton,
               {
-                backgroundColor: isActive ? colors.primary + "20" : colors.muted + "20",
+                backgroundColor: isActive
+                  ? colors.primary + "20"
+                  : colors.muted + "20",
                 borderColor: isActive ? colors.primary : colors.border,
               },
             ]}

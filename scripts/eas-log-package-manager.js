@@ -7,5 +7,7 @@ try {
   const out = execSync("pnpm --version", { encoding: "utf8" }).trim();
   console.log("[EAS] Package manager: pnpm@" + out);
 } catch (e) {
-  console.warn("[EAS] pnpm not in PATH; EAS may use npm. Check the next step in the log.");
+  console.warn(
+    "[EAS] pnpm not in PATH; EAS may use npm. Check the next step in the log.",
+  );
 }

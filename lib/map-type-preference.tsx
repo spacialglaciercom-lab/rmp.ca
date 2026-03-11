@@ -21,7 +21,9 @@ export async function getStoredMapType(): Promise<MapTypePreference> {
   return DEFAULT;
 }
 
-export async function setStoredMapType(value: MapTypePreference): Promise<void> {
+export async function setStoredMapType(
+  value: MapTypePreference,
+): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, value);
   } catch {
@@ -29,7 +31,10 @@ export async function setStoredMapType(value: MapTypePreference): Promise<void> 
   }
 }
 
-type MapTypeContextValue = [MapTypePreference, (value: MapTypePreference) => Promise<void>];
+type MapTypeContextValue = [
+  MapTypePreference,
+  (value: MapTypePreference) => Promise<void>,
+];
 const MapTypeContext = React.createContext<MapTypeContextValue | null>(null);
 
 export function MapTypeProvider({ children }: { children: React.ReactNode }) {
@@ -51,7 +56,10 @@ export function MapTypeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useMapType(): [MapTypePreference, (value: MapTypePreference) => Promise<void>] {
+export function useMapType(): [
+  MapTypePreference,
+  (value: MapTypePreference) => Promise<void>,
+] {
   const ctx = useContext(MapTypeContext);
   if (ctx) return ctx;
 

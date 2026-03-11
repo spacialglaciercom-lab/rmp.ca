@@ -15,7 +15,9 @@ import { usePluginStore } from "@/stores/pluginStore";
 export default function RouteScreen() {
   const { theme } = useTheme();
   const router = useRouter();
-  const collectionRouteEnabled = usePluginStore((s) => s.isPluginEnabled("collection-route", true));
+  const collectionRouteEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("collection-route", true),
+  );
 
   useEffect(() => {
     if (!collectionRouteEnabled) {

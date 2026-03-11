@@ -29,17 +29,34 @@ const ai = genkit({
 /** Navigation context injected into the system prompt when driving. */
 export const NavContextSchema = z.object({
   streetName: z.string().optional().describe("Current street name"),
-  nextManeuver: z.string().optional().describe("Next turn type (e.g. turn left)"),
-  distanceToNext: z.number().optional().describe("Distance to next maneuver in meters"),
-  distanceRemaining: z.number().optional().describe("Total remaining distance in meters"),
+  nextManeuver: z
+    .string()
+    .optional()
+    .describe("Next turn type (e.g. turn left)"),
+  distanceToNext: z
+    .number()
+    .optional()
+    .describe("Distance to next maneuver in meters"),
+  distanceRemaining: z
+    .number()
+    .optional()
+    .describe("Total remaining distance in meters"),
   eta: z.string().optional().describe("Estimated time of arrival"),
   currentStep: z.number().optional().describe("Current navigation step index"),
-  totalSteps: z.number().optional().describe("Total number of navigation steps"),
+  totalSteps: z
+    .number()
+    .optional()
+    .describe("Total number of navigation steps"),
   weather: z.string().optional().describe("Current weather summary"),
-  isNavigating: z.boolean().describe("Whether the driver is actively navigating"),
+  isNavigating: z
+    .boolean()
+    .describe("Whether the driver is actively navigating"),
   lat: z.number().optional().describe("Current GPS latitude"),
   lon: z.number().optional().describe("Current GPS longitude"),
-  heading: z.number().optional().describe("Compass heading in degrees (0=N, 90=E, 180=S, 270=W)"),
+  heading: z
+    .number()
+    .optional()
+    .describe("Compass heading in degrees (0=N, 90=E, 180=S, 270=W)"),
   speedMph: z.number().optional().describe("Current speed in mph"),
 });
 
@@ -55,19 +72,31 @@ export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 /** Input to the co-pilot chat flow. */
 const CoPilotInputSchema = z.object({
-  message: z.string().describe("The driver's message (text or transcribed speech)"),
-  history: z.array(ChatMessageSchema).optional().describe("Recent conversation history (last 20 messages)"),
-  navContext: NavContextSchema.optional().describe("Current navigation state, if available"),
+  message: z
+    .string()
+    .describe("The driver's message (text or transcribed speech)"),
+  history: z
+    .array(ChatMessageSchema)
+    .optional()
+    .describe("Recent conversation history (last 20 messages)"),
+  navContext: NavContextSchema.optional().describe(
+    "Current navigation state, if available",
+  ),
 });
 
 /** Output from the co-pilot chat flow. */
 const CoPilotOutputSchema = z.object({
-  reply: z.string().describe("The co-pilot's response (will be spoken via TTS)"),
+  reply: z
+    .string()
+    .describe("The co-pilot's response (will be spoken via TTS)"),
 });
 
 // ── System prompt builder ───────────────────────────────────────────────────
 
-function buildSystemPrompt(navContext?: NavContext, ragContext?: string): string {
+function buildSystemPrompt(
+  navContext?: NavContext,
+  ragContext?: string,
+): string {
   const base = `You are a friendly AI co-pilot riding along with a trash collection driver. Your name is "Copilot".
 
 Personality:
@@ -99,20 +128,26 @@ You're currently parked or between routes. The driver isn't navigating right now
 
   if (navContext.streetName) parts.push(`- Street: ${navContext.streetName}`);
   if (navContext.nextManeuver && navContext.distanceToNext != null) {
-    parts.push(`- Next: ${navContext.nextManeuver} in ${formatDist(navContext.distanceToNext)}`);
+    parts.push(
+      `- Next: ${navContext.nextManeuver} in ${formatDist(navContext.distanceToNext)}`,
+    );
   }
   if (navContext.distanceRemaining != null) {
     parts.push(`- Remaining: ${formatDist(navContext.distanceRemaining)}`);
   }
   if (navContext.eta) parts.push(`- ETA: ${navContext.eta}`);
   if (navContext.currentStep != null && navContext.totalSteps != null) {
-    parts.push(`- Progress: step ${navContext.currentStep + 1} of ${navContext.totalSteps}`);
+    parts.push(
+      `- Progress: step ${navContext.currentStep + 1} of ${navContext.totalSteps}`,
+    );
   }
   if (navContext.weather) parts.push(`- Weather: ${navContext.weather}`);
 
   if (ragContext) {
     parts.push(`\nRelevant knowledge base context:\n${ragContext}`);
-    parts.push(`\nUse this context to answer domain-specific questions about trash collection, routes, policies, or vehicle operations. If the question is casual conversation, ignore this context.`);
+    parts.push(
+      `\nUse this context to answer domain-specific questions about trash collection, routes, policies, or vehicle operations. If the question is casual conversation, ignore this context.`,
+    );
   }
 
   return parts.join("\n");
@@ -143,16 +178,24 @@ export const coPilotChatFlow = ai.defineFlow(
       const { retrieveContext } = await import("../rag/ragService");
       const chunks = await retrieveContext(input.message, 3);
       if (chunks.length > 0) {
-        ragContext = chunks.map((c) => `[${c.filename}]: ${c.content}`).join("\n\n");
+        ragContext = chunks
+          .map((c) => `[${c.filename}]: ${c.content}`)
+          .join("\n\n");
       }
     } catch (err) {
       console.warn("[CoPilot] RAG retrieval failed (non-fatal):", err);
     }
 
-    const systemPrompt = buildSystemPrompt(input.navContext ?? undefined, ragContext);
+    const systemPrompt = buildSystemPrompt(
+      input.navContext ?? undefined,
+      ragContext,
+    );
 
     // Build message history for the model
-    const messages: Array<{ role: "user" | "model"; content: Array<{ text: string }> }> = [];
+    const messages: Array<{
+      role: "user" | "model";
+      content: Array<{ text: string }>;
+    }> = [];
 
     // Add conversation history (last 20 messages)
     if (input.history) {
@@ -218,13 +261,16 @@ export async function chatWithCoPilot(
         const { retrieveContext } = await import("../rag/ragService");
         const chunks = await retrieveContext(message, 3);
         if (chunks.length > 0) {
-          ragContext = chunks.map((c) => `[${c.filename}]: ${c.content}`).join("\n\n");
+          ragContext = chunks
+            .map((c) => `[${c.filename}]: ${c.content}`)
+            .join("\n\n");
         }
       } catch {
         // RAG optional
       }
       const systemPrompt = buildSystemPrompt(navContext, ragContext);
-      const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+      const messages: Array<{ role: "user" | "assistant"; content: string }> =
+        [];
       if (history) {
         for (const msg of history.slice(-20)) {
           messages.push({ role: msg.role, content: msg.content });

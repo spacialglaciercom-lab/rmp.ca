@@ -71,7 +71,9 @@ export async function getResumableDownloadInfo(): Promise<{
   if (!state) return null;
   let progress: number | undefined;
   if (state.source === "s3" && state.completedFiles && state.totalFiles) {
-    progress = Math.round((state.completedFiles.length / state.totalFiles) * 100);
+    progress = Math.round(
+      (state.completedFiles.length / state.totalFiles) * 100,
+    );
   }
   return { cityId: state.cityId, source: state.source, progress };
 }
@@ -106,7 +108,8 @@ let regionsCache: DownloadedRegion[] | null = null;
 /** Get the base storage directory. Throws if unavailable. */
 function getStorageBase(): string {
   const base = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-  if (!base) throw new Error("No file system directory available for offline maps");
+  if (!base)
+    throw new Error("No file system directory available for offline maps");
   return base;
 }
 
@@ -235,16 +238,66 @@ export async function getUpdateStatus(): Promise<{
 
 /** Predefined cities and regions (Canadian cities only). */
 export const OFFLINE_CITIES: OfflineCity[] = [
-  { id: "montreal", name: "Montreal", country: "Canada", bounds: { minLat: 45.41, maxLat: 45.70, minLon: -73.85, maxLon: -73.50 } },
-  { id: "laval", name: "Laval", country: "Canada", bounds: { minLat: 45.53, maxLat: 45.63, minLon: -73.80, maxLon: -73.65 } },
-  { id: "longueuil", name: "Longueuil", country: "Canada", bounds: { minLat: 45.43, maxLat: 45.55, minLon: -73.55, maxLon: -73.42 } },
-  { id: "toronto", name: "Toronto", country: "Canada", bounds: { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.11 } },
-  { id: "vancouver", name: "Vancouver", country: "Canada", bounds: { minLat: 49.20, maxLat: 49.35, minLon: -123.25, maxLon: -123.00 } },
-  { id: "ottawa", name: "Ottawa", country: "Canada", bounds: { minLat: 45.30, maxLat: 45.55, minLon: -76.05, maxLon: -75.50 } },
-  { id: "calgary", name: "Calgary", country: "Canada", bounds: { minLat: 50.90, maxLat: 51.20, minLon: -114.25, maxLon: -113.85 } },
-  { id: "edmonton", name: "Edmonton", country: "Canada", bounds: { minLat: 53.45, maxLat: 53.65, minLon: -113.65, maxLon: -113.35 } },
-  { id: "quebec_city", name: "Quebec City", country: "Canada", bounds: { minLat: 46.75, maxLat: 46.95, minLon: -71.35, maxLon: -71.15 } },
-  { id: "halifax", name: "Halifax", country: "Canada", bounds: { minLat: 44.60, maxLat: 44.72, minLon: -63.70, maxLon: -63.52 } },
+  {
+    id: "montreal",
+    name: "Montreal",
+    country: "Canada",
+    bounds: { minLat: 45.41, maxLat: 45.7, minLon: -73.85, maxLon: -73.5 },
+  },
+  {
+    id: "laval",
+    name: "Laval",
+    country: "Canada",
+    bounds: { minLat: 45.53, maxLat: 45.63, minLon: -73.8, maxLon: -73.65 },
+  },
+  {
+    id: "longueuil",
+    name: "Longueuil",
+    country: "Canada",
+    bounds: { minLat: 45.43, maxLat: 45.55, minLon: -73.55, maxLon: -73.42 },
+  },
+  {
+    id: "toronto",
+    name: "Toronto",
+    country: "Canada",
+    bounds: { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.11 },
+  },
+  {
+    id: "vancouver",
+    name: "Vancouver",
+    country: "Canada",
+    bounds: { minLat: 49.2, maxLat: 49.35, minLon: -123.25, maxLon: -123.0 },
+  },
+  {
+    id: "ottawa",
+    name: "Ottawa",
+    country: "Canada",
+    bounds: { minLat: 45.3, maxLat: 45.55, minLon: -76.05, maxLon: -75.5 },
+  },
+  {
+    id: "calgary",
+    name: "Calgary",
+    country: "Canada",
+    bounds: { minLat: 50.9, maxLat: 51.2, minLon: -114.25, maxLon: -113.85 },
+  },
+  {
+    id: "edmonton",
+    name: "Edmonton",
+    country: "Canada",
+    bounds: { minLat: 53.45, maxLat: 53.65, minLon: -113.65, maxLon: -113.35 },
+  },
+  {
+    id: "quebec_city",
+    name: "Quebec City",
+    country: "Canada",
+    bounds: { minLat: 46.75, maxLat: 46.95, minLon: -71.35, maxLon: -71.15 },
+  },
+  {
+    id: "halifax",
+    name: "Halifax",
+    country: "Canada",
+    bounds: { minLat: 44.6, maxLat: 44.72, minLon: -63.7, maxLon: -63.52 },
+  },
 ];
 
 // ─── S3 bucket listing ────────────────────────────────────────────
@@ -289,7 +342,9 @@ async function listS3Objects(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), LIST_PAGE_TIMEOUT_MS);
     const combinedSignal = signal
-      ? { aborted: signal.aborted || controller.signal.aborted } as AbortSignal
+      ? ({
+          aborted: signal.aborted || controller.signal.aborted,
+        } as AbortSignal)
       : controller.signal;
 
     try {
@@ -318,13 +373,19 @@ async function listS3Objects(
 
       // Check for pagination
       const truncated = xml.includes("<IsTruncated>true</IsTruncated>");
-      const nextToken = xml.match(/<NextContinuationToken>(.*?)<\/NextContinuationToken>/);
-      continuationToken = truncated && nextToken?.[1] ? nextToken[1] : undefined;
+      const nextToken = xml.match(
+        /<NextContinuationToken>(.*?)<\/NextContinuationToken>/,
+      );
+      continuationToken =
+        truncated && nextToken?.[1] ? nextToken[1] : undefined;
     } catch (err) {
       clearTimeout(timeout);
       // If it's a timeout or abort, return what we have so far
       if (objects.length > 0) {
-        console.warn(`[OvertureMaps] Listing stopped after ${objects.length} files:`, err);
+        console.warn(
+          `[OvertureMaps] Listing stopped after ${objects.length} files:`,
+          err,
+        );
         break;
       }
       throw err;
@@ -359,8 +420,13 @@ const PROGRESS_THROTTLE_MS = 300;
 export async function downloadCityData(
   city: OfflineCity,
   onProgress?: (done: number, total: number, phase: string) => void,
-  signal?: AbortSignal
-): Promise<{ success: boolean; fileCount: number; sizeBytes: number; error?: string }> {
+  signal?: AbortSignal,
+): Promise<{
+  success: boolean;
+  fileCount: number;
+  sizeBytes: number;
+  error?: string;
+}> {
   const layers = city.layers ?? DEFAULT_LAYERS;
   const regionDir = getRegionDir(city.id);
 
@@ -374,8 +440,8 @@ export async function downloadCityData(
   const savedState = await loadDownloadState();
   const completedFiles = new Set<string>(
     savedState?.cityId === city.id && savedState.source === "s3"
-      ? savedState.completedFiles ?? []
-      : []
+      ? (savedState.completedFiles ?? [])
+      : [],
   );
   const isResuming = completedFiles.size > 0;
 
@@ -384,13 +450,12 @@ export async function downloadCityData(
   const allObjects: S3Object[] = [];
 
   for (const layer of layers) {
-    if (signal?.aborted) return { success: false, fileCount: 0, sizeBytes: 0, error: "Cancelled" };
+    if (signal?.aborted)
+      return { success: false, fileCount: 0, sizeBytes: 0, error: "Cancelled" };
     const prefix = OVERTURE_LAYERS[layer];
     try {
-      const objects = await listS3Objects(
-        prefix,
-        signal,
-        (found) => onProgress?.(found, found, `Listing ${layer}… (${found} files)`),
+      const objects = await listS3Objects(prefix, signal, (found) =>
+        onProgress?.(found, found, `Listing ${layer}… (${found} files)`),
       );
       // Filter to .parquet files only
       const parquetFiles = objects.filter((o) => o.key.endsWith(".parquet"));
@@ -402,7 +467,12 @@ export async function downloadCityData(
 
   if (allObjects.length === 0) {
     await clearDownloadState();
-    return { success: false, fileCount: 0, sizeBytes: 0, error: "No data files found for this region" };
+    return {
+      success: false,
+      fileCount: 0,
+      sizeBytes: 0,
+      error: "No data files found for this region",
+    };
   }
 
   // Save initial state
@@ -438,7 +508,12 @@ export async function downloadCityData(
         totalFiles: allObjects.length,
         startedAt: savedState?.startedAt ?? Date.now(),
       });
-      return { success: false, fileCount: downloaded, sizeBytes: totalBytes, error: "Download cancelled (resumable)" };
+      return {
+        success: false,
+        fileCount: downloaded,
+        sizeBytes: totalBytes,
+        error: "Download cancelled (resumable)",
+      };
     }
 
     const localPath = getLocalPath(city.id, obj.key);
@@ -447,7 +522,9 @@ export async function downloadCityData(
       const s3Url = `${S3_BUCKET}/${obj.key}`;
       const dlResult = await FileSystem.downloadAsync(s3Url, localPath);
       if (dlResult.status < 200 || dlResult.status >= 300) {
-        console.warn(`[OvertureMaps] HTTP ${dlResult.status} for ${obj.key}, skipping`);
+        console.warn(
+          `[OvertureMaps] HTTP ${dlResult.status} for ${obj.key}, skipping`,
+        );
         continue;
       }
       downloaded++;
@@ -472,8 +549,15 @@ export async function downloadCityData(
 
     // Throttle progress
     const now = Date.now();
-    if (now - lastProgressTime >= PROGRESS_THROTTLE_MS || i === allObjects.length - 1) {
-      onProgress?.(downloaded, allObjects.length, isResuming ? "Resuming…" : "Downloading…");
+    if (
+      now - lastProgressTime >= PROGRESS_THROTTLE_MS ||
+      i === allObjects.length - 1
+    ) {
+      onProgress?.(
+        downloaded,
+        allObjects.length,
+        isResuming ? "Resuming…" : "Downloading…",
+      );
       lastProgressTime = now;
     }
   }
@@ -508,8 +592,13 @@ export async function downloadCityData(
 export async function downloadCityFromR2(
   city: OfflineCity,
   onProgress?: (done: number, total: number, phase: string) => void,
-  signal?: AbortSignal
-): Promise<{ success: boolean; fileCount: number; sizeBytes: number; error?: string }> {
+  signal?: AbortSignal,
+): Promise<{
+  success: boolean;
+  fileCount: number;
+  sizeBytes: number;
+  error?: string;
+}> {
   const regionDir = getRegionDir(city.id);
   const filename = `${city.id}-${PMTILES_VERSION}.pmtiles`;
   const localPath = `${regionDir}/${filename}`;
@@ -528,24 +617,31 @@ export async function downloadCityFromR2(
 
   // Use createDownloadResumable for progress tracking
   let lastProgressTime = 0;
-  const progressCallback = (downloadProgress: FileSystem.DownloadProgressData) => {
+  const progressCallback = (
+    downloadProgress: FileSystem.DownloadProgressData,
+  ) => {
     if (signal?.aborted) return;
     const now = Date.now();
     if (now - lastProgressTime < PROGRESS_THROTTLE_MS) return;
     lastProgressTime = now;
     const { totalBytesWritten, totalBytesExpectedToWrite } = downloadProgress;
-    const pct = totalBytesExpectedToWrite > 0
-      ? Math.round((totalBytesWritten / totalBytesExpectedToWrite) * 100)
-      : 0;
+    const pct =
+      totalBytesExpectedToWrite > 0
+        ? Math.round((totalBytesWritten / totalBytesExpectedToWrite) * 100)
+        : 0;
     onProgress?.(
       totalBytesWritten,
       totalBytesExpectedToWrite,
-      `${isResuming ? "Resuming" : "Downloading"}… ${pct}% (${formatBytes(totalBytesWritten)})`
+      `${isResuming ? "Resuming" : "Downloading"}… ${pct}% (${formatBytes(totalBytesWritten)})`,
     );
   };
 
   // Try to resume from saved state
-  if (savedState?.cityId === city.id && savedState.source === "r2" && savedState.resumableSnapshot) {
+  if (
+    savedState?.cityId === city.id &&
+    savedState.source === "r2" &&
+    savedState.resumableSnapshot
+  ) {
     try {
       onProgress?.(0, 1, "Resuming download…");
       downloadResumable = new FileSystem.DownloadResumable(
@@ -553,16 +649,26 @@ export async function downloadCityFromR2(
         localPath,
         {},
         progressCallback,
-        savedState.resumableSnapshot
+        savedState.resumableSnapshot,
       );
       isResuming = true;
     } catch {
       // Fall back to fresh download
-      downloadResumable = FileSystem.createDownloadResumable(url, localPath, {}, progressCallback);
+      downloadResumable = FileSystem.createDownloadResumable(
+        url,
+        localPath,
+        {},
+        progressCallback,
+      );
     }
   } else {
     onProgress?.(0, 1, "Downloading PMTiles…");
-    downloadResumable = FileSystem.createDownloadResumable(url, localPath, {}, progressCallback);
+    downloadResumable = FileSystem.createDownloadResumable(
+      url,
+      localPath,
+      {},
+      progressCallback,
+    );
   }
 
   // Save initial state
@@ -598,14 +704,26 @@ export async function downloadCityFromR2(
       : await downloadResumable.downloadAsync();
 
     if (signal?.aborted) {
-      return { success: false, fileCount: 0, sizeBytes: 0, error: "Cancelled (resumable)" };
+      return {
+        success: false,
+        fileCount: 0,
+        sizeBytes: 0,
+        error: "Cancelled (resumable)",
+      };
     }
     if (!result) {
       await clearDownloadState();
-      return { success: false, fileCount: 0, sizeBytes: 0, error: "Download returned no result" };
+      return {
+        success: false,
+        fileCount: 0,
+        sizeBytes: 0,
+        error: "Download returned no result",
+      };
     }
     if (result.status < 200 || result.status >= 300) {
-      await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+      await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(
+        () => {},
+      );
       await clearDownloadState();
       return {
         success: false,
@@ -640,7 +758,9 @@ export async function downloadCityFromR2(
     return { success: true, fileCount: 1, sizeBytes };
   } catch (err) {
     // Clean up partial file on error
-    await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(
+      () => {},
+    );
     if (signal?.aborted) {
       return { success: false, fileCount: 0, sizeBytes: 0, error: "Cancelled" };
     }
@@ -662,7 +782,10 @@ export async function getDownloadedRegions(): Promise<DownloadedRegion[]> {
   if (regionsCache) return regionsCache;
   try {
     const raw = await AsyncStorage.getItem(OFFLINE_MAPS_KEY);
-    if (!raw) { regionsCache = []; return []; }
+    if (!raw) {
+      regionsCache = [];
+      return [];
+    }
     const parsed = JSON.parse(raw) as DownloadedRegion[];
     regionsCache = Array.isArray(parsed) ? parsed : [];
     return regionsCache;
@@ -681,9 +804,13 @@ export async function deleteDownloadedRegion(regionId: string): Promise<void> {
     const osmPath = `${getRegionDir(region.cityId)}/${region.cityId}.osm`;
     try {
       const info = await FileSystem.getInfoAsync(osmPath, { size: false });
-      if (info.exists) await FileSystem.deleteAsync(osmPath, { idempotent: true });
+      if (info.exists)
+        await FileSystem.deleteAsync(osmPath, { idempotent: true });
     } catch (err) {
-      console.warn(`[OfflineMaps] Failed to delete OSM file for ${regionId}:`, err);
+      console.warn(
+        `[OfflineMaps] Failed to delete OSM file for ${regionId}:`,
+        err,
+      );
     }
   } else {
     const dir = getRegionDir(regionId);
@@ -691,7 +818,10 @@ export async function deleteDownloadedRegion(regionId: string): Promise<void> {
       const info = await FileSystem.getInfoAsync(dir, { size: false });
       if (info.exists) await FileSystem.deleteAsync(dir, { idempotent: true });
     } catch (err) {
-      console.warn(`[OvertureMaps] Failed to delete data for ${regionId}:`, err);
+      console.warn(
+        `[OvertureMaps] Failed to delete data for ${regionId}:`,
+        err,
+      );
     }
   }
   const filtered = existing.filter((r) => r.id !== regionId);
@@ -703,7 +833,8 @@ export async function deleteDownloadedRegion(regionId: string): Promise<void> {
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
@@ -766,21 +897,32 @@ export async function downloadOfflineRegion(
   maxZoom: number = 16,
   onProgress: (progress: OfflineProgress) => void,
   onComplete: () => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
 ): Promise<void> {
   const OfflineManager = getOfflineManager();
   if (!OfflineManager) {
-    onError(new Error("MapLibre OfflineManager not available on this platform"));
+    onError(
+      new Error("MapLibre OfflineManager not available on this platform"),
+    );
     return;
   }
   try {
     await new Promise<void>((resolve, reject) => {
       OfflineManager.createPack(
         { name, styleURL, minZoom, maxZoom, bounds },
-        (_offlineRegion: unknown, status: { completedResourceCount: number; completedResourceSize: number; requiredResourceCount: number }) => {
+        (
+          _offlineRegion: unknown,
+          status: {
+            completedResourceCount: number;
+            completedResourceSize: number;
+            requiredResourceCount: number;
+          },
+        ) => {
           const required = status.requiredResourceCount || 1;
           const progress: OfflineProgress = {
-            percentage: Math.round((status.completedResourceCount / required) * 100),
+            percentage: Math.round(
+              (status.completedResourceCount / required) * 100,
+            ),
             completedResourceCount: status.completedResourceCount,
             completedResourceSize: status.completedResourceSize,
             requiredResourceCount: status.requiredResourceCount,
@@ -797,7 +939,7 @@ export async function downloadOfflineRegion(
         (_offlineRegion: unknown, err: unknown) => {
           console.error("Offline download error:", err);
           reject(err);
-        }
+        },
       ).catch(reject);
     });
     onComplete();
@@ -858,7 +1000,11 @@ export async function getMapLibrePacks(): Promise<MapLibrePackInfo[]> {
   const OfflineManager = getOfflineManager();
   if (!OfflineManager?.getPacks) return [];
   try {
-    const packs = (await OfflineManager.getPacks()) as Array<{ name?: string; bounds?: [[number, number], [number, number]]; metadata?: Record<string, unknown> }>;
+    const packs = (await OfflineManager.getPacks()) as Array<{
+      name?: string;
+      bounds?: [[number, number], [number, number]];
+      metadata?: Record<string, unknown>;
+    }>;
     return (packs ?? []).map((p) => ({
       name: p.name ?? "unknown",
       bounds: p.bounds,
@@ -879,7 +1025,7 @@ export async function createMapLibrePack(
   minZoom: number,
   maxZoom: number,
   onProgress: (progress: OfflineProgress) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
 ): Promise<void> {
   const name = `pack_${city.id}`;
   const { minLat, maxLat, minLon, maxLon } = city.bounds;
@@ -895,7 +1041,7 @@ export async function createMapLibrePack(
     maxZoom,
     onProgress,
     () => {},
-    onError
+    onError,
   );
 }
 
@@ -959,7 +1105,7 @@ export async function resetEverything(): Promise<void> {
 export async function downloadOSMPBF(
   city: OfflineCity,
   onProgress?: (done: number, total: number, phase: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   const regionDir = getRegionDir(city.id);
   const filename = `${city.id}.osm`;
@@ -981,7 +1127,11 @@ export async function downloadOSMPBF(
   for (let i = 0; i < OVERPASS_API_ENDPOINTS.length; i++) {
     if (signal?.aborted) throw new Error("Cancelled");
     const endpoint = OVERPASS_API_ENDPOINTS[i];
-    onProgress?.(0, 1, `Requesting OSM data… (endpoint ${i + 1}/${OVERPASS_API_ENDPOINTS.length})`);
+    onProgress?.(
+      0,
+      1,
+      `Requesting OSM data… (endpoint ${i + 1}/${OVERPASS_API_ENDPOINTS.length})`,
+    );
     try {
       const res = await fetch(endpoint, {
         method: "POST",
@@ -997,12 +1147,18 @@ export async function downloadOSMPBF(
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (signal?.aborted) throw new Error("Cancelled");
-      console.warn(`[OfflineMaps] Overpass endpoint failed: ${endpoint}`, lastError.message);
+      console.warn(
+        `[OfflineMaps] Overpass endpoint failed: ${endpoint}`,
+        lastError.message,
+      );
     }
   }
 
   if (text == null) {
-    throw lastError ?? new Error("All Overpass API endpoints failed. Please try again later.");
+    throw (
+      lastError ??
+      new Error("All Overpass API endpoints failed. Please try again later.")
+    );
   }
 
   onProgress?.(0.5, 1, "Saving…");
@@ -1035,7 +1191,9 @@ export async function downloadOSMPBF(
 }
 
 /** Get the local path to a downloaded OSM file for a city, if it exists. */
-export async function getOSMPBFFilePath(cityId: string): Promise<string | null> {
+export async function getOSMPBFFilePath(
+  cityId: string,
+): Promise<string | null> {
   const path = `${getRegionDir(cityId)}/${cityId}.osm`;
   const info = await FileSystem.getInfoAsync(path, { size: false });
   return info.exists ? path : null;

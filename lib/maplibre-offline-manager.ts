@@ -5,7 +5,8 @@
 
 import { Platform } from "react-native";
 
-type OfflineManagerType = typeof import("@maplibre/maplibre-react-native").OfflineManager;
+type OfflineManagerType =
+  typeof import("@maplibre/maplibre-react-native").OfflineManager;
 
 let _offlineManager: OfflineManagerType | null = null;
 let _attempted = false;

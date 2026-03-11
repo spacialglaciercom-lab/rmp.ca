@@ -84,7 +84,11 @@ IMPORTANT: Respond with ONLY valid JSON matching this exact schema (no markdown,
 
 // ── Lazy-loaded AI instance ───────────────────────────────────────────────
 
-let _modelPromise: Promise<{ generateContent: (prompt: string) => Promise<{ response: { text: () => string } }> }> | null = null;
+let _modelPromise: Promise<{
+  generateContent: (
+    prompt: string,
+  ) => Promise<{ response: { text: () => string } }>;
+}> | null = null;
 
 function getModel() {
   if (_modelPromise) return _modelPromise;
@@ -95,7 +99,11 @@ function getModel() {
     if (Platform.OS !== "web" && !isExpoGo) {
       // Native dev build: use @react-native-firebase/ai
       try {
-        const { getAI, getGenerativeModel, GoogleAIBackend } = require("@react-native-firebase/ai");
+        const {
+          getAI,
+          getGenerativeModel,
+          GoogleAIBackend,
+        } = require("@react-native-firebase/ai");
         const ai = getAI(undefined, { backend: new GoogleAIBackend() });
         return getGenerativeModel(ai, {
           model: "gemini-2.0-flash",
@@ -107,28 +115,44 @@ function getModel() {
           },
         });
       } catch (e) {
-        console.warn("[FirebaseAI] Native module not available, trying JS SDK:", (e as Error).message);
+        console.warn(
+          "[FirebaseAI] Native module not available, trying JS SDK:",
+          (e as Error).message,
+        );
       }
     }
 
     // Web / Expo Go fallback: use firebase JS SDK
     try {
-      const { initializeApp, getApps, getApp: getExistingApp } = require("firebase/app");
-      const { getAI: getAIWeb, getGenerativeModel: getGenModelWeb, GoogleAIBackend: GoogleAIBackendWeb } = require("firebase/ai");
+      const {
+        initializeApp,
+        getApps,
+        getApp: getExistingApp,
+      } = require("firebase/app");
+      const {
+        getAI: getAIWeb,
+        getGenerativeModel: getGenModelWeb,
+        GoogleAIBackend: GoogleAIBackendWeb,
+      } = require("firebase/ai");
 
       // Reuse existing JS app or create one for AI
       let app;
       const existingApps = getApps();
-      const aiApp = existingApps.find((a: { name: string }) => a.name === "trashroute-ai");
+      const aiApp = existingApps.find(
+        (a: { name: string }) => a.name === "trashroute-ai",
+      );
       if (aiApp) {
         app = aiApp;
       } else {
         // Web config from Firebase Console — same project as native (trashroutemobile)
-        app = initializeApp({
-          apiKey: process.env.EXPO_PUBLIC_FIREBASE_AI_API_KEY || "",
-          projectId: "trashroutemobile",
-          appId: "1:970176642480:web:placeholder", // Replace with actual web app ID from Firebase Console
-        }, "trashroute-ai");
+        app = initializeApp(
+          {
+            apiKey: process.env.EXPO_PUBLIC_FIREBASE_AI_API_KEY || "",
+            projectId: "trashroutemobile",
+            appId: "1:970176642480:web:placeholder", // Replace with actual web app ID from Firebase Console
+          },
+          "trashroute-ai",
+        );
       }
 
       const ai = getAIWeb(app, { backend: new GoogleAIBackendWeb() });
@@ -142,8 +166,13 @@ function getModel() {
         },
       });
     } catch (e) {
-      console.error("[FirebaseAI] JS SDK fallback failed:", (e as Error).message);
-      throw new Error("Firebase AI not available. Use a native dev build or set EXPO_PUBLIC_FIREBASE_AI_API_KEY for web.");
+      console.error(
+        "[FirebaseAI] JS SDK fallback failed:",
+        (e as Error).message,
+      );
+      throw new Error(
+        "Firebase AI not available. Use a native dev build or set EXPO_PUBLIC_FIREBASE_AI_API_KEY for web.",
+      );
     }
   })();
 
@@ -159,7 +188,9 @@ function getModel() {
  *   e.g. "Skip Elm Street on Tuesdays — school zone"
  * @returns Parsed constraint result with structured rules
  */
-export async function parseConstraint(input: string): Promise<ParsedConstraintResult> {
+export async function parseConstraint(
+  input: string,
+): Promise<ParsedConstraintResult> {
   const trimmed = input.trim();
   if (!trimmed) {
     throw new Error("Constraint input cannot be empty.");

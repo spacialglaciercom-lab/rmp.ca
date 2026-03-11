@@ -18,7 +18,9 @@ import { Platform } from "react-native";
 
 /** App URL scheme from app.config (e.g. "trashroute" or "routemasterpro"). */
 const APP_SCHEME =
-  (typeof Constants.expoConfig?.scheme === "string" && Constants.expoConfig.scheme) || "trashroute";
+  (typeof Constants.expoConfig?.scheme === "string" &&
+    Constants.expoConfig.scheme) ||
+  "trashroute";
 
 const MAPILLARY_ACCESS_TOKEN_KEY = "mapillary_access_token";
 const MAPILLARY_TOKEN_EXPIRY_KEY = "mapillary_token_expiry";
@@ -29,13 +31,16 @@ const TOKEN_URL = "https://graph.mapillary.com/token";
 
 /** Client ID from Mapillary Developer Dashboard. Set in app.config or env. */
 export const MAPILLARY_CLIENT_ID =
-  (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_MAPILLARY_CLIENT_ID) ||
+  (typeof process !== "undefined" &&
+    process.env?.EXPO_PUBLIC_MAPILLARY_CLIENT_ID) ||
   "33877043798608580";
 
 /** Client Secret from Mapillary Developer Dashboard. Required for token exchange. */
 function getClientSecret(): string {
   const secret =
-    (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_MAPILLARY_CLIENT_SECRET) || "";
+    (typeof process !== "undefined" &&
+      process.env?.EXPO_PUBLIC_MAPILLARY_CLIENT_SECRET) ||
+    "";
   return secret;
 }
 
@@ -49,10 +54,13 @@ function getRedirectUri(): string {
   }
   // Mapillary dashboard only accepts https (and http) — use your website URL when set.
   const base =
-    typeof process !== "undefined" && process.env?.EXPO_PUBLIC_MAPILLARY_REDIRECT_URI?.trim();
+    typeof process !== "undefined" &&
+    process.env?.EXPO_PUBLIC_MAPILLARY_REDIRECT_URI?.trim();
   if (base) {
     const url = base.replace(/\/$/, "");
-    return url.endsWith("/mapillary-callback") ? url : `${url}/mapillary-callback`;
+    return url.endsWith("/mapillary-callback")
+      ? url
+      : `${url}/mapillary-callback`;
   }
   // Fallback: Expo Go uses exp:// so redirect returns to the app; add that exact URI in Mapillary.
   const isExpoGo = Constants.appOwnership === "expo";
@@ -130,7 +138,9 @@ async function openAuthSession(): Promise<{ url: string } | null> {
  * Exchange authorization code for access token.
  * Mapillary expects: POST with Authorization: OAuth CLIENT_SECRET and body with grant_type, code, client_id, redirect_uri.
  */
-async function exchangeCodeForToken(code: string): Promise<MapillaryTokenResult> {
+async function exchangeCodeForToken(
+  code: string,
+): Promise<MapillaryTokenResult> {
   const clientSecret = getClientSecret();
   const redirectUri = getRedirectUri();
 

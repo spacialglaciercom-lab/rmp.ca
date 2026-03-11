@@ -43,11 +43,15 @@ export async function searchAddress(query: string): Promise<GeocodeResult[]> {
     .map((item) => ({
       lat: parseFloat(String(item.lat)),
       lon: parseFloat(String(item.lon)),
-      displayName: item.display_name != null && String(item.display_name).trim() !== ""
-        ? String(item.display_name)
-        : `${item.lat}, ${item.lon}`,
+      displayName:
+        item.display_name != null && String(item.display_name).trim() !== ""
+          ? String(item.display_name)
+          : `${item.lat}, ${item.lon}`,
     }))
-    .filter((r) => !Number.isNaN(r.lat) && !Number.isNaN(r.lon) && r.displayName != null);
+    .filter(
+      (r) =>
+        !Number.isNaN(r.lat) && !Number.isNaN(r.lon) && r.displayName != null,
+    );
 }
 
 export interface ReverseGeocodeResult {
@@ -61,7 +65,10 @@ export interface ReverseGeocodeResult {
  * Reverse geocode a lat/lon to city + country via Nominatim.
  * Returns empty strings if lookup fails. displayName is the full address when available.
  */
-export async function reverseGeocode(lat: number, lon: number): Promise<ReverseGeocodeResult> {
+export async function reverseGeocode(
+  lat: number,
+  lon: number,
+): Promise<ReverseGeocodeResult> {
   try {
     const params = new URLSearchParams({
       lat: String(lat),
@@ -69,18 +76,29 @@ export async function reverseGeocode(lat: number, lon: number): Promise<ReverseG
       format: "json",
       zoom: "18",
     });
-    const response = await fetch(`${NOMINATIM_REVERSE_URL}?${params.toString()}`, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "RouteMasterPro/1.0 (navigation; reverse geocode)",
+    const response = await fetch(
+      `${NOMINATIM_REVERSE_URL}?${params.toString()}`,
+      {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "RouteMasterPro/1.0 (navigation; reverse geocode)",
+        },
       },
-    });
+    );
     if (!response.ok) return { city: "", country: "" };
     const data = await response.json();
     const addr = data?.address ?? {};
-    const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.county ||
+      "";
     const country = addr.country || "";
-    const displayName = data?.display_name ? String(data.display_name).trim() : undefined;
+    const displayName = data?.display_name
+      ? String(data.display_name).trim()
+      : undefined;
     return { city, country, displayName };
   } catch {
     return { city: "", country: "" };

@@ -10,7 +10,7 @@ import { CollectionPoint } from "@/types";
 function perpendicularDistance(
   point: { latitude: number; longitude: number },
   lineStart: { latitude: number; longitude: number },
-  lineEnd: { latitude: number; longitude: number }
+  lineEnd: { latitude: number; longitude: number },
 ): number {
   // Convert to radians
   const lat1 = (lineStart.latitude * Math.PI) / 180;
@@ -29,12 +29,20 @@ function perpendicularDistance(
   const dLon3 = lon3 - lon1;
 
   // Calculate the cross-track distance using spherical geometry
-  const a = Math.sin(dLat3) * Math.sin(dLat) + Math.cos(dLat3) * Math.cos(dLat) * Math.sin(dLon3) * Math.sin(dLon);
-  const b = Math.sin(dLat) * Math.sin(dLat) + Math.cos(dLat) * Math.cos(dLat) * Math.sin(dLon) * Math.sin(dLon);
-  const c = Math.sin(dLat3) * Math.sin(dLon3) + Math.cos(dLat3) * Math.cos(dLat) * Math.sin(dLat) * Math.sin(dLon3);
+  const a =
+    Math.sin(dLat3) * Math.sin(dLat) +
+    Math.cos(dLat3) * Math.cos(dLat) * Math.sin(dLon3) * Math.sin(dLon);
+  const b =
+    Math.sin(dLat) * Math.sin(dLat) +
+    Math.cos(dLat) * Math.cos(dLat) * Math.sin(dLon) * Math.sin(dLon);
+  const c =
+    Math.sin(dLat3) * Math.sin(dLon3) +
+    Math.cos(dLat3) * Math.cos(dLat) * Math.sin(dLat) * Math.sin(dLon3);
 
   // Cross-track distance in radians
-  const dxt = Math.asin(Math.sin(a) * Math.sin(b) / Math.sqrt(b * c + (1 - b) * (1 - c)));
+  const dxt = Math.asin(
+    (Math.sin(a) * Math.sin(b)) / Math.sqrt(b * c + (1 - b) * (1 - c)),
+  );
 
   // Convert to kilometers (Earth's radius = 6371 km)
   const distance = Math.abs(dxt) * 6371;
@@ -53,7 +61,7 @@ function perpendicularDistance(
 function perpendicularDistanceCartesian(
   point: { latitude: number; longitude: number },
   lineStart: { latitude: number; longitude: number },
-  lineEnd: { latitude: number; longitude: number }
+  lineEnd: { latitude: number; longitude: number },
 ): number {
   const x0 = point.longitude;
   const y0 = point.latitude;
@@ -63,7 +71,9 @@ function perpendicularDistanceCartesian(
   const y2 = lineEnd.latitude;
 
   // Calculate the perpendicular distance using the point-to-line formula
-  const numerator = Math.abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1);
+  const numerator = Math.abs(
+    (y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1,
+  );
   const denominator = Math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2);
 
   if (denominator === 0) {
@@ -84,7 +94,7 @@ function perpendicularDistanceCartesian(
  */
 export function douglasPeucker(
   points: CollectionPoint[],
-  tolerance: number = 0.01 // 10 meters default
+  tolerance: number = 0.01, // 10 meters default
 ): CollectionPoint[] {
   if (points.length <= 2) {
     return points;
@@ -101,7 +111,7 @@ export function douglasPeucker(
     const distance = perpendicularDistanceCartesian(
       { latitude: points[i].latitude, longitude: points[i].longitude },
       { latitude: start.latitude, longitude: start.longitude },
-      { latitude: end.latitude, longitude: end.longitude }
+      { latitude: end.latitude, longitude: end.longitude },
     );
 
     if (distance > maxDistance) {
@@ -113,7 +123,10 @@ export function douglasPeucker(
   // If max distance is greater than tolerance, recursively simplify
   if (maxDistance > tolerance) {
     // Recursively simplify the two segments
-    const leftSegment = douglasPeucker(points.slice(0, maxIndex + 1), tolerance);
+    const leftSegment = douglasPeucker(
+      points.slice(0, maxIndex + 1),
+      tolerance,
+    );
     const rightSegment = douglasPeucker(points.slice(maxIndex), tolerance);
 
     // Combine results, removing duplicate point at maxIndex
@@ -133,7 +146,7 @@ export function douglasPeucker(
  */
 export function simplifyRouteByReduction(
   points: CollectionPoint[],
-  targetReduction: number = 0.5 // Keep 50% of points by default
+  targetReduction: number = 0.5, // Keep 50% of points by default
 ): CollectionPoint[] {
   if (points.length <= 2) {
     return points;
@@ -171,7 +184,7 @@ export function simplifyRouteByReduction(
  */
 export function calculateCompressionMetrics(
   originalPoints: CollectionPoint[],
-  simplifiedPoints: CollectionPoint[]
+  simplifiedPoints: CollectionPoint[],
 ): {
   originalCount: number;
   simplifiedCount: number;
@@ -181,7 +194,9 @@ export function calculateCompressionMetrics(
   const originalCount = originalPoints.length;
   const simplifiedCount = simplifiedPoints.length;
   const pointsRemoved = originalCount - simplifiedCount;
-  const reductionPercentage = ((pointsRemoved / originalCount) * 100).toFixed(1);
+  const reductionPercentage = ((pointsRemoved / originalCount) * 100).toFixed(
+    1,
+  );
 
   return {
     originalCount,

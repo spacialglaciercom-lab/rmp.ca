@@ -5,8 +5,11 @@
 import React from "react";
 import { BottomSheet } from "@/components/shared/BottomSheet";
 import { OSMExtractorContent } from "./OSMExtractorContent";
-import type { LatLonPoint, OverpassElement } from "@/lib/overpassService";
-import type { ParsedOverpassResult } from "@/lib/overpassService";
+import type {
+  LatLonPoint,
+  OverpassElement,
+  ParsedOverpassResult,
+} from "@/lib/overpassService";
 
 interface OSMExtractorSheetProps {
   visible: boolean;

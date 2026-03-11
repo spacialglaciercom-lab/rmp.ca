@@ -20,7 +20,11 @@ const OSMAND_SCHEME = "osmandmaps://";
  * Build Organic Maps URL for a single point (map?v=1&ll=lat,lon&n=title).
  * https://omaps.app/api
  */
-export function buildOrganicMapsUrl(lat: number, lon: number, title?: string): string {
+export function buildOrganicMapsUrl(
+  lat: number,
+  lon: number,
+  title?: string,
+): string {
   const ll = `${lat},${lon}`;
   const params = new URLSearchParams({ v: "1", ll });
   if (title) params.set("n", title);
@@ -33,13 +37,14 @@ export function buildOrganicMapsUrl(lat: number, lon: number, title?: string): s
  * https://omaps.app/api
  */
 export function buildOrganicMapsMultiPointUrl(
-  points: Array<{ lat: number; lon: number; title?: string }>
+  points: Array<{ lat: number; lon: number; title?: string }>,
 ): string {
   if (points.length === 0) return "";
   const parts: string[] = ["v=1"];
   for (const p of points) {
     parts.push(`ll=${p.lat},${p.lon}`);
-    if (p.title != null && p.title !== "") parts.push(`n=${encodeURIComponent(p.title)}`);
+    if (p.title != null && p.title !== "")
+      parts.push(`n=${encodeURIComponent(p.title)}`);
   }
   return `${ORGANIC_MAPS_SCHEME}map?${parts.join("&")}`;
 }
@@ -49,12 +54,14 @@ export function buildOrganicMapsMultiPointUrl(
  */
 export async function openInOrganicMapsWithPoints(
   points: Array<{ lat: number; lon: number; title?: string }>,
-  options?: { fallbackToWeb?: boolean; appOnly?: boolean }
+  options?: { fallbackToWeb?: boolean; appOnly?: boolean },
 ): Promise<boolean> {
   if (points.length === 0) return false;
   if (points.length === 1) {
     const p = points[0];
-    return openInOrganicMaps(p.lat, p.lon, p.title, { appOnly: options?.appOnly });
+    return openInOrganicMaps(p.lat, p.lon, p.title, {
+      appOnly: options?.appOnly,
+    });
   }
   const url = buildOrganicMapsMultiPointUrl(points);
   const webUrl = `https://omaps.app/map?${url.replace(/^om:\/\/map\?/, "")}`;
@@ -86,7 +93,11 @@ export async function openInOrganicMapsWithPoints(
 /**
  * Build MAPS.ME URL for a single point (same format as api-ios).
  */
-export function buildMapsMeUrl(lat: number, lon: number, title?: string): string {
+export function buildMapsMeUrl(
+  lat: number,
+  lon: number,
+  title?: string,
+): string {
   const ll = `${lat},${lon}`;
   const params = new URLSearchParams({ v: "1", ll });
   if (title) params.set("n", title);
@@ -106,7 +117,7 @@ export async function openInOrganicMaps(
   lat: number,
   lon: number,
   title?: string,
-  options?: OpenInOrganicMapsOptions
+  options?: OpenInOrganicMapsOptions,
 ): Promise<boolean> {
   const url = buildOrganicMapsUrl(lat, lon, title);
   const webUrl = `${ORGANIC_MAPS_WEB}map?v=1&ll=${lat},${lon}${title ? `&n=${encodeURIComponent(title)}` : ""}`;
@@ -137,7 +148,7 @@ export async function openInOrganicMaps(
 export async function openInMapsMe(
   lat: number,
   lon: number,
-  title?: string
+  title?: string,
 ): Promise<boolean> {
   const url = buildMapsMeUrl(lat, lon, title);
   try {
@@ -157,7 +168,11 @@ export async function openInMapsMe(
  * Uses om://route?dll=lat,lon&daddr=title&type=vehicle (start = current location if omitted).
  * https://omaps.app/api
  */
-export type OfflineMapRouteType = "vehicle" | "pedestrian" | "bicycle" | "transit";
+export type OfflineMapRouteType =
+  | "vehicle"
+  | "pedestrian"
+  | "bicycle"
+  | "transit";
 
 export async function openNavigationInOrganicMaps(
   destinationLat: number,
@@ -168,7 +183,7 @@ export async function openNavigationInOrganicMaps(
     startLon?: number;
     startTitle?: string;
     type?: OfflineMapRouteType;
-  }
+  },
 ): Promise<boolean> {
   const type = options?.type ?? "vehicle";
   const params = new URLSearchParams({
@@ -210,7 +225,7 @@ export async function openInOfflineMap(
   lat: number,
   lon: number,
   title?: string,
-  options?: { fallbackToWeb?: boolean }
+  options?: { fallbackToWeb?: boolean },
 ): Promise<boolean> {
   const fallbackToWeb = options?.fallbackToWeb ?? true;
 
@@ -225,7 +240,9 @@ export async function openInOfflineMap(
     } catch {
       // last resort: geo: link (opens system map)
       try {
-        await Linking.openURL(`geo:${lat},${lon}?q=${lat},${lon}${title ? ` (${encodeURIComponent(title)})` : ""}`);
+        await Linking.openURL(
+          `geo:${lat},${lon}?q=${lat},${lon}${title ? ` (${encodeURIComponent(title)})` : ""}`,
+        );
         return true;
       } catch {
         return false;
@@ -278,7 +295,7 @@ export async function openInOsmAnd(
   lat: number,
   lon: number,
   _title?: string,
-  options?: { zoom?: number }
+  options?: { zoom?: number },
 ): Promise<boolean> {
   const zoom = options?.zoom ?? 15;
   const url = buildOsmAndUrl(lat, lon, zoom);

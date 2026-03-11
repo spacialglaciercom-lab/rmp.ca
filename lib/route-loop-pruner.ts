@@ -40,7 +40,10 @@ function segmentKey(a: LatLon, b: LatLon, precision: number): string {
   return `${coordKey(a, precision)}->${coordKey(b, precision)}`;
 }
 
-function dedupeConsecutive<T extends LatLon>(route: T[], precision: number): T[] {
+function dedupeConsecutive<T extends LatLon>(
+  route: T[],
+  precision: number,
+): T[] {
   if (route.length <= 1) return route.slice();
   const out: T[] = [route[0]!];
   let lastKey = coordKey(route[0]!, precision);
@@ -63,8 +66,7 @@ function haversineKm(a: LatLon, b: LatLon): number {
   const sinDLat = Math.sin(dLat / 2);
   const sinDLon = Math.sin(dLon / 2);
   const h =
-    sinDLat * sinDLat +
-    Math.cos(lat1) * Math.cos(lat2) * (sinDLon * sinDLon);
+    sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * (sinDLon * sinDLon);
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -100,11 +102,12 @@ function computeWorstSegmentVisits(route: LatLon[], precision: number): number {
  */
 export function pruneRouteLoops<T extends LatLon>(
   route: T[],
-  options: PruneRouteLoopsOptions
+  options: PruneRouteLoopsOptions,
 ): PruneRouteLoopsResult<T> {
   const precision = options.precision ?? 5;
   const maxSegmentVisits = Math.max(1, Math.floor(options.maxSegmentVisits));
-  const maxIterations = options.maxIterations ?? Math.min(50, Math.max(1, route.length));
+  const maxIterations =
+    options.maxIterations ?? Math.min(50, Math.max(1, route.length));
 
   const original = dedupeConsecutive(route, precision);
   let working = original.slice();
@@ -172,4 +175,3 @@ export function pruneRouteLoops<T extends LatLon>(
     },
   };
 }
-

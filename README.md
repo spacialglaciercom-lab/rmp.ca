@@ -17,14 +17,14 @@
 
 ## 🛠 Tech Stack
 
-| Layer | Technologies |
-|---|---|
-| **App** | [Expo](https://expo.dev/) (SDK 54), React Native, [expo-router](https://docs.expo.dev/router/introduction/), [NativeWind](https://www.nativewind.dev/) (Tailwind), Zustand |
-| **Maps** | MapLibre GL, Leaflet, react-leaflet, OSM, Overture, PMTiles, DuckDB-WASM |
-| **API/Backend** | **tRPC**, Express, TanStack Query, [Firebase](https://firebase.google.com/) (Auth, Firestore, Storage, Analytics) |
-| **Database** | [Drizzle ORM](https://orm.drizzle.team/), MySQL/TiDB, MongoDB |
-| **Optimization** | Custom optimizer (Chinese Postman); Python FastAPI backend for spectral partitioning |
-| **AI/Voice** | OpenAI-compatible AI SDK, Genkit, ElevenLabs, Moonshine (transcription) |
+| Layer            | Technologies                                                                                                                                                               |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App**          | [Expo](https://expo.dev/) (SDK 54), React Native, [expo-router](https://docs.expo.dev/router/introduction/), [NativeWind](https://www.nativewind.dev/) (Tailwind), Zustand |
+| **Maps**         | MapLibre GL, Leaflet, react-leaflet, OSM, Overture, PMTiles, DuckDB-WASM                                                                                                   |
+| **API/Backend**  | **tRPC**, Express, TanStack Query, [Firebase](https://firebase.google.com/) (Auth, Firestore, Storage, Analytics)                                                          |
+| **Database**     | [Drizzle ORM](https://orm.drizzle.team/), MySQL/TiDB, MongoDB                                                                                                              |
+| **Optimization** | Custom optimizer (Chinese Postman); Python FastAPI backend for spectral partitioning                                                                                       |
+| **AI/Voice**     | OpenAI-compatible AI SDK, Genkit, ElevenLabs, Moonshine (transcription)                                                                                                    |
 
 ---
 
@@ -43,21 +43,25 @@
 ## ⚙️ Setup & Installation
 
 1.  **Clone the Repository**
+
     ```bash
     git clone <repo-url> rmp.ca
     cd rmp.ca
     ```
 
 2.  **Install Dependencies**
+
     ```bash
     pnpm install
     ```
 
 3.  **Configure Environment Variables**
     Copy `.env.example` to `.env` and fill in the required values:
+
     ```bash
     cp .env.example .env
     ```
+
     Key variables to set:
     - `EXPO_PUBLIC_API_BASE_URL`: Your Node/Express + tRPC server.
     - `EXPO_PUBLIC_OPTIMIZER_URL`: Optimizer API endpoint.
@@ -74,6 +78,7 @@
 ## 🏃 Commands & Scripts
 
 ### Development
+
 - `pnpm dev` — Start Expo for web (port 19007).
 - `pnpm dev:server` — Start Node.js tRPC server with `tsx watch`.
 - `pnpm dev:all` — Run both the app and the server concurrently.
@@ -81,12 +86,14 @@
 - `pnpm mobile:ios` / `pnpm mobile:android` — Run directly on a simulator/emulator.
 
 ### Build & Production
+
 - `pnpm build` — Export Expo app for web production.
 - `pnpm build:server` — Bundle the Node server using `esbuild` to `dist/`.
 - `pnpm start` — Run the bundled server from `dist/index.js`.
 - `pnpm build:android` — Trigger an EAS build for Android.
 
 ### Utilities
+
 - `pnpm lint` / `pnpm format` — Code quality and formatting.
 - `pnpm check` — Type-check using TypeScript.
 - `pnpm test` — Run unit tests with Vitest.
@@ -94,6 +101,7 @@
 - `pnpm mobile:tunnel` — Start a tunnel via ngrok for remote mobile testing.
 
 ### Docker (local stack)
+
 The full dev stack (MySQL, backend, optimizer, Overture) runs via **Docker Compose from the parent folder** of this repo (where `docker-compose.yml` lives). This repo provides the app and backend images. See [docs/DOCKER.md](docs/DOCKER.md) for how to run `docker compose up --build`.
 
 ---
@@ -116,6 +124,7 @@ The full dev stack (MySQL, backend, optimizer, Overture) runs via **Docker Compo
 ## 🌍 Environment Variables
 
 Refer to `.env.example` for a full list. Primary categories include:
+
 - **Base URLs**: API, Optimizer, Overture Extract.
 - **Authentication**: Firebase, OSM OAuth, Mapillary.
 - **API Keys**: Google Maps, Mapbox, OpenWeatherMap.
@@ -136,6 +145,7 @@ Refer to `.env.example` for a full list. Primary categories include:
 ## 🔌 Plugins
 
 The app features an OsmAnd-inspired plugin system. Plugins can be toggled in **Settings → Plugins**.
+
 - Configured via `lib/plugins/default-config.json`.
 - See `docs/PLUGIN-DEVELOPMENT.md` for details on creating and deploying plugins.
 

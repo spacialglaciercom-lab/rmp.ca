@@ -3,8 +3,15 @@
  * Integrates cost correction model with route optimization to provide cost-optimal routes
  */
 
-import { costPredictionService, type CostOptimizationRequest, type CostAwareRouteRecommendation } from "@/services/costPredictionService";
-import { costCorrectionModel, type CostFactors } from "@/lib/cost-correction-model";
+import {
+  costPredictionService,
+  type CostOptimizationRequest,
+  type CostAwareRouteRecommendation,
+} from "@/services/costPredictionService";
+import {
+  costCorrectionModel,
+  type CostFactors,
+} from "@/lib/cost-correction-model";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2/routeOptimizer";
 import { getEdgePenaltiesFromLeap } from "@/lib/route-ml-enhancement";
 import type { RouteStatistics } from "@/types/routing";
@@ -77,7 +84,7 @@ export interface RouteVariant {
  */
 export class CostAwareRouteOptimizer {
   private optimizer: RouteOptimizer;
-  private costWeights: CostOptimizationConfig['costWeights'];
+  private costWeights: CostOptimizationConfig["costWeights"];
   private learningEnabled: boolean;
 
   constructor(
@@ -85,18 +92,23 @@ export class CostAwareRouteOptimizer {
     ways: Way[],
     onewayMode: string = "A",
     turnRestrictions: any[] = [],
-    config: CostOptimizationConfig = {}
+    config: CostOptimizationConfig = {},
   ) {
     this.costWeights = config.costWeights || {
       fuel: 0.3,
       labor: 0.4,
       maintenance: 0.2,
-      overhead: 0.1
+      overhead: 0.1,
     };
     this.learningEnabled = config.learningEnabled ?? true;
 
     // Initialize base route optimizer
-    this.optimizer = new RouteOptimizer(nodes, ways, onewayMode, turnRestrictions);
+    this.optimizer = new RouteOptimizer(
+      nodes,
+      ways,
+      onewayMode,
+      turnRestrictions,
+    );
   }
 
   /**
@@ -107,7 +119,7 @@ export class CostAwareRouteOptimizer {
     weatherData?: CurrentWeather,
     operationalContext?: Partial<CostFactors>,
     config: CostOptimizationConfig = {},
-    customStartPoint?: { lat: number; lon: number }
+    customStartPoint?: { lat: number; lon: number },
   ): Promise<CostOptimizedRoute | null> {
     try {
       console.log("🚀 Starting cost-aware route optimization...");
@@ -115,7 +127,7 @@ export class CostAwareRouteOptimizer {
       // Step 1: Get ML-enhanced edge penalties for problematic ways
       console.log("🤖 Getting ML edge penalties...");
       const edgePenalties = await this.getMLEdgePenalties(ways, weatherData);
-      
+
       // Step 2: Get cost-aware route recommendations
       console.log("💰 Analyzing cost factors...");
       const costRequest: CostOptimizationRequest = {
@@ -123,13 +135,20 @@ export class CostAwareRouteOptimizer {
         weatherData,
         operationalContext,
         budgetConstraints: config.budgetConstraints,
-        optimizationPreferences: config.optimizationPreferences
+        optimizationPreferences: config.optimizationPreferences,
       };
 
-      const costRecommendation = await costPredictionService.getCostAwareRecommendations(costRequest);
+      const costRecommendation =
+        await costPredictionService.getCostAwareRecommendations(costRequest);
       if (!costRecommendation) {
-        console.warn("⚠️ Cost-aware recommendation failed, using standard optimization");
-        return this.getStandardCostOptimizedRoute(routeStats, weatherData, operationalContext);
+        console.warn(
+          "⚠️ Cost-aware recommendation failed, using standard optimization",
+        );
+        return this.getStandardCostOptimizedRoute(
+          routeStats,
+          weatherData,
+          operationalContext,
+        );
       }
 
       // Step 3: Generate route variants with different optimization strategies
@@ -138,40 +157,53 @@ export class CostAwareRouteOptimizer {
         routeStats,
         weatherData,
         operationalContext,
-        config
+        config,
       );
 
       // Step 4: Select best variant based on cost efficiency
       console.log("🎯 Selecting optimal route...");
-      const bestVariant = this.selectBestVariant(routeVariants, costRecommendation);
+      const bestVariant = this.selectBestVariant(
+        routeVariants,
+        costRecommendation,
+      );
 
       // Step 5: Create final cost-optimized route
       console.log("✨ Creating cost-optimized route...");
       const optimizedRoute = await this.createOptimizedRoute(
         bestVariant,
         costRecommendation,
-        customStartPoint
+        customStartPoint,
       );
 
       return optimizedRoute;
     } catch (error) {
       console.error("❌ Cost-aware optimization failed:", error);
-      return this.getFallbackOptimizedRoute(routeStats, weatherData, operationalContext);
+      return this.getFallbackOptimizedRoute(
+        routeStats,
+        weatherData,
+        operationalContext,
+      );
     }
   }
 
   /**
    * Get ML edge penalties for cost optimization
    */
-  private async getMLEdgePenalties(ways: Way[], weatherData?: CurrentWeather): Promise<Map<string, number>> {
+  private async getMLEdgePenalties(
+    ways: Way[],
+    weatherData?: CurrentWeather,
+  ): Promise<Map<string, number>> {
     try {
-      const weatherContext = weatherData ? 
-        `Weather context: ${weatherData.condition.main}, visibility ${weatherData.visibility}m, wind ${weatherData.windSpeed}m/s` : 
-        null;
-      
+      const weatherContext = weatherData
+        ? `Weather context: ${weatherData.condition.main}, visibility ${weatherData.visibility}m, wind ${weatherData.windSpeed}m/s`
+        : null;
+
       return await getEdgePenaltiesFromLeap(ways, weatherContext);
     } catch (error) {
-      console.warn("⚠️ ML edge penalties failed, using default penalties:", error);
+      console.warn(
+        "⚠️ ML edge penalties failed, using default penalties:",
+        error,
+      );
       return new Map<string, number>();
     }
   }
@@ -183,7 +215,7 @@ export class CostAwareRouteOptimizer {
     routeStats: RouteStatistics,
     weatherData?: CurrentWeather,
     operationalContext?: Partial<CostFactors>,
-    config: CostOptimizationConfig = {}
+    config: CostOptimizationConfig = {},
   ): Promise<RouteVariant[]> {
     const variants: RouteVariant[] = [];
 
@@ -197,21 +229,25 @@ export class CostAwareRouteOptimizer {
     const costOptimizedPrediction = await costCorrectionModel.predictCosts(
       routeStats,
       weatherData,
-      costOptimizedContext
+      costOptimizedContext,
     );
 
     if (costOptimizedPrediction) {
       variants.push({
         name: "Cost-Optimized",
-        description: "Optimized for minimum total cost with experienced driver and off-peak timing",
+        description:
+          "Optimized for minimum total cost with experienced driver and off-peak timing",
         routeStats,
         costPrediction: costOptimizedPrediction,
-        efficiencyScore: this.calculateVariantEfficiency(costOptimizedPrediction, routeStats),
+        efficiencyScore: this.calculateVariantEfficiency(
+          costOptimizedPrediction,
+          routeStats,
+        ),
         tradeOffs: [
           "Requires experienced driver",
           "Early morning start may affect scheduling",
-          "Limited to off-peak hours"
-        ]
+          "Limited to off-peak hours",
+        ],
       });
     }
 
@@ -224,21 +260,25 @@ export class CostAwareRouteOptimizer {
     const timeOptimizedPrediction = await costCorrectionModel.predictCosts(
       timeOptimizedStats,
       weatherData,
-      operationalContext
+      operationalContext,
     );
 
     if (timeOptimizedPrediction) {
       variants.push({
         name: "Time-Optimized",
-        description: "Prioritizes completion time while maintaining reasonable costs",
+        description:
+          "Prioritizes completion time while maintaining reasonable costs",
         routeStats: timeOptimizedStats,
         costPrediction: timeOptimizedPrediction,
-        efficiencyScore: this.calculateVariantEfficiency(timeOptimizedPrediction, timeOptimizedStats),
+        efficiencyScore: this.calculateVariantEfficiency(
+          timeOptimizedPrediction,
+          timeOptimizedStats,
+        ),
         tradeOffs: [
           "May increase fuel consumption",
           "Higher operational intensity",
-          "Increased safety risks"
-        ]
+          "Increased safety risks",
+        ],
       });
     }
 
@@ -252,21 +292,25 @@ export class CostAwareRouteOptimizer {
     const fuelOptimizedPrediction = await costCorrectionModel.predictCosts(
       routeStats,
       weatherData,
-      fuelOptimizedContext
+      fuelOptimizedContext,
     );
 
     if (fuelOptimizedPrediction) {
       variants.push({
         name: "Fuel-Optimized",
-        description: "Minimizes fuel consumption through eco-driving techniques",
+        description:
+          "Minimizes fuel consumption through eco-driving techniques",
         routeStats,
         costPrediction: fuelOptimizedPrediction,
-        efficiencyScore: this.calculateVariantEfficiency(fuelOptimizedPrediction, routeStats),
+        efficiencyScore: this.calculateVariantEfficiency(
+          fuelOptimizedPrediction,
+          routeStats,
+        ),
         tradeOffs: [
           "May increase total time",
           "Requires fuel-conscious driving",
-          "Slightly higher labor costs"
-        ]
+          "Slightly higher labor costs",
+        ],
       });
     }
 
@@ -275,21 +319,25 @@ export class CostAwareRouteOptimizer {
       const weatherAdaptivePrediction = await costCorrectionModel.predictCosts(
         routeStats,
         { ...weatherData, rain1h: weatherData.rain1h * 0.7 }, // Assume weather improvement
-        operationalContext
+        operationalContext,
       );
 
       if (weatherAdaptivePrediction) {
         variants.push({
           name: "Weather-Adaptive",
-          description: "Adjusts for weather conditions to maintain safety and efficiency",
+          description:
+            "Adjusts for weather conditions to maintain safety and efficiency",
           routeStats,
           costPrediction: weatherAdaptivePrediction,
-          efficiencyScore: this.calculateVariantEfficiency(weatherAdaptivePrediction, routeStats),
+          efficiencyScore: this.calculateVariantEfficiency(
+            weatherAdaptivePrediction,
+            routeStats,
+          ),
           tradeOffs: [
             "May require schedule adjustment",
             "Weather-dependent timing",
-            "Potential customer service impact"
-          ]
+            "Potential customer service impact",
+          ],
         });
       }
     }
@@ -300,7 +348,10 @@ export class CostAwareRouteOptimizer {
   /**
    * Calculate efficiency score for a route variant
    */
-  private calculateVariantEfficiency(prediction: any, routeStats: RouteStatistics): number {
+  private calculateVariantEfficiency(
+    prediction: any,
+    routeStats: RouteStatistics,
+  ): number {
     const dist = routeStats.totalDistance || 1;
     const costPerKm = prediction.predictedTotalCost / dist;
     const timePerKm = prediction.predictedTime / dist;
@@ -335,19 +386,22 @@ export class CostAwareRouteOptimizer {
    */
   private selectBestVariant(
     variants: RouteVariant[],
-    costRecommendation: CostAwareRouteRecommendation
+    costRecommendation: CostAwareRouteRecommendation,
   ): RouteVariant {
     // Filter by budget constraints if specified
-    const validVariants = variants.filter(variant => {
+    const validVariants = variants.filter((variant) => {
       const totalCost = variant.costPrediction.predictedTotalCost;
-      const maxCost = costRecommendation.predictedCosts.predictedTotalCost * 1.2; // 20% tolerance
+      const maxCost =
+        costRecommendation.predictedCosts.predictedTotalCost * 1.2; // 20% tolerance
       return totalCost <= maxCost;
     });
 
     // Select variant with highest efficiency score
-    const bestVariant = validVariants.reduce((best, current) => 
-      current.efficiencyScore > best.efficiencyScore ? current : best
-    , validVariants[0]);
+    const bestVariant = validVariants.reduce(
+      (best, current) =>
+        current.efficiencyScore > best.efficiencyScore ? current : best,
+      validVariants[0],
+    );
 
     return bestVariant || variants[0]; // Fallback to first variant
   }
@@ -358,7 +412,7 @@ export class CostAwareRouteOptimizer {
   private async createOptimizedRoute(
     variant: RouteVariant,
     costRecommendation: CostAwareRouteRecommendation,
-    customStartPoint?: { lat: number; lon: number }
+    customStartPoint?: { lat: number; lon: number },
   ): Promise<CostOptimizedRoute> {
     const { costPrediction } = variant;
     const { routeStats } = variant;
@@ -368,21 +422,29 @@ export class CostAwareRouteOptimizer {
       costPerKilometer: costPrediction.predictedTotalCost / dist,
       timePerKilometer: costPrediction.predictedTime / dist,
       fuelEfficiency: dist / (costPrediction.predictedFuelConsumption || 1),
-      costEffectiveness: dist / (costPrediction.predictedTotalCost || 1) * 1000,
+      costEffectiveness:
+        (dist / (costPrediction.predictedTotalCost || 1)) * 1000,
     };
 
     // Calculate cost comparisons
     const costComparison = {
-      vsStandardRoute: this.calculateVsStandardRoute(variant, costRecommendation),
+      vsStandardRoute: this.calculateVsStandardRoute(
+        variant,
+        costRecommendation,
+      ),
       vsPreviousRoutes: 0, // Would be calculated from historical data
-      potentialSavings: Math.max(0, costRecommendation.predictedCosts.predictedTotalCost - costPrediction.predictedTotalCost)
+      potentialSavings: Math.max(
+        0,
+        costRecommendation.predictedCosts.predictedTotalCost -
+          costPrediction.predictedTotalCost,
+      ),
     };
 
     // Generate recommendations
     const recommendations = [
       ...costPrediction.optimizationSuggestions,
       ...costRecommendation.optimizationOpportunities,
-      `Selected ${variant.name} strategy for optimal cost efficiency`
+      `Selected ${variant.name} strategy for optimal cost efficiency`,
     ];
 
     return {
@@ -394,20 +456,23 @@ export class CostAwareRouteOptimizer {
         fuelCost: costPrediction.costBreakdown.fuel,
         laborCost: costPrediction.costBreakdown.labor,
         maintenanceCost: costPrediction.costBreakdown.maintenance,
-        overheadCost: costPrediction.costBreakdown.overhead
+        overheadCost: costPrediction.costBreakdown.overhead,
       },
       costEfficiencyScore: variant.efficiencyScore,
       optimizationMetrics,
       costComparison,
       riskAssessment: costRecommendation.riskAssessment,
-      recommendations: [...new Set(recommendations)] // Remove duplicates
+      recommendations: [...new Set(recommendations)], // Remove duplicates
     };
   }
 
   /**
    * Calculate cost comparison vs standard route
    */
-  private calculateVsStandardRoute(variant: RouteVariant, costRecommendation: CostAwareRouteRecommendation): number {
+  private calculateVsStandardRoute(
+    variant: RouteVariant,
+    costRecommendation: CostAwareRouteRecommendation,
+  ): number {
     const standardCost = costRecommendation.predictedCosts.predictedTotalCost;
     const variantCost = variant.costPrediction.predictedTotalCost;
     return ((standardCost - variantCost) / standardCost) * 100;
@@ -419,9 +484,13 @@ export class CostAwareRouteOptimizer {
   private async getStandardCostOptimizedRoute(
     routeStats: RouteStatistics,
     weatherData?: CurrentWeather,
-    operationalContext?: Partial<CostFactors>
+    operationalContext?: Partial<CostFactors>,
   ): Promise<CostOptimizedRoute | null> {
-    const prediction = await costCorrectionModel.predictCosts(routeStats, weatherData, operationalContext);
+    const prediction = await costCorrectionModel.predictCosts(
+      routeStats,
+      weatherData,
+      operationalContext,
+    );
     if (!prediction) return null;
 
     return {
@@ -433,26 +502,33 @@ export class CostAwareRouteOptimizer {
         fuelCost: prediction.costBreakdown.fuel,
         laborCost: prediction.costBreakdown.labor,
         maintenanceCost: prediction.costBreakdown.maintenance,
-        overheadCost: prediction.costBreakdown.overhead
+        overheadCost: prediction.costBreakdown.overhead,
       },
       costEfficiencyScore: 50, // Neutral score for fallback
       optimizationMetrics: {
-        costPerKilometer: prediction.predictedTotalCost / (routeStats.totalDistance || 1),
-        timePerKilometer: prediction.predictedTime / (routeStats.totalDistance || 1),
-        fuelEfficiency: (routeStats.totalDistance || 1) / (prediction.predictedFuelConsumption || 1),
-        costEffectiveness: (routeStats.totalDistance || 1) / (prediction.predictedTotalCost || 1) * 1000,
+        costPerKilometer:
+          prediction.predictedTotalCost / (routeStats.totalDistance || 1),
+        timePerKilometer:
+          prediction.predictedTime / (routeStats.totalDistance || 1),
+        fuelEfficiency:
+          (routeStats.totalDistance || 1) /
+          (prediction.predictedFuelConsumption || 1),
+        costEffectiveness:
+          ((routeStats.totalDistance || 1) /
+            (prediction.predictedTotalCost || 1)) *
+          1000,
       },
       costComparison: {
         vsStandardRoute: 0,
         vsPreviousRoutes: 0,
-        potentialSavings: 0
+        potentialSavings: 0,
       },
       riskAssessment: {
         costOverrunRisk: "medium",
         confidence: prediction.confidenceScore,
-        primaryRiskFactors: prediction.riskFactors
+        primaryRiskFactors: prediction.riskFactors,
       },
-      recommendations: prediction.optimizationSuggestions
+      recommendations: prediction.optimizationSuggestions,
     };
   }
 
@@ -462,7 +538,7 @@ export class CostAwareRouteOptimizer {
   private getFallbackOptimizedRoute(
     routeStats: RouteStatistics,
     weatherData?: CurrentWeather,
-    operationalContext?: Partial<CostFactors>
+    operationalContext?: Partial<CostFactors>,
   ): CostOptimizedRoute {
     // Simple cost estimation fallback
     const baseTime = routeStats.estimatedTime;
@@ -471,8 +547,13 @@ export class CostAwareRouteOptimizer {
     const estimatedTimeCost = (baseTime / 60) * 45;
     const estimatedFuelCost = estimatedFuel * 1.5;
     const estimatedMaintenanceCost = baseDistance * 0.15;
-    const estimatedOverheadCost = (estimatedTimeCost + estimatedFuelCost + estimatedMaintenanceCost) * 0.2;
-    const estimatedTotalCost = estimatedTimeCost + estimatedFuelCost + estimatedMaintenanceCost + estimatedOverheadCost;
+    const estimatedOverheadCost =
+      (estimatedTimeCost + estimatedFuelCost + estimatedMaintenanceCost) * 0.2;
+    const estimatedTotalCost =
+      estimatedTimeCost +
+      estimatedFuelCost +
+      estimatedMaintenanceCost +
+      estimatedOverheadCost;
 
     return {
       route: [],
@@ -483,30 +564,33 @@ export class CostAwareRouteOptimizer {
         fuelCost: estimatedFuelCost,
         laborCost: estimatedTimeCost,
         maintenanceCost: estimatedMaintenanceCost,
-        overheadCost: estimatedOverheadCost
+        overheadCost: estimatedOverheadCost,
       },
       costEfficiencyScore: 40, // Lower score for fallback
       optimizationMetrics: {
         costPerKilometer: estimatedTotalCost / baseDistance,
         timePerKilometer: baseTime / baseDistance,
         fuelEfficiency: baseDistance / estimatedFuel,
-        costEffectiveness: baseDistance / estimatedTotalCost * 1000
+        costEffectiveness: (baseDistance / estimatedTotalCost) * 1000,
       },
       costComparison: {
         vsStandardRoute: 0,
         vsPreviousRoutes: 0,
-        potentialSavings: 0
+        potentialSavings: 0,
       },
       riskAssessment: {
         costOverrunRisk: "high",
         confidence: 0.5,
-        primaryRiskFactors: ["Limited prediction accuracy", "Fallback estimation used"]
+        primaryRiskFactors: [
+          "Limited prediction accuracy",
+          "Fallback estimation used",
+        ],
       },
       recommendations: [
         "Cost prediction unavailable - monitor actual costs",
         "Consider cost model retraining",
-        "Track performance for future improvements"
-      ]
+        "Track performance for future improvements",
+      ],
     };
   }
 
@@ -526,7 +610,7 @@ export class CostAwareRouteOptimizer {
     },
     routeStats: RouteStatistics,
     weatherData?: CurrentWeather,
-    operationalContext?: Partial<CostFactors>
+    operationalContext?: Partial<CostFactors>,
   ): Promise<void> {
     if (!this.learningEnabled) return;
 
@@ -539,7 +623,7 @@ export class CostAwareRouteOptimizer {
       maintenanceCosts: actualPerformance.actualTotalCost * 0.15,
       stopsCompleted: actualPerformance.stopsCompleted,
       customerComplaints: actualPerformance.customerComplaints || 0,
-      safetyIncidents: actualPerformance.safetyIncidents || 0
+      safetyIncidents: actualPerformance.safetyIncidents || 0,
     };
 
     await costPredictionService.updateWithActualCosts({
@@ -548,7 +632,7 @@ export class CostAwareRouteOptimizer {
       actualCosts,
       routeStats,
       weatherData,
-      operationalContext
+      operationalContext,
     });
   }
 
@@ -563,24 +647,26 @@ export class CostAwareRouteOptimizer {
     }>,
     weatherData?: CurrentWeather,
     operationalContext?: Partial<CostFactors>,
-    config: CostOptimizationConfig = {}
-  ): Promise<Array<{
-    name: string;
-    description?: string;
-    costAnalysis: CostOptimizedRoute;
-    ranking: {
-      costRank: number;
-      efficiencyRank: number;
-      overallScore: number;
-    };
-  }>> {
+    config: CostOptimizationConfig = {},
+  ): Promise<
+    Array<{
+      name: string;
+      description?: string;
+      costAnalysis: CostOptimizedRoute;
+      ranking: {
+        costRank: number;
+        efficiencyRank: number;
+        overallScore: number;
+      };
+    }>
+  > {
     const routeAnalyses = await Promise.all(
       routeOptions.map(async (option) => {
         const costAnalysis = await this.optimizeWithCostAwareness(
           option.routeStats,
           weatherData,
           operationalContext,
-          config
+          config,
         );
 
         return {
@@ -590,28 +676,32 @@ export class CostAwareRouteOptimizer {
           ranking: {
             costRank: 0, // Will be calculated
             efficiencyRank: 0, // Will be calculated
-            overallScore: costAnalysis?.costEfficiencyScore || 0
-          }
+            overallScore: costAnalysis?.costEfficiencyScore || 0,
+          },
         };
-      })
+      }),
     );
 
     // Sort by overall score and assign rankings
-    const sortedByCost = [...routeAnalyses].sort((a, b) => 
-      a.costAnalysis.predictedCosts.totalCost - b.costAnalysis.predictedCosts.totalCost
+    const sortedByCost = [...routeAnalyses].sort(
+      (a, b) =>
+        a.costAnalysis.predictedCosts.totalCost -
+        b.costAnalysis.predictedCosts.totalCost,
     );
 
-    const sortedByEfficiency = [...routeAnalyses].sort((a, b) => 
-      b.costAnalysis.costEfficiencyScore - a.costAnalysis.costEfficiencyScore
+    const sortedByEfficiency = [...routeAnalyses].sort(
+      (a, b) =>
+        b.costAnalysis.costEfficiencyScore - a.costAnalysis.costEfficiencyScore,
     );
 
-    return routeAnalyses.map(analysis => ({
+    return routeAnalyses.map((analysis) => ({
       ...analysis,
       ranking: {
-        costRank: sortedByCost.findIndex(a => a.name === analysis.name) + 1,
-        efficiencyRank: sortedByEfficiency.findIndex(a => a.name === analysis.name) + 1,
-        overallScore: analysis.ranking.overallScore
-      }
+        costRank: sortedByCost.findIndex((a) => a.name === analysis.name) + 1,
+        efficiencyRank:
+          sortedByEfficiency.findIndex((a) => a.name === analysis.name) + 1,
+        overallScore: analysis.ranking.overallScore,
+      },
     }));
   }
 
@@ -620,7 +710,7 @@ export class CostAwareRouteOptimizer {
    */
   async generateOptimizationReport(
     optimizedRoute: CostOptimizedRoute,
-    alternativeRoutes?: CostOptimizedRoute[]
+    alternativeRoutes?: CostOptimizedRoute[],
   ): Promise<{
     summary: string;
     costBreakdown: any;
@@ -635,11 +725,23 @@ export class CostAwareRouteOptimizer {
       total: optimizedRoute.predictedCosts.totalCost,
       breakdown: optimizedRoute.predictedCosts,
       percentages: {
-        fuel: (optimizedRoute.predictedCosts.fuelCost / optimizedRoute.predictedCosts.totalCost) * 100,
-        labor: (optimizedRoute.predictedCosts.laborCost / optimizedRoute.predictedCosts.totalCost) * 100,
-        maintenance: (optimizedRoute.predictedCosts.maintenanceCost / optimizedRoute.predictedCosts.totalCost) * 100,
-        overhead: (optimizedRoute.predictedCosts.overheadCost / optimizedRoute.predictedCosts.totalCost) * 100
-      }
+        fuel:
+          (optimizedRoute.predictedCosts.fuelCost /
+            optimizedRoute.predictedCosts.totalCost) *
+          100,
+        labor:
+          (optimizedRoute.predictedCosts.laborCost /
+            optimizedRoute.predictedCosts.totalCost) *
+          100,
+        maintenance:
+          (optimizedRoute.predictedCosts.maintenanceCost /
+            optimizedRoute.predictedCosts.totalCost) *
+          100,
+        overhead:
+          (optimizedRoute.predictedCosts.overheadCost /
+            optimizedRoute.predictedCosts.totalCost) *
+          100,
+      },
     };
 
     const efficiencyAnalysis = {
@@ -647,21 +749,25 @@ export class CostAwareRouteOptimizer {
       benchmarks: {
         costPerKm: { good: 8, average: 12, poor: 16 },
         timePerKm: { good: 3, average: 5, poor: 8 },
-        fuelEfficiency: { good: 4, average: 3, poor: 2 }
-      }
+        fuelEfficiency: { good: 4, average: 3, poor: 2 },
+      },
     };
 
     const riskAssessment = {
       level: optimizedRoute.riskAssessment.costOverrunRisk,
       confidence: optimizedRoute.riskAssessment.confidence,
       factors: optimizedRoute.riskAssessment.primaryRiskFactors,
-      mitigation: this.generateRiskMitigationStrategies(optimizedRoute.riskAssessment)
+      mitigation: this.generateRiskMitigationStrategies(
+        optimizedRoute.riskAssessment,
+      ),
     };
 
     const performanceMetrics = {
       efficiencyScore: optimizedRoute.costEfficiencyScore,
       costSavings: optimizedRoute.costComparison.potentialSavings,
-      performanceVsAlternatives: alternativeRoutes ? this.compareToAlternatives(optimizedRoute, alternativeRoutes) : null
+      performanceVsAlternatives: alternativeRoutes
+        ? this.compareToAlternatives(optimizedRoute, alternativeRoutes)
+        : null,
     };
 
     return {
@@ -670,7 +776,7 @@ export class CostAwareRouteOptimizer {
       efficiencyAnalysis,
       recommendations: optimizedRoute.recommendations,
       riskAssessment,
-      performanceMetrics
+      performanceMetrics,
     };
   }
 
@@ -700,14 +806,27 @@ export class CostAwareRouteOptimizer {
   /**
    * Compare performance to alternative routes
    */
-  private compareToAlternatives(optimizedRoute: CostOptimizedRoute, alternatives: CostOptimizedRoute[]): any {
-    const avgAlternativeCost = alternatives.reduce((sum, route) => sum + route.predictedCosts.totalCost, 0) / alternatives.length;
-    const avgAlternativeEfficiency = alternatives.reduce((sum, route) => sum + route.costEfficiencyScore, 0) / alternatives.length;
+  private compareToAlternatives(
+    optimizedRoute: CostOptimizedRoute,
+    alternatives: CostOptimizedRoute[],
+  ): any {
+    const avgAlternativeCost =
+      alternatives.reduce(
+        (sum, route) => sum + route.predictedCosts.totalCost,
+        0,
+      ) / alternatives.length;
+    const avgAlternativeEfficiency =
+      alternatives.reduce((sum, route) => sum + route.costEfficiencyScore, 0) /
+      alternatives.length;
 
     return {
-      costAdvantage: ((avgAlternativeCost - optimizedRoute.predictedCosts.totalCost) / avgAlternativeCost) * 100,
-      efficiencyAdvantage: optimizedRoute.costEfficiencyScore - avgAlternativeEfficiency,
-      alternativesCount: alternatives.length
+      costAdvantage:
+        ((avgAlternativeCost - optimizedRoute.predictedCosts.totalCost) /
+          avgAlternativeCost) *
+        100,
+      efficiencyAdvantage:
+        optimizedRoute.costEfficiencyScore - avgAlternativeEfficiency,
+      alternativesCount: alternatives.length,
     };
   }
 }
@@ -720,34 +839,45 @@ export function createCostAwareRouteOptimizer(
   ways: Way[],
   onewayMode: string = "A",
   turnRestrictions: any[] = [],
-  config: CostOptimizationConfig = {}
+  config: CostOptimizationConfig = {},
 ): CostAwareRouteOptimizer {
-  return new CostAwareRouteOptimizer(nodes, ways, onewayMode, turnRestrictions, config);
+  return new CostAwareRouteOptimizer(
+    nodes,
+    ways,
+    onewayMode,
+    turnRestrictions,
+    config,
+  );
 }
 
 // Export singleton instance management
 export const costAwareRouteOptimizer = {
   create: createCostAwareRouteOptimizer,
-  
+
   // Utility functions
-  calculateCostEfficiency: (prediction: any, routeStats: RouteStatistics): number => {
+  calculateCostEfficiency: (
+    prediction: any,
+    routeStats: RouteStatistics,
+  ): number => {
     const dist = routeStats.totalDistance || 1;
     const costPerKm = prediction.predictedTotalCost / dist;
     const timePerKm = prediction.predictedTime / dist;
-    
+
     let score = 50;
     if (costPerKm < 10) score += 25;
     else if (costPerKm < 15) score += 15;
     if (timePerKm < 4) score += 15;
     else if (timePerKm < 6) score += 8;
-    
+
     return Math.min(100, score);
   },
 
   generateCostSummary: (optimizedRoute: CostOptimizedRoute): string => {
-    return `Route: ${optimizedRoute.totalDistance.toFixed(1)}km, ` +
-           `Cost: $${optimizedRoute.predictedCosts.totalCost.toFixed(2)}, ` +
-           `Efficiency: ${optimizedRoute.costEfficiencyScore}/100, ` +
-           `Risk: ${optimizedRoute.riskAssessment.costOverrunRisk}`;
-  }
+    return (
+      `Route: ${optimizedRoute.totalDistance.toFixed(1)}km, ` +
+      `Cost: $${optimizedRoute.predictedCosts.totalCost.toFixed(2)}, ` +
+      `Efficiency: ${optimizedRoute.costEfficiencyScore}/100, ` +
+      `Risk: ${optimizedRoute.riskAssessment.costOverrunRisk}`
+    );
+  },
 };

@@ -3,7 +3,15 @@
  * Shown in Maps & Resources next to the Mapillary / Map & widgets section.
  */
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Platform,
+} from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import { SectionLabel } from "@/components/minimal";
 import { OsmAuthService } from "@/lib/osmAuthService";
@@ -40,7 +48,7 @@ export function OSMEditingSection() {
       const redirectUri = OsmAuthService.getRedirectUri();
       Alert.alert(
         "OSM not configured",
-        `Add EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID and EXPO_PUBLIC_OSM_OAUTH_CLIENT_SECRET to .env. In your OSM OAuth2 application (https://www.openstreetmap.org/oauth2/applications) set Redirect URI to ${redirectUri}`
+        `Add EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID and EXPO_PUBLIC_OSM_OAUTH_CLIENT_SECRET to .env. In your OSM OAuth2 application (https://www.openstreetmap.org/oauth2/applications) set Redirect URI to ${redirectUri}`,
       );
       return;
     }
@@ -67,21 +75,34 @@ export function OSMEditingSection() {
 
   return (
     <View style={[styles.section, { paddingVertical: 4 }]}>
-      <SectionLabel color={colors.primary} style={{ marginTop: 20, marginBottom: 12 }}>
+      <SectionLabel
+        color={colors.primary}
+        style={{ marginTop: 20, marginBottom: 12 }}
+      >
         OpenStreetMap
       </SectionLabel>
       <Text style={[styles.description, { color: colors.muted }]}>
-        Sign in to use OSM editing (notes, user preferences). Placed here next to Mapillary settings.
+        Sign in to use OSM editing (notes, user preferences). Placed here next
+        to Mapillary settings.
       </Text>
       {loading ? (
-        <ActivityIndicator size="small" color={colors.primary} style={styles.loader} />
+        <ActivityIndicator
+          size="small"
+          color={colors.primary}
+          style={styles.loader}
+        />
       ) : !configured ? (
         <Text style={[styles.hint, { color: colors.muted }]}>
-          Set EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID and client secret in .env to enable. In your OSM OAuth2 app set Redirect URI to {OsmAuthService.getRedirectUri()}.
+          Set EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID and client secret in .env to
+          enable. In your OSM OAuth2 app set Redirect URI to{" "}
+          {OsmAuthService.getRedirectUri()}.
         </Text>
       ) : displayName ? (
         <View style={styles.row}>
-          <Text style={[styles.signedIn, { color: colors.text }]} numberOfLines={1}>
+          <Text
+            style={[styles.signedIn, { color: colors.text }]}
+            numberOfLines={1}
+          >
             Signed in as {displayName}
           </Text>
           <TouchableOpacity
@@ -89,7 +110,9 @@ export function OSMEditingSection() {
             onPress={handleSignOut}
             activeOpacity={0.7}
           >
-            <Text style={[styles.buttonText, { color: colors.text }]}>Sign out</Text>
+            <Text style={[styles.buttonText, { color: colors.text }]}>
+              Sign out
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -102,7 +125,9 @@ export function OSMEditingSection() {
           {signingIn ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={[styles.buttonText, { color: "#fff" }]}>Sign in to OpenStreetMap</Text>
+            <Text style={[styles.buttonText, { color: "#fff" }]}>
+              Sign in to OpenStreetMap
+            </Text>
           )}
         </TouchableOpacity>
       )}

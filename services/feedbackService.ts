@@ -83,7 +83,9 @@ export async function submitIssueReport(report: IssueReport): Promise<boolean> {
   }
 }
 
-export async function submitSuggestion(report: SuggestionReport): Promise<boolean> {
+export async function submitSuggestion(
+  report: SuggestionReport,
+): Promise<boolean> {
   try {
     const deviceInfo = report.deviceInfo ?? getDeviceInfo();
 

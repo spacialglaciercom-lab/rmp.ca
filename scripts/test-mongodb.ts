@@ -12,7 +12,11 @@ if (!uri) {
 }
 
 const client = new MongoClient(uri, {
-  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
   serverSelectionTimeoutMS: 10000,
   connectTimeoutMS: 10000,
 });
@@ -22,7 +26,9 @@ async function run() {
     console.log("Connecting to MongoDB...");
     await client.connect();
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!",
+    );
     process.exit(0);
   } catch (err) {
     console.error("Connection failed:", err);

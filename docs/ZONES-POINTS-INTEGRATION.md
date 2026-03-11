@@ -12,22 +12,22 @@ The backend exposes **`POST /api/zones/partition-from-points`** and the app has 
 
 ### Input (top toolbar / sidebar)
 
-1. **Upload CSV/JSON**  
-   - Columns: `address` and/or `lat`/`lon`, optional `weight`.  
+1. **Upload CSV/JSON**
+   - Columns: `address` and/or `lat`/`lon`, optional `weight`.
    - Parse and build `PointInput[]`; if only addresses, show a "Geocode" step (see below).
 
-2. **Geocoding (addresses)**  
-   - Backend has no internet; do geocoding **client-side** (e.g. Google Maps Geocoding API in the UI, or Nominatim).  
+2. **Geocoding (addresses)**
+   - Backend has no internet; do geocoding **client-side** (e.g. Google Maps Geocoding API in the UI, or Nominatim).
    - For Montréal, support French addresses and normalize before calling the geocoder.
 
-3. **Sliders**  
-   - **Truck count** (zones).  
+3. **Sliders**
+   - **Truck count** (zones).
    - **KNN neighbors** (e.g. 1–20) with short hint: "More neighbors = smoother zones, more graph edges."
 
-4. **Balance metric**  
+4. **Balance metric**
    - Dropdown or segmented control: "Equal count" | "By weight" | "By distance".
 
-5. **Run**  
+5. **Run**
    - Call `partitionZonesFromPoints({ points, truck_count, balance_metric, knn_neighbors, include_polygons })`, then `addSavedZone()` with a name and `polygon` derived from the union of zone polygons or the bounding box.
 
 ### Map
@@ -46,7 +46,7 @@ The backend exposes **`POST /api/zones/partition-from-points`** and the app has 
 
 ### Saving
 
-- Reuse existing Zones store: `addSavedZone({ name, polygon, zones, truck_count, balance_metric, ... })`.  
+- Reuse existing Zones store: `addSavedZone({ name, polygon, zones, truck_count, balance_metric, ... })`.
 - For partition-from-points, set `balance_metric` to `"count"` | `"weight"` (store type already allows this).
 
 ## Minimal hook in ZonePage
@@ -59,5 +59,5 @@ To add a "Partition from points" flow:
 
 ## Geocoding (addresses only)
 
-- **Client-side:** Use Google Maps Geocoding API (key from server `/api/config`) or Nominatim (no key).  
+- **Client-side:** Use Google Maps Geocoding API (key from server `/api/config`) or Nominatim (no key).
 - **Flow:** User pastes or uploads addresses → "Geocode" → spinner → replace addresses with `{ lat, lon, weight }` → enable "Partition" button.

@@ -1,6 +1,9 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { impactAsync as hapticImpact, ImpactFeedbackStyle } from "@/lib/safe-haptics";
+import {
+  impactAsync as hapticImpact,
+  ImpactFeedbackStyle,
+} from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
 import { useTurnPenaltyConfig } from "@/hooks/useTurnPenaltyConfig";
@@ -11,12 +14,12 @@ import { PriorityOrderDisplay } from "./PriorityOrderDisplay";
 
 const MIN_TOUCH_SIZE = 44;
 
-const TURN_TYPES: Array<{
+const TURN_TYPES: {
   key: keyof TurnPenalties;
   label: string;
   description: string;
   colorKey: "warning" | "error" | "success";
-}> = [
+}[] = [
   {
     key: "leftTurn",
     label: "Left Turn Penalty",
@@ -32,7 +35,8 @@ const TURN_TYPES: Array<{
   {
     key: "rightTurn",
     label: "Right Turn Penalty",
-    description: "Penalty applied for right turns (usually 0 for right-side collection)",
+    description:
+      "Penalty applied for right turns (usually 0 for right-side collection)",
     colorKey: "success",
   },
 ];
@@ -71,12 +75,7 @@ export function TurnPenaltyConfig({
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.surface },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: colors.surface }]}>
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           Turn Penalty Configuration

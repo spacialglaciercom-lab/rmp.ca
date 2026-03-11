@@ -55,13 +55,16 @@ type RoutingAction =
   | { type: "SET_PREVIEW_ROUTE"; payload: PreviewRoutePoint[] | null }
   | { type: "SET_PREVIEW_ROUTES"; payload: PreviewRoutePoint[][] | null }
   | { type: "SET_WEATHER_ANALYSIS"; payload: WeatherAnalysisResult | null }
-  | { type: "SET_AI_ROUTE_ANALYSIS"; payload: {
-      averageSpeedMph: number;
-      totalEstimatedTimeMinutes: number;
-      confidenceScore: number;
-      weatherImpactSeverity: "none" | "low" | "moderate" | "high";
-      reasoning: string;
-    } | null }
+  | {
+      type: "SET_AI_ROUTE_ANALYSIS";
+      payload: {
+        averageSpeedMph: number;
+        totalEstimatedTimeMinutes: number;
+        confidenceScore: number;
+        weatherImpactSeverity: "none" | "low" | "moderate" | "high";
+        reasoning: string;
+      } | null;
+    }
   | { type: "RESET" };
 
 const defaultTurnPenalties: TurnPenalties = {
@@ -89,7 +92,10 @@ const initialState: RoutingState = {
   aiRouteAnalysis: null,
 };
 
-function routingReducer(state: RoutingState, action: RoutingAction): RoutingState {
+function routingReducer(
+  state: RoutingState,
+  action: RoutingAction,
+): RoutingState {
   switch (action.type) {
     case "SET_START_POINT":
       return {
@@ -99,7 +105,10 @@ function routingReducer(state: RoutingState, action: RoutingAction): RoutingStat
     case "SET_TURN_PENALTIES":
       return {
         ...state,
-        configuration: { ...state.configuration, turnPenalties: action.payload },
+        configuration: {
+          ...state.configuration,
+          turnPenalties: action.payload,
+        },
       };
     case "SET_ONEWAY_MODE":
       return {
@@ -109,12 +118,18 @@ function routingReducer(state: RoutingState, action: RoutingAction): RoutingStat
     case "SET_SERVICE_BOTH_SIDES":
       return {
         ...state,
-        configuration: { ...state.configuration, serviceBothSides: action.payload },
+        configuration: {
+          ...state.configuration,
+          serviceBothSides: action.payload,
+        },
       };
     case "SET_OUTPUT_FILENAME":
       return {
         ...state,
-        configuration: { ...state.configuration, outputFileName: action.payload },
+        configuration: {
+          ...state.configuration,
+          outputFileName: action.payload,
+        },
       };
     case "SET_STATISTICS": {
       const MAX_ESTIMATED_MINUTES = 24 * 60;
@@ -148,9 +163,17 @@ function routingReducer(state: RoutingState, action: RoutingAction): RoutingStat
     case "SET_GPX_DATA":
       return { ...state, gpxData: action.payload };
     case "SET_PREVIEW_ROUTE":
-      return { ...state, previewRoutePoints: action.payload, previewRoutePointsByVehicle: null };
+      return {
+        ...state,
+        previewRoutePoints: action.payload,
+        previewRoutePointsByVehicle: null,
+      };
     case "SET_PREVIEW_ROUTES":
-      return { ...state, previewRoutePointsByVehicle: action.payload, previewRoutePoints: null };
+      return {
+        ...state,
+        previewRoutePointsByVehicle: action.payload,
+        previewRoutePoints: null,
+      };
     case "SET_WEATHER_ANALYSIS":
       return { ...state, weatherAnalysis: action.payload };
     case "SET_AI_ROUTE_ANALYSIS":
@@ -192,7 +215,7 @@ export function validateCoordinates(lat: number, lon: number): boolean {
 
 export function generateLogEntry(
   message: string,
-  type: ProcessingLogEntry["type"] = "info"
+  type: ProcessingLogEntry["type"] = "info",
 ): ProcessingLogEntry {
   return {
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -228,8 +251,21 @@ export function generateSampleReport(stats: RouteStatistics): RouteReport {
       turnOptimization: "Right-turn bias applied with U-turn penalty of 500+",
     },
     dataSummary: {
-      includedTags: ["residential", "unclassified", "service", "tertiary", "secondary"],
-      excludedTags: ["parking_aisle", "private", "footway", "cycleway", "steps", "path"],
+      includedTags: [
+        "residential",
+        "unclassified",
+        "service",
+        "tertiary",
+        "secondary",
+      ],
+      excludedTags: [
+        "parking_aisle",
+        "private",
+        "footway",
+        "cycleway",
+        "steps",
+        "path",
+      ],
       connectedComponents: 1,
       segmentsRouted: stats.segmentsRouted,
       segmentsExcluded: stats.segmentsExcluded,
@@ -286,7 +322,7 @@ export function generateGPXString(
   routeName: string,
   points: Array<{ lat: number; lon: number }>,
   simplify: boolean = false,
-  tolerance: number = 0.01
+  tolerance: number = 0.01,
 ): string {
   // Import Douglas-Peucker - only if simplification is needed
   let douglasPeucker: any = null;
@@ -295,7 +331,9 @@ export function generateGPXString(
       const module = require("@/lib/douglas-peucker");
       douglasPeucker = module.douglasPeucker;
     } catch (e) {
-      console.warn("Douglas-Peucker module not available, skipping simplification");
+      console.warn(
+        "Douglas-Peucker module not available, skipping simplification",
+      );
       simplify = false;
     }
   }
@@ -333,7 +371,10 @@ export function generateGPXString(
   const timestamp = new Date().toISOString();
   const safeName = escapeGpxXml(routeName);
   const trackPoints = processedPoints
-    .map((p: any) => `      <trkpt lat="${p.lat}" lon="${p.lon}"><time>${timestamp}</time></trkpt>`)
+    .map(
+      (p: any) =>
+        `      <trkpt lat="${p.lat}" lon="${p.lon}"><time>${timestamp}</time></trkpt>`,
+    )
     .join("\n");
 
   const simplificationNote = simplify
@@ -362,7 +403,7 @@ ${trackPoints}
  */
 export function generateMultiTrackGPXString(
   routeNameBase: string,
-  routes: Array<{ name: string; points: Array<{ lat: number; lon: number }> }>
+  routes: Array<{ name: string; points: Array<{ lat: number; lon: number }> }>,
 ): string {
   const timestamp = new Date().toISOString();
   const safeBase = escapeGpxXml(routeNameBase);
@@ -370,7 +411,10 @@ export function generateMultiTrackGPXString(
     .filter((r) => r.points.length >= 2)
     .map((r) => {
       const trackPoints = r.points
-        .map((p) => `      <trkpt lat="${p.lat}" lon="${p.lon}"><time>${timestamp}</time></trkpt>`)
+        .map(
+          (p) =>
+            `      <trkpt lat="${p.lat}" lon="${p.lon}"><time>${timestamp}</time></trkpt>`,
+        )
         .join("\n");
       return `  <trk>
     <name>${escapeGpxXml(r.name)}</name>

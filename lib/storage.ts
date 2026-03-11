@@ -39,7 +39,7 @@ export const storage = {
   async updateCollectionPoint(
     routeId: string,
     pointId: string,
-    updates: Partial<CollectionPoint>
+    updates: Partial<CollectionPoint>,
   ): Promise<void> {
     try {
       const route = await this.loadRoute();
@@ -55,7 +55,7 @@ export const storage = {
 
       // Update completed count
       route.completedPoints = route.points.filter(
-        (p) => p.status === "completed"
+        (p) => p.status === "completed",
       ).length;
 
       // Update route status

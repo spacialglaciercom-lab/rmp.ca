@@ -8,7 +8,9 @@ export const LOGGING_INTERVAL_SEC_MAX = 60;
 export const LOGGING_INTERVAL_SEC_DEFAULT = 5;
 
 /** Convert seconds to a distance interval for iOS (distanceInterval only; timeInterval is Android-only). Rough: ~2 m/s walking, ~10 m/s driving. */
-export function loggingIntervalSecondsToDistanceMeters(seconds: number): number {
+export function loggingIntervalSecondsToDistanceMeters(
+  seconds: number,
+): number {
   return Math.max(5, Math.min(100, Math.round(seconds * 3)));
 }
 
@@ -41,11 +43,12 @@ export const useRecordingSettingsStore = create<RecordingSettingsStore>()(
         set({
           loggingIntervalSeconds: Math.max(
             LOGGING_INTERVAL_SEC_MIN,
-            Math.min(LOGGING_INTERVAL_SEC_MAX, Math.round(v))
+            Math.min(LOGGING_INTERVAL_SEC_MAX, Math.round(v)),
           ),
         }),
       setRememberMyChoice: (v) => set({ rememberMyChoice: v }),
-      setShowRecOnMapWhenRecording: (v) => set({ showRecOnMapWhenRecording: v }),
+      setShowRecOnMapWhenRecording: (v) =>
+        set({ showRecOnMapWhenRecording: v }),
     }),
     {
       name: "trashroute-recording-settings",
@@ -55,6 +58,6 @@ export const useRecordingSettingsStore = create<RecordingSettingsStore>()(
         rememberMyChoice: s.rememberMyChoice,
         showRecOnMapWhenRecording: s.showRecOnMapWhenRecording,
       }),
-    }
-  )
+    },
+  ),
 );

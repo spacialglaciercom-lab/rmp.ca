@@ -115,7 +115,10 @@ const styles = StyleSheet.create({
   },
 });
 
-export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetProps) {
+export function RouteParametersSheet({
+  visible,
+  onClose,
+}: RouteParametersSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [viewMode, setViewMode] = useState<ViewMode>("main");
@@ -169,7 +172,12 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
   }, []);
 
   useEffect(() => {
-    if (visible && viewMode === "voice" && expoVoices.length === 0 && !expoVoicesLoading) {
+    if (
+      visible &&
+      viewMode === "voice" &&
+      expoVoices.length === 0 &&
+      !expoVoicesLoading
+    ) {
       setExpoVoicesLoading(true);
       getAvailableExpoVoicesAsync()
         .then(setExpoVoices)
@@ -180,7 +188,8 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
   if (!visible) return null;
 
   const recalcLabel =
-    RECALC_DISTANCE_OPTIONS.find((o) => o.value === store.recalcDistanceMeters)?.label ?? "120 m";
+    RECALC_DISTANCE_OPTIONS.find((o) => o.value === store.recalcDistanceMeters)
+      ?.label ?? "120 m";
 
   return (
     <Modal
@@ -205,15 +214,31 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
         >
           {viewMode === "avoid" ? (
             <>
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <View
+                style={[styles.header, { borderBottomColor: colors.border }]}
+              >
                 <View style={styles.headerLeft}>
                   <TouchableOpacity onPress={handleBack} style={{ padding: 4 }}>
-                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.primary} />
+                    <MaterialCommunityIcons
+                      name="chevron-left"
+                      size={28}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
-                  <Text style={[styles.headerTitle, { color: colors.text }]}>Avoid roads...</Text>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>
+                    Avoid roads...
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={handleBack} style={{ padding: 8 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: colors.primary }}>Done</Text>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.primary,
+                    }}
+                  >
+                    Done
+                  </Text>
                 </TouchableOpacity>
               </View>
               <ScrollView
@@ -222,14 +247,25 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                 keyboardShouldPersistTaps="handled"
               >
                 <Text style={[styles.instructionText, { color: colors.muted }]}>
-                  Select roads you want to avoid during navigation. You can either select a road on the
-                  map or choose a type from the list below.
+                  Select roads you want to avoid during navigation. You can
+                  either select a road on the map or choose a type from the list
+                  below.
                 </Text>
-                <SectionLabel color={colors.muted} style={{ marginTop: 0, marginBottom: 12 }}>SELECT MANUALLY</SectionLabel>
+                <SectionLabel
+                  color={colors.muted}
+                  style={{ marginTop: 0, marginBottom: 12 }}
+                >
+                  SELECT MANUALLY
+                </SectionLabel>
                 <TouchableOpacity onPress={openMapSelection} style={styles.row}>
-                  <Text style={[styles.linkText, { color: colors.primary }]}>Select on map</Text>
+                  <Text style={[styles.linkText, { color: colors.primary }]}>
+                    Select on map
+                  </Text>
                 </TouchableOpacity>
-                <SectionLabel color={colors.muted} style={{ marginTop: 16, marginBottom: 12 }}>
+                <SectionLabel
+                  color={colors.muted}
+                  style={{ marginTop: 16, marginBottom: 12 }}
+                >
                   AVOID BY TYPE
                 </SectionLabel>
                 {AVOID_ROADS_OPTIONS.map(({ key, label }) => (
@@ -245,12 +281,19 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                       },
                     ]}
                   >
-                    <Text style={{ color: colors.text, fontSize: 16, flex: 1 }}>{label}</Text>
+                    <Text style={{ color: colors.text, fontSize: 16, flex: 1 }}>
+                      {label}
+                    </Text>
                     <Switch
                       value={store.avoidRoads[key]}
                       onValueChange={(v) => store.setAvoidRoads(key, v)}
-                      trackColor={{ false: colors.border, true: colors.primary + "60" }}
-                      thumbColor={store.avoidRoads[key] ? colors.primary : colors.muted}
+                      trackColor={{
+                        false: colors.border,
+                        true: colors.primary + "60",
+                      }}
+                      thumbColor={
+                        store.avoidRoads[key] ? colors.primary : colors.muted
+                      }
                     />
                   </View>
                 ))}
@@ -258,35 +301,68 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
             </>
           ) : viewMode === "preferences" ? (
             <>
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <View
+                style={[styles.header, { borderBottomColor: colors.border }]}
+              >
                 <View style={styles.headerLeft}>
                   <TouchableOpacity onPress={handleBack} style={{ padding: 4 }}>
-                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.primary} />
+                    <MaterialCommunityIcons
+                      name="chevron-left"
+                      size={28}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
-                  <Text style={[styles.headerTitle, { color: colors.text }]}>Prefer...</Text>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>
+                    Prefer...
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={handleBack} style={{ padding: 8 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: colors.primary }}>Done</Text>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.primary,
+                    }}
+                  >
+                    Done
+                  </Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.content}>
                 <Text style={[styles.instructionText, { color: colors.muted }]}>
-                  Route preferences will be available in a future update. These will let you prefer
-                  motorways, shortest routes, or scenic roads.
+                  Route preferences will be available in a future update. These
+                  will let you prefer motorways, shortest routes, or scenic
+                  roads.
                 </Text>
               </View>
             </>
           ) : viewMode === "recalc" ? (
             <>
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <View
+                style={[styles.header, { borderBottomColor: colors.border }]}
+              >
                 <View style={styles.headerLeft}>
                   <TouchableOpacity onPress={handleBack} style={{ padding: 4 }}>
-                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.primary} />
+                    <MaterialCommunityIcons
+                      name="chevron-left"
+                      size={28}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
-                  <Text style={[styles.headerTitle, { color: colors.text }]}>Recalculate distance</Text>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>
+                    Recalculate distance
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={handleBack} style={{ padding: 8 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: colors.primary }}>Done</Text>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.primary,
+                    }}
+                  >
+                    Done
+                  </Text>
                 </TouchableOpacity>
               </View>
               <ScrollView
@@ -295,7 +371,8 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                 keyboardShouldPersistTaps="handled"
               >
                 <Text style={[styles.instructionText, { color: colors.muted }]}>
-                  Set the minimum distance from the route before automatic recalculation triggers.
+                  Set the minimum distance from the route before automatic
+                  recalculation triggers.
                 </Text>
                 {RECALC_DISTANCE_OPTIONS.map(({ value, label }) => {
                   const isSelected = store.recalcDistanceMeters === value;
@@ -304,7 +381,9 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                       key={value}
                       onPress={() => {
                         if (Platform.OS !== "web") hapticImpact();
-                        store.setRecalcDistanceMeters(value as RecalcDistanceValue);
+                        store.setRecalcDistanceMeters(
+                          value as RecalcDistanceValue,
+                        );
                       }}
                       style={[
                         styles.row,
@@ -314,13 +393,21 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                           marginBottom: 4,
                           paddingHorizontal: 16,
                           borderWidth: 1,
-                          borderColor: isSelected ? colors.primary : colors.border,
+                          borderColor: isSelected
+                            ? colors.primary
+                            : colors.border,
                         },
                       ]}
                     >
-                      <Text style={{ color: colors.text, fontSize: 16 }}>{label}</Text>
+                      <Text style={{ color: colors.text, fontSize: 16 }}>
+                        {label}
+                      </Text>
                       {isSelected && (
-                        <MaterialCommunityIcons name="check" size={20} color={colors.primary} />
+                        <MaterialCommunityIcons
+                          name="check"
+                          size={20}
+                          color={colors.primary}
+                        />
                       )}
                     </TouchableOpacity>
                   );
@@ -329,25 +416,46 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
             </>
           ) : viewMode === "voice" ? (
             <>
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <View
+                style={[styles.header, { borderBottomColor: colors.border }]}
+              >
                 <View style={styles.headerLeft}>
                   <TouchableOpacity onPress={handleBack} style={{ padding: 4 }}>
-                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.primary} />
+                    <MaterialCommunityIcons
+                      name="chevron-left"
+                      size={28}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
-                  <Text style={[styles.headerTitle, { color: colors.text }]}>System voice</Text>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>
+                    System voice
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={handleBack} style={{ padding: 8 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: colors.primary }}>Done</Text>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.primary,
+                    }}
+                  >
+                    Done
+                  </Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.content}>
                 <Text style={[styles.instructionText, { color: colors.muted }]}>
-                  Used for navigation announcements and Co-Pilot when ElevenLabs is off.
+                  Used for navigation announcements and Co-Pilot when ElevenLabs
+                  is off.
                 </Text>
                 {expoVoicesLoading ? (
-                  <Text style={{ color: colors.muted, marginTop: 12 }}>Loading voices…</Text>
+                  <Text style={{ color: colors.muted, marginTop: 12 }}>
+                    Loading voices…
+                  </Text>
                 ) : expoVoices.length === 0 ? (
-                  <Text style={{ color: colors.muted, marginTop: 12 }}>No voices available.</Text>
+                  <Text style={{ color: colors.muted, marginTop: 12 }}>
+                    No voices available.
+                  </Text>
                 ) : (
                   <FlatList
                     data={expoVoices}
@@ -355,7 +463,8 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                     style={{ marginTop: 8, maxHeight: 320 }}
                     renderItem={({ item, index }) => {
                       const isSelected = store.expoVoiceIndex === index;
-                      const label = item.name || item.language || `Voice ${index + 1}`;
+                      const label =
+                        item.name || item.language || `Voice ${index + 1}`;
                       return (
                         <TouchableOpacity
                           onPress={() => {
@@ -370,15 +479,24 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                               marginBottom: 4,
                               paddingHorizontal: 16,
                               borderWidth: 1,
-                              borderColor: isSelected ? colors.primary : colors.border,
+                              borderColor: isSelected
+                                ? colors.primary
+                                : colors.border,
                             },
                           ]}
                         >
-                          <Text style={{ color: colors.text, fontSize: 16 }} numberOfLines={1}>
+                          <Text
+                            style={{ color: colors.text, fontSize: 16 }}
+                            numberOfLines={1}
+                          >
                             {label}
                           </Text>
                           {isSelected && (
-                            <MaterialCommunityIcons name="check" size={20} color={colors.primary} />
+                            <MaterialCommunityIcons
+                              name="check"
+                              size={20}
+                              color={colors.primary}
+                            />
                           )}
                         </TouchableOpacity>
                       );
@@ -389,13 +507,25 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
             </>
           ) : (
             <>
-              <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <View
+                style={[styles.header, { borderBottomColor: colors.border }]}
+              >
                 <View>
-                  <Text style={[styles.headerTitle, { color: colors.text }]}>Route parameters</Text>
-                  <Text style={[styles.headerSubtitle, { color: colors.muted }]}>Driving</Text>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>
+                    Route parameters
+                  </Text>
+                  <Text
+                    style={[styles.headerSubtitle, { color: colors.muted }]}
+                  >
+                    Driving
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={handleClose} style={{ padding: 8 }}>
-                  <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={colors.text}
+                  />
                 </TouchableOpacity>
               </View>
               <ScrollView
@@ -407,29 +537,53 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                   onPress={openAvoidRoads}
                   style={[styles.rowWithChevron, { marginBottom: 4 }]}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <MaterialCommunityIcons
                       name="alert-circle-outline"
                       size={22}
                       color={colors.muted}
                     />
-                    <Text style={{ color: colors.text, fontSize: 16 }}>Avoid roads...</Text>
+                    <Text style={{ color: colors.text, fontSize: 16 }}>
+                      Avoid roads...
+                    </Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={24}
+                    color={colors.muted}
+                  />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={openPreferences}
                   style={[styles.rowWithChevron, { marginBottom: 4 }]}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <MaterialCommunityIcons
                       name="alert-circle-outline"
                       size={22}
                       color={colors.muted}
                     />
-                    <Text style={{ color: colors.text, fontSize: 16 }}>Prefer...</Text>
+                    <Text style={{ color: colors.text, fontSize: 16 }}>
+                      Prefer...
+                    </Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={24}
+                    color={colors.muted}
+                  />
                 </TouchableOpacity>
 
                 <ToggleRow
@@ -479,31 +633,58 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                     onPress={openSystemVoicePicker}
                     style={[styles.rowWithChevron, { marginBottom: 4 }]}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
                       <MaterialCommunityIcons
                         name="microphone"
                         size={22}
                         color={colors.muted}
                       />
-                      <Text style={{ color: colors.text, fontSize: 16 }}>System voice</Text>
+                      <Text style={{ color: colors.text, fontSize: 16 }}>
+                        System voice
+                      </Text>
                     </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
                       <Text style={{ color: colors.muted, fontSize: 14 }}>
                         Tap to choose
                       </Text>
-                      <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={24}
+                        color={colors.muted}
+                      />
                     </View>
                   </TouchableOpacity>
                 )}
 
-                <SectionLabel color={colors.muted} style={{ marginTop: 20, marginBottom: 12 }}>
+                <SectionLabel
+                  color={colors.muted}
+                  style={{ marginTop: 20, marginBottom: 12 }}
+                >
                   RECALCULATE ROUTE
                 </SectionLabel>
                 <TouchableOpacity
                   onPress={openRecalcDistancePicker}
                   style={[styles.rowWithChevron, { marginBottom: 4 }]}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <MaterialCommunityIcons
                       name="compass-outline"
                       size={22}
@@ -513,9 +694,21 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                       Minimal distance to recalculate route
                     </Text>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Text style={{ color: colors.muted, fontSize: 16 }}>{recalcLabel}</Text>
-                    <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Text style={{ color: colors.muted, fontSize: 16 }}>
+                      {recalcLabel}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={24}
+                      color={colors.muted}
+                    />
                   </View>
                 </TouchableOpacity>
                 <View
@@ -528,19 +721,34 @@ export function RouteParametersSheet({ visible, onClose }: RouteParametersSheetP
                     },
                   ]}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <MaterialCommunityIcons
                       name="u-turn-right"
                       size={22}
                       color={colors.primary}
                     />
-                    <Text style={{ color: colors.text, fontSize: 16 }}>In case of reverse direction</Text>
+                    <Text style={{ color: colors.text, fontSize: 16 }}>
+                      In case of reverse direction
+                    </Text>
                   </View>
                   <Switch
                     value={store.recalcOnReverseDirection}
                     onValueChange={store.setRecalcOnReverseDirection}
-                    trackColor={{ false: colors.border, true: colors.primary + "60" }}
-                    thumbColor={store.recalcOnReverseDirection ? colors.primary : colors.muted}
+                    trackColor={{
+                      false: colors.border,
+                      true: colors.primary + "60",
+                    }}
+                    thumbColor={
+                      store.recalcOnReverseDirection
+                        ? colors.primary
+                        : colors.muted
+                    }
                   />
                 </View>
               </ScrollView>

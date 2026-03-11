@@ -49,6 +49,7 @@ To show the MAPS.ME map **inside** the app on iOS, you must provide the **OMIM f
 ### Steps (summary)
 
 1. **Clone OMIM** (large repo, use submodules):
+
    ```bash
    git clone --recursive https://github.com/mapsme/omim.git
    cd omim && ./configure.sh
@@ -59,20 +60,24 @@ To show the MAPS.ME map **inside** the app on iOS, you must provide the **OMIM f
 
 3. **Place the framework in the project**  
    The current plugin expects the MAPS.ME framework at:
+
    ```text
    <project_root>/iphone/Maps
    ```
+
    So you need to copy or symlink the built framework so that path exists (e.g. put the `Maps` product from OMIM’s `iphone` build into `trashroute-mobile/iphone/Maps`).
 
 4. **Enable the embedded plugin**  
    Set the env var so the Expo config includes the MAPS.ME native module:
+
    ```bash
    set EXPO_MAPME_EMBED=1
    npm run dev:metro
    ```
+
    For EAS/CI, set `EXPO_MAPME_EMBED=1` in the build environment.
 
-5. **Prebuild and run**  
+5. **Prebuild and run**
    ```bash
    npx expo prebuild
    cd ios && pod install && cd ..
@@ -89,9 +94,9 @@ To show the MAPS.ME map **inside** the app on iOS, you must provide the **OMIM f
 
 ## Summary
 
-| Mode              | Setup                    | Use case                          |
-|-------------------|--------------------------|-----------------------------------|
-| Open in app       | None                     | “Open in Organic Maps” / MAPS.ME  |
-| Embedded MAPS.ME  | OMIM built + path + env  | In-app native offline map (iOS)   |
+| Mode             | Setup                   | Use case                         |
+| ---------------- | ----------------------- | -------------------------------- |
+| Open in app      | None                    | “Open in Organic Maps” / MAPS.ME |
+| Embedded MAPS.ME | OMIM built + path + env | In-app native offline map (iOS)  |
 
 For most users, **option 1** (URL API in `@/lib/offline-map-url`) is enough and does not require the MAPS.ME framework.

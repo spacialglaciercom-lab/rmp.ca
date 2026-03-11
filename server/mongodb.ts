@@ -40,7 +40,9 @@ export async function connectAndPing(): Promise<boolean> {
     log.info("Pinged deployment. Connected to MongoDB.");
     return true;
   } catch (err) {
-    log.warn("Connection failed", { error: err instanceof Error ? err.message : String(err) });
+    log.warn("Connection failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return false;
   }
 }

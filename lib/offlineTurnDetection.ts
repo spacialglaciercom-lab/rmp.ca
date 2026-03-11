@@ -23,7 +23,7 @@ function toDeg(rad: number): number {
 
 export function haversineDistance(
   p1: { lat: number; lon: number },
-  p2: { lat: number; lon: number }
+  p2: { lat: number; lon: number },
 ): number {
   const dLat = toRad(p2.lat - p1.lat);
   const dLon = toRad(p2.lon - p1.lon);
@@ -35,7 +35,7 @@ export function haversineDistance(
 
 function calculateBearing(
   from: { lat: number; lon: number },
-  to: { lat: number; lon: number }
+  to: { lat: number; lon: number },
 ): number {
   const dLon = toRad(to.lon - from.lon);
   const lat1 = toRad(from.lat);
@@ -76,7 +76,7 @@ function formatDistance(meters: number): string {
  */
 export function detectTurnsFromGPX(
   points: Array<{ lat: number; lon: number }>,
-  thresholdDegrees: number = 30
+  thresholdDegrees: number = 30,
 ): TurnInstruction[] {
   const instructions: TurnInstruction[] = [];
   if (points.length < 3) return instructions;

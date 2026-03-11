@@ -30,12 +30,9 @@ export interface TurnAwareCppOptions {
 export function solveTurnAwareCPP(
   turnEdges: TurnEdge[],
   startNode?: TurnNode,
-  options: TurnAwareCppOptions = {}
+  options: TurnAwareCppOptions = {},
 ): TurnAwareCppResult {
-  const {
-    enableCycleDetection = true,
-    cycleConfig = {},
-  } = options;
+  const { enableCycleDetection = true, cycleConfig = {} } = options;
 
   // Pre-compute "from" and "to" keys for every edge once (avoids string
   // concatenation inside the hot Hierholzer loop).
@@ -49,7 +46,10 @@ export function solveTurnAwareCPP(
     fromKeyArr[i] = fk;
     toKeyArr[i] = tk;
     let list = adj.get(fk);
-    if (!list) { list = []; adj.set(fk, list); }
+    if (!list) {
+      list = [];
+      adj.set(fk, list);
+    }
     list.push(i);
   }
 
@@ -69,27 +69,27 @@ export function solveTurnAwareCPP(
     indices.sort((a, b) => {
       const ea = turnEdges[a]!;
       const eb = turnEdges[b]!;
-      
+
       // If cycle detection is active, apply tabu penalties
       if (cycleDetector) {
         const aTabu = cycleDetector.isTabu(toKeyArr[a]!) ? 1000 : 0;
         const bTabu = cycleDetector.isTabu(toKeyArr[b]!) ? 1000 : 0;
         if (aTabu !== bTabu) return aTabu - bTabu;
-        
+
         const aPenalty = cycleDetector.getPenalty(toKeyArr[a]!);
         const bPenalty = cycleDetector.getPenalty(toKeyArr[b]!);
         if (Math.abs(aPenalty - bPenalty) > 50) return aPenalty - bPenalty;
       }
-      
+
       const aDeadhead = ea.deadhead ? 1 : 0;
       const bDeadhead = eb.deadhead ? 1 : 0;
       if (aDeadhead !== bDeadhead) return aDeadhead - bDeadhead;
-      
+
       // U-turn handling with dead-end awareness
       const aUturn = ea.turnType === "u-turn" ? 1 : 0;
       const bUturn = eb.turnType === "u-turn" ? 1 : 0;
       if (aUturn !== bUturn) return aUturn - bUturn;
-      
+
       // For U-turns, prefer those that don't lead to dead-ends (degree 1)
       if (aUturn && bUturn) {
         const aDeg = adj.get(toKeyArr[a]!)?.length ?? 0;
@@ -97,7 +97,7 @@ export function solveTurnAwareCPP(
         if (aDeg <= 1 && bDeg > 1) return 1;
         if (bDeg <= 1 && aDeg > 1) return -1;
       }
-      
+
       const aDeg = adj.get(toKeyArr[a]!)?.length ?? 0;
       const bDeg = adj.get(toKeyArr[b]!)?.length ?? 0;
       if (aDeg !== bDeg) return bDeg - aDeg;
@@ -110,7 +110,9 @@ export function solveTurnAwareCPP(
 
   // Use index pointers instead of shift() (O(1) vs O(n) per dequeue)
   const remainingIdx = new Map<string, number>();
-  adj.forEach((_, key) => { remainingIdx.set(key, 0); });
+  adj.forEach((_, key) => {
+    remainingIdx.set(key, 0);
+  });
 
   // Incremental counter — O(1) per edge consumption instead of O(V) per iteration
   let remainingEdgeCount = turnEdges.length;
@@ -119,13 +121,13 @@ export function solveTurnAwareCPP(
 
   const startKey: string = startNode
     ? `${startNode.edgeId}:${startNode.direction}`
-    : adj.keys().next().value ?? "";
+    : (adj.keys().next().value ?? "");
 
   // Hierholzer's: use edge stack, append on backtrack
   const nodeStack: string[] = [startKey];
   const edgeIdxStack: number[] = [-1]; // edge index that led to this node (-1 = none)
   const circuit: TurnEdge[] = [];
-  
+
   // Safety cap to prevent true infinite loops
   const maxIterations = turnEdges.length * 10;
   let iterations = 0;
@@ -146,13 +148,13 @@ export function solveTurnAwareCPP(
         if (loopsDetected % 10 === 1) {
           console.warn(
             `[TurnAwareCPP] Loop detected (${detection.loopType}) at ${key}, ` +
-            `attempting escape. Tabu nodes: ${detection.tabuNodes.size}`
+              `attempting escape. Tabu nodes: ${detection.tabuNodes.size}`,
           );
         }
         loopEscapeMode = true;
         escapeAttempts++;
         tabuNodesUsed += detection.tabuNodes.size;
-        
+
         // If severely stuck (50+ stagnant iterations), force backtrack
         if (detection.stagnantIterations > 50 && nodeStack.length > 3) {
           cycleDetector.leaveNode(key);
@@ -163,7 +165,7 @@ export function solveTurnAwareCPP(
           }
           continue;
         }
-        
+
         // Re-sort adjacency with stronger penalties in escape mode
         if (indices && idx < indices.length) {
           const remaining = indices.slice(idx);
@@ -177,22 +179,27 @@ export function solveTurnAwareCPP(
       // Find best non-tabu edge
       let edgeIdx = indices[idx]!;
       let searchIdx = idx;
-      
+
       // Build set of recent stack nodes to avoid in escape mode
       const recentStackNodes = new Set<string>();
       if (loopEscapeMode && nodeStack.length > 5) {
-        for (let i = Math.max(0, nodeStack.length - 20); i < nodeStack.length; i++) {
+        for (
+          let i = Math.max(0, nodeStack.length - 20);
+          i < nodeStack.length;
+          i++
+        ) {
           recentStackNodes.add(nodeStack[i]!);
         }
       }
-      
+
       if (cycleDetector) {
         while (searchIdx < indices.length) {
           const candidateIdx = indices[searchIdx]!;
           const targetKey = toKeyArr[candidateIdx]!;
           const isTabu = cycleDetector.isTabu(targetKey);
-          const isRecentStack = loopEscapeMode && recentStackNodes.has(targetKey);
-          
+          const isRecentStack =
+            loopEscapeMode && recentStackNodes.has(targetKey);
+
           // In escape mode, also avoid recent stack nodes
           if (!isTabu && !isRecentStack) {
             edgeIdx = candidateIdx;
@@ -205,17 +212,17 @@ export function solveTurnAwareCPP(
           }
           searchIdx++;
         }
-        
+
         // If all edges lead to tabu nodes, clear tabu and take first available
         if (searchIdx >= indices.length && idx < indices.length) {
           edgeIdx = indices[idx]!;
           cycleDetector.clearTabu(toKeyArr[edgeIdx]!);
         }
-        
+
         // Update lowlink for SCC tracking
         cycleDetector.updateLowlink(key, toKeyArr[edgeIdx]!);
       }
-      
+
       // Decrement for all edges skipped (tabu or otherwise) plus the one consumed
       const edgesConsumed = searchIdx + 1 - (remainingIdx.get(key) ?? 0);
       remainingEdgeCount -= edgesConsumed;
@@ -238,7 +245,7 @@ export function solveTurnAwareCPP(
   if (iterations >= maxIterations) {
     console.error(
       `[TurnAwareCPP] Hit iteration cap (${maxIterations}). ` +
-      `Circuit has ${circuit.length} edges, graph has ${turnEdges.length}.`
+        `Circuit has ${circuit.length} edges, graph has ${turnEdges.length}.`,
     );
     if (cycleDetector) {
       const diag = cycleDetector.getDiagnostics();
@@ -251,7 +258,9 @@ export function solveTurnAwareCPP(
 
   // Warn if edges remain unconsumed (graph wasn't fully Eulerian/connected)
   if (remainingEdgeCount > 0) {
-    console.warn(`[TurnAwareCPP] Hierholzer left ${remainingEdgeCount} unconsumed edges — graph may not be Eulerian or fully connected`);
+    console.warn(
+      `[TurnAwareCPP] Hierholzer left ${remainingEdgeCount} unconsumed edges — graph may not be Eulerian or fully connected`,
+    );
   }
 
   // Tally turn stats
@@ -261,7 +270,7 @@ export function solveTurnAwareCPP(
   }
 
   const totalCost = circuit.reduce((sum, e) => sum + e.totalCost, 0);
-  
+
   const result: TurnAwareCppResult = { circuit, totalCost, stats };
   if (enableCycleDetection) {
     result.cycleDiagnostics = {
@@ -289,7 +298,7 @@ export function turnCircuitToStreetRoute(circuit: TurnEdge[]): string[] {
 function coordAt(
   coords: [number, number][],
   index: number,
-  forward: boolean
+  forward: boolean,
 ): [number, number] {
   return forward ? coords[index]! : coords[coords.length - 1 - index]!;
 }
@@ -299,7 +308,7 @@ function coordAt(
  *  no real street geometry and would cause the route to scribble across the map. */
 export function turnCircuitToRoutePoints(
   streetEdges: StreetEdge[],
-  circuit: TurnEdge[]
+  circuit: TurnEdge[],
 ): { latitude: number; longitude: number; nodeId?: string }[] {
   const edgeMap = new Map<string, StreetEdge>();
   for (let i = 0; i < streetEdges.length; i++) {
@@ -329,7 +338,8 @@ export function turnCircuitToRoutePoints(
         const len = fromEdge.coordinates.length;
         for (let j = 0; j < len; j++) {
           const [lat, lon] = coordAt(fromEdge.coordinates, j, isFwd);
-          const nodeId = j === 0 ? startNode : j === len - 1 ? endNode : undefined;
+          const nodeId =
+            j === 0 ? startNode : j === len - 1 ? endNode : undefined;
           if (nodeId != null) {
             points.push({ latitude: lat, longitude: lon, nodeId });
           } else {
@@ -349,7 +359,8 @@ export function turnCircuitToRoutePoints(
     prevWasBridge = false;
     for (let j = skipFirst ? 1 : 0; j < len; j++) {
       const [lat, lon] = coordAt(edge.coordinates, j, isForward);
-      const nodeId = j === 0 ? startNodeId : j === len - 1 ? endNodeId : undefined;
+      const nodeId =
+        j === 0 ? startNodeId : j === len - 1 ? endNodeId : undefined;
       if (nodeId != null) {
         points.push({ latitude: lat, longitude: lon, nodeId });
       } else {

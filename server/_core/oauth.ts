@@ -13,7 +13,9 @@ function initFirebaseAdmin() {
   if (admin.apps.length > 0) return;
   const raw = ENV.firebaseServiceAccount?.trim();
   if (!raw) {
-    log.info("Firebase Admin SDK not initialized (FIREBASE_SERVICE_ACCOUNT not set)");
+    log.info(
+      "Firebase Admin SDK not initialized (FIREBASE_SERVICE_ACCOUNT not set)",
+    );
     return;
   }
   try {
@@ -21,16 +23,24 @@ function initFirebaseAdmin() {
     admin.initializeApp({ credential: admin.credential.cert(cred) });
     log.info("Firebase Admin SDK initialized");
   } catch (e) {
-    log.error("Failed to initialize Firebase Admin SDK", e instanceof Error ? e : new Error(String(e)));
+    log.error(
+      "Failed to initialize Firebase Admin SDK",
+      e instanceof Error ? e : new Error(String(e)),
+    );
   }
 }
 
 function isFirebaseConfigured(): boolean {
-  return typeof ENV.firebaseServiceAccount === "string" && ENV.firebaseServiceAccount.length > 0;
+  return (
+    typeof ENV.firebaseServiceAccount === "string" &&
+    ENV.firebaseServiceAccount.length > 0
+  );
 }
 
 function isOAuthConfigured(): boolean {
-  return typeof ENV.oAuthServerUrl === "string" && ENV.oAuthServerUrl.length > 0;
+  return (
+    typeof ENV.oAuthServerUrl === "string" && ENV.oAuthServerUrl.length > 0
+  );
 }
 
 function getQueryParam(req: Request, key: string): string | undefined {
@@ -96,10 +106,14 @@ export function registerOAuthRoutes(app: Express) {
   // Firebase Auth: verify ID token and create session (for Sign in with Apple via Firebase)
   app.post("/api/auth/firebase", async (req: Request, res: Response) => {
     if (!isFirebaseConfigured()) {
-      res.status(503).json({ error: "Firebase auth is not configured (FIREBASE_SERVICE_ACCOUNT not set)" });
+      res.status(503).json({
+        error:
+          "Firebase auth is not configured (FIREBASE_SERVICE_ACCOUNT not set)",
+      });
       return;
     }
-    const idToken = typeof req.body?.idToken === "string" ? req.body.idToken : undefined;
+    const idToken =
+      typeof req.body?.idToken === "string" ? req.body.idToken : undefined;
     if (!idToken) {
       res.status(400).json({ error: "idToken is required" });
       return;
@@ -110,7 +124,10 @@ export function registerOAuthRoutes(app: Express) {
       const openId = `firebase:${decoded.uid}`;
       const name = decoded.name ?? decoded.email ?? "";
       const email = decoded.email ?? null;
-      const loginMethod = decoded.firebase?.sign_in_provider === "apple.com" ? "apple" : "firebase";
+      const loginMethod =
+        decoded.firebase?.sign_in_provider === "apple.com"
+          ? "apple"
+          : "firebase";
 
       const user = await syncUser({
         openId,
@@ -125,21 +142,29 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       res.json({
         sessionToken,
         user: buildUserResponse(user),
       });
     } catch (error) {
-      log.error("Firebase token verification failed", error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        "Firebase token verification failed",
+        error instanceof Error ? error : new Error(String(error)),
+      );
       res.status(401).json({ error: "Invalid Firebase ID token" });
     }
   });
 
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     if (!isOAuthConfigured()) {
-      res.status(503).json({ error: "OAuth is not configured (OAUTH_SERVER_URL not set)" });
+      res
+        .status(503)
+        .json({ error: "OAuth is not configured (OAUTH_SERVER_URL not set)" });
       return;
     }
     const code = getQueryParam(req, "code");
@@ -160,7 +185,10 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       // Redirect to the frontend URL after OAuth.
       // Production (Vercel): set WEB_APP_URL or EXPO_WEB_PREVIEW_URL to your Vercel URL (e.g. https://trashroute-mobile.vercel.app).
@@ -172,14 +200,19 @@ export function registerOAuthRoutes(app: Express) {
         "http://localhost:19007";
       res.redirect(302, frontendUrl);
     } catch (error) {
-      log.error("OAuth callback failed", error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        "OAuth callback failed",
+        error instanceof Error ? error : new Error(String(error)),
+      );
       res.status(500).json({ error: "OAuth callback failed" });
     }
   });
 
   app.get("/api/oauth/mobile", async (req: Request, res: Response) => {
     if (!isOAuthConfigured()) {
-      res.status(503).json({ error: "OAuth is not configured (OAUTH_SERVER_URL not set)" });
+      res
+        .status(503)
+        .json({ error: "OAuth is not configured (OAUTH_SERVER_URL not set)" });
       return;
     }
     const code = getQueryParam(req, "code");
@@ -201,14 +234,20 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       res.json({
         app_session_id: sessionToken,
         user: buildUserResponse(user),
       });
     } catch (error) {
-      log.error("OAuth mobile exchange failed", error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        "OAuth mobile exchange failed",
+        error instanceof Error ? error : new Error(String(error)),
+      );
       res.status(500).json({ error: "OAuth mobile exchange failed" });
     }
   });
@@ -225,7 +264,10 @@ export function registerOAuthRoutes(app: Express) {
       const user = await sdk.authenticateRequest(req);
       res.json({ user: buildUserResponse(user) });
     } catch (error) {
-      log.error("/api/auth/me failed", error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        "/api/auth/me failed",
+        error instanceof Error ? error : new Error(String(error)),
+      );
       res.status(401).json({ error: "Not authenticated", user: null });
     }
   });
@@ -252,7 +294,10 @@ export function registerOAuthRoutes(app: Express) {
 
       res.json({ success: true, user: buildUserResponse(user) });
     } catch (error) {
-      log.error("/api/auth/session failed", error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        "/api/auth/session failed",
+        error instanceof Error ? error : new Error(String(error)),
+      );
       res.status(401).json({ error: "Invalid token" });
     }
   });

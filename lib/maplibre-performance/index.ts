@@ -14,11 +14,7 @@ export {
 
 export { OptimizedTileCache, type CachedTile } from "./optimized-tile-cache";
 
-export {
-  PriorityTaskQueue,
-  TaskPriority,
-  type TaskID,
-} from "./task-queue";
+export { PriorityTaskQueue, TaskPriority, type TaskID } from "./task-queue";
 
 export {
   OptimizedFeaturePositionMap,
@@ -32,9 +28,7 @@ export {
   type TileDisposeCallback,
 } from "./tile-lifecycle-manager";
 
-export {
-  VertexBufferPool,
-} from "./vertex-buffer-pool";
+export { VertexBufferPool } from "./vertex-buffer-pool";
 
 export {
   ProgramConfigurationSet,

@@ -16,13 +16,16 @@ const adb = path.join(sdkRoot, "platform-tools", "adb.exe");
 
 if (!fs.existsSync(adb)) {
   console.error("ADB not found at", adb);
-  console.error("Set ANDROID_HOME to your Android SDK root, or install Android Studio.");
+  console.error(
+    "Set ANDROID_HOME to your Android SDK root, or install Android Studio.",
+  );
   process.exit(1);
 }
 
 process.env.ANDROID_HOME = sdkRoot;
 if (!process.env.PATH.includes(path.join(sdkRoot, "platform-tools"))) {
-  process.env.PATH = path.join(sdkRoot, "platform-tools") + path.delimiter + process.env.PATH;
+  process.env.PATH =
+    path.join(sdkRoot, "platform-tools") + path.delimiter + process.env.PATH;
 }
 
 // Load .env
@@ -45,9 +48,15 @@ try {
 execSync(`"${adb}" start-server`, { stdio: "inherit" });
 
 const out = execSync(`"${adb}" devices`, { encoding: "utf8" });
-const lines = out.split(/\r?\n/).filter((l) => l.trim() && !l.includes("List of devices"));
-const devices = lines.filter((l) => (l.split("\t")[1] || "").trim() === "device");
-const offline = lines.filter((l) => (l.split("\t")[1] || "").trim() === "offline");
+const lines = out
+  .split(/\r?\n/)
+  .filter((l) => l.trim() && !l.includes("List of devices"));
+const devices = lines.filter(
+  (l) => (l.split("\t")[1] || "").trim() === "device",
+);
+const offline = lines.filter(
+  (l) => (l.split("\t")[1] || "").trim() === "offline",
+);
 
 const emulatorPath = path.join(sdkRoot, "emulator", "emulator.exe");
 
@@ -63,23 +72,34 @@ async function waitForDevice() {
     } catch (_) {}
   }
   if (!fs.existsSync(emulatorPath)) {
-    console.warn("No Android device. Start the emulator from Android Studio (Tools → Device Manager → Run).");
+    console.warn(
+      "No Android device. Start the emulator from Android Studio (Tools → Device Manager → Run).",
+    );
     return;
   }
   try {
-    const avdList = execSync(`"${emulatorPath}" -list-avds`, { encoding: "utf8" });
-    const avds = avdList.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    const avdList = execSync(`"${emulatorPath}" -list-avds`, {
+      encoding: "utf8",
+    });
+    const avds = avdList
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (avds.length === 0) {
-      console.warn("No AVD found. Create one in Android Studio: Tools → Device Manager.");
+      console.warn(
+        "No AVD found. Create one in Android Studio: Tools → Device Manager.",
+      );
       return;
     }
     const avd = avds[0];
     console.warn("\nNo device connected. Starting emulator:", avd);
-    require("child_process").spawn(emulatorPath, ["-avd", avd], {
-      stdio: "ignore",
-      detached: true,
-      cwd: root,
-    }).unref();
+    require("child_process")
+      .spawn(emulatorPath, ["-avd", avd], {
+        stdio: "ignore",
+        detached: true,
+        cwd: root,
+      })
+      .unref();
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     console.warn("Waiting up to 50s for emulator to boot...");
     for (let i = 0; i < 25; i++) {
@@ -92,7 +112,9 @@ async function waitForDevice() {
         }
       } catch (_) {}
     }
-    console.warn("Emulator may still be booting. Expo will start; press 'a' when ready.\n");
+    console.warn(
+      "Emulator may still be booting. Expo will start; press 'a' when ready.\n",
+    );
   } catch (e) {
     console.warn("Could not start emulator:", e.message || e);
   }

@@ -2,7 +2,11 @@ export * from "./navigation";
 
 export type CollectionStatus = "pending" | "completed" | "skipped" | "issue";
 
-export type CollectionType = "residential" | "commercial" | "recycling" | "bulk";
+export type CollectionType =
+  | "residential"
+  | "commercial"
+  | "recycling"
+  | "bulk";
 
 export interface CollectionPoint {
   id: string;

@@ -144,10 +144,10 @@ You should see `{"status":"ok","model":"small-streaming-en","model_loaded":true}
 
 ## Environment (sidecar)
 
-| Variable            | Default                | Description                          |
-|---------------------|------------------------|--------------------------------------|
-| `PORT`              | `8090`                 | Port the app listens on (Cloud Run sets this). |
-| `MOONSHINE_LANGUAGE`| `en`                   | Language code for model (e.g. en, es, zh). Model is downloaded via get_model_for_language(). |
+| Variable             | Default | Description                                                                                  |
+| -------------------- | ------- | -------------------------------------------------------------------------------------------- |
+| `PORT`               | `8090`  | Port the app listens on (Cloud Run sets this).                                               |
+| `MOONSHINE_LANGUAGE` | `en`    | Language code for model (e.g. en, es, zh). Model is downloaded via get_model_for_language(). |
 
 ---
 

@@ -28,7 +28,7 @@ export interface CPPWeightData {
   metadata: {
     modelVersion: string;
     calculationDate: Date;
-    dataSource: 'prediction' | 'historical' | 'ml_enhanced';
+    dataSource: "prediction" | "historical" | "ml_enhanced";
     validationScore: number;
   };
 }
@@ -96,38 +96,41 @@ export class CPPWeightIntegrationSystem {
       tags?: Record<string, string>;
     }>,
     weatherData?: any,
-    operationalContext?: any
+    operationalContext?: any,
   ): Promise<CPPWeightData[]> {
     console.log(`🧮 Calculating corrected weights for ${ways.length} ways...`);
-    
+
     const correctedWeights: CPPWeightData[] = [];
     let processedCount = 0;
 
     try {
       // Batch process ways for efficiency
       const batchSize = 50;
-      
+
       for (let i = 0; i < ways.length; i += batchSize) {
         const batch = ways.slice(i, i + batchSize);
-        const batchWeights = await this.processWeightBatch(batch, weatherData, operationalContext);
+        const batchWeights = await this.processWeightBatch(
+          batch,
+          weatherData,
+          operationalContext,
+        );
         correctedWeights.push(...batchWeights);
-        
+
         processedCount += batch.length;
         console.log(`   Processed ${processedCount}/${ways.length} ways`);
       }
 
       console.log(`✅ Calculated ${correctedWeights.length} corrected weights`);
       return correctedWeights;
-
     } catch (error) {
       console.error("❌ Error calculating corrected weights:", error);
-      
+
       // Fallback to original weights if enabled
       if (this.config.fallbackToOriginal) {
         console.log("⚠️  Falling back to original weights");
         return this.createFallbackWeights(ways);
       }
-      
+
       throw error;
     }
   }
@@ -138,21 +141,21 @@ export class CPPWeightIntegrationSystem {
   private async processWeightBatch(
     ways: Array<any>,
     weatherData?: any,
-    operationalContext?: any
+    operationalContext?: any,
   ): Promise<CPPWeightData[]> {
     const batchWeights: CPPWeightData[] = [];
 
     // Get predictions for the batch
-    const routeStatsBatch = ways.map(way => this.convertWayToRouteStats(way));
-    
+    const routeStatsBatch = ways.map((way) => this.convertWayToRouteStats(way));
+
     const predictions = await Promise.all(
-      routeStatsBatch.map(stats => 
+      routeStatsBatch.map((stats) =>
         costPredictionService.getCostAwareRecommendations({
           routeStats: stats,
           weatherData,
-          operationalContext
-        })
-      )
+          operationalContext,
+        }),
+      ),
     );
 
     // Calculate ML-enhanced penalties if enabled
@@ -166,15 +169,15 @@ export class CPPWeightIntegrationSystem {
       const way = ways[i];
       const prediction = predictions[i];
       const mlPenalty = mlPenalties.get(way.id) || 0;
-      
+
       const weightData = await this.calculateSingleWeight(
         way,
         prediction,
         mlPenalty,
         weatherData,
-        operationalContext
+        operationalContext,
       );
-      
+
       if (weightData) {
         batchWeights.push(weightData);
       }
@@ -191,48 +194,56 @@ export class CPPWeightIntegrationSystem {
     costRecommendation: any,
     mlPenalty: number,
     weatherData?: any,
-    operationalContext?: any
+    operationalContext?: any,
   ): Promise<CPPWeightData | null> {
     try {
       const originalWeight = way.length; // Base weight is physical length
-      
+
       // Extract features
-      const features = this.extractWayFeatures(way, weatherData, operationalContext);
-      
+      const features = this.extractWayFeatures(
+        way,
+        weatherData,
+        operationalContext,
+      );
+
       // Calculate cost-based correction
       let costCorrectionFactor = 1.0;
       let confidence = 0.5;
-      
+
       if (costRecommendation && costRecommendation.predictedCosts) {
-        const predictedCost = costRecommendation.predictedCosts.predictedTotalCost;
+        const predictedCost =
+          costRecommendation.predictedCosts.predictedTotalCost;
         const baselineCost = this.calculateBaselineCost(way.length, way.tags);
-        
+
         costCorrectionFactor = predictedCost / baselineCost;
         confidence = costRecommendation.predictedCosts.confidenceScore;
       }
-      
+
       // Apply ML penalty
       const mlCorrectionFactor = 1.0 + mlPenalty;
-      
+
       // Combine corrections
-      let correctedWeight = originalWeight * costCorrectionFactor * mlCorrectionFactor;
-      
+      let correctedWeight =
+        originalWeight * costCorrectionFactor * mlCorrectionFactor;
+
       // Apply confidence-based weighting
       if (confidence < this.config.minConfidence) {
         // Blend with original weight based on confidence
         const confidenceFactor = confidence / this.config.minConfidence;
-        correctedWeight = originalWeight * (1 - confidenceFactor) + correctedWeight * confidenceFactor;
+        correctedWeight =
+          originalWeight * (1 - confidenceFactor) +
+          correctedWeight * confidenceFactor;
       }
-      
+
       // Apply maximum correction limit
       const maxCorrection = this.config.maxCorrectionFactor;
       if (correctedWeight / originalWeight > maxCorrection) {
         correctedWeight = originalWeight * maxCorrection;
       }
-      
+
       // Get model version for tracking
       const modelVersion = await this.getCurrentModelVersion();
-      
+
       return {
         wayId: way.id,
         originalWeight,
@@ -243,19 +254,22 @@ export class CPPWeightIntegrationSystem {
         metadata: {
           modelVersion,
           calculationDate: new Date(),
-          dataSource: mlPenalty > 0 ? 'ml_enhanced' : 'prediction',
-          validationScore: this.calculateValidationScore(correctedWeight, originalWeight, confidence)
-        }
+          dataSource: mlPenalty > 0 ? "ml_enhanced" : "prediction",
+          validationScore: this.calculateValidationScore(
+            correctedWeight,
+            originalWeight,
+            confidence,
+          ),
+        },
       };
-
     } catch (error) {
       console.error(`Error calculating weight for way ${way.id}:`, error);
-      
+
       // Return fallback weight if validation fails
       if (this.config.fallbackToOriginal) {
         return this.createFallbackWeight(way);
       }
-      
+
       return null;
     }
   }
@@ -263,21 +277,27 @@ export class CPPWeightIntegrationSystem {
   /**
    * Get ML-enhanced penalties from route optimization
    */
-  private async getMLEnhancedPenalties(ways: any[], weatherData?: any): Promise<Map<string, number>> {
+  private async getMLEnhancedPenalties(
+    ways: any[],
+    weatherData?: any,
+  ): Promise<Map<string, number>> {
     try {
       // This would integrate with the existing ML enhancement system
       // For now, return simulated penalties
       const penalties = new Map<string, number>();
-      
+
       for (const way of ways) {
         // Simulate ML penalty based on way characteristics
         const penalty = this.simulateMLPenalty(way, weatherData);
         penalties.set(way.id, penalty);
       }
-      
+
       return penalties;
     } catch (error) {
-      console.warn("⚠️  ML enhancement failed, using prediction-based weights only:", error);
+      console.warn(
+        "⚠️  ML enhancement failed, using prediction-based weights only:",
+        error,
+      );
       return new Map<string, number>();
     }
   }
@@ -288,37 +308,41 @@ export class CPPWeightIntegrationSystem {
   private simulateMLPenalty(way: any, weatherData?: any): number {
     // Simulate penalty based on way characteristics
     let penalty = 0;
-    
+
     // Road type penalty
-    if (way.tags?.highway === 'residential') penalty += 0.1;
-    if (way.tags?.highway === 'service') penalty += 0.15;
-    if (way.tags?.highway === 'primary') penalty -= 0.05;
-    
+    if (way.tags?.highway === "residential") penalty += 0.1;
+    if (way.tags?.highway === "service") penalty += 0.15;
+    if (way.tags?.highway === "primary") penalty -= 0.05;
+
     // Width penalty
     if (way.tags?.width && parseFloat(way.tags.width) < 3) penalty += 0.1;
-    
+
     // Surface penalty
-    if (way.tags?.surface === 'gravel') penalty += 0.2;
-    if (way.tags?.surface === 'unpaved') penalty += 0.25;
-    
+    if (way.tags?.surface === "gravel") penalty += 0.2;
+    if (way.tags?.surface === "unpaved") penalty += 0.25;
+
     // Weather penalty
     if (weatherData?.rain1h > 5) penalty += 0.1;
     if (weatherData?.windSpeed > 10) penalty += 0.05;
-    
+
     return Math.min(0.5, penalty); // Max 50% penalty
   }
 
   /**
    * Extract features from way data
    */
-  private extractWayFeatures(way: any, weatherData?: any, operationalContext?: any): CPPWeightData['features'] {
+  private extractWayFeatures(
+    way: any,
+    weatherData?: any,
+    operationalContext?: any,
+  ): CPPWeightData["features"] {
     return {
       distance: way.length,
       turnComplexity: this.calculateTurnComplexity(way),
       weatherSeverity: this.calculateWeatherSeverity(weatherData),
-      driverExperience: operationalContext?.driverExperience || 'intermediate',
-      timeOfDay: operationalContext?.timeOfDay || 'morning',
-      urbanDensity: this.calculateUrbanDensity(way)
+      driverExperience: operationalContext?.driverExperience || "intermediate",
+      timeOfDay: operationalContext?.timeOfDay || "morning",
+      urbanDensity: this.calculateUrbanDensity(way),
     };
   }
 
@@ -328,14 +352,14 @@ export class CPPWeightIntegrationSystem {
   private calculateTurnComplexity(way: any): number {
     // Estimate based on way geometry and tags
     let complexity = 0.5; // Base complexity
-    
+
     // Road type influence
-    if (way.tags?.highway === 'residential') complexity += 0.2;
-    if (way.tags?.junction === 'roundabout') complexity += 0.3;
-    
+    if (way.tags?.highway === "residential") complexity += 0.2;
+    if (way.tags?.junction === "roundabout") complexity += 0.3;
+
     // One-way influence
-    if (way.tags?.oneway === 'yes') complexity += 0.1;
-    
+    if (way.tags?.oneway === "yes") complexity += 0.1;
+
     return Math.min(1.0, complexity);
   }
 
@@ -344,38 +368,47 @@ export class CPPWeightIntegrationSystem {
    */
   private calculateWeatherSeverity(weatherData?: any): number {
     if (!weatherData) return 0;
-    
+
     let severity = 0;
-    
+
     if (weatherData.rain1h > 5) severity += 0.3;
     if (weatherData.windSpeed > 10) severity += 0.2;
     if (weatherData.visibility < 1000) severity += 0.3;
-    
+
     return Math.min(1.0, severity);
   }
 
   /**
    * Calculate urban density
    */
-  private calculateUrbanDensity(way: any): 'low' | 'medium' | 'high' {
+  private calculateUrbanDensity(way: any): "low" | "medium" | "high" {
     // Simple heuristic based on road type and width
-    if (way.tags?.highway === 'motorway' || way.tags?.highway === 'trunk') return 'low';
-    if (way.tags?.highway === 'residential' && way.tags?.width && parseFloat(way.tags.width) < 4) return 'high';
-    return 'medium';
+    if (way.tags?.highway === "motorway" || way.tags?.highway === "trunk")
+      return "low";
+    if (
+      way.tags?.highway === "residential" &&
+      way.tags?.width &&
+      parseFloat(way.tags.width) < 4
+    )
+      return "high";
+    return "medium";
   }
 
   /**
    * Calculate baseline cost for comparison
    */
-  private calculateBaselineCost(distance: number, tags?: Record<string, string>): number {
+  private calculateBaselineCost(
+    distance: number,
+    tags?: Record<string, string>,
+  ): number {
     // Simple baseline: distance-based cost with road type modifier
     let baseCost = distance * 2.0; // $2 per km baseline
-    
+
     // Road type modifiers
-    if (tags?.highway === 'motorway') baseCost *= 0.8;
-    if (tags?.highway === 'residential') baseCost *= 1.2;
-    if (tags?.highway === 'service') baseCost *= 1.5;
-    
+    if (tags?.highway === "motorway") baseCost *= 0.8;
+    if (tags?.highway === "residential") baseCost *= 1.2;
+    if (tags?.highway === "service") baseCost *= 1.5;
+
     return baseCost;
   }
 
@@ -386,7 +419,7 @@ export class CPPWeightIntegrationSystem {
     // Estimate route statistics from way data
     const estimatedStops = Math.max(1, Math.floor(way.length * 0.5)); // 0.5 stops per km
     const estimatedTime = way.length * 6; // 6 minutes per km baseline
-    
+
     return {
       totalDistance: way.length,
       estimatedTime,
@@ -395,20 +428,25 @@ export class CPPWeightIntegrationSystem {
         rightTurns: Math.floor(estimatedStops * 0.6),
         leftTurns: Math.floor(estimatedStops * 0.3),
         uTurns: Math.floor(estimatedStops * 0.1),
-        straightAhead: estimatedStops
+        straightAhead: estimatedStops,
       },
       segmentsRouted: way.nodes.length - 1,
-      segmentsExcluded: 0
+      segmentsExcluded: 0,
     };
   }
 
   /**
    * Calculate validation score for weight
    */
-  private calculateValidationScore(correctedWeight: number, originalWeight: number, confidence: number): number {
+  private calculateValidationScore(
+    correctedWeight: number,
+    originalWeight: number,
+    confidence: number,
+  ): number {
     const correctionRatio = correctedWeight / originalWeight;
-    const ratioScore = correctionRatio > 0.5 && correctionRatio < 3.0 ? 1.0 : 0.5;
-    
+    const ratioScore =
+      correctionRatio > 0.5 && correctionRatio < 3.0 ? 1.0 : 0.5;
+
     return (ratioScore + confidence) / 2;
   }
 
@@ -424,11 +462,11 @@ export class CPPWeightIntegrationSystem {
       confidence: 0.0,
       features: this.extractWayFeatures(way),
       metadata: {
-        modelVersion: 'fallback',
+        modelVersion: "fallback",
         calculationDate: new Date(),
-        dataSource: 'original',
-        validationScore: 0.0
-      }
+        dataSource: "original",
+        validationScore: 0.0,
+      },
     };
   }
 
@@ -438,28 +476,36 @@ export class CPPWeightIntegrationSystem {
   private async getCurrentModelVersion(): Promise<string> {
     try {
       const model = await incrementalModelTrainer.loadCurrentModel();
-      return model?.version || 'unknown';
+      return model?.version || "unknown";
     } catch (error) {
-      return 'unknown';
+      return "unknown";
     }
   }
 
   /**
    * Apply corrected weights to CPP solver
    */
-  async applyWeightsToCPP(cppOptimizer: any, correctedWeights: CPPWeightData[]): Promise<boolean> {
-    console.log(`🎯 Applying ${correctedWeights.length} corrected weights to CPP solver...`);
-    
+  async applyWeightsToCPP(
+    cppOptimizer: any,
+    correctedWeights: CPPWeightData[],
+  ): Promise<boolean> {
+    console.log(
+      `🎯 Applying ${correctedWeights.length} corrected weights to CPP solver...`,
+    );
+
     try {
-      const weightMap = new Map(correctedWeights.map(w => [w.wayId, w.correctedWeight]));
-      const confidenceMap = new Map(correctedWeights.map(w => [w.wayId, w.confidence]));
-      
+      const weightMap = new Map(
+        correctedWeights.map((w) => [w.wayId, w.correctedWeight]),
+      );
+      const confidenceMap = new Map(
+        correctedWeights.map((w) => [w.wayId, w.confidence]),
+      );
+
       // Apply weights to CPP optimizer
       await cppOptimizer.updateEdgeWeights(weightMap, confidenceMap);
-      
+
       console.log("✅ Weights successfully applied to CPP solver");
       return true;
-      
     } catch (error) {
       console.error("❌ Failed to apply weights to CPP solver:", error);
       return false;
@@ -475,21 +521,21 @@ export class CPPWeightIntegrationSystem {
   }> {
     const tests = [
       {
-        name: 'Weight Range Validation',
-        test: () => this.validateWeightRanges(weights)
+        name: "Weight Range Validation",
+        test: () => this.validateWeightRanges(weights),
       },
       {
-        name: 'Confidence Threshold Validation',
-        test: () => this.validateConfidenceThresholds(weights)
+        name: "Confidence Threshold Validation",
+        test: () => this.validateConfidenceThresholds(weights),
       },
       {
-        name: 'Data Completeness Validation',
-        test: () => this.validateDataCompleteness(weights)
+        name: "Data Completeness Validation",
+        test: () => this.validateDataCompleteness(weights),
       },
       {
-        name: 'Model Version Consistency',
-        test: () => this.validateModelVersionConsistency(weights)
-      }
+        name: "Model Version Consistency",
+        test: () => this.validateModelVersionConsistency(weights),
+      },
     ];
 
     const results = tests.map(({ name, test }) => {
@@ -498,22 +544,22 @@ export class CPPWeightIntegrationSystem {
         return {
           name,
           passed,
-          message: passed ? `${name} passed` : `${name} failed`
+          message: passed ? `${name} passed` : `${name} failed`,
         };
       } catch (error) {
         return {
           name,
           passed: false,
-          message: `${name} error: ${String(error)}`
+          message: `${name} error: ${String(error)}`,
         };
       }
     });
 
-    const passed = results.every(r => r.passed);
-    
+    const passed = results.every((r) => r.passed);
+
     return {
       passed,
-      tests: results
+      tests: results,
     };
   }
 
@@ -521,7 +567,7 @@ export class CPPWeightIntegrationSystem {
    * Validate weight ranges
    */
   private validateWeightRanges(weights: CPPWeightData[]): boolean {
-    return weights.every(w => {
+    return weights.every((w) => {
       const ratio = w.correctedWeight / w.originalWeight;
       return ratio >= 0.1 && ratio <= 5.0; // Reasonable range
     });
@@ -531,19 +577,20 @@ export class CPPWeightIntegrationSystem {
    * Validate confidence thresholds
    */
   private validateConfidenceThresholds(weights: CPPWeightData[]): boolean {
-    return weights.every(w => w.confidence >= 0 && w.confidence <= 1);
+    return weights.every((w) => w.confidence >= 0 && w.confidence <= 1);
   }
 
   /**
    * Validate data completeness
    */
   private validateDataCompleteness(weights: CPPWeightData[]): boolean {
-    return weights.every(w => 
-      w.wayId && 
-      w.originalWeight > 0 && 
-      w.correctedWeight > 0 && 
-      w.features && 
-      w.metadata
+    return weights.every(
+      (w) =>
+        w.wayId &&
+        w.originalWeight > 0 &&
+        w.correctedWeight > 0 &&
+        w.features &&
+        w.metadata,
     );
   }
 
@@ -551,7 +598,7 @@ export class CPPWeightIntegrationSystem {
    * Validate model version consistency
    */
   private validateModelVersionConsistency(weights: CPPWeightData[]): boolean {
-    const versions = new Set(weights.map(w => w.metadata.modelVersion));
+    const versions = new Set(weights.map((w) => w.metadata.modelVersion));
     return versions.size <= 2; // Allow current and fallback versions
   }
 
@@ -560,7 +607,7 @@ export class CPPWeightIntegrationSystem {
    */
   async storeWeightUpdate(update: CPPWeightUpdate): Promise<void> {
     this.weightHistory.push(update);
-    
+
     // Keep only recent history (last 100 updates)
     if (this.weightHistory.length > 100) {
       this.weightHistory = this.weightHistory.slice(-100);
@@ -573,12 +620,12 @@ export class CPPWeightIntegrationSystem {
     try {
       const db = client.db("trashroute");
       const collection = db.collection("cpp_weight_updates");
-      
+
       await collection.insertOne({
         ...update,
-        _id: new ObjectId()
+        _id: new ObjectId(),
       });
-      
+
       console.log(`Weight update stored: ${update.updateId}`);
     } catch (error) {
       console.error("Error storing weight update:", error);
@@ -595,19 +642,19 @@ export class CPPWeightIntegrationSystem {
     try {
       const db = client.db("trashroute");
       const collection = db.collection("cpp_weight_updates");
-      
+
       const history = await collection
         .find({})
         .sort({ timestamp: -1 })
         .limit(limit)
         .toArray();
-      
-      return history.map(h => ({
+
+      return history.map((h) => ({
         updateId: h.updateId,
         timestamp: h.timestamp,
         weights: h.weights,
         summary: h.summary,
-        validation: h.validation
+        validation: h.validation,
       }));
     } catch (error) {
       console.error("Error getting weight history:", error);
@@ -629,26 +676,29 @@ export class CPPWeightIntegrationSystem {
         totalWeights: 0,
         averageCorrection: 0,
         averageConfidence: 0,
-        byDataSource: {}
+        byDataSource: {},
       };
     }
 
     const weights = Array.from(this.currentWeights.values());
-    
+
     const totalWeights = weights.length;
-    const averageCorrection = weights.reduce((sum, w) => sum + w.correctionFactor, 0) / totalWeights;
-    const averageConfidence = weights.reduce((sum, w) => sum + w.confidence, 0) / totalWeights;
-    
+    const averageCorrection =
+      weights.reduce((sum, w) => sum + w.correctionFactor, 0) / totalWeights;
+    const averageConfidence =
+      weights.reduce((sum, w) => sum + w.confidence, 0) / totalWeights;
+
     const byDataSource: Record<string, number> = {};
-    weights.forEach(w => {
-      byDataSource[w.metadata.dataSource] = (byDataSource[w.metadata.dataSource] || 0) + 1;
+    weights.forEach((w) => {
+      byDataSource[w.metadata.dataSource] =
+        (byDataSource[w.metadata.dataSource] || 0) + 1;
     });
 
     return {
       totalWeights,
       averageCorrection,
       averageConfidence,
-      byDataSource
+      byDataSource,
     };
   }
 }
@@ -663,7 +713,7 @@ export class NightlyWeightSync {
 
   constructor(
     weightIntegration: CPPWeightIntegrationSystem,
-    syncInterval: number = 24 // hours
+    syncInterval: number = 24, // hours
   ) {
     this.weightIntegration = weightIntegration;
     this.syncInterval = syncInterval;
@@ -675,7 +725,7 @@ export class NightlyWeightSync {
   async performNightlySync(cppOptimizer: any): Promise<WeightFeedbackResult> {
     console.log("🌙 Starting nightly weight synchronization...");
     const startTime = Date.now();
-    
+
     try {
       // Step 1: Check if sync is needed
       const shouldSync = await this.shouldSync();
@@ -683,54 +733,72 @@ export class NightlyWeightSync {
         return {
           success: true,
           weightsApplied: 0,
-          recommendations: [shouldSync.reason]
+          recommendations: [shouldSync.reason],
         };
       }
 
       // Step 2: Get recent cost model updates
       console.log("📊 Getting recent cost model updates...");
       const recentUpdates = await this.getRecentUpdates();
-      
+
       if (recentUpdates.length === 0) {
         return {
           success: true,
           weightsApplied: 0,
-          recommendations: ["No new cost model updates available"]
+          recommendations: ["No new cost model updates available"],
         };
       }
 
       // Step 3: Calculate corrected weights
       console.log("🧮 Calculating corrected weights...");
       const ways = await this.getWaysForOptimization();
-      const correctedWeights = await this.weightIntegration.calculateCorrectedWeights(ways);
+      const correctedWeights =
+        await this.weightIntegration.calculateCorrectedWeights(ways);
 
       // Step 4: Validate weights
       console.log("🔍 Validating corrected weights...");
-      const validation = await this.weightIntegration.validateWeightIntegration(correctedWeights);
-      
+      const validation =
+        await this.weightIntegration.validateWeightIntegration(
+          correctedWeights,
+        );
+
       if (!validation.passed) {
-        console.warn("⚠️  Weight validation failed:", validation.tests.filter(t => !t.passed));
-        
-        if (validation.tests.some(t => t.name.includes('critical') && !t.passed)) {
+        console.warn(
+          "⚠️  Weight validation failed:",
+          validation.tests.filter((t) => !t.passed),
+        );
+
+        if (
+          validation.tests.some((t) => t.name.includes("critical") && !t.passed)
+        ) {
           return {
             success: false,
             weightsApplied: 0,
             errors: ["Critical validation failures detected"],
-            recommendations: ["Review weight calculation process", "Check data quality"]
+            recommendations: [
+              "Review weight calculation process",
+              "Check data quality",
+            ],
           };
         }
       }
 
       // Step 5: Apply weights to CPP
       console.log("🎯 Applying weights to CPP solver...");
-      const applySuccess = await this.weightIntegration.applyWeightsToCPP(cppOptimizer, correctedWeights);
-      
+      const applySuccess = await this.weightIntegration.applyWeightsToCPP(
+        cppOptimizer,
+        correctedWeights,
+      );
+
       if (!applySuccess) {
         return {
           success: false,
           weightsApplied: 0,
           errors: ["Failed to apply weights to CPP solver"],
-          recommendations: ["Check CPP solver integration", "Verify weight format"]
+          recommendations: [
+            "Check CPP solver integration",
+            "Verify weight format",
+          ],
         };
       }
 
@@ -744,22 +812,27 @@ export class NightlyWeightSync {
           updatedWays: correctedWeights.length,
           averageCorrection: this.calculateAverageCorrection(correctedWeights),
           confidenceScore: this.calculateAverageConfidence(correctedWeights),
-          modelVersion: await this.weightIntegration.getCurrentModelVersion()
+          modelVersion: await this.weightIntegration.getCurrentModelVersion(),
         },
-        validation: validation
+        validation: validation,
       };
 
       await this.weightIntegration.storeWeightUpdate(updateResult);
 
       // Step 7: Calculate performance improvement
-      const improvement = await this.calculatePerformanceImprovement(correctedWeights);
+      const improvement =
+        await this.calculatePerformanceImprovement(correctedWeights);
 
       const duration = (Date.now() - startTime) / 1000;
       this.lastSyncDate = new Date();
 
-      console.log(`✅ Nightly weight sync completed in ${duration.toFixed(2)}s`);
+      console.log(
+        `✅ Nightly weight sync completed in ${duration.toFixed(2)}s`,
+      );
       console.log(`   Applied ${correctedWeights.length} corrected weights`);
-      console.log(`   Average correction: ${(updateResult.summary.averageCorrection * 100).toFixed(1)}%`);
+      console.log(
+        `   Average correction: ${(updateResult.summary.averageCorrection * 100).toFixed(1)}%`,
+      );
 
       return {
         success: true,
@@ -769,13 +842,12 @@ export class NightlyWeightSync {
         recommendations: [
           "Monitor CPP performance with new weights",
           "Continue collecting route performance data",
-          "Review weight validation results"
-        ]
+          "Review weight validation results",
+        ],
       };
-
     } catch (error) {
       console.error("❌ Nightly weight sync failed:", error);
-      
+
       return {
         success: false,
         weightsApplied: 0,
@@ -783,8 +855,8 @@ export class NightlyWeightSync {
         recommendations: [
           "Check system logs for detailed error information",
           "Verify cost model and CPP integration",
-          "Consider manual intervention if needed"
-        ]
+          "Consider manual intervention if needed",
+        ],
       };
     }
   }
@@ -795,11 +867,12 @@ export class NightlyWeightSync {
   private async shouldSync(): Promise<{ needed: boolean; reason: string }> {
     // Check if enough time has passed since last sync
     if (this.lastSyncDate) {
-      const hoursSinceLastSync = (Date.now() - this.lastSyncDate.getTime()) / (1000 * 60 * 60);
+      const hoursSinceLastSync =
+        (Date.now() - this.lastSyncDate.getTime()) / (1000 * 60 * 60);
       if (hoursSinceLastSync < this.syncInterval) {
         return {
           needed: false,
-          reason: `Last sync was ${hoursSinceLastSync.toFixed(1)} hours ago (interval: ${this.syncInterval}h)`
+          reason: `Last sync was ${hoursSinceLastSync.toFixed(1)} hours ago (interval: ${this.syncInterval}h)`,
         };
       }
     }
@@ -809,22 +882,23 @@ export class NightlyWeightSync {
     if (recentUpdates.length === 0) {
       return {
         needed: false,
-        reason: "No new cost model updates available"
+        reason: "No new cost model updates available",
       };
     }
 
     // Check model performance improvement
     const recentImprovement = await this.getRecentImprovement();
-    if (recentImprovement < 0.01) { // Less than 1% improvement
+    if (recentImprovement < 0.01) {
+      // Less than 1% improvement
       return {
         needed: false,
-        reason: "Recent model updates show minimal improvement (< 1%)"
+        reason: "Recent model updates show minimal improvement (< 1%)",
       };
     }
 
     return {
       needed: true,
-      reason: `Sufficient new data and model improvements detected (${recentUpdates.length} updates, ${(recentImprovement * 100).toFixed(2)}% improvement)`
+      reason: `Sufficient new data and model improvements detected (${recentUpdates.length} updates, ${(recentImprovement * 100).toFixed(2)}% improvement)`,
     };
   }
 
@@ -833,18 +907,18 @@ export class NightlyWeightSync {
    */
   private async getRecentUpdates(): Promise<any[]> {
     const since = new Date(Date.now() - this.syncInterval * 60 * 60 * 1000);
-    
+
     const client = getMongoClient();
     if (!client) return [];
 
     try {
       const db = client.db("trashroute");
       const collection = db.collection("cost_history");
-      
+
       return await collection
         .find({
           timestamp: { $gte: since },
-          "costCorrections.accuracyScore": { $gte: 0.7 }
+          "costCorrections.accuracyScore": { $gte: 0.7 },
         })
         .sort({ timestamp: -1 })
         .limit(100)
@@ -866,10 +940,12 @@ export class NightlyWeightSync {
       length: 0.5 + Math.random() * 2.0, // 0.5-2.5 km
       nodes: Array.from({ length: 10 }, (_, j) => `node_${i}_${j}`),
       tags: {
-        highway: ['residential', 'tertiary', 'secondary'][Math.floor(Math.random() * 3)],
+        highway: ["residential", "tertiary", "secondary"][
+          Math.floor(Math.random() * 3)
+        ],
         width: (3 + Math.random() * 4).toString(), // 3-7m width
-        surface: Math.random() > 0.8 ? 'gravel' : 'asphalt'
-      }
+        surface: Math.random() > 0.8 ? "gravel" : "asphalt",
+      },
     }));
   }
 
@@ -878,8 +954,11 @@ export class NightlyWeightSync {
    */
   private calculateAverageCorrection(weights: CPPWeightData[]): number {
     if (weights.length === 0) return 0;
-    
-    const totalCorrection = weights.reduce((sum, w) => sum + w.correctionFactor, 0);
+
+    const totalCorrection = weights.reduce(
+      (sum, w) => sum + w.correctionFactor,
+      0,
+    );
     return totalCorrection / weights.length;
   }
 
@@ -888,7 +967,7 @@ export class NightlyWeightSync {
    */
   private calculateAverageConfidence(weights: CPPWeightData[]): number {
     if (weights.length === 0) return 0;
-    
+
     const totalConfidence = weights.reduce((sum, w) => sum + w.confidence, 0);
     return totalConfidence / weights.length;
   }
@@ -898,21 +977,25 @@ export class NightlyWeightSync {
    */
   private async getRecentImprovement(): Promise<number> {
     const recentHistory = await this.weightIntegration.getWeightHistory(10);
-    
+
     if (recentHistory.length < 2) return 0;
-    
+
     const recent = recentHistory[0];
     const previous = recentHistory[1];
-    
+
     if (!recent || !previous) return 0;
-    
-    return recent.summary.averageCorrection - previous.summary.averageCorrection;
+
+    return (
+      recent.summary.averageCorrection - previous.summary.averageCorrection
+    );
   }
 
   /**
    * Calculate performance improvement from new weights
    */
-  private async calculatePerformanceImprovement(weights: CPPWeightData[]): Promise<number> {
+  private async calculatePerformanceImprovement(
+    weights: CPPWeightData[],
+  ): Promise<number> {
     // This would compare CPP performance before and after weight application
     // For now, return estimated improvement based on correction factors
     const avgCorrection = this.calculateAverageCorrection(weights);
@@ -923,15 +1006,19 @@ export class NightlyWeightSync {
    * Schedule regular weight synchronization
    */
   scheduleRegularSync(): void {
-    setInterval(async () => {
-      console.log(`⏰ Scheduled weight sync triggered (interval: ${this.syncInterval}h)`);
-      
-      // This would need access to the CPP optimizer instance
-      // For now, just log the intention
-      console.log("Weight sync would be performed here with CPP optimizer");
-      
-    }, this.syncInterval * 60 * 60 * 1000);
-    
+    setInterval(
+      async () => {
+        console.log(
+          `⏰ Scheduled weight sync triggered (interval: ${this.syncInterval}h)`,
+        );
+
+        // This would need access to the CPP optimizer instance
+        // For now, just log the intention
+        console.log("Weight sync would be performed here with CPP optimizer");
+      },
+      this.syncInterval * 60 * 60 * 1000,
+    );
+
     console.log(`⏰ Scheduled weight sync every ${this.syncInterval} hours`);
   }
 }
@@ -943,12 +1030,14 @@ export const defaultWeightIntegrationConfig: WeightIntegrationConfig = {
   weightUpdateInterval: 24, // hours
   validationThreshold: 0.7,
   fallbackToOriginal: true,
-  mlEnhancementEnabled: true
+  mlEnhancementEnabled: true,
 };
 
 // Export singleton instances
-export const cppWeightIntegration = new CPPWeightIntegrationSystem(defaultWeightIntegrationConfig);
+export const cppWeightIntegration = new CPPWeightIntegrationSystem(
+  defaultWeightIntegrationConfig,
+);
 export const nightlyWeightSync = new NightlyWeightSync(
   cppWeightIntegration,
-  24 // Sync every 24 hours
+  24, // Sync every 24 hours
 );

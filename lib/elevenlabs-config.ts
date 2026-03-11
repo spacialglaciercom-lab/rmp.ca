@@ -40,7 +40,10 @@ export async function getElevenLabsVoiceId(): Promise<string | null> {
   }
 }
 
-export async function setElevenLabsVoiceId(id: string, name: string): Promise<void> {
+export async function setElevenLabsVoiceId(
+  id: string,
+  name: string,
+): Promise<void> {
   await AsyncStorage.setItem(ELEVENLABS_VOICE_ID, id);
   await AsyncStorage.setItem(ELEVENLABS_VOICE_NAME, name);
 }

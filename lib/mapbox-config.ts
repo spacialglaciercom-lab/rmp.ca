@@ -16,7 +16,10 @@ const MAPBOX_PUBLIC_TOKEN_KEY = "EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN";
 
 /** Public token for map display. Set in .env as EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN. */
 export function getMapboxPublicToken(): string {
-  if (typeof process !== "undefined" && process.env?.[MAPBOX_PUBLIC_TOKEN_KEY]) {
+  if (
+    typeof process !== "undefined" &&
+    process.env?.[MAPBOX_PUBLIC_TOKEN_KEY]
+  ) {
     return process.env[MAPBOX_PUBLIC_TOKEN_KEY];
   }
   return "";

@@ -25,7 +25,10 @@ export default function LayerPickerContent() {
   return (
     <ScreenContainer>
       <View style={styles.container}>
-        <LayerPicker onClose={handleClose} onPreviewOnMap={handlePreviewOnMap} />
+        <LayerPicker
+          onClose={handleClose}
+          onPreviewOnMap={handlePreviewOnMap}
+        />
       </View>
     </ScreenContainer>
   );

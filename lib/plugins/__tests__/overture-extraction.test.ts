@@ -59,7 +59,11 @@ describe("overture-extraction plugin", () => {
     const extractor = plugin!.getFeatures().extractor as (
       polygon: GeoJSON.Feature<GeoJSON.Polygon>,
       theme?: string,
-    ) => Promise<{ geojson: GeoJSON.FeatureCollection; stats?: unknown; warnings: string[] }>;
+    ) => Promise<{
+      geojson: GeoJSON.FeatureCollection;
+      stats?: unknown;
+      warnings: string[];
+    }>;
 
     const polygon: GeoJSON.Feature<GeoJSON.Polygon> = {
       type: "Feature",
@@ -99,7 +103,13 @@ describe("overture-extraction plugin", () => {
         features: [
           {
             type: "Feature",
-            geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [0, 0],
+                [1, 1],
+              ],
+            },
             properties: {},
           },
           // Invalid: no geometry
@@ -107,7 +117,9 @@ describe("overture-extraction plugin", () => {
         ],
       },
       stats: undefined,
-      warnings: ["1 invalid feature(s) (50%) — check CRS (expected EPSG:4326) and geometry validity."],
+      warnings: [
+        "1 invalid feature(s) (50%) — check CRS (expected EPSG:4326) and geometry validity.",
+      ],
     });
 
     const plugin = getPlugin("overture-extraction");
@@ -120,7 +132,15 @@ describe("overture-extraction plugin", () => {
       type: "Feature",
       geometry: {
         type: "Polygon",
-        coordinates: [[[-73.6, 45.4], [-73.4, 45.4], [-73.4, 45.6], [-73.6, 45.6], [-73.6, 45.4]]],
+        coordinates: [
+          [
+            [-73.6, 45.4],
+            [-73.4, 45.4],
+            [-73.4, 45.6],
+            [-73.6, 45.6],
+            [-73.6, 45.4],
+          ],
+        ],
       },
       properties: {},
     };

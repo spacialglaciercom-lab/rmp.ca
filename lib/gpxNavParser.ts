@@ -39,7 +39,11 @@ function parseLatLon(tag: string): { lat: number; lon: number } | null {
 }
 
 /** Get content of a child element (e.g. <name>Route</name>). */
-function getElementContent(gpx: string, afterIndex: number, tagName: string): string | null {
+function getElementContent(
+  gpx: string,
+  afterIndex: number,
+  tagName: string,
+): string | null {
   const open = `<${tagName}>`;
   const close = `</${tagName}>`;
   const start = gpx.indexOf(open, afterIndex);
@@ -60,7 +64,9 @@ export function parseGPXForNavigation(gpxString: string): ParsedGPX {
   let metadataName = "Unnamed Route";
 
   // Metadata name
-  const metaNameMatch = gpxString.match(/<metadata>[\s\S]*?<name>([^<]*)<\/name>/i);
+  const metaNameMatch = gpxString.match(
+    /<metadata>[\s\S]*?<name>([^<]*)<\/name>/i,
+  );
   if (metaNameMatch) metadataName = metaNameMatch[1].trim();
 
   // Track points: <trkpt lat="..." lon="..."> ... </trkpt>

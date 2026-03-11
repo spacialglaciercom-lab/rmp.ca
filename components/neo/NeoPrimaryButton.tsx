@@ -1,5 +1,11 @@
 import React from "react";
-import { TouchableOpacity, Text, StyleSheet, ViewStyle, Platform } from "react-native";
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ViewStyle,
+  Platform,
+} from "react-native";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
@@ -72,7 +78,9 @@ export function NeoPrimaryButton({
         style,
       ]}
     >
-      <Text style={[styles.text, { color: textColor }]}>{title.toUpperCase()}</Text>
+      <Text style={[styles.text, { color: textColor }]}>
+        {title.toUpperCase()}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -90,8 +98,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: '#00D9FF',
-    textShadowColor: 'rgba(0, 217, 255, 0.5)',
+    color: "#00D9FF",
+    textShadowColor: "rgba(0, 217, 255, 0.5)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },

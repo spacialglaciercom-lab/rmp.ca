@@ -24,17 +24,27 @@ export function NeoHeader({
   statusHighlight = true,
 }: NeoHeaderProps) {
   const colors = useColors();
-  const statusColor = statusHighlight ? (colors.statusRun ?? colors.warning) : colors.primary;
+  const statusColor = statusHighlight
+    ? (colors.statusRun ?? colors.warning)
+    : colors.primary;
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+      <Text
+        style={[styles.title, { color: colors.foreground }]}
+        numberOfLines={1}
+      >
         {title}
       </Text>
       <View style={styles.statusRow}>
-        <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
+        <Text style={[styles.statusLabel, { color: statusColor }]}>
+          {statusLabel}
+        </Text>
       </View>
-      <Text style={[styles.subtitle, { color: colors.muted }]} numberOfLines={1}>
+      <Text
+        style={[styles.subtitle, { color: colors.muted }]}
+        numberOfLines={1}
+      >
         {subtitle}
       </Text>
     </View>
@@ -45,11 +55,11 @@ const styles = StyleSheet.create({
   wrap: {
     marginBottom: 24,
     padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.15)',
-    shadowColor: '#00D9FF',
+    borderColor: "rgba(0, 217, 255, 0.15)",
+    shadowColor: "#00D9FF",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -59,8 +69,8 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: '#00D9FF',
-    textShadowColor: 'rgba(0, 217, 255, 0.5)',
+    color: "#00D9FF",
+    textShadowColor: "rgba(0, 217, 255, 0.5)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
@@ -71,11 +81,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     letterSpacing: 1,
-    color: '#00D9FF',
+    color: "#00D9FF",
   },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
 });

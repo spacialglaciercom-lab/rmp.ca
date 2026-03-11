@@ -6,10 +6,10 @@
 
 /** Public Overpass API endpoints (try in order until one succeeds). */
 export const OVERPASS_API_ENDPOINTS: readonly string[] = [
-  "https://overpass-api.de/api/interpreter",       // Main (DE)
+  "https://overpass-api.de/api/interpreter", // Main (DE)
   "https://overpass.kumi.systems/api/interpreter", // Kumi Systems
   "https://overpass.openstreetmap.fr/api/interpreter", // French
-  "https://overpass.osm.rambler.ru/cgi/interpreter",   // Russian
+  "https://overpass.osm.rambler.ru/cgi/interpreter", // Russian
 ];
 
 /** Current index for round-robin (optional load spreading). */
@@ -87,7 +87,7 @@ export function pointsToPolyString(points: LatLonPoint[]): string {
  */
 export function buildQuery(
   points: LatLonPoint[],
-  categories: OSMCategoryKey[]
+  categories: OSMCategoryKey[],
 ): string {
   if (points.length < 3) {
     throw new Error("At least 3 points required for the polygon.");
@@ -190,7 +190,7 @@ function parseOverpassResponse(data: OverpassResponse): ParsedOverpassResult {
     } else if (el.type === "way" && el.nodes) {
       const coords = el.nodes.map((nid) => nodes[nid]).filter(Boolean) as [
         number,
-        number
+        number,
       ][];
       if (coords.length < 2) return;
 
@@ -238,7 +238,7 @@ const MAX_GET_QUERY_LENGTH = 1800;
 
 function parseOverpassResponseText(
   text: string,
-  response: { ok: boolean; status: number }
+  response: { ok: boolean; status: number },
 ): OverpassResponse {
   let data: OverpassResponse | OverpassErrorResponse;
   try {
@@ -250,14 +250,17 @@ function parseOverpassResponseText(
     throw new Error(
       response.ok
         ? "Invalid response from Overpass API."
-        : `Overpass API error: ${response.status}. ${hint}`
+        : `Overpass API error: ${response.status}. ${hint}`,
     );
   }
 
   if (!response.ok) {
     const err = data as OverpassErrorResponse;
     const msg =
-      err.error ?? err.remark ?? text.slice(0, 200) ?? `HTTP ${response.status}`;
+      err.error ??
+      err.remark ??
+      text.slice(0, 200) ??
+      `HTTP ${response.status}`;
     throw new Error(`Overpass API: ${msg}`);
   }
 
@@ -280,7 +283,7 @@ function parseOverpassResponseText(
  */
 async function fetchFromEndpoint(
   endpoint: string,
-  query: string
+  query: string,
 ): Promise<OverpassResponse> {
   const encoded = encodeURIComponent(query);
 
@@ -293,7 +296,7 @@ async function fetchFromEndpoint(
     });
   } catch (networkErr) {
     throw new Error(
-      `Network error: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`
+      `Network error: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`,
     );
   }
 
@@ -329,7 +332,7 @@ async function fetchFromEndpoint(
  */
 export async function fetchOSMData(
   points: LatLonPoint[],
-  categories: OSMCategoryKey[]
+  categories: OSMCategoryKey[],
 ): Promise<ParsedOverpassResult> {
   const query = buildQuery(points, categories);
 
@@ -349,7 +352,7 @@ export async function fetchOSMData(
       if (__DEV__) {
         console.warn(
           `[overpassService] Endpoint failed: ${endpoint}`,
-          lastError.message
+          lastError.message,
         );
       }
     }

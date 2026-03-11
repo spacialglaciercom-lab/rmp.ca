@@ -5,7 +5,9 @@
  * Two styles: standard (OSM) and dark (CARTO) — same as web route-map.
  * When offlineSupport is true, tiles are requested via getTile and RN serves cached tiles.
  */
-export function getLeafletRouteMapHTML(options?: { offlineSupport?: boolean }): string {
+export function getLeafletRouteMapHTML(options?: {
+  offlineSupport?: boolean;
+}): string {
   const offlineSupport = options?.offlineSupport ?? false;
   return `
 <!DOCTYPE html>

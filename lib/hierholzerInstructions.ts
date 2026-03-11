@@ -146,7 +146,16 @@ const SHORT_LABEL: Record<TurnType, string> = {
 };
 
 function cardinalDirection(deg: number): string {
-  const dirs = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"];
+  const dirs = [
+    "north",
+    "northeast",
+    "east",
+    "southeast",
+    "south",
+    "southwest",
+    "west",
+    "northwest",
+  ];
   return dirs[Math.round(deg / 45) % 8];
 }
 
@@ -210,8 +219,7 @@ export function generateHierholzerInstructions(
     const distFromPrev = cumDist;
     cumDist = segDistances[i];
 
-    const distToNext =
-      i < segDistances.length - 1 ? segDistances[i] : 0;
+    const distToNext = i < segDistances.length - 1 ? segDistances[i] : 0;
 
     raw.push({
       index: i,

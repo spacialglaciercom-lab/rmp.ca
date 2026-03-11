@@ -9,7 +9,7 @@ import { TabScreenSkeleton } from "@/components/tab-screen-skeleton";
 import { usePluginStore } from "@/stores/pluginStore";
 
 const ZonePage = lazy(() =>
-  import("@/components/zones/ZonePage").then((m) => ({ default: m.ZonePage }))
+  import("@/components/zones/ZonePage").then((m) => ({ default: m.ZonePage })),
 );
 
 export default function ZonesScreen() {
@@ -28,9 +28,7 @@ export default function ZonesScreen() {
 
   return (
     <Suspense
-      fallback={
-        <TabScreenSkeleton title="Zones" subtitle="Loading zones..." />
-      }
+      fallback={<TabScreenSkeleton title="Zones" subtitle="Loading zones..." />}
     >
       <ZonePage />
     </Suspense>

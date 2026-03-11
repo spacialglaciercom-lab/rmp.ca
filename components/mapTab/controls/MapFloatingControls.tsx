@@ -132,14 +132,22 @@ function MapFloatingControlsInner({
   const leftPad = 12;
 
   const widgetStyle = transparentWidgets
-    ? { backgroundColor: "rgba(42, 42, 42, 0.55)" as const, borderColor: "rgba(68, 68, 68, 0.6)" as const }
+    ? {
+        backgroundColor: "rgba(42, 42, 42, 0.55)" as const,
+        borderColor: "rgba(68, 68, 68, 0.6)" as const,
+      }
     : undefined;
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       {/* Top-left: Hamburger + Search (search only when onSearch provided, e.g. Navigation plugin on) */}
       <View style={[styles.topLeft, { top: topPad, left: leftPad }]}>
-        <FloatingIconButton icon="menu" onPress={openSidebar} size={44} style={widgetStyle} />
+        <FloatingIconButton
+          icon="menu"
+          onPress={openSidebar}
+          size={44}
+          style={widgetStyle}
+        />
         {onSearch && (
           <FloatingIconButton
             icon="magnify"
@@ -188,8 +196,18 @@ function MapFloatingControlsInner({
         <View style={[styles.rightStack, { top: topPad, right: rightPad }]}>
           {showZoomControls && (
             <>
-              <FloatingIconButton icon="plus" onPress={onZoomIn ?? (() => {})} size={40} style={widgetStyle} />
-              <FloatingIconButton icon="minus" onPress={onZoomOut ?? (() => {})} size={40} style={widgetStyle} />
+              <FloatingIconButton
+                icon="plus"
+                onPress={onZoomIn ?? (() => {})}
+                size={40}
+                style={widgetStyle}
+              />
+              <FloatingIconButton
+                icon="minus"
+                onPress={onZoomOut ?? (() => {})}
+                size={40}
+                style={widgetStyle}
+              />
             </>
           )}
           {showCompass && (
@@ -210,7 +228,9 @@ function MapFloatingControlsInner({
       )}
 
       {/* Bottom-left: Navigation (opens From/To panel), Recording, Street View + Scale bar */}
-      <View style={[styles.bottomLeft, { bottom: bottomPad + 8, left: leftPad }]}>
+      <View
+        style={[styles.bottomLeft, { bottom: bottomPad + 8, left: leftPad }]}
+      >
         {onOpenNavigation && (
           <FloatingIconButton
             icon="navigation-variant-outline"

@@ -3,9 +3,21 @@
  * falls back to OpenWeatherMap if no Google key.
  */
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, Platform, ActivityIndicator } from "react-native";
-import { getCurrentWeather, isWeatherConfigured } from "@/services/weatherService";
-import { getGoogleCurrentConditions, isGoogleWeatherConfigured } from "@/services/googleWeatherService";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  ActivityIndicator,
+} from "react-native";
+import {
+  getCurrentWeather,
+  isWeatherConfigured,
+} from "@/services/weatherService";
+import {
+  getGoogleCurrentConditions,
+  isGoogleWeatherConfigured,
+} from "@/services/googleWeatherService";
 import { cardinalToAbbrev } from "@/lib/weather-utils";
 
 const DEFAULT_LAT = 45.5017;
@@ -21,7 +33,7 @@ function getLocation(): Promise<{ lat: number; lon: number }> {
             lon: pos.coords.longitude,
           }),
         () => resolve({ lat: DEFAULT_LAT, lon: DEFAULT_LON }),
-        { timeout: 5000, maximumAge: 300000 }
+        { timeout: 5000, maximumAge: 300000 },
       );
     });
   }
@@ -33,9 +45,13 @@ async function getLocationNative(): Promise<{ lat: number; lon: number }> {
     const Location = await import("expo-location");
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") return { lat: DEFAULT_LAT, lon: DEFAULT_LON };
-    const getPos =
-      (Location as { getCurrentPositionAsync?: (opts?: object) => Promise<{ coords: { latitude: number; longitude: number } }> })
-        .getCurrentPositionAsync;
+    const getPos = (
+      Location as {
+        getCurrentPositionAsync?: (
+          opts?: object,
+        ) => Promise<{ coords: { latitude: number; longitude: number } }>;
+      }
+    ).getCurrentPositionAsync;
     if (getPos) {
       const loc = await getPos({});
       return { lat: loc.coords.latitude, lon: loc.coords.longitude };
@@ -86,9 +102,10 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
           setDisplay({
             temp: Math.round(cur.temperature.degrees ?? 0),
             main: cur.weatherCondition?.description?.text ?? "—",
-            feelsLike: cur.feelsLikeTemperature?.degrees != null
-              ? Math.round(cur.feelsLikeTemperature.degrees)
-              : undefined,
+            feelsLike:
+              cur.feelsLikeTemperature?.degrees != null
+                ? Math.round(cur.feelsLikeTemperature.degrees)
+                : undefined,
             wind: windStr,
             humidity: cur.relativeHumidity ?? undefined,
           });
@@ -103,9 +120,10 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
                 temp: Math.round(w.temp),
                 main: w.condition?.main ?? "",
                 feelsLike: Math.round(w.feelsLike),
-                wind: w.windSpeed > 0
-                  ? `${Math.round(w.windSpeed * 3.6)} km/h`
-                  : undefined,
+                wind:
+                  w.windSpeed > 0
+                    ? `${Math.round(w.windSpeed * 3.6)} km/h`
+                    : undefined,
                 humidity: w.humidity,
               }
             : null,
@@ -126,7 +144,10 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
   if (!hasSource && !loading) {
     return (
       <View style={styles.wrap}>
-        <Text style={[styles.condition, { color: textColor, opacity: 0.7 }]} numberOfLines={1}>
+        <Text
+          style={[styles.condition, { color: textColor, opacity: 0.7 }]}
+          numberOfLines={1}
+        >
           —
         </Text>
       </View>
@@ -142,7 +163,10 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
   if (error || !display) {
     return (
       <View style={styles.wrap}>
-        <Text style={[styles.condition, { color: textColor, opacity: 0.7 }]} numberOfLines={1}>
+        <Text
+          style={[styles.condition, { color: textColor, opacity: 0.7 }]}
+          numberOfLines={1}
+        >
           —
         </Text>
       </View>
@@ -162,7 +186,10 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
       <View style={styles.column}>
         <View style={styles.mainRow}>
           <Text style={[styles.temp, { color: textColor }]}>{temp}°</Text>
-          <Text style={[styles.condition, { color: textColor }]} numberOfLines={1}>
+          <Text
+            style={[styles.condition, { color: textColor }]}
+            numberOfLines={1}
+          >
             {main}
           </Text>
           {feelsLike != null && (
@@ -172,7 +199,10 @@ function HeaderWeatherInner({ textColor }: { textColor: string }) {
           )}
         </View>
         {secondary.length > 0 && (
-          <Text style={[styles.secondary, { color: textColor }]} numberOfLines={1}>
+          <Text
+            style={[styles.secondary, { color: textColor }]}
+            numberOfLines={1}
+          >
             {secondary}
           </Text>
         )}

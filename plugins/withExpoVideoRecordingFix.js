@@ -10,7 +10,9 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withDangerousMod } = requireFromRoot("expo/config-plugins");
 
 function patchExpoVideoManager(projectRoot) {
@@ -32,15 +34,15 @@ function patchExpoVideoManager(projectRoot) {
 
   content = content.replace(
     /audioSession\.category != \.playback/g,
-    "audioSession.category != .playAndRecord"
+    "audioSession.category != .playAndRecord",
   );
   content = content.replace(
     /setCategory\(\.playback, mode: \.moviePlayback/g,
-    "setCategory(.playAndRecord, mode: .moviePlayback"
+    "setCategory(.playAndRecord, mode: .moviePlayback",
   );
   content = content.replace(
     "if audioSession.categoryOptions != audioSessionCategoryOptions || audioSession.category != .playAndRecord || audioSession.mode != .moviePlayback {",
-    "// Use .playAndRecord so expo-audio voice recording works alongside video (expo/expo#36890)\n    if audioSession.categoryOptions != audioSessionCategoryOptions || audioSession.category != .playAndRecord || audioSession.mode != .moviePlayback {"
+    "// Use .playAndRecord so expo-audio voice recording works alongside video (expo/expo#36890)\n    if audioSession.categoryOptions != audioSessionCategoryOptions || audioSession.category != .playAndRecord || audioSession.mode != .moviePlayback {",
   );
 
   fs.writeFileSync(swiftPath, content, "utf8");

@@ -3,7 +3,13 @@
  * Per Master Plan Section 9.
  */
 
-import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useMemo,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -45,7 +51,9 @@ interface MapMarkersScreenProps {
   /** Collection points from current route (waypoints + depot) */
   collectionPoints: CollectionPoint[];
   /** Display route points (geometry) — first = start, rest = waypoints */
-  displayRoutePoints?: Array<{ lat: number; lon: number } & { label?: string }> | null;
+  displayRoutePoints?:
+    | ({ lat: number; lon: number } & { label?: string })[]
+    | null;
   /** Called when user clears route markers */
   onClearRouteMarkers?: () => void;
 }
@@ -61,9 +69,18 @@ export function MapMarkersScreen({
   const insets = useSafeAreaInsets();
   const deviceType = useDeviceType();
   const { dispatch } = useRouting();
-  const { customMarkers, removeMarker, renameMarker, setMarkerLocation, clearAllCustomMarkers, addMediaNote } = useMarkersStore();
+  const {
+    customMarkers,
+    removeMarker,
+    renameMarker,
+    setMarkerLocation,
+    clearAllCustomMarkers,
+    addMediaNote,
+  } = useMarkersStore();
   const geocodedRef = useRef<Set<string>>(new Set());
-  const [recordingMarkerId, setRecordingMarkerId] = useState<string | null>(null);
+  const [recordingMarkerId, setRecordingMarkerId] = useState<string | null>(
+    null,
+  );
 
   // Reverse geocode markers that don't have a cached location
   useEffect(() => {
@@ -80,7 +97,9 @@ export function MapMarkersScreen({
         if (loc) setMarkerLocation(m.id, loc);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [visible, customMarkers.length]);
 
   const { routeMarkers, totalRouteCount } = useMemo(() => {
@@ -99,7 +118,8 @@ export function MapMarkersScreen({
         id: `route-${i}`,
         name:
           (p as { label?: string }).label ||
-          (collectionPoints[i]?.address || collectionPoints[i]?.locationName) ||
+          collectionPoints[i]?.address ||
+          collectionPoints[i]?.locationName ||
           (i === 0 ? "Depot (Start)" : `Stop ${i + 1}`),
         lat: p.lat,
         lon: p.lon,
@@ -107,7 +127,10 @@ export function MapMarkersScreen({
       }));
     }
     const total = list.length;
-    const shown = total > MAX_ROUTE_MARKERS_LIST ? list.slice(0, MAX_ROUTE_MARKERS_LIST) : list;
+    const shown =
+      total > MAX_ROUTE_MARKERS_LIST
+        ? list.slice(0, MAX_ROUTE_MARKERS_LIST)
+        : list;
     return { routeMarkers: shown, totalRouteCount: total };
   }, [collectionPoints, displayRoutePoints]);
 
@@ -122,7 +145,7 @@ export function MapMarkersScreen({
         location: m.location,
         mediaNotesCount: m.mediaNotes?.length ?? 0,
       })),
-    [customMarkers]
+    [customMarkers],
   );
 
   const handleClose = () => {
@@ -136,7 +159,7 @@ export function MapMarkersScreen({
       "Clear Route Markers",
       "Remove the current route and its markers from the map?",
       () => onClearRouteMarkers?.(),
-      "Clear"
+      "Clear",
     );
   };
 
@@ -145,7 +168,7 @@ export function MapMarkersScreen({
     Alert.alert(
       "Add Marker",
       "Long-press on the map to add a custom marker at that location.",
-      [{ text: "OK" }]
+      [{ text: "OK" }],
     );
   };
 
@@ -188,7 +211,7 @@ export function MapMarkersScreen({
       "Clear Custom Markers",
       `Remove all ${customMarkers.length} custom marker(s)?`,
       clearAllCustomMarkers,
-      "Clear"
+      "Clear",
     );
   };
 
@@ -197,12 +220,15 @@ export function MapMarkersScreen({
     setRecordingMarkerId(markerId);
   }, []);
 
-  const handleNoteSaved = useCallback((uri: string, type: "audio" | "video", duration?: number) => {
-    if (recordingMarkerId) {
-      addMediaNote(recordingMarkerId, { uri, type, duration });
-    }
-    setRecordingMarkerId(null);
-  }, [recordingMarkerId, addMediaNote]);
+  const handleNoteSaved = useCallback(
+    (uri: string, type: "audio" | "video", duration?: number) => {
+      if (recordingMarkerId) {
+        addMediaNote(recordingMarkerId, { uri, type, duration });
+      }
+      setRecordingMarkerId(null);
+    },
+    [recordingMarkerId, addMediaNote],
+  );
 
   const handleNoteCancel = useCallback(() => {
     setRecordingMarkerId(null);
@@ -277,7 +303,8 @@ export function MapMarkersScreen({
             </SectionLabel>
             {totalRouteCount > MAX_ROUTE_MARKERS_LIST && (
               <Text style={[styles.cappedHint, { color: colors.muted }]}>
-                Showing first {MAX_ROUTE_MARKERS_LIST} of {totalRouteCount} points.
+                Showing first {MAX_ROUTE_MARKERS_LIST} of {totalRouteCount}{" "}
+                points.
               </Text>
             )}
             {routeMarkers.length === 0 ? (
@@ -320,7 +347,11 @@ export function MapMarkersScreen({
               <TouchableOpacity
                 style={[
                   styles.actionButton,
-                  { borderColor: colors.border, backgroundColor: colors.surface, marginBottom: 10 },
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    marginBottom: 10,
+                  },
                   routeMarkers.length === 0 && styles.actionDisabled,
                 ]}
                 onPress={handleClearRouteMarkers}
@@ -329,12 +360,18 @@ export function MapMarkersScreen({
                 <MaterialCommunityIcons
                   name="map-marker-off"
                   size={20}
-                  color={routeMarkers.length ? colors.muted : colors.muted + "80"}
+                  color={
+                    routeMarkers.length ? colors.muted : colors.muted + "80"
+                  }
                 />
                 <Text
                   style={[
                     styles.actionButtonText,
-                    { color: routeMarkers.length ? colors.text : colors.muted + "80" },
+                    {
+                      color: routeMarkers.length
+                        ? colors.text
+                        : colors.muted + "80",
+                    },
                   ]}
                 >
                   Clear Route Markers
@@ -343,7 +380,10 @@ export function MapMarkersScreen({
               <TouchableOpacity
                 style={[
                   styles.actionButton,
-                  { borderColor: colors.primary, backgroundColor: colors.primary + "20" },
+                  {
+                    borderColor: colors.primary,
+                    backgroundColor: colors.primary + "20",
+                  },
                 ]}
                 onPress={handleAddMarker}
               >

@@ -46,7 +46,9 @@ export function AddressSearchModal({
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
-  const [googlePredictions, setGooglePredictions] = useState<GooglePlacePrediction[]>([]);
+  const [googlePredictions, setGooglePredictions] = useState<
+    GooglePlacePrediction[]
+  >([]);
   const [useGooglePlaces, setUseGooglePlaces] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,9 @@ export function AddressSearchModal({
     isGooglePlacesConfigured().then((ok) => {
       if (mounted) setUseGooglePlaces(ok);
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const fetchGooglePredictions = useCallback(async (q: string) => {
@@ -83,7 +87,8 @@ export function AddressSearchModal({
     try {
       const list = await getPlacePredictions(q.trim());
       setGooglePredictions(list ?? []);
-      if ((list?.length ?? 0) === 0) setError("No places found. Try a different search.");
+      if ((list?.length ?? 0) === 0)
+        setError("No places found. Try a different search.");
     } catch (e) {
       setGooglePredictions([]);
       setError(e instanceof Error ? e.message : "Search failed.");
@@ -118,12 +123,20 @@ export function AddressSearchModal({
     setError(null);
     try {
       const list = await searchAddress(q);
-      const safe = (list ?? []).filter((r): r is GeocodeResult => r != null && typeof r.displayName === "string");
+      const safe = (list ?? []).filter(
+        (r): r is GeocodeResult =>
+          r != null && typeof r.displayName === "string",
+      );
       setResults(safe);
-      if (safe.length === 0) setError("No results found. Try a different address or place name.");
+      if (safe.length === 0)
+        setError("No results found. Try a different address or place name.");
     } catch (e) {
       setResults([]);
-      setError(e instanceof Error ? e.message : "Search failed. Check your connection.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Search failed. Check your connection.",
+      );
     } finally {
       setLoading(false);
     }
@@ -138,7 +151,7 @@ export function AddressSearchModal({
       onSelect({ lat: item.lat, lon: item.lon, label });
       onClose();
     },
-    [onSelect, onClose]
+    [onSelect, onClose],
   );
 
   const handleSelectGoogle = useCallback(
@@ -153,9 +166,15 @@ export function AddressSearchModal({
           setError("Could not load place details.");
           return;
         }
-        const label = (details.displayName || details.formattedAddress || "").length > 60
-          ? (details.displayName || details.formattedAddress || "").slice(0, 57) + "…"
-          : (details.displayName || details.formattedAddress || `${details.location.lat}, ${details.location.lon}`);
+        const label =
+          (details.displayName || details.formattedAddress || "").length > 60
+            ? (details.displayName || details.formattedAddress || "").slice(
+                0,
+                57,
+              ) + "…"
+            : details.displayName ||
+              details.formattedAddress ||
+              `${details.location.lat}, ${details.location.lon}`;
         onSelect({
           lat: details.location.lat,
           lon: details.location.lon,
@@ -163,12 +182,14 @@ export function AddressSearchModal({
         });
         onClose();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to get place details.");
+        setError(
+          e instanceof Error ? e.message : "Failed to get place details.",
+        );
       } finally {
         setLoading(false);
       }
     },
-    [onSelect, onClose]
+    [onSelect, onClose],
   );
 
   if (!visible) return null;
@@ -182,17 +203,37 @@ export function AddressSearchModal({
       presentationStyle="fullScreen"
     >
       <KeyboardAvoidingView
-        style={[styles.overlay, { backgroundColor: colors.background, paddingTop: insets.top }]}
+        style={[
+          styles.overlay,
+          { backgroundColor: colors.background, paddingTop: insets.top },
+        ]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={[styles.header, { borderBottomColor: TECH_NAV.glassBorder }]}>
-          <Text style={[styles.title, { color: colors.text }]}>Search address</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={12}>
-            <MaterialCommunityIcons name="close" size={24} color={colors.muted} />
+        <View
+          style={[styles.header, { borderBottomColor: TECH_NAV.glassBorder }]}
+        >
+          <Text style={[styles.title, { color: colors.text }]}>
+            Search address
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeBtn}
+            hitSlop={12}
+          >
+            <MaterialCommunityIcons
+              name="close"
+              size={24}
+              color={colors.muted}
+            />
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.searchRow, { borderBottomColor: TECH_NAV.glassBorder }]}>
+        <View
+          style={[
+            styles.searchRow,
+            { borderBottomColor: TECH_NAV.glassBorder },
+          ]}
+        >
           <TextInput
             style={[
               styles.input,
@@ -203,7 +244,9 @@ export function AddressSearchModal({
                 borderRadius: TECH_NAV.radiusInput,
               },
             ]}
-            placeholder={useGooglePlaces ? "Search places or addresses…" : "Where to?"}
+            placeholder={
+              useGooglePlaces ? "Search places or addresses…" : "Where to?"
+            }
             placeholderTextColor={colors.muted + "cc"}
             value={query}
             onChangeText={(t) => {
@@ -237,8 +280,14 @@ export function AddressSearchModal({
 
         {error ? (
           <View style={styles.message}>
-            <MaterialCommunityIcons name="information-outline" size={20} color={colors.muted} />
-            <Text style={[styles.messageText, { color: colors.muted }]}>{error}</Text>
+            <MaterialCommunityIcons
+              name="information-outline"
+              size={20}
+              color={colors.muted}
+            />
+            <Text style={[styles.messageText, { color: colors.muted }]}>
+              {error}
+            </Text>
           </View>
         ) : null}
 
@@ -250,12 +299,22 @@ export function AddressSearchModal({
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[styles.row, { borderBottomColor: TECH_NAV.glassBorder }]}
+                style={[
+                  styles.row,
+                  { borderBottomColor: TECH_NAV.glassBorder },
+                ]}
                 onPress={() => handleSelectGoogle(item)}
                 activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="map-marker-outline" size={22} color={TECH_NAV.blue} />
-                <Text style={[styles.rowText, { color: colors.text }]} numberOfLines={2}>
+                <MaterialCommunityIcons
+                  name="map-marker-outline"
+                  size={22}
+                  color={TECH_NAV.blue}
+                />
+                <Text
+                  style={[styles.rowText, { color: colors.text }]}
+                  numberOfLines={2}
+                >
                   {item.text || item.placeId}
                 </Text>
               </TouchableOpacity>
@@ -273,7 +332,9 @@ export function AddressSearchModal({
         ) : (
           <FlatList
             data={results.filter((r) => r != null)}
-            keyExtractor={(item) => (item ? `${item.lat}-${item.lon}` : `fallback-${Math.random()}`)}
+            keyExtractor={(item) =>
+              item ? `${item.lat}-${item.lon}` : `fallback-${Math.random()}`
+            }
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
@@ -281,12 +342,22 @@ export function AddressSearchModal({
               const name = item.displayName ?? `${item.lat}, ${item.lon}`;
               return (
                 <TouchableOpacity
-                  style={[styles.row, { borderBottomColor: TECH_NAV.glassBorder }]}
+                  style={[
+                    styles.row,
+                    { borderBottomColor: TECH_NAV.glassBorder },
+                  ]}
                   onPress={() => handleSelectNominatim(item)}
                   activeOpacity={0.7}
                 >
-                  <MaterialCommunityIcons name="map-marker-outline" size={22} color={TECH_NAV.blue} />
-                  <Text style={[styles.rowText, { color: colors.text }]} numberOfLines={2}>
+                  <MaterialCommunityIcons
+                    name="map-marker-outline"
+                    size={22}
+                    color={TECH_NAV.blue}
+                  />
+                  <Text
+                    style={[styles.rowText, { color: colors.text }]}
+                    numberOfLines={2}
+                  >
                     {name}
                   </Text>
                 </TouchableOpacity>

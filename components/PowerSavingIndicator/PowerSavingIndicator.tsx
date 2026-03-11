@@ -19,13 +19,21 @@ interface PowerSavingIndicatorProps {
   compact?: boolean;
 }
 
-export function PowerSavingIndicator({ compact = true }: PowerSavingIndicatorProps) {
+export function PowerSavingIndicator({
+  compact = true,
+}: PowerSavingIndicatorProps) {
   const { mode, batteryLevel, isReady } = usePowerSaving();
   const theme = useTheme();
   if (!isReady) return null;
 
   const colors = MODE_COLORS[mode];
-  const label = compact ? (mode === "performance" ? "Perf" : mode === "balanced" ? "Bal" : "Ultra") : POWER_MODE_LABELS[mode];
+  const label = compact
+    ? mode === "performance"
+      ? "Perf"
+      : mode === "balanced"
+        ? "Bal"
+        : "Ultra"
+    : POWER_MODE_LABELS[mode];
   const batteryPct = Math.round(batteryLevel * 100);
 
   return (
@@ -34,7 +42,9 @@ export function PowerSavingIndicator({ compact = true }: PowerSavingIndicatorPro
         {label}
       </Text>
       {!compact && (
-        <Text style={[styles.battery, { color: theme.textTertiary }]}>{batteryPct}%</Text>
+        <Text style={[styles.battery, { color: theme.textTertiary }]}>
+          {batteryPct}%
+        </Text>
       )}
     </View>
   );

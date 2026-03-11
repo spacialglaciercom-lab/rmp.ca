@@ -1,9 +1,9 @@
 /**
  * Tarjan-inspired cycle detector for graph traversal algorithms.
- * 
+ *
  * Detects infinite loops during Hierholzer's algorithm and other graph traversals
  * by tracking strongly connected component (SCC) membership and visit counts.
- * 
+ *
  * Key features:
  * - Identifies when traversal is stuck in a cycle
  * - Tracks SCC visit counts to detect repeated cycling
@@ -48,7 +48,7 @@ export interface CycleDetectionResult {
  */
 export class CycleDetector {
   private config: CycleDetectorConfig;
-  
+
   // Tarjan-style tracking
   private nodeIndex: Map<string, number> = new Map();
   private nodeLowlink: Map<string, number> = new Map();
@@ -65,11 +65,11 @@ export class CycleDetector {
   // Recent history for oscillation detection
   private recentNodes: string[] = [];
   private nodeVisitCount: Map<string, number> = new Map();
-  
+
   // Progress tracking
   private lastEdgeCount: number = 0;
   private stagnantIterations: number = 0;
-  
+
   // Tabu list for escape
   private tabuNodes: Set<string> = new Set();
   private tabuExpiry: Map<string, number> = new Map();
@@ -88,7 +88,11 @@ export class CycleDetector {
     // Extend expiry for externally-added tabu nodes slightly if requested
     const expiry = this.tabuExpiry.get(nodeKey);
     if (expiry !== undefined) {
-      this.tabuExpiry.set(nodeKey, expiry + Math.floor(this.config.recentWindowSize * extraWindowMultiplier));
+      this.tabuExpiry.set(
+        nodeKey,
+        expiry +
+          Math.floor(this.config.recentWindowSize * extraWindowMultiplier),
+      );
     }
   }
 
@@ -99,7 +103,7 @@ export class CycleDetector {
   enterNode(nodeKey: string, remainingEdges: number): CycleDetectionResult {
     this.iterationCount++;
     this.expireTabu();
-    
+
     // Track recent history
     this.recentNodes.push(nodeKey);
     if (this.recentNodes.length > this.config.recentWindowSize) {
@@ -111,13 +115,18 @@ export class CycleDetector {
         this.nodeVisitCount.delete(removed);
       }
     }
-    this.nodeVisitCount.set(nodeKey, (this.nodeVisitCount.get(nodeKey) ?? 0) + 1);
-    
+    this.nodeVisitCount.set(
+      nodeKey,
+      (this.nodeVisitCount.get(nodeKey) ?? 0) + 1,
+    );
+
     // Check for node oscillation (same node visited too many times recently)
     const nodeVisits = this.nodeVisitCount.get(nodeKey) ?? 0;
     if (nodeVisits > this.config.maxNodeRevisits) {
       if (this.config.debug) {
-        console.warn(`[CycleDetector] Node oscillation: ${nodeKey} visited ${nodeVisits} times`);
+        console.warn(
+          `[CycleDetector] Node oscillation: ${nodeKey} visited ${nodeVisits} times`,
+        );
       }
       this.addToTabu(nodeKey);
       return {
@@ -128,7 +137,7 @@ export class CycleDetector {
         stagnantIterations: this.stagnantIterations,
       };
     }
-    
+
     // Tarjan-style SCC detection on first visit
     if (!this.nodeIndex.has(nodeKey)) {
       this.nodeIndex.set(nodeKey, this.currentIndex);
@@ -142,10 +151,12 @@ export class CycleDetector {
       if (scc !== undefined) {
         const visits = (this.sccVisitCount.get(scc) ?? 0) + 1;
         this.sccVisitCount.set(scc, visits);
-        
+
         if (visits > this.config.maxSccRevisits) {
           if (this.config.debug) {
-            console.warn(`[CycleDetector] SCC ${scc} revisited ${visits} times`);
+            console.warn(
+              `[CycleDetector] SCC ${scc} revisited ${visits} times`,
+            );
           }
           this.addToTabu(nodeKey);
           return {
@@ -158,16 +169,20 @@ export class CycleDetector {
         }
       }
     }
-    
+
     // Check for zero progress (edge count not decreasing)
     // Note: In Hierholzer, we always remove an edge when moving forward,
     // so stagnation means we're backtracking without consuming edges
     if (remainingEdges >= this.lastEdgeCount && this.lastEdgeCount > 0) {
       this.stagnantIterations++;
       // Trigger at 25 iterations (half window) for earlier detection
-      if (this.stagnantIterations > Math.floor(this.config.recentWindowSize / 2)) {
+      if (
+        this.stagnantIterations > Math.floor(this.config.recentWindowSize / 2)
+      ) {
         if (this.config.debug) {
-          console.warn(`[CycleDetector] Zero progress for ${this.stagnantIterations} iterations`);
+          console.warn(
+            `[CycleDetector] Zero progress for ${this.stagnantIterations} iterations`,
+          );
         }
         this.addToTabu(nodeKey);
         return {
@@ -184,7 +199,7 @@ export class CycleDetector {
     }
     // Don't reset on equal - could be oscillating at same edge count
     this.lastEdgeCount = remainingEdges;
-    
+
     return {
       isLooping: false,
       loopType: "none",
@@ -218,7 +233,9 @@ export class CycleDetector {
       } while (w !== undefined && w !== nodeKey);
 
       if (this.config.debug && sccNodes.length > 1) {
-        console.log(`[CycleDetector] Found SCC ${this.currentSccId} with ${sccNodes.length} nodes`);
+        console.log(
+          `[CycleDetector] Found SCC ${this.currentSccId} with ${sccNodes.length} nodes`,
+        );
       }
       this.currentSccId++;
     }
@@ -231,9 +248,9 @@ export class CycleDetector {
     const fromLowlink = this.nodeLowlink.get(fromKey);
     const toLowlink = this.nodeLowlink.get(toKey);
     const toIndex = this.nodeIndex.get(toKey);
-    
+
     if (fromLowlink === undefined) return;
-    
+
     if (this.onStack.has(toKey) && toIndex !== undefined) {
       // Back edge to node on stack
       this.nodeLowlink.set(fromKey, Math.min(fromLowlink, toIndex));
@@ -308,7 +325,7 @@ export class CycleDetector {
       mostVisited.push({ node, visits });
     });
     mostVisited.sort((a, b) => b.visits - a.visits);
-    
+
     return {
       totalNodesVisited: this.iterationCount,
       uniqueNodes: this.nodeIndex.size,
@@ -324,7 +341,10 @@ export class CycleDetector {
   private addToTabu(nodeKey: string): void {
     this.tabuNodes.add(nodeKey);
     // Tabu expires after 2x window size iterations
-    this.tabuExpiry.set(nodeKey, this.iterationCount + this.config.recentWindowSize * 2);
+    this.tabuExpiry.set(
+      nodeKey,
+      this.iterationCount + this.config.recentWindowSize * 2,
+    );
   }
 
   private expireTabu(): void {
@@ -339,7 +359,6 @@ export class CycleDetector {
       this.tabuExpiry.delete(node);
     }
   }
-
 }
 
 /**
@@ -349,15 +368,15 @@ export class CycleDetector {
 export function detectSimpleOscillation(
   recentPath: string[],
   windowSize: number = 12,
-  maxRepeats: number = 3
+  maxRepeats: number = 3,
 ): { isOscillating: boolean; culprit?: string } {
   if (recentPath.length < windowSize) {
     return { isOscillating: false };
   }
-  
+
   const window = recentPath.slice(-windowSize);
   const counts = new Map<string, number>();
-  
+
   for (const node of window) {
     const count = (counts.get(node) ?? 0) + 1;
     counts.set(node, count);
@@ -365,7 +384,7 @@ export function detectSimpleOscillation(
       return { isOscillating: true, culprit: node };
     }
   }
-  
+
   return { isOscillating: false };
 }
 
@@ -376,20 +395,24 @@ export function detectSimpleOscillation(
 export function detectRouteCycle(
   route: string[],
   minCycleLength: number = 3,
-  maxCycleLength: number = 20
+  maxCycleLength: number = 20,
 ): { hasCycle: boolean; cycleStart?: number; cycleLength?: number } {
   if (route.length < minCycleLength * 2) {
     return { hasCycle: false };
   }
-  
+
   // Check for repeating patterns of various lengths
-  for (let len = minCycleLength; len <= Math.min(maxCycleLength, Math.floor(route.length / 2)); len++) {
+  for (
+    let len = minCycleLength;
+    len <= Math.min(maxCycleLength, Math.floor(route.length / 2));
+    len++
+  ) {
     const end = route.length;
     const start = end - len;
     const prevStart = start - len;
-    
+
     if (prevStart < 0) continue;
-    
+
     let matches = true;
     for (let i = 0; i < len; i++) {
       if (route[start + i] !== route[prevStart + i]) {
@@ -397,11 +420,11 @@ export function detectRouteCycle(
         break;
       }
     }
-    
+
     if (matches) {
       return { hasCycle: true, cycleStart: prevStart, cycleLength: len };
     }
   }
-  
+
   return { hasCycle: false };
 }

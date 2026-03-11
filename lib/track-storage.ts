@@ -59,7 +59,7 @@ function computeBounds(points: TrackPoint[]): SavedTrack["bounds"] {
  */
 export function generateRecordedTrackGPX(
   name: string,
-  points: TrackPoint[]
+  points: TrackPoint[],
 ): string {
   const timestamp = new Date().toISOString();
   const trackPoints = points
@@ -103,7 +103,7 @@ export const trackStorage = {
     name: string,
     points: TrackPoint[],
     totalDistanceMeters: number,
-    elapsedMs: number
+    elapsedMs: number,
   ): Promise<SavedTrack> {
     const gpxData = generateRecordedTrackGPX(name, points);
     const track: SavedTrack = {

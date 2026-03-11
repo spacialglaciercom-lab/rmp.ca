@@ -41,7 +41,9 @@ export interface ErrorReportPayload {
   platform?: string;
 }
 
-export async function sendErrorPushNotification(payload: ErrorReportPayload): Promise<void> {
+export async function sendErrorPushNotification(
+  payload: ErrorReportPayload,
+): Promise<void> {
   const tokens = getErrorPushTokens();
   if (tokens.length === 0) return;
 
@@ -61,16 +63,16 @@ export async function sendErrorPushNotification(payload: ErrorReportPayload): Pr
     };
     if (payload.stack) data.stack = payload.stack.slice(0, 2000);
 
-    const messages = tokens.filter((token) => Expo.isExpoPushToken(token)).map(
-      (to) => ({
+    const messages = tokens
+      .filter((token) => Expo.isExpoPushToken(token))
+      .map((to) => ({
         to,
         sound: "default" as const,
         title,
         body,
         data,
         priority: "high" as const,
-      })
-    );
+      }));
 
     if (messages.length === 0) return;
 
@@ -79,6 +81,9 @@ export async function sendErrorPushNotification(payload: ErrorReportPayload): Pr
       await expo.sendPushNotificationsAsync(chunk);
     }
   } catch (err) {
-    log.error("Failed to send push", err instanceof Error ? err : new Error(String(err)));
+    log.error(
+      "Failed to send push",
+      err instanceof Error ? err : new Error(String(err)),
+    );
   }
 }

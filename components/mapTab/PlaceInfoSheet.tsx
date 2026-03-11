@@ -19,7 +19,10 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useColors } from "@/hooks/use-colors";
 import { useDeviceType } from "@/hooks/useDeviceType";
-import { searchNearby, isGooglePlacesConfigured } from "@/services/googlePlacesService";
+import {
+  searchNearby,
+  isGooglePlacesConfigured,
+} from "@/services/googlePlacesService";
 import { reverseGeocode } from "@/lib/geocode";
 import { MinimalButton } from "@/components/minimal";
 
@@ -90,7 +93,9 @@ export function PlaceInfoSheet({
         }
       }
       const rev = await reverseGeocode(lat, lon);
-      const name = rev.displayName || (rev.city && rev.country ? `${rev.city}, ${rev.country}` : "Location");
+      const name =
+        rev.displayName ||
+        (rev.city && rev.country ? `${rev.city}, ${rev.country}` : "Location");
       setPlace({
         name: rev.displayName ? "Address" : name,
         address: rev.displayName || undefined,
@@ -206,7 +211,11 @@ export function PlaceInfoSheet({
               style={styles.closeBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialCommunityIcons name="close" size={24} color={colors.muted} />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={colors.muted}
+              />
             </TouchableOpacity>
           </View>
 
@@ -225,16 +234,33 @@ export function PlaceInfoSheet({
             ) : place ? (
               <>
                 {error && (
-                  <Text style={[styles.errorText, { color: colors.muted }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.errorText, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
                     {error}
                   </Text>
                 )}
-                <View style={[styles.card, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}>
-                  <Text style={[styles.placeName, { color: colors.text }]} numberOfLines={2}>
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: colors.surfaceAlt ?? colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.placeName, { color: colors.text }]}
+                    numberOfLines={2}
+                  >
                     {place.name}
                   </Text>
                   {place.address && (
-                    <Text style={[styles.address, { color: colors.muted }]} numberOfLines={3}>
+                    <Text
+                      style={[styles.address, { color: colors.muted }]}
+                      numberOfLines={3}
+                    >
                       {place.address}
                     </Text>
                   )}
@@ -254,33 +280,78 @@ export function PlaceInfoSheet({
                   )}
                   {Platform.OS !== "web" && onStreetView && (
                     <TouchableOpacity
-                      style={[styles.streetViewBtn, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+                      style={[
+                        styles.streetViewBtn,
+                        {
+                          backgroundColor: colors.surfaceAlt ?? colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
                       onPress={handleStreetView}
                     >
-                      <MaterialCommunityIcons name="camera-marker" size={22} color={colors.primary} />
-                      <Text style={[styles.streetViewBtnText, { color: colors.text }]}>
+                      <MaterialCommunityIcons
+                        name="camera-marker"
+                        size={22}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.streetViewBtnText,
+                          { color: colors.text },
+                        ]}
+                      >
                         Mapillary Street View
                       </Text>
                     </TouchableOpacity>
                   )}
                   {Platform.OS !== "web" && onContributeImages && (
                     <TouchableOpacity
-                      style={[styles.streetViewBtn, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+                      style={[
+                        styles.streetViewBtn,
+                        {
+                          backgroundColor: colors.surfaceAlt ?? colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
                       onPress={handleContributeImages}
                     >
-                      <MaterialCommunityIcons name="camera-plus-outline" size={22} color="#10B981" />
-                      <Text style={[styles.streetViewBtnText, { color: colors.text }]}>
+                      <MaterialCommunityIcons
+                        name="camera-plus-outline"
+                        size={22}
+                        color="#10B981"
+                      />
+                      <Text
+                        style={[
+                          styles.streetViewBtnText,
+                          { color: colors.text },
+                        ]}
+                      >
                         Contribute images
                       </Text>
                     </TouchableOpacity>
                   )}
                   {Platform.OS !== "web" && onGoogleStreetView && (
                     <TouchableOpacity
-                      style={[styles.streetViewBtn, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+                      style={[
+                        styles.streetViewBtn,
+                        {
+                          backgroundColor: colors.surfaceAlt ?? colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
                       onPress={handleGoogleStreetView}
                     >
-                      <MaterialCommunityIcons name="google-street-view" size={22} color={colors.primary} />
-                      <Text style={[styles.streetViewBtnText, { color: colors.text }]}>
+                      <MaterialCommunityIcons
+                        name="google-street-view"
+                        size={22}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.streetViewBtnText,
+                          { color: colors.text },
+                        ]}
+                      >
                         Google Street View
                       </Text>
                     </TouchableOpacity>
@@ -299,8 +370,17 @@ export function PlaceInfoSheet({
                       style={[styles.clearBtn, { borderColor: colors.border }]}
                       onPress={handleClear}
                     >
-                      <MaterialCommunityIcons name="map-marker-off-outline" size={20} color={colors.error ?? "#ef4444"} />
-                      <Text style={[styles.clearBtnText, { color: colors.error ?? "#ef4444" }]}>
+                      <MaterialCommunityIcons
+                        name="map-marker-off-outline"
+                        size={20}
+                        color={colors.error ?? "#ef4444"}
+                      />
+                      <Text
+                        style={[
+                          styles.clearBtnText,
+                          { color: colors.error ?? "#ef4444" },
+                        ]}
+                      >
                         Clear marker
                       </Text>
                     </TouchableOpacity>

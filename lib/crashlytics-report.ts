@@ -10,7 +10,7 @@ import Constants from "expo-constants";
 export function recordErrorToCrashlytics(
   error: Error,
   name?: string,
-  context?: Record<string, string>
+  context?: Record<string, string>,
 ): void {
   if (Platform.OS === "web" || Constants.appOwnership === "expo") return;
   try {
@@ -18,7 +18,8 @@ export function recordErrorToCrashlytics(
     const c = crashlytics();
     if (context) {
       for (const [key, value] of Object.entries(context)) {
-        if (value != null && value !== "") c.setAttribute(key, String(value).slice(0, 100));
+        if (value != null && value !== "")
+          c.setAttribute(key, String(value).slice(0, 100));
       }
     }
     const err = error instanceof Error ? error : new Error(String(error));

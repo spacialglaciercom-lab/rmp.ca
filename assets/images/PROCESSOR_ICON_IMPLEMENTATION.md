@@ -1,6 +1,7 @@
 # Processor Icon Implementation
 
 ## Files Generated:
+
 - processor-icon.svg
 - processor-icon-main.svg
 - processor-icon-512.svg
@@ -37,10 +38,11 @@
    - https://convertio.co/svg-png/
 
 2. **Command Line** (For batch conversion)
+
    ```bash
    # Using rsvg-convert (install: brew install librsvg)
    rsvg-convert -w 1024 -h 1024 processor-icon.svg -o processor-icon-1024.png
-   
+
    # Using Inkscape
    inkscape processor-icon.svg -w 1024 -h 1024 -o processor-icon-1024.png
    ```

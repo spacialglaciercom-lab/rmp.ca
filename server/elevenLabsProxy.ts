@@ -33,16 +33,35 @@ export function registerElevenLabsProxyRoutes(app: Express) {
     }
     try {
       const [personalResp, sharedResp] = await Promise.all([
-        fetch(`${ELEVENLABS_BASE}/voices`, { headers: { "xi-api-key": apiKey } }),
-        fetch(`${ELEVENLABS_BASE}/shared-voices?page_size=100&sort=trending&category=professional`, {
+        fetch(`${ELEVENLABS_BASE}/voices`, {
           headers: { "xi-api-key": apiKey },
-        }).catch(() => null),
+        }),
+        fetch(
+          `${ELEVENLABS_BASE}/shared-voices?page_size=100&sort=trending&category=professional`,
+          {
+            headers: { "xi-api-key": apiKey },
+          },
+        ).catch(() => null),
       ]);
-      const allVoices: Array<{ voice_id: string; name: string; category: string; labels: Record<string, string>; preview_url: string | null }> = [];
+      const allVoices: Array<{
+        voice_id: string;
+        name: string;
+        category: string;
+        labels: Record<string, string>;
+        preview_url: string | null;
+      }> = [];
       const seenIds = new Set<string>();
 
       if (personalResp.ok) {
-        const data = (await personalResp.json()) as { voices?: Array<{ voice_id: string; name: string; category?: string; labels?: Record<string, string>; preview_url?: string | null }> };
+        const data = (await personalResp.json()) as {
+          voices?: Array<{
+            voice_id: string;
+            name: string;
+            category?: string;
+            labels?: Record<string, string>;
+            preview_url?: string | null;
+          }>;
+        };
         for (const v of data.voices ?? []) {
           if (!seenIds.has(v.voice_id)) {
             seenIds.add(v.voice_id);
@@ -57,7 +76,16 @@ export function registerElevenLabsProxyRoutes(app: Express) {
         }
       }
       if (sharedResp?.ok) {
-        const sharedData = (await sharedResp.json()) as { voices?: Array<{ voice_id?: string; public_owner_id?: string; name: string; category?: string; labels?: Record<string, string>; preview_url?: string | null }> };
+        const sharedData = (await sharedResp.json()) as {
+          voices?: Array<{
+            voice_id?: string;
+            public_owner_id?: string;
+            name: string;
+            category?: string;
+            labels?: Record<string, string>;
+            preview_url?: string | null;
+          }>;
+        };
         for (const v of sharedData.voices ?? []) {
           const id = v.voice_id ?? v.public_owner_id;
           if (id && !seenIds.has(id)) {
@@ -74,7 +102,10 @@ export function registerElevenLabsProxyRoutes(app: Express) {
       }
       res.json({ voices: allVoices });
     } catch (err) {
-      log.error("voices error", err instanceof Error ? err : new Error(String(err)));
+      log.error(
+        "voices error",
+        err instanceof Error ? err : new Error(String(err)),
+      );
       res.status(500).json({ error: "Failed to fetch voices" });
     }
   });
@@ -86,7 +117,10 @@ export function registerElevenLabsProxyRoutes(app: Express) {
       res.status(503).json({ error: "ELEVENLABS_API_KEY not set on server." });
       return;
     }
-    const { audioBase64, mimeType } = req.body as { audioBase64?: string; mimeType?: string };
+    const { audioBase64, mimeType } = req.body as {
+      audioBase64?: string;
+      mimeType?: string;
+    };
     if (!audioBase64 || typeof audioBase64 !== "string") {
       res.status(400).json({ error: "audioBase64 is required" });
       return;
@@ -103,20 +137,24 @@ export function registerElevenLabsProxyRoutes(app: Express) {
       const parts: Buffer[] = [];
 
       // File part
-      parts.push(Buffer.from(
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
-        `Content-Type: ${mime}\r\n\r\n`
-      ));
+      parts.push(
+        Buffer.from(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
+            `Content-Type: ${mime}\r\n\r\n`,
+        ),
+      );
       parts.push(audioBuffer);
       parts.push(Buffer.from("\r\n"));
 
       // model_id part
-      parts.push(Buffer.from(
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="model_id"\r\n\r\n` +
-        `scribe_v1\r\n`
-      ));
+      parts.push(
+        Buffer.from(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="model_id"\r\n\r\n` +
+            `scribe_v1\r\n`,
+        ),
+      );
 
       // End boundary
       parts.push(Buffer.from(`--${boundary}--\r\n`));
@@ -134,15 +172,24 @@ export function registerElevenLabsProxyRoutes(app: Express) {
 
       if (!resp.ok) {
         const errText = await resp.text();
-        log.warn("STT failed", { status: resp.status, body: errText.slice(0, 200) });
+        log.warn("STT failed", {
+          status: resp.status,
+          body: errText.slice(0, 200),
+        });
         res.status(resp.status).json({ error: "ElevenLabs STT failed" });
         return;
       }
 
-      const data = await resp.json() as { text?: string; language_code?: string };
+      const data = (await resp.json()) as {
+        text?: string;
+        language_code?: string;
+      };
       res.json({ text: data.text || "", language_code: data.language_code });
     } catch (err) {
-      log.error("STT error", err instanceof Error ? err : new Error(String(err)));
+      log.error(
+        "STT error",
+        err instanceof Error ? err : new Error(String(err)),
+      );
       res.status(500).json({ error: "STT request failed" });
     }
   });
@@ -154,7 +201,11 @@ export function registerElevenLabsProxyRoutes(app: Express) {
       res.status(503).json({ error: "ELEVENLABS_API_KEY not set on server." });
       return;
     }
-    const { text, voice_id: voiceId, model_id: modelId } = req.body as { text?: string; voice_id?: string; model_id?: string };
+    const {
+      text,
+      voice_id: voiceId,
+      model_id: modelId,
+    } = req.body as { text?: string; voice_id?: string; model_id?: string };
     if (!text || typeof text !== "string") {
       res.status(400).json({ error: "text is required" });
       return;
@@ -182,7 +233,10 @@ export function registerElevenLabsProxyRoutes(app: Express) {
       });
       if (!resp.ok) {
         const errText = await resp.text();
-        log.warn("TTS failed", { status: resp.status, body: errText.slice(0, 200) });
+        log.warn("TTS failed", {
+          status: resp.status,
+          body: errText.slice(0, 200),
+        });
         res.status(resp.status).json({ error: "ElevenLabs TTS failed" });
         return;
       }
@@ -191,7 +245,10 @@ export function registerElevenLabsProxyRoutes(app: Express) {
       const buffer = await resp.arrayBuffer();
       res.send(Buffer.from(buffer));
     } catch (err) {
-      log.error("TTS error", err instanceof Error ? err : new Error(String(err)));
+      log.error(
+        "TTS error",
+        err instanceof Error ? err : new Error(String(err)),
+      );
       res.status(500).json({ error: "TTS request failed" });
     }
   });

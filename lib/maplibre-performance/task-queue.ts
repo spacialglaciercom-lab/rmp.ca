@@ -28,7 +28,10 @@ export class PriorityTaskQueue {
     [TaskPriority.LOW, []],
   ]);
 
-  schedule(callback: () => void, priority: TaskPriority = TaskPriority.NORMAL): TaskID {
+  schedule(
+    callback: () => void,
+    priority: TaskPriority = TaskPriority.NORMAL,
+  ): TaskID {
     const id = nextTaskId++;
     const task: QueuedTask = { id, callback, priority };
     const q = this.queues.get(priority)!;

@@ -31,14 +31,21 @@ function findPodfiles(dir, collected = [], depth = 0) {
   for (const e of entries) {
     const full = path.join(dir, e.name);
     if (e.name === "Podfile") collected.push(full);
-    else if (e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith(".")) findPodfiles(full, collected, depth + 1);
+    else if (
+      e.isDirectory() &&
+      e.name !== "node_modules" &&
+      !e.name.startsWith(".")
+    )
+      findPodfiles(full, collected, depth + 1);
   }
   return collected;
 }
 
 const cwd = process.cwd();
 const searchRoots = [path.join(cwd, "ios"), path.join(cwd, "build"), cwd];
-const allPodfiles = [...new Set(searchRoots.flatMap((root) => findPodfiles(root)))];
+const allPodfiles = [
+  ...new Set(searchRoots.flatMap((root) => findPodfiles(root))),
+];
 
 let patched = 0;
 for (const podfilePath of allPodfiles) {
@@ -48,20 +55,34 @@ for (const podfilePath of allPodfiles) {
     if (fixed !== contents) {
       fs.writeFileSync(podfilePath, fixed, "utf8");
       patched++;
-      console.log("[prebuild-ios-and-patch] Patched:", path.relative(cwd, podfilePath));
+      console.log(
+        "[prebuild-ios-and-patch] Patched:",
+        path.relative(cwd, podfilePath),
+      );
     }
   } catch (err) {
     console.warn("[prebuild-ios-and-patch] Skip", podfilePath, err.message);
   }
 }
-if (patched) console.log("[prebuild-ios-and-patch] Removed invalid 'end @rnmapbox/...' from", patched, "Podfile(s).");
+if (patched)
+  console.log(
+    "[prebuild-ios-and-patch] Removed invalid 'end @rnmapbox/...' from",
+    patched,
+    "Podfile(s).",
+  );
 
 // Verify no Podfile still contains the bad line (fail fast so we don't get to pod install with a broken file)
 for (const podfilePath of allPodfiles) {
   try {
     const contents = fs.readFileSync(podfilePath, "utf8");
-    if (contents.includes("@rnmapbox/maps-post_installer") || /\bend\s+@rnmapbox\b/.test(contents)) {
-      console.error("[prebuild-ios-and-patch] ERROR: Podfile still contains invalid line:", podfilePath);
+    if (
+      contents.includes("@rnmapbox/maps-post_installer") ||
+      /\bend\s+@rnmapbox\b/.test(contents)
+    ) {
+      console.error(
+        "[prebuild-ios-and-patch] ERROR: Podfile still contains invalid line:",
+        podfilePath,
+      );
       process.exit(1);
     }
   } catch {

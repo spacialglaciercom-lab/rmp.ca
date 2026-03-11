@@ -46,7 +46,9 @@ export type SttStreamCallbacks = {
 // Moonshine (on-device) provider
 // ---------------------------------------------------------------------------
 
-let _moonshineModule: typeof import("@/modules/moonshine-voice").default | null = null;
+let _moonshineModule:
+  | typeof import("@/modules/moonshine-voice").default
+  | null = null;
 
 /**
  * Lazily load the native Moonshine module.
@@ -118,7 +120,9 @@ export async function startMoonshineStream(
  * Transcribe an audio file using Moonshine (non-streaming).
  * Useful for pre-recorded audio or when streaming isn't needed.
  */
-export async function transcribeFileMoonshine(filePath: string): Promise<SttResult> {
+export async function transcribeFileMoonshine(
+  filePath: string,
+): Promise<SttResult> {
   const mod = getMoonshineModule();
   if (!mod || !mod.isAvailable() || !mod.isModelLoaded()) {
     throw new Error("Moonshine is not available or no model loaded");
@@ -154,7 +158,12 @@ export async function transcribeServerSide(
           mimeType?: string;
           language?: string;
           prompt?: string;
-        }) => Promise<{ text: string; duration: number; language: string; segments: unknown[] }>;
+        }) => Promise<{
+          text: string;
+          duration: number;
+          language: string;
+          segments: unknown[];
+        }>;
       };
     };
   },
@@ -171,13 +180,13 @@ export async function transcribeServerSide(
   return {
     text: result.text,
     duration: result.duration,
-    segments: (result.segments as Array<{ text: string; start: number; end: number }>).map(
-      (seg) => ({
-        text: seg.text,
-        startTime: seg.start ?? 0,
-        duration: (seg.end ?? 0) - (seg.start ?? 0),
-      }),
-    ),
+    segments: (
+      result.segments as Array<{ text: string; start: number; end: number }>
+    ).map((seg) => ({
+      text: seg.text,
+      startTime: seg.start ?? 0,
+      duration: (seg.end ?? 0) - (seg.start ?? 0),
+    })),
     provider: "whisper",
   };
 }
@@ -226,16 +235,24 @@ export async function transcribe(
         return transcribeFileMoonshine(source.path);
       }
       // No server-side file transcription path — would need to upload first
-      throw new Error("File transcription requires Moonshine or uploading to server.");
+      throw new Error(
+        "File transcription requires Moonshine or uploading to server.",
+      );
     }
 
     case "url": {
-      if (!opts.trpcClient) throw new Error("tRPC client required for server-side transcription");
-      return transcribeServerSide(opts.trpcClient, { url: source.url }, opts.language);
+      if (!opts.trpcClient)
+        throw new Error("tRPC client required for server-side transcription");
+      return transcribeServerSide(
+        opts.trpcClient,
+        { url: source.url },
+        opts.language,
+      );
     }
 
     case "base64": {
-      if (!opts.trpcClient) throw new Error("tRPC client required for server-side transcription");
+      if (!opts.trpcClient)
+        throw new Error("tRPC client required for server-side transcription");
       return transcribeServerSide(
         opts.trpcClient,
         { base64: source.data, mimeType: source.mimeType },

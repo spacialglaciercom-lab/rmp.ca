@@ -1,21 +1,33 @@
 {
-  "cli": { "version": ">= 18.0.0", "promptToConfigurePushNotifications": false },
+  "cli": {
+    "version": ">= 18.0.0",
+    "promptToConfigurePushNotifications": false
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000" },
+      "env": {
+        "EAS_USE_CACHE": "0",
+        "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000"
+      },
       "ios": { "buildConfiguration": "Debug" }
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000" },
+      "env": {
+        "EAS_USE_CACHE": "0",
+        "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000"
+      },
       "android": { "buildType": "apk" },
       "ios": { "buildConfiguration": "Release" }
     },
     "production": {
       "distribution": "store",
-      "env": { "EAS_USE_CACHE": "0", "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000" },
+      "env": {
+        "EAS_USE_CACHE": "0",
+        "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000"
+      },
       "ios": { "buildConfiguration": "Release", "image": "latest" }
     }
   },

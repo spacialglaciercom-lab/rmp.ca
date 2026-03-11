@@ -1,4 +1,4 @@
-const { spatialQueryService } = require('../services/spatialQueryService');
+const { spatialQueryService } = require("../services/spatialQueryService");
 
 (async () => {
   const results = await spatialQueryService.spatialQuery(`
@@ -6,6 +6,6 @@ const { spatialQueryService } = require('../services/spatialQueryService');
     FROM street_edges
     LIMIT 5
   `);
-  
-  console.log('Spatial Query Results:', results);
+
+  console.log("Spatial Query Results:", results);
 })();

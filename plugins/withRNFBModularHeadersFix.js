@@ -10,7 +10,9 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withDangerousMod } = requireFromRoot("expo/config-plugins");
 
 function enhancePodfile(projectRoot) {
@@ -23,7 +25,9 @@ function enhancePodfile(projectRoot) {
   // (RCT_EXPORT_METHOD macro cannot resolve RCTBridgeModule under strict modular headers).
   if (content.includes("use_modular_headers!")) {
     content = content.replace(/^\s*use_modular_headers!\s*\n/gm, "");
-    console.log("[RNFB Fix] Removed global use_modular_headers! (breaks RNFB ObjC)");
+    console.log(
+      "[RNFB Fix] Removed global use_modular_headers! (breaks RNFB ObjC)",
+    );
   }
 
   // Target RNFB pods specifically to disable strict modular headers
@@ -53,9 +57,14 @@ function enhancePodfile(projectRoot) {
       "    end",
     ].join("\n");
 
-    const postInstallMatch = content.match(/(post_install\s+do\s+\|[^|]+\|\s*\n)/);
+    const postInstallMatch = content.match(
+      /(post_install\s+do\s+\|[^|]+\|\s*\n)/,
+    );
     if (postInstallMatch) {
-      content = content.replace(postInstallMatch[1], postInstallMatch[1] + snippet + "\n");
+      content = content.replace(
+        postInstallMatch[1],
+        postInstallMatch[1] + snippet + "\n",
+      );
     }
   }
 

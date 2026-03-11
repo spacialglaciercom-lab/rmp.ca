@@ -5,10 +5,7 @@
 /**
  * Measure execution time of a function
  */
-export function measurePerformance<T>(
-  name: string,
-  fn: () => T
-): T {
+export function measurePerformance<T>(name: string, fn: () => T): T {
   const start = performance.now();
   const result = fn();
   const end = performance.now();
@@ -28,7 +25,7 @@ export function measurePerformance<T>(
  */
 export function debounce<T extends (...args: any[]) => any>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let timeoutId: any = null;
 
@@ -43,7 +40,7 @@ export function debounce<T extends (...args: any[]) => any>(
  */
 export function throttle<T extends (...args: any[]) => any>(
   fn: T,
-  limit: number
+  limit: number,
 ): (...args: Parameters<T>) => void {
   let inThrottle: boolean = false;
 
@@ -164,12 +161,15 @@ export const objectOps = {
    */
   pick<T extends Record<string, any>, K extends keyof T>(
     obj: T,
-    keys: K[]
+    keys: K[],
   ): Pick<T, K> {
-    return keys.reduce((acc, key) => {
-      acc[key] = obj[key];
-      return acc;
-    }, {} as Pick<T, K>);
+    return keys.reduce(
+      (acc, key) => {
+        acc[key] = obj[key];
+        return acc;
+      },
+      {} as Pick<T, K>,
+    );
   },
 
   /**
@@ -177,7 +177,7 @@ export const objectOps = {
    */
   omit<T extends Record<string, any>, K extends keyof T>(
     obj: T,
-    keys: K[]
+    keys: K[],
   ): Omit<T, K> {
     const keySet = new Set(keys);
     const result: any = {};

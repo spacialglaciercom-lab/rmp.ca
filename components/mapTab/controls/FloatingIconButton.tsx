@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  Pressable,
-  StyleSheet,
-  ViewStyle,
-  Platform,
-} from "react-native";
+import { Pressable, StyleSheet, ViewStyle, Platform } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { ComponentProps } from "react";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";

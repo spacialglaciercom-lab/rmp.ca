@@ -6,14 +6,24 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 
-let MCIcon: React.ComponentType<{ name: string; size: number; color: string }> | null = null;
+let MCIcon: React.ComponentType<{
+  name: string;
+  size: number;
+  color: string;
+}> | null = null;
 try {
   MCIcon = require("@expo/vector-icons/MaterialCommunityIcons").default;
 } catch {
   //
 }
 
-export type WeatherConditionType = "clear" | "clouds" | "rain" | "snow" | "wind" | "unknown";
+export type WeatherConditionType =
+  | "clear"
+  | "clouds"
+  | "rain"
+  | "snow"
+  | "wind"
+  | "unknown";
 
 function conditionToIcon(condition: string): string {
   const c = condition.toLowerCase();
@@ -65,7 +75,11 @@ function WeatherIndicatorInner({
         },
       ]}
     >
-      <MCIcon name={iconName} size={size} color={glow ? glowColor : colors.foreground} />
+      <MCIcon
+        name={iconName}
+        size={size}
+        color={glow ? glowColor : colors.foreground}
+      />
     </View>
   );
 }

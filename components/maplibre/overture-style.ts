@@ -22,8 +22,16 @@ export function getPMTilesHttpsUrl(city: string, version?: string): string {
 
 /** Available cities with PMTiles on R2. Add more as you build them. */
 export const PMTILES_CITIES: string[] = [
-  "montreal", "laval", "longueuil", "toronto", "vancouver",
-  "ottawa", "calgary", "edmonton", "quebec_city", "halifax",
+  "montreal",
+  "laval",
+  "longueuil",
+  "toronto",
+  "vancouver",
+  "ottawa",
+  "calgary",
+  "edmonton",
+  "quebec_city",
+  "halifax",
 ];
 
 /** Overture road layers (for overlay on web and for dynamic layers on native). Exported for MapLibreRouteMap. */
@@ -170,7 +178,9 @@ export function buildOvertureStyle(options: {
     source: "osm-raster",
     minzoom: 0,
     maxzoom: 22,
-    ...(mapTilesAsOverlay ? { paint: { "raster-opacity": rasterOverlayOpacity } } : {}),
+    ...(mapTilesAsOverlay
+      ? { paint: { "raster-opacity": rasterOverlayOpacity } }
+      : {}),
   };
 
   const layers =
@@ -240,7 +250,11 @@ export function buildOvertureOverlayStyle(options: { city: string }): object {
       },
     },
     layers: [
-      { id: "overture-overlay-bg", type: "background", paint: { "background-color": "rgba(0,0,0,0)" } },
+      {
+        id: "overture-overlay-bg",
+        type: "background",
+        paint: { "background-color": "rgba(0,0,0,0)" },
+      },
       ...OVERTURE_ROAD_LAYERS,
     ],
   };

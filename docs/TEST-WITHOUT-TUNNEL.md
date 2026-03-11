@@ -20,9 +20,10 @@ No tunnel. Phone and PC must be on the **same Wi‑Fi**.
    - **iOS:** Camera app can open the QR in Expo Go.
    - Or in Expo Go choose “Enter URL manually” and type the `exp://192.168.x.x:8082` URL shown in the terminal.
 
-**If it says “Couldn’t connect”:**  
-- Confirm phone and PC are on the same Wi‑Fi (not phone on cellular).  
-- Try turning Windows “Private network” on for your Wi‑Fi (Settings → Network → your Wi‑Fi → profile = Private).  
+**If it says “Couldn’t connect”:**
+
+- Confirm phone and PC are on the same Wi‑Fi (not phone on cellular).
+- Try turning Windows “Private network” on for your Wi‑Fi (Settings → Network → your Wi‑Fi → profile = Private).
 - Temporarily turn off Windows Firewall for Private network to test, then add a rule for Node if needed (see `TUNNEL-FIREWALL-RULES.md` for Node path).
 
 ---
@@ -94,14 +95,14 @@ or `pnpm run mobile` then press **i**. The app opens in the iOS Simulator; no de
 
 ## Quick reference
 
-| Goal                         | Command / step                                      |
-|-----------------------------|-----------------------------------------------------|
-| Phone on same Wi‑Fi         | `pnpm run mobile` → scan QR or enter `exp://…` URL  |
-| Browser only                | `pnpm run dev` → http://localhost:19007             |
-| Android emulator             | Start AVD → `pnpm run mobile:android` or `mobile` + **a** |
-| Android phone via USB        | USB + `adb reverse` → `pnpm run mobile` → enter `exp://127.0.0.1:PORT` |
-| iOS Simulator (Mac)          | `pnpm run mobile:ios` or `mobile` + **i**          |
-| Tunnel (when it works)       | `pnpm run mobile:tunnel` or manual ngrok            |
+| Goal                   | Command / step                                                         |
+| ---------------------- | ---------------------------------------------------------------------- |
+| Phone on same Wi‑Fi    | `pnpm run mobile` → scan QR or enter `exp://…` URL                     |
+| Browser only           | `pnpm run dev` → http://localhost:19007                                |
+| Android emulator       | Start AVD → `pnpm run mobile:android` or `mobile` + **a**              |
+| Android phone via USB  | USB + `adb reverse` → `pnpm run mobile` → enter `exp://127.0.0.1:PORT` |
+| iOS Simulator (Mac)    | `pnpm run mobile:ios` or `mobile` + **i**                              |
+| Tunnel (when it works) | `pnpm run mobile:tunnel` or manual ngrok                               |
 
 ---
 

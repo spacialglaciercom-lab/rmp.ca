@@ -6,13 +6,23 @@
  * Web uses cookie-based auth and browser Speech Recognition; no sign-in needed.
  */
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Platform, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Platform,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { getApiBaseUrl } from "@/shared/oauth";
 import * as Auth from "@/lib/_core/auth";
-import { signInWithAppleAndGetIdToken, preloadFirebaseAuth } from "@/lib/firebaseAppleSignIn";
+import {
+  signInWithAppleAndGetIdToken,
+  preloadFirebaseAuth,
+} from "@/lib/firebaseAppleSignIn";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export const AccountSection: React.FC = () => {
@@ -50,10 +60,22 @@ export const AccountSection: React.FC = () => {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string })?.error ?? `Sign-in failed: ${res.status}`);
+        throw new Error(
+          (err as { error?: string })?.error ?? `Sign-in failed: ${res.status}`,
+        );
       }
 
-      const data = (await res.json()) as { sessionToken?: string; user?: { id?: number; openId?: string; name?: string | null; email?: string | null; loginMethod?: string | null; lastSignedIn?: string } };
+      const data = (await res.json()) as {
+        sessionToken?: string;
+        user?: {
+          id?: number;
+          openId?: string;
+          name?: string | null;
+          email?: string | null;
+          loginMethod?: string | null;
+          lastSignedIn?: string;
+        };
+      };
       if (data.sessionToken) {
         await Auth.setSessionToken(data.sessionToken);
         if (data.user) {
@@ -72,7 +94,10 @@ export const AccountSection: React.FC = () => {
       const msg =
         err instanceof Error
           ? err.message
-          : String((err as { message?: string })?.message ?? "Could not sign in. Check your connection and try again.");
+          : String(
+              (err as { message?: string })?.message ??
+                "Could not sign in. Check your connection and try again.",
+            );
       const isBundleError =
         msg.includes("Could not load bundle") ||
         msg.includes("LoadBundleFromServerRequestError") ||
@@ -99,9 +124,18 @@ export const AccountSection: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, gap: 10 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingVertical: 14,
+          gap: 10,
+        }}
+      >
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={{ fontSize: 15, color: colors.muted }}>Checking account...</Text>
+        <Text style={{ fontSize: 15, color: colors.muted }}>
+          Checking account...
+        </Text>
       </View>
     );
   }
@@ -127,11 +161,16 @@ export const AccountSection: React.FC = () => {
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>
+            <Text
+              style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+            >
               {user.name || user.email || "Signed in"}
             </Text>
             {user.email && user.name && (
-              <Text style={{ fontSize: 13, color: colors.muted }} numberOfLines={1}>
+              <Text
+                style={{ fontSize: 13, color: colors.muted }}
+                numberOfLines={1}
+              >
                 {user.email}
               </Text>
             )}
@@ -152,8 +191,14 @@ export const AccountSection: React.FC = () => {
             gap: 8,
           }}
         >
-          <MaterialCommunityIcons name="logout" size={18} color={colors.error} />
-          <Text style={{ fontSize: 15, fontWeight: "600", color: colors.error }}>
+          <MaterialCommunityIcons
+            name="logout"
+            size={18}
+            color={colors.error}
+          />
+          <Text
+            style={{ fontSize: 15, fontWeight: "600", color: colors.error }}
+          >
             Sign out
           </Text>
         </TouchableOpacity>
@@ -164,7 +209,8 @@ export const AccountSection: React.FC = () => {
   return (
     <View style={{ paddingVertical: 12 }}>
       <Text style={{ fontSize: 14, color: colors.muted, marginBottom: 10 }}>
-        Sign in with Apple to enable hands-free voice. Your speech is sent to the server for transcription.
+        Sign in with Apple to enable hands-free voice. Your speech is sent to
+        the server for transcription.
       </Text>
       <TouchableOpacity
         onPress={handleSignIn}

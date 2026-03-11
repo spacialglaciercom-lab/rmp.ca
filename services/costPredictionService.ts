@@ -3,10 +3,18 @@
  * Integrates cost correction model with route optimization and provides cost-aware recommendations
  */
 
-import { costCorrectionModel, type CostFactors, type CostPrediction, type ActualCostData } from "@/lib/cost-correction-model";
+import {
+  costCorrectionModel,
+  type CostFactors,
+  type CostPrediction,
+  type ActualCostData,
+} from "@/lib/cost-correction-model";
 import type { RouteStatistics } from "@/types/routing";
 import type { CurrentWeather } from "@/services/weatherService";
-import { getLeapWeatherRecommendations, type LeapWeatherInput } from "@/services/leapAIService";
+import {
+  getLeapWeatherRecommendations,
+  type LeapWeatherInput,
+} from "@/services/leapAIService";
 
 export interface CostAwareRouteRecommendation {
   routeId: string;
@@ -64,9 +72,9 @@ export class CostPredictionService {
   private static instance: CostPredictionService;
   private costLearningQueue: CostLearningUpdate[] = [];
   private learningBatchSize = 10;
-  
+
   private constructor() {}
-  
+
   static getInstance(): CostPredictionService {
     if (!CostPredictionService.instance) {
       CostPredictionService.instance = new CostPredictionService();
@@ -78,33 +86,42 @@ export class CostPredictionService {
    * Get cost-aware route recommendations
    */
   async getCostAwareRecommendations(
-    request: CostOptimizationRequest
+    request: CostOptimizationRequest,
   ): Promise<CostAwareRouteRecommendation | null> {
     try {
       // Get base cost prediction
       const prediction = await costCorrectionModel.predictCosts(
         request.routeStats,
         request.weatherData,
-        request.operationalContext
+        request.operationalContext,
       );
-      
+
       if (!prediction) {
         console.warn("Cost prediction failed, using fallback");
         return this.getFallbackRecommendation(request);
       }
 
       // Generate alternative cost scenarios
-      const alternatives = await this.generateAlternativeScenarios(request, prediction);
-      
+      const alternatives = await this.generateAlternativeScenarios(
+        request,
+        prediction,
+      );
+
       // Calculate cost efficiency score
-      const efficiencyScore = this.calculateCostEfficiencyScore(prediction, request);
-      
+      const efficiencyScore = this.calculateCostEfficiencyScore(
+        prediction,
+        request,
+      );
+
       // Assess cost risks
       const riskAssessment = this.assessCostRisks(prediction, request);
-      
+
       // Identify optimization opportunities
-      const optimizationOpportunities = this.identifyOptimizationOpportunities(prediction, request);
-      
+      const optimizationOpportunities = this.identifyOptimizationOpportunities(
+        prediction,
+        request,
+      );
+
       return {
         routeId: `route_${Date.now()}`,
         predictedCosts: prediction,
@@ -125,7 +142,7 @@ export class CostPredictionService {
   async updateWithActualCosts(update: CostLearningUpdate): Promise<void> {
     // Add to learning queue
     this.costLearningQueue.push(update);
-    
+
     // Process batch when we have enough samples
     if (this.costLearningQueue.length >= this.learningBatchSize) {
       await this.processLearningBatch();
@@ -142,36 +159,42 @@ export class CostPredictionService {
       routeName?: string;
     }>,
     weatherData?: CurrentWeather,
-    operationalContext?: Partial<CostFactors>
-  ): Promise<Array<{
-    routeId: string;
-    routeName?: string;
-    predictedCosts: CostPrediction;
-    costRank: number;
-    costEfficiency: number;
-    recommendations: string[];
-  }>> {
+    operationalContext?: Partial<CostFactors>,
+  ): Promise<
+    Array<{
+      routeId: string;
+      routeName?: string;
+      predictedCosts: CostPrediction;
+      costRank: number;
+      costEfficiency: number;
+      recommendations: string[];
+    }>
+  > {
     const routeCosts = await Promise.all(
       routes.map(async (route) => {
         const prediction = await costCorrectionModel.predictCosts(
           route.routeStats,
           weatherData,
-          operationalContext
+          operationalContext,
         );
-        
+
         return {
           routeId: route.routeId,
           routeName: route.routeName,
           predictedCosts: prediction,
-          costEfficiency: prediction ? this.calculateBasicCostEfficiency(prediction) : 0,
-          recommendations: prediction ? this.getBasicRecommendations(prediction) : [],
+          costEfficiency: prediction
+            ? this.calculateBasicCostEfficiency(prediction)
+            : 0,
+          recommendations: prediction
+            ? this.getBasicRecommendations(prediction)
+            : [],
         };
-      })
+      }),
     );
 
     // Sort by cost efficiency and assign ranks
     const validRoutes = routeCosts
-      .filter(route => route.predictedCosts !== null)
+      .filter((route) => route.predictedCosts !== null)
       .sort((a, b) => b.costEfficiency - a.costEfficiency);
 
     return validRoutes.map((route, index) => ({
@@ -184,9 +207,7 @@ export class CostPredictionService {
   /**
    * Generate budget-aware recommendations
    */
-  async getBudgetRecommendations(
-    request: CostOptimizationRequest
-  ): Promise<{
+  async getBudgetRecommendations(request: CostOptimizationRequest): Promise<{
     withinBudget: boolean;
     recommendations: string[];
     costReductionNeeded: number;
@@ -204,19 +225,29 @@ export class CostPredictionService {
 
     const { predictedCosts } = recommendation;
     const constraints = request.budgetConstraints || {};
-    
+
     let withinBudget = true;
     let costReductionNeeded = 0;
     const recommendations: string[] = [];
     const alternativeStrategies: string[] = [];
 
     // Check total cost constraint
-    if (constraints.maxTotalCost && predictedCosts.predictedTotalCost > constraints.maxTotalCost) {
+    if (
+      constraints.maxTotalCost &&
+      predictedCosts.predictedTotalCost > constraints.maxTotalCost
+    ) {
       withinBudget = false;
-      costReductionNeeded = predictedCosts.predictedTotalCost - constraints.maxTotalCost;
-      recommendations.push(`Total cost exceeds budget by $${costReductionNeeded.toFixed(2)}`);
-      alternativeStrategies.push("Consider route optimization to reduce distance");
-      alternativeStrategies.push("Schedule during off-peak hours to reduce labor costs");
+      costReductionNeeded =
+        predictedCosts.predictedTotalCost - constraints.maxTotalCost;
+      recommendations.push(
+        `Total cost exceeds budget by $${costReductionNeeded.toFixed(2)}`,
+      );
+      alternativeStrategies.push(
+        "Consider route optimization to reduce distance",
+      );
+      alternativeStrategies.push(
+        "Schedule during off-peak hours to reduce labor costs",
+      );
     }
 
     // Check fuel cost constraint
@@ -224,7 +255,9 @@ export class CostPredictionService {
       const predictedFuelCost = predictedCosts.costBreakdown.fuel;
       if (predictedFuelCost > constraints.maxFuelCost) {
         withinBudget = false;
-        recommendations.push(`Fuel cost exceeds budget by $${(predictedFuelCost - constraints.maxFuelCost).toFixed(2)}`);
+        recommendations.push(
+          `Fuel cost exceeds budget by $${(predictedFuelCost - constraints.maxFuelCost).toFixed(2)}`,
+        );
         alternativeStrategies.push("Optimize route to reduce total distance");
         alternativeStrategies.push("Consider more fuel-efficient vehicle");
       }
@@ -235,15 +268,21 @@ export class CostPredictionService {
       const predictedTimeCost = predictedCosts.costBreakdown.labor;
       if (predictedTimeCost > constraints.maxTimeCost) {
         withinBudget = false;
-        recommendations.push(`Time/labor cost exceeds budget by $${(predictedTimeCost - constraints.maxTimeCost).toFixed(2)}`);
+        recommendations.push(
+          `Time/labor cost exceeds budget by $${(predictedTimeCost - constraints.maxTimeCost).toFixed(2)}`,
+        );
         alternativeStrategies.push("Optimize route to reduce completion time");
-        alternativeStrategies.push("Consider more experienced driver for efficiency");
+        alternativeStrategies.push(
+          "Consider more experienced driver for efficiency",
+        );
       }
     }
 
     if (withinBudget) {
       recommendations.push("Route stays within budget constraints");
-      recommendations.push(`Budget utilization: ${((predictedCosts.predictedTotalCost / (constraints.maxTotalCost || predictedCosts.predictedTotalCost)) * 100).toFixed(1)}%`);
+      recommendations.push(
+        `Budget utilization: ${((predictedCosts.predictedTotalCost / (constraints.maxTotalCost || predictedCosts.predictedTotalCost)) * 100).toFixed(1)}%`,
+      );
     }
 
     return {
@@ -259,13 +298,15 @@ export class CostPredictionService {
    */
   private async generateAlternativeScenarios(
     request: CostOptimizationRequest,
-    basePrediction: CostPrediction
-  ): Promise<Array<{
-    routeVariant: string;
-    costDifference: number;
-    timeDifference: number;
-    tradeOffs: string[];
-  }>> {
+    basePrediction: CostPrediction,
+  ): Promise<
+    Array<{
+      routeVariant: string;
+      costDifference: number;
+      timeDifference: number;
+      tradeOffs: string[];
+    }>
+  > {
     const alternatives: Array<{
       routeVariant: string;
       costDifference: number;
@@ -283,14 +324,17 @@ export class CostPredictionService {
     const costOptimizedPrediction = await costCorrectionModel.predictCosts(
       request.routeStats,
       request.weatherData,
-      costOptimizedContext
+      costOptimizedContext,
     );
 
     if (costOptimizedPrediction) {
       alternatives.push({
         routeVariant: "Cost-Optimized",
-        costDifference: costOptimizedPrediction.predictedTotalCost - basePrediction.predictedTotalCost,
-        timeDifference: costOptimizedPrediction.predictedTime - basePrediction.predictedTime,
+        costDifference:
+          costOptimizedPrediction.predictedTotalCost -
+          basePrediction.predictedTotalCost,
+        timeDifference:
+          costOptimizedPrediction.predictedTime - basePrediction.predictedTime,
         tradeOffs: [
           "Requires experienced driver",
           "Early morning start may affect scheduling",
@@ -309,14 +353,17 @@ export class CostPredictionService {
       const delayedPrediction = await costCorrectionModel.predictCosts(
         request.routeStats,
         delayedWeatherData,
-        request.operationalContext
+        request.operationalContext,
       );
 
       if (delayedPrediction) {
         alternatives.push({
           routeVariant: "Weather-Delayed",
-          costDifference: delayedPrediction.predictedTotalCost - basePrediction.predictedTotalCost,
-          timeDifference: delayedPrediction.predictedTime - basePrediction.predictedTime,
+          costDifference:
+            delayedPrediction.predictedTotalCost -
+            basePrediction.predictedTotalCost,
+          timeDifference:
+            delayedPrediction.predictedTime - basePrediction.predictedTime,
           tradeOffs: [
             "Delays service delivery",
             "May affect customer satisfaction",
@@ -335,14 +382,17 @@ export class CostPredictionService {
     const offPeakPrediction = await costCorrectionModel.predictCosts(
       request.routeStats,
       request.weatherData,
-      offPeakContext
+      offPeakContext,
     );
 
     if (offPeakPrediction) {
       alternatives.push({
         routeVariant: "Off-Peak",
-        costDifference: offPeakPrediction.predictedTotalCost - basePrediction.predictedTotalCost,
-        timeDifference: offPeakPrediction.predictedTime - basePrediction.predictedTime,
+        costDifference:
+          offPeakPrediction.predictedTotalCost -
+          basePrediction.predictedTotalCost,
+        timeDifference:
+          offPeakPrediction.predictedTime - basePrediction.predictedTime,
         tradeOffs: [
           "Early morning start required",
           "May require overtime pay",
@@ -359,7 +409,7 @@ export class CostPredictionService {
    */
   private calculateCostEfficiencyScore(
     prediction: CostPrediction,
-    request: CostOptimizationRequest
+    request: CostOptimizationRequest,
   ): number {
     const preferences = request.optimizationPreferences || {
       prioritizeCost: true,
@@ -371,25 +421,36 @@ export class CostPredictionService {
     let score = 50; // Base score
 
     // Cost efficiency (lower cost = higher score)
-    const costPerKm = prediction.predictedTotalCost / (request.routeStats.totalDistance || 1);
-    if (costPerKm < 8) score += 25; // Very efficient
-    else if (costPerKm < 12) score += 15; // Efficient
-    else if (costPerKm < 16) score += 5; // Average
+    const costPerKm =
+      prediction.predictedTotalCost / (request.routeStats.totalDistance || 1);
+    if (costPerKm < 8)
+      score += 25; // Very efficient
+    else if (costPerKm < 12)
+      score += 15; // Efficient
+    else if (costPerKm < 16)
+      score += 5; // Average
     else score -= 10; // Inefficient
 
     // Time efficiency (shorter time = higher score)
-    const timePerKm = prediction.predictedTime / (request.routeStats.totalDistance || 1);
+    const timePerKm =
+      prediction.predictedTime / (request.routeStats.totalDistance || 1);
     if (preferences.prioritizeTime) {
-      if (timePerKm < 3) score += 15; // Very fast
-      else if (timePerKm < 5) score += 10; // Fast
+      if (timePerKm < 3)
+        score += 15; // Very fast
+      else if (timePerKm < 5)
+        score += 10; // Fast
       else if (timePerKm > 8) score -= 15; // Slow
     }
 
     // Fuel efficiency (lower fuel consumption = higher score)
-    const fuelPerKm = prediction.predictedFuelConsumption / (request.routeStats.totalDistance || 1);
+    const fuelPerKm =
+      prediction.predictedFuelConsumption /
+      (request.routeStats.totalDistance || 1);
     if (preferences.prioritizeFuel) {
-      if (fuelPerKm < 0.25) score += 15; // Very efficient
-      else if (fuelPerKm < 0.35) score += 10; // Efficient
+      if (fuelPerKm < 0.25)
+        score += 15; // Very efficient
+      else if (fuelPerKm < 0.35)
+        score += 10; // Efficient
       else if (fuelPerKm > 0.5) score -= 15; // Inefficient
     }
 
@@ -397,7 +458,10 @@ export class CostPredictionService {
     score += prediction.confidenceScore * 10;
 
     // Risk adjustment
-    if (preferences.riskTolerance === "conservative" && prediction.riskFactors.length > 2) {
+    if (
+      preferences.riskTolerance === "conservative" &&
+      prediction.riskFactors.length > 2
+    ) {
       score -= 10;
     }
 
@@ -409,7 +473,7 @@ export class CostPredictionService {
    */
   private assessCostRisks(
     prediction: CostPrediction,
-    request: CostOptimizationRequest
+    request: CostOptimizationRequest,
   ): {
     costOverrunRisk: "low" | "medium" | "high";
     likelyCostRange: [number, number];
@@ -417,7 +481,7 @@ export class CostPredictionService {
   } {
     const riskFactors = [...prediction.riskFactors];
     let riskLevel: "low" | "medium" | "high" = "low";
-    
+
     // Determine risk level
     if (prediction.confidenceScore < 0.7) {
       riskLevel = "high";
@@ -428,7 +492,9 @@ export class CostPredictionService {
     }
 
     if (request.weatherData) {
-      const weatherSeverity = this.calculateWeatherSeverity(request.weatherData);
+      const weatherSeverity = this.calculateWeatherSeverity(
+        request.weatherData,
+      );
       if (weatherSeverity > 0.7) {
         riskLevel = "high";
         riskFactors.push("Severe weather conditions");
@@ -441,7 +507,7 @@ export class CostPredictionService {
     // Calculate cost range based on risk
     const baseCost = prediction.predictedTotalCost;
     let costRange: [number, number];
-    
+
     switch (riskLevel) {
       case "low":
         costRange = [baseCost * 0.9, baseCost * 1.1];
@@ -466,31 +532,42 @@ export class CostPredictionService {
    */
   private identifyOptimizationOpportunities(
     prediction: CostPrediction,
-    request: CostOptimizationRequest
+    request: CostOptimizationRequest,
   ): string[] {
     const opportunities: string[] = [];
 
     // Fuel optimization
     if (prediction.costBreakdown.fuel > prediction.predictedTotalCost * 0.4) {
-      opportunities.push("High fuel costs - consider route optimization to reduce distance");
+      opportunities.push(
+        "High fuel costs - consider route optimization to reduce distance",
+      );
     }
 
     // Time optimization
-    if (prediction.predictedTime > 240) { // > 4 hours
-      opportunities.push("Long route duration - consider splitting into multiple shorter routes");
+    if (prediction.predictedTime > 240) {
+      // > 4 hours
+      opportunities.push(
+        "Long route duration - consider splitting into multiple shorter routes",
+      );
     }
 
     // Weather optimization
     if (request.weatherData) {
-      const weatherSeverity = this.calculateWeatherSeverity(request.weatherData);
+      const weatherSeverity = this.calculateWeatherSeverity(
+        request.weatherData,
+      );
       if (weatherSeverity > 0.5) {
-        opportunities.push("Weather impact detected - consider timing adjustments");
+        opportunities.push(
+          "Weather impact detected - consider timing adjustments",
+        );
       }
     }
 
     // Risk optimization
     if (prediction.riskFactors.length > 2) {
-      opportunities.push("Multiple risk factors - implement risk mitigation strategies");
+      opportunities.push(
+        "Multiple risk factors - implement risk mitigation strategies",
+      );
     }
 
     // Always include learning opportunity
@@ -506,20 +583,20 @@ export class CostPredictionService {
     if (this.costLearningQueue.length === 0) return;
 
     const batch = this.costLearningQueue.splice(0, this.learningBatchSize);
-    
+
     try {
       await Promise.all(
-        batch.map(update => 
+        batch.map((update) =>
           costCorrectionModel.learnFromActualData(
             update.predictedCosts,
             update.actualCosts,
             update.routeStats,
             update.weatherData,
-            update.operationalContext
-          )
-        )
+            update.operationalContext,
+          ),
+        ),
       );
-      
+
       console.log(`Processed ${batch.length} cost learning updates`);
     } catch (error) {
       console.error("Cost learning batch processing failed:", error);
@@ -529,15 +606,21 @@ export class CostPredictionService {
   /**
    * Fallback recommendation when AI is unavailable
    */
-  private getFallbackRecommendation(request: CostOptimizationRequest): CostAwareRouteRecommendation {
+  private getFallbackRecommendation(
+    request: CostOptimizationRequest,
+  ): CostAwareRouteRecommendation {
     const baseTime = request.routeStats.estimatedTime;
     const baseDistance = request.routeStats.totalDistance;
-    
+
     // Simple cost estimation
     const estimatedFuel = baseDistance * 0.3; // 0.3L per km
     const estimatedTimeCost = (baseTime / 60) * 45; // $45/hour
     const estimatedFuelCost = estimatedFuel * 1.5; // $1.5/L
-    const estimatedTotalCost = estimatedTimeCost + estimatedFuelCost + (baseDistance * 0.15) + ((estimatedTimeCost + estimatedFuelCost) * 0.2);
+    const estimatedTotalCost =
+      estimatedTimeCost +
+      estimatedFuelCost +
+      baseDistance * 0.15 +
+      (estimatedTimeCost + estimatedFuelCost) * 0.2;
 
     const fallbackPrediction: CostPrediction = {
       predictedTime: baseTime,
@@ -592,12 +675,12 @@ export class CostPredictionService {
    */
   private calculateWeatherSeverity(weatherData?: CurrentWeather): number {
     if (!weatherData) return 0;
-    
+
     let severity = 0;
     if (weatherData.rain1h > 5) severity += 0.3;
     if (weatherData.windSpeed > 10) severity += 0.2;
     if (weatherData.visibility < 1000) severity += 0.3;
-    
+
     return Math.min(1, severity);
   }
 
@@ -606,12 +689,14 @@ export class CostPredictionService {
    */
   private getFallbackRiskFactors(weatherData?: CurrentWeather): string[] {
     const factors: string[] = ["Limited prediction accuracy"];
-    
+
     if (weatherData) {
-      if (weatherData.rain1h > 5) factors.push("Weather impact not fully assessed");
-      if (weatherData.windSpeed > 10) factors.push("Wind conditions may affect costs");
+      if (weatherData.rain1h > 5)
+        factors.push("Weather impact not fully assessed");
+      if (weatherData.windSpeed > 10)
+        factors.push("Wind conditions may affect costs");
     }
-    
+
     return factors;
   }
 

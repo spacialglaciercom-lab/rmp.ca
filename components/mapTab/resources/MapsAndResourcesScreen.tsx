@@ -7,11 +7,11 @@ import {
   StyleSheet,
   Modal,
   Pressable,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
 
 import { useColors } from "@/hooks/use-colors";
 import { useDeviceType } from "@/hooks/useDeviceType";
@@ -75,7 +75,10 @@ const styles = StyleSheet.create({
   },
 });
 
-export function MapsAndResourcesScreen({ visible, onClose }: MapsAndResourcesScreenProps) {
+export function MapsAndResourcesScreen({
+  visible,
+  onClose,
+}: MapsAndResourcesScreenProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const deviceType = useDeviceType();
@@ -116,21 +119,28 @@ export function MapsAndResourcesScreen({ visible, onClose }: MapsAndResourcesScr
         >
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <TouchableOpacity style={styles.backButton} onPress={handleClose}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color={colors.text}
+              />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]}>
               Maps & Resources
             </Text>
           </View>
 
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <MapSourcePicker />
-        </View>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
+          >
+            <View style={styles.section}>
+              <MapSourcePicker />
+            </View>
 
-        <View style={styles.section}>
-          <OverlayToggles />
-        </View>
+            <View style={styles.section}>
+              <OverlayToggles />
+            </View>
 
             <View style={styles.section}>
               <DisplayOptionsToggles />

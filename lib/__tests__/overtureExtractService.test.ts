@@ -35,7 +35,13 @@ const MOCK_GEOJSON = {
   features: [
     {
       type: "Feature" as const,
-      geometry: { type: "LineString" as const, coordinates: [[0, 0], [1, 1]] as [number, number][] },
+      geometry: {
+        type: "LineString" as const,
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ] as [number, number][],
+      },
       properties: {},
     },
   ],
@@ -88,11 +94,18 @@ function makePolygon(
 
 // Two polygons with the *same* bounding box [-1,-1 → 1,1] but different shapes.
 const RECTANGLE = makePolygon([
-  [-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1],
+  [-1, -1],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+  [-1, -1],
 ]);
 
 const TRIANGLE = makePolygon([
-  [-1, -1], [1, -1], [0, 1], [-1, -1],
+  [-1, -1],
+  [1, -1],
+  [0, 1],
+  [-1, -1],
 ]);
 
 // ---------------------------------------------------------------------------
@@ -110,9 +123,8 @@ describe("extractOverture cache-key discrimination", () => {
     await extractOverture(RECTANGLE, "roads");
     await extractOverture(TRIANGLE, "roads");
 
-    const { default: AsyncStorage } = await import(
-      "@react-native-async-storage/async-storage"
-    );
+    const { default: AsyncStorage } =
+      await import("@react-native-async-storage/async-storage");
     const setCalls = vi.mocked(AsyncStorage.setItem).mock.calls;
 
     // Both results should have been cached under distinct keys
@@ -128,9 +140,8 @@ describe("extractOverture cache-key discrimination", () => {
     await extractOverture(RECTANGLE, "roads");
     await extractOverture(RECTANGLE, "roads");
 
-    const { default: AsyncStorage } = await import(
-      "@react-native-async-storage/async-storage"
-    );
+    const { default: AsyncStorage } =
+      await import("@react-native-async-storage/async-storage");
     // Only one write – the second call should return from cache
     expect(vi.mocked(AsyncStorage.setItem).mock.calls.length).toBe(1);
   });
@@ -141,9 +152,8 @@ describe("extractOverture cache-key discrimination", () => {
     await extractOverture(RECTANGLE, "roads");
     await extractOverture(RECTANGLE, "buildings");
 
-    const { default: AsyncStorage } = await import(
-      "@react-native-async-storage/async-storage"
-    );
+    const { default: AsyncStorage } =
+      await import("@react-native-async-storage/async-storage");
     const setCalls = vi.mocked(AsyncStorage.setItem).mock.calls;
     expect(setCalls.length).toBe(2);
     expect(setCalls[0][0]).not.toBe(setCalls[1][0]);

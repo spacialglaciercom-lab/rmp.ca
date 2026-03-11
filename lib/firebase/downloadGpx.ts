@@ -8,11 +8,23 @@ import { Linking } from "react-native";
 
 const STORAGE_GPX_PREFIX = "gpx_files";
 
-function requireStorage(): () => { ref: (path: string) => { getDownloadURL: () => Promise<string>; writeToFile?: (path: string) => { then: (fn: () => void) => void } } } {
+function requireStorage(): () => {
+  ref: (path: string) => {
+    getDownloadURL: () => Promise<string>;
+    writeToFile?: (path: string) => { then: (fn: () => void) => void };
+  };
+} {
   if (!storage || typeof storage !== "function") {
-    throw new Error("Firebase Storage is not available. Use a development build with Firebase for GPX download.");
+    throw new Error(
+      "Firebase Storage is not available. Use a development build with Firebase for GPX download.",
+    );
   }
-  return storage as unknown as () => { ref: (path: string) => { getDownloadURL: () => Promise<string>; writeToFile?: (path: string) => { then: (fn: () => void) => void } } };
+  return storage as unknown as () => {
+    ref: (path: string) => {
+      getDownloadURL: () => Promise<string>;
+      writeToFile?: (path: string) => { then: (fn: () => void) => void };
+    };
+  };
 }
 
 /**
@@ -22,7 +34,7 @@ function requireStorage(): () => { ref: (path: string) => { getDownloadURL: () =
 export async function getGpxDownloadUrl(
   userId: string,
   routeId: string,
-  options?: { subPath?: "routes" | "" }
+  options?: { subPath?: "routes" | "" },
 ): Promise<string> {
   await ensureAppCheckReady();
   const st = requireStorage();
@@ -39,7 +51,7 @@ export async function getGpxDownloadUrl(
 export async function getGpxFileAsText(
   userId: string,
   routeId: string,
-  options?: { subPath?: "routes" | "" }
+  options?: { subPath?: "routes" | "" },
 ): Promise<string> {
   const url = await getGpxDownloadUrl(userId, routeId, options);
   const res = await fetch(url);
@@ -60,7 +72,7 @@ export async function downloadGpxToFile(
   userId: string,
   routeId: string,
   localFilePath: string,
-  options?: { subPath?: "routes" | "" }
+  options?: { subPath?: "routes" | "" },
 ): Promise<string> {
   await ensureAppCheckReady();
   const st = requireStorage();
@@ -79,7 +91,7 @@ export async function downloadGpxToFile(
 export async function openGpxInExternalApp(
   userId: string,
   routeId: string,
-  options?: { subPath?: "routes" | "" }
+  options?: { subPath?: "routes" | "" },
 ): Promise<void> {
   const url = await getGpxDownloadUrl(userId, routeId, options);
   try {

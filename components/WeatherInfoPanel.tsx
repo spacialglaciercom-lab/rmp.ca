@@ -7,7 +7,10 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import { WeatherIndicator } from "./WeatherIndicator";
-import type { WeatherAnalysisResult, RouteWeatherSummary } from "@/services/weatherAnalysis";
+import type {
+  WeatherAnalysisResult,
+  RouteWeatherSummary,
+} from "@/services/weatherAnalysis";
 
 function windDegToLabel(deg: number): string {
   if (deg >= 338 || deg < 23) return "N";
@@ -32,7 +35,9 @@ function StatRow({
   return (
     <View style={styles.statRow}>
       <Text style={[styles.statLabel, { color: colors.muted }]}>{label}</Text>
-      <Text style={[styles.statValue, { color: colors.foreground }]}>{value}</Text>
+      <Text style={[styles.statValue, { color: colors.foreground }]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -43,7 +48,10 @@ export interface WeatherInfoPanelProps {
   mainCondition?: string;
 }
 
-export function WeatherInfoPanel({ analysis, mainCondition = "Clear" }: WeatherInfoPanelProps) {
+export function WeatherInfoPanel({
+  analysis,
+  mainCondition = "Clear",
+}: WeatherInfoPanelProps) {
   const colors = useColors();
   const summary: RouteWeatherSummary | undefined = analysis.routeWeatherSummary;
 
@@ -59,7 +67,9 @@ export function WeatherInfoPanel({ analysis, mainCondition = "Clear" }: WeatherI
     >
       <View style={styles.header}>
         <WeatherIndicator condition={mainCondition} size={28} glow />
-        <Text style={[styles.title, { color: colors.foreground }]}>Weather along route</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>
+          Weather along route
+        </Text>
       </View>
 
       {summary ? (
@@ -87,8 +97,12 @@ export function WeatherInfoPanel({ analysis, mainCondition = "Clear" }: WeatherI
             <StatRow
               label="Precipitation"
               value={[
-                summary.rainMmh > 0 ? `Rain ${summary.rainMmh.toFixed(1)} mm/h` : null,
-                summary.snowMmh > 0 ? `Snow ${summary.snowMmh.toFixed(1)} mm/h` : null,
+                summary.rainMmh > 0
+                  ? `Rain ${summary.rainMmh.toFixed(1)} mm/h`
+                  : null,
+                summary.snowMmh > 0
+                  ? `Snow ${summary.snowMmh.toFixed(1)} mm/h`
+                  : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -116,7 +130,8 @@ export function WeatherInfoPanel({ analysis, mainCondition = "Clear" }: WeatherI
         </View>
       ) : (
         <Text style={[styles.fallback, { color: colors.muted }]}>
-          No weather data for this route. Enable Weather-Optimized Routing and generate a route.
+          No weather data for this route. Enable Weather-Optimized Routing and
+          generate a route.
         </Text>
       )}
 
@@ -131,7 +146,11 @@ export function WeatherInfoPanel({ analysis, mainCondition = "Clear" }: WeatherI
           ]}
         >
           {analysis.alerts.slice(0, 3).map((a, i) => (
-            <Text key={i} style={[styles.alertText, { color: colors.foreground }]} numberOfLines={1}>
+            <Text
+              key={i}
+              style={[styles.alertText, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
               {a}
             </Text>
           ))}

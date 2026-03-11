@@ -12,12 +12,18 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { connectAndPing } from "../mongodb";
 import { initRagIndex } from "../rag/ragService";
-import { sendErrorPushNotification, registerPushToken } from "../reportErrorPush";
+import {
+  sendErrorPushNotification,
+  registerPushToken,
+} from "../reportErrorPush";
 import { handleEasBuildWebhook } from "../easBuildWebhook";
 import { registerMapsProxyRoutes } from "../mapsProxy";
 import { registerAiProxyRoutes } from "../aiProxy";
 import { registerElevenLabsProxyRoutes } from "../elevenLabsProxy";
-import { registerWsExtractProxy, registerExtractHttpProxyRoutes } from "../wsExtractProxy";
+import {
+  registerWsExtractProxy,
+  registerExtractHttpProxyRoutes,
+} from "../wsExtractProxy";
 import { registerOptimizerProxyRoutes } from "../optimizerProxy";
 import { createLogger } from "../logger";
 import { ENV } from "./env";
@@ -38,16 +44,23 @@ function isPortAvailable(port: number): Promise<boolean> {
 
 const DEFAULT_FALLBACK_PORTS = [8082, 8083, 8084, 3001, 3002, 5000, 5001];
 
-async function findAvailablePort(preferredPort: number = 3000): Promise<number> {
+async function findAvailablePort(
+  preferredPort: number = 3000,
+): Promise<number> {
   const envFallback = process.env.PORT_FALLBACK;
   const extraPorts = envFallback
-    ? envFallback.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+    ? envFallback
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n))
     : [];
 
   const portsToTry = [
     preferredPort,
     ...DEFAULT_FALLBACK_PORTS.filter((p) => p !== preferredPort),
-    ...extraPorts.filter((p) => p !== preferredPort && !DEFAULT_FALLBACK_PORTS.includes(p)),
+    ...extraPorts.filter(
+      (p) => p !== preferredPort && !DEFAULT_FALLBACK_PORTS.includes(p),
+    ),
   ];
 
   for (const port of portsToTry) {
@@ -57,7 +70,7 @@ async function findAvailablePort(preferredPort: number = 3000): Promise<number> 
     }
   }
   throw new Error(
-    `No available port found. Tried: ${[...new Set(portsToTry)].join(", ")}`
+    `No available port found. Tried: ${[...new Set(portsToTry)].join(", ")}`,
   );
 }
 
@@ -78,7 +91,10 @@ async function startServer() {
     if (origin) {
       res.header("Access-Control-Allow-Origin", origin);
     }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
     res.header(
       "Access-Control-Allow-Headers",
       "Origin, X-Requested-With, Content-Type, Accept, Authorization",
@@ -97,7 +113,7 @@ async function startServer() {
   app.post(
     "/api/eas-build-webhook",
     express.raw({ type: "application/json" }),
-    (req, res) => handleEasBuildWebhook(req, res)
+    (req, res) => handleEasBuildWebhook(req, res),
   );
 
   app.use(express.json({ limit: "50mb" }));
@@ -130,14 +146,17 @@ async function startServer() {
         reportError: "POST /api/report-error",
         registerPushToken: "POST /api/register-push-token",
         easBuildWebhook: "POST /api/eas-build-webhook (EAS Build events)",
-        wsExtract: "WebSocket /ws/extract (proxy to optimizer backend for web same-origin)",
+        wsExtract:
+          "WebSocket /ws/extract (proxy to optimizer backend for web same-origin)",
         extractGeojson: "GET /geojson/:hash (proxy to extract backend)",
         extractDownload: "GET /download/:hash (proxy to extract backend)",
         optimizerOptimize: "POST /api/optimize (proxy to Python optimizer)",
         optimizerGeojson: "POST /api/geojson/* (proxy to Python optimizer)",
         optimizerZones: "POST /api/zones/partition (proxy to Python optimizer)",
-        optimizerOverture: "POST /overture/optimize (proxy to Python optimizer)",
-        optimizerHealth: "GET /optimizer/health (proxy to Python optimizer /health)",
+        optimizerOverture:
+          "POST /overture/optimize (proxy to Python optimizer)",
+        optimizerHealth:
+          "GET /optimizer/health (proxy to Python optimizer /health)",
       },
       timestamp: Date.now(),
     });
@@ -157,16 +176,25 @@ async function startServer() {
   app.get("/api/ai/chat", (_req, res) => {
     res.json({
       ok: true,
-      message: "AI chat: use POST with body { messages, systemPrompt?, model?, max_tokens?, temperature? }",
+      message:
+        "AI chat: use POST with body { messages, systemPrompt?, model?, max_tokens?, temperature? }",
       configured: Boolean(
-        (process.env.AI_GATEWAY_API_KEY ?? "").trim() || (process.env.OPENROUTER_API_KEY ?? "").trim(),
+        (process.env.AI_GATEWAY_API_KEY ?? "").trim() ||
+        (process.env.OPENROUTER_API_KEY ?? "").trim(),
       ),
     });
   });
 
   app.post("/api/register-push-token", (req, res) => {
-    const body = req.body as { expoPushToken?: string; token?: string; userId?: string };
-    const token = typeof body?.expoPushToken === "string" ? body.expoPushToken : body?.token;
+    const body = req.body as {
+      expoPushToken?: string;
+      token?: string;
+      userId?: string;
+    };
+    const token =
+      typeof body?.expoPushToken === "string"
+        ? body.expoPushToken
+        : body?.token;
     if (typeof token !== "string" || !token.trim()) {
       res.status(400).json({ ok: false, error: "expoPushToken required" });
       return;
@@ -177,26 +205,42 @@ async function startServer() {
   });
 
   app.post("/api/report-error", (req, res) => {
-    const payload = req.body as { message?: string; stack?: string; appVersion?: string; platform?: string };
-    const message = typeof payload?.message === "string" ? payload.message : "Unknown error";
+    const payload = req.body as {
+      message?: string;
+      stack?: string;
+      appVersion?: string;
+      platform?: string;
+    };
+    const message =
+      typeof payload?.message === "string" ? payload.message : "Unknown error";
     sendErrorPushNotification({
       message,
       stack: typeof payload?.stack === "string" ? payload.stack : undefined,
-      appVersion: typeof payload?.appVersion === "string" ? payload.appVersion : undefined,
-      platform: typeof payload?.platform === "string" ? payload.platform : undefined,
-    }).then(() => {
-      res.status(200).json({ ok: true });
-    }).catch((err) => {
-      log.error("report-error", err instanceof Error ? err : new Error(String(err)));
-      res.status(500).json({ ok: false, error: "Failed to process report" });
-    });
+      appVersion:
+        typeof payload?.appVersion === "string"
+          ? payload.appVersion
+          : undefined,
+      platform:
+        typeof payload?.platform === "string" ? payload.platform : undefined,
+    })
+      .then(() => {
+        res.status(200).json({ ok: true });
+      })
+      .catch((err) => {
+        log.error(
+          "report-error",
+          err instanceof Error ? err : new Error(String(err)),
+        );
+        res.status(500).json({ ok: false, error: "Failed to process report" });
+      });
   });
 
   /** Voice: public REST endpoints (no tRPC, no auth) so AI chat always works. */
   app.post("/api/voice/transcribe", async (req, res) => {
     try {
       const body = req.body as { audioBase64?: string; mimeType?: string };
-      const audioBase64 = typeof body?.audioBase64 === "string" ? body.audioBase64 : undefined;
+      const audioBase64 =
+        typeof body?.audioBase64 === "string" ? body.audioBase64 : undefined;
       if (!audioBase64) {
         res.status(400).json({ ok: false, error: "audioBase64 required" });
         return;
@@ -211,28 +255,58 @@ async function startServer() {
         res.status(400).json({ ok: false, error: result.error });
         return;
       }
-      res.status(200).json({ ok: true, text: result.text, language: result.language, segments: result.segments });
+      res.status(200).json({
+        ok: true,
+        text: result.text,
+        language: result.language,
+        segments: result.segments,
+      });
     } catch (err) {
-      log.error("voice/transcribe", err instanceof Error ? err : new Error(String(err)));
-      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : "Transcription failed" });
+      log.error(
+        "voice/transcribe",
+        err instanceof Error ? err : new Error(String(err)),
+      );
+      res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : "Transcription failed",
+      });
     }
   });
 
   app.post("/api/voice/chat", async (req, res) => {
     try {
-      const body = req.body as { message?: string; history?: Array<{ role: string; content: string }>; clientGatewayApiKey?: string | null };
-      const message = typeof body?.message === "string" ? body.message.trim() : "";
+      const body = req.body as {
+        message?: string;
+        history?: Array<{ role: string; content: string }>;
+        clientGatewayApiKey?: string | null;
+      };
+      const message =
+        typeof body?.message === "string" ? body.message.trim() : "";
       if (!message) {
         res.status(400).json({ ok: false, error: "message required" });
         return;
       }
       const history = Array.isArray(body?.history) ? body.history : undefined;
-      const clientGatewayApiKey = typeof body?.clientGatewayApiKey === "string" ? body.clientGatewayApiKey : undefined;
-      const reply = await chatWithCoPilot(message, history, undefined, clientGatewayApiKey ?? undefined);
+      const clientGatewayApiKey =
+        typeof body?.clientGatewayApiKey === "string"
+          ? body.clientGatewayApiKey
+          : undefined;
+      const reply = await chatWithCoPilot(
+        message,
+        history,
+        undefined,
+        clientGatewayApiKey ?? undefined,
+      );
       res.status(200).json({ ok: true, reply });
     } catch (err) {
-      log.error("voice/chat", err instanceof Error ? err : new Error(String(err)));
-      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : "Chat failed" });
+      log.error(
+        "voice/chat",
+        err instanceof Error ? err : new Error(String(err)),
+      );
+      res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : "Chat failed",
+      });
     }
   });
 
@@ -257,22 +331,36 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    log.warn("Port busy, using fallback", { preferred: preferredPort, using: port });
-    log.warn(`If using .env, set EXPO_PUBLIC_API_BASE_URL=http://localhost:${port}`);
+    log.warn("Port busy, using fallback", {
+      preferred: preferredPort,
+      using: port,
+    });
+    log.warn(
+      `If using .env, set EXPO_PUBLIC_API_BASE_URL=http://localhost:${port}`,
+    );
   }
 
   const host = process.env.HOST ?? "0.0.0.0";
   server.listen(port, host, () => {
     log.warn(`Server listening on http://${host}:${port}`);
-    log.warn('Web app (Expo): run "pnpm run dev" then open http://localhost:19007');
+    log.warn(
+      'Web app (Expo): run "pnpm run dev" then open http://localhost:19007',
+    );
     if (ENV.moonshineSidecarUrl) {
       log.warn("Voice STT: Moonshine sidecar configured");
     } else if (ENV.forgeApiUrl) {
       log.warn("Voice STT: Whisper (Forge) configured");
     } else {
-      log.warn("Voice STT: not configured — set MOONSHINE_SIDECAR_URL on this service (main API), or BUILT_IN_FORGE_*");
+      log.warn(
+        "Voice STT: not configured — set MOONSHINE_SIDECAR_URL on this service (main API), or BUILT_IN_FORGE_*",
+      );
     }
   });
 }
 
-startServer().catch((err) => log.error("startup failed", err instanceof Error ? err : new Error(String(err))));
+startServer().catch((err) =>
+  log.error(
+    "startup failed",
+    err instanceof Error ? err : new Error(String(err)),
+  ),
+);

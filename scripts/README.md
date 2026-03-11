@@ -4,21 +4,22 @@ Scripts to start the trashroute-mobile app and backends.
 
 ## Quick start
 
-| Script | Description |
-|--------|-------------|
-| `start.bat` / `start.ps1` | Expo + tRPC server |
-| `start-backend.bat` / `start-backend.ps1` | MC-CARP API (trash-route, port 8000) |
-| `start-routemaster.bat` | RouteMaster API (port 8003) |
-| `start-all.bat` / `start-all.ps1` | App + MC-CARP backend in separate windows |
-| `kill-ports.bat` / `kill-ports.ps1` | Free ports 3000 and 19007 (run before start, or start-all does it) |
-| `reserve-ports.ps1` | Optional: reserve 3000 & 19007 for this app only (run as Admin, once) |
-| `start-at-login.ps1` | Same as start-all but for running at Windows login (Expo + MC-CARP, minimized windows) |
-| `install-startup.ps1` | Add trashroute-mobile to Windows Startup (run once) |
-| `uninstall-startup.ps1` | Remove from Windows Startup |
+| Script                                    | Description                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| `start.bat` / `start.ps1`                 | Expo + tRPC server                                                                     |
+| `start-backend.bat` / `start-backend.ps1` | MC-CARP API (trash-route, port 8000)                                                   |
+| `start-routemaster.bat`                   | RouteMaster API (port 8003)                                                            |
+| `start-all.bat` / `start-all.ps1`         | App + MC-CARP backend in separate windows                                              |
+| `kill-ports.bat` / `kill-ports.ps1`       | Free ports 3000 and 19007 (run before start, or start-all does it)                     |
+| `reserve-ports.ps1`                       | Optional: reserve 3000 & 19007 for this app only (run as Admin, once)                  |
+| `start-at-login.ps1`                      | Same as start-all but for running at Windows login (Expo + MC-CARP, minimized windows) |
+| `install-startup.ps1`                     | Add trashroute-mobile to Windows Startup (run once)                                    |
+| `uninstall-startup.ps1`                   | Remove from Windows Startup                                                            |
 
 ## Usage
 
 **App only:**
+
 ```bash
 scripts\start.bat
 # or
@@ -26,6 +27,7 @@ scripts\start.bat
 ```
 
 **App + MC-CARP backend:**
+
 ```bash
 scripts\start-all.bat
 # or
@@ -33,6 +35,7 @@ scripts\start-all.bat
 ```
 
 **Backend only:**
+
 ```bash
 scripts\start-backend.bat
 # or
@@ -40,6 +43,7 @@ scripts\start-backend.bat
 ```
 
 **Start automatically at Windows login:**
+
 1. Run once (as yourself): `.\scripts\install-startup.ps1`  
    (Right‑click `install-startup.ps1` → Run with PowerShell, or in PowerShell: `cd C:\trashroute-mobile\scripts; .\install-startup.ps1`)
 2. After that, each time you log in, the app and MC-CARP backend will start in minimized windows.

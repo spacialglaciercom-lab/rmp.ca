@@ -3,14 +3,25 @@ import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { recordErrorToCrashlytics } from "@/lib/crashlytics-report";
 import { trackEvent } from "@/lib/analytics";
 import { getEdgePenaltiesFromLeap } from "@/lib/route-ml-enhancement";
-import { buildTurnExpandedGraph, bridgeAllSCCs, makeEulerian, precomputeSCCs, type PipelineProgressCallback } from "@/lib/turnAwareGraph";
+import {
+  buildTurnExpandedGraph,
+  bridgeAllSCCs,
+  makeEulerian,
+  precomputeSCCs,
+  type PipelineProgressCallback,
+} from "@/lib/turnAwareGraph";
 import {
   solveTurnAwareCPP,
   turnCircuitToRoutePoints,
 } from "@/lib/turnAwareCpp";
 import { osmToStreetEdges } from "@/lib/osmToStreetEdges";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2";
-import type { Node, Way, TurnRestriction, TurnPenaltyWeights } from "@/lib/route-optimizer-v2/types";
+import type {
+  Node,
+  Way,
+  TurnRestriction,
+  TurnPenaltyWeights,
+} from "@/lib/route-optimizer-v2/types";
 import type { OptimizationResult } from "@/lib/route-optimizer-v2/types";
 import {
   getCurrentWeather,
@@ -37,7 +48,10 @@ export interface RouteOptimizationOptions {
 }
 
 export type RouteOptimizationResult =
-  | (OptimizationResult & { type: "standard"; weatherAnalysis?: WeatherAnalysisResult })
+  | (OptimizationResult & {
+      type: "standard";
+      weatherAnalysis?: WeatherAnalysisResult;
+    })
   | {
       type: "turn-aware";
       route: { latitude: number; longitude: number }[];
@@ -73,7 +87,7 @@ export function useRouteOptimization() {
   const optimizeRoute = async (
     nodes: Map<string, Node>,
     ways: Way[],
-    options: RouteOptimizationOptions = {}
+    options: RouteOptimizationOptions = {},
   ): Promise<RouteOptimizationResult> => {
     const {
       customLat,
@@ -90,7 +104,7 @@ export function useRouteOptimization() {
     const mergeWeatherPenalty = (
       edgePenalties: Map<string, number> | undefined,
       weatherPenalty: number,
-      wayIds: string[]
+      wayIds: string[],
     ): Map<string, number> => {
       const out = new Map(edgePenalties ?? []);
       for (const id of wayIds) {
@@ -99,14 +113,16 @@ export function useRouteOptimization() {
       return out;
     };
 
-    const runStandard = (edgePenalties?: Map<string, number>): RouteOptimizationResult => {
+    const runStandard = (
+      edgePenalties?: Map<string, number>,
+    ): RouteOptimizationResult => {
       const optimizer = new RouteOptimizer(
         nodes,
         ways,
         onewayMode,
         turnRestrictions,
         edgePenalties,
-        { serviceBothSides }
+        { serviceBothSides },
       );
       const result = optimizer.optimize(customLat, customLon, turnPenalties);
       return { ...result, type: "standard" };
@@ -115,13 +131,20 @@ export function useRouteOptimization() {
     const attachWeatherAnalysis = async (
       result: RouteOptimizationResult,
       routePoints: Array<{ latitude: number; longitude: number }>,
-      totalDistanceKm: number
+      totalDistanceKm: number,
     ): Promise<RouteOptimizationResult> => {
-      if (!features.weatherOptimizedRouting || !isWeatherConfigured() || routePoints.length < 2) {
+      if (
+        !features.weatherOptimizedRouting ||
+        !isWeatherConfigured() ||
+        routePoints.length < 2
+      ) {
         return result;
       }
       try {
-        const points = routePoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+        const points = routePoints.map((p) => ({
+          lat: p.latitude,
+          lon: p.longitude,
+        }));
         const weatherMap = await getWeatherForRoutePoints(points);
         const estimatedMinutes = totalDistanceKm * 3; // rough: ~20 km/h average
         const segments = buildSegmentsFromPoints(points, estimatedMinutes);
@@ -136,14 +159,27 @@ export function useRouteOptimization() {
 
     try {
       // --- Fetch weather & ML penalties (can run in parallel with graph work) ---
-      const fetchPenaltiesAsync = async (): Promise<{ mlPenalties?: Map<string, number>; weatherSummary: string | null }> => {
+      const fetchPenaltiesAsync = async (): Promise<{
+        mlPenalties?: Map<string, number>;
+        weatherSummary: string | null;
+      }> => {
         let penalties: Map<string, number> | undefined;
         let weatherSummary: string | null = null;
-        if (features.weatherOptimizedRouting && isWeatherConfigured() && nodes.size > 0) {
+        if (
+          features.weatherOptimizedRouting &&
+          isWeatherConfigured() &&
+          nodes.size > 0
+        ) {
           try {
             const arr = Array.from(nodes.values());
-            const centLat = arr.length > 0 ? arr.reduce((s, n) => s + n.lat, 0) / arr.length : 0;
-            const centLon = arr.length > 0 ? arr.reduce((s, n) => s + n.lon, 0) / arr.length : 0;
+            const centLat =
+              arr.length > 0
+                ? arr.reduce((s, n) => s + n.lat, 0) / arr.length
+                : 0;
+            const centLon =
+              arr.length > 0
+                ? arr.reduce((s, n) => s + n.lon, 0) / arr.length
+                : 0;
             const weather = await Promise.race([
               getCurrentWeather(centLat, centLon).catch(() => null),
               new Promise<null>((r) => setTimeout(() => r(null), 8000)),
@@ -152,21 +188,33 @@ export function useRouteOptimization() {
               weatherSummary = `${weather.condition.main}, ${weather.temp}°C, vis ${(weather.visibility / 1000).toFixed(1)}km, wind ${weather.windSpeed}m/s`;
               const weatherPenalty = getWeatherPenaltyMultiplier(weather);
               if (weatherPenalty > 0 && ways.length > 0) {
-                penalties = mergeWeatherPenalty(penalties, weatherPenalty, ways.map((w) => w.id));
+                penalties = mergeWeatherPenalty(
+                  penalties,
+                  weatherPenalty,
+                  ways.map((w) => w.id),
+                );
               }
             }
-          } catch { /* continue without weather */ }
+          } catch {
+            /* continue without weather */
+          }
         }
         if (features.enabled && features.learnedPenalties) {
           try {
             const leapPenalties = await Promise.race([
               getEdgePenaltiesFromLeap(ways, weatherSummary ?? undefined),
-              new Promise<Map<string, number>>((r) => setTimeout(() => r(new Map()), 8000)),
+              new Promise<Map<string, number>>((r) =>
+                setTimeout(() => r(new Map()), 8000),
+              ),
             ]);
             const merged = new Map(penalties ?? []);
-            leapPenalties.forEach((v, k) => merged.set(k, (merged.get(k) ?? 0) + v));
+            leapPenalties.forEach((v, k) =>
+              merged.set(k, (merged.get(k) ?? 0) + v),
+            );
             penalties = merged;
-          } catch { /* continue without LEAP */ }
+          } catch {
+            /* continue without LEAP */
+          }
         }
         return { mlPenalties: penalties, weatherSummary };
       };
@@ -177,10 +225,18 @@ export function useRouteOptimization() {
 
         onProgress?.("street-edges", "Converting OSM to street edges...");
         const streetEdges = osmToStreetEdges(nodes, ways);
-        console.log("[TurnAwareCPP] streetEdges:", streetEdges.length,
-          "sample:", streetEdges.slice(0, 3).map(e => ({
-            id: e.id, from: e.from, to: e.to, coords: e.coordinates.length, len: Math.round(e.length)
-          })));
+        console.log(
+          "[TurnAwareCPP] streetEdges:",
+          streetEdges.length,
+          "sample:",
+          streetEdges.slice(0, 3).map((e) => ({
+            id: e.id,
+            from: e.from,
+            to: e.to,
+            coords: e.coordinates.length,
+            len: Math.round(e.length),
+          })),
+        );
         if (streetEdges.length === 0) {
           mlEdgePenalties = (await penaltiesPromise).mlPenalties;
           return runStandard(mlEdgePenalties);
@@ -191,14 +247,27 @@ export function useRouteOptimization() {
         mlEdgePenalties = mlPenalties;
 
         onProgress?.("turn-graph", "Building turn-expanded graph...");
-        const { nodes: turnNodes, edges: turnEdges } = await buildTurnExpandedGraph(
-          streetEdges,
-          undefined,
-          mlEdgePenalties,
-          onProgress
+        const { nodes: turnNodes, edges: turnEdges } =
+          await buildTurnExpandedGraph(
+            streetEdges,
+            undefined,
+            mlEdgePenalties,
+            onProgress,
+          );
+        console.log(
+          "[TurnAwareCPP] turnNodes:",
+          turnNodes.length,
+          "turnEdges:",
+          turnEdges.length,
+          "turnTypes:",
+          turnEdges.reduce(
+            (acc, e) => {
+              acc[e.turnType] = (acc[e.turnType] ?? 0) + 1;
+              return acc;
+            },
+            {} as Record<string, number>,
+          ),
         );
-        console.log("[TurnAwareCPP] turnNodes:", turnNodes.length, "turnEdges:", turnEdges.length,
-          "turnTypes:", turnEdges.reduce((acc, e) => { acc[e.turnType] = (acc[e.turnType] ?? 0) + 1; return acc; }, {} as Record<string, number>));
         if (turnEdges.length === 0) return runStandard(mlEdgePenalties);
 
         // Compute SCCs once and reuse for bridging (avoids double traversal)
@@ -208,34 +277,67 @@ export function useRouteOptimization() {
         // Bridge disconnected SCCs so no segments are silently dropped
         onProgress?.("bridge", "Bridging disconnected components...");
         const preBridgeCount = turnEdges.length;
-        const bridged = await bridgeAllSCCs(turnEdges, streetEdges, cachedSCCs, onProgress);
-        console.log("[TurnAwareCPP] bridged edges:", bridged.length, "(bridges:", bridged.length - preBridgeCount, ")");
+        const bridged = await bridgeAllSCCs(
+          turnEdges,
+          streetEdges,
+          cachedSCCs,
+          onProgress,
+        );
+        console.log(
+          "[TurnAwareCPP] bridged edges:",
+          bridged.length,
+          "(bridges:",
+          bridged.length - preBridgeCount,
+          ")",
+        );
 
         // Balance in/out degrees to make graph Eulerian
         onProgress?.("eulerian", "Balancing graph for Eulerian circuit...");
         const preEulerianCount = bridged.length;
         const eulerianEdges = await makeEulerian(bridged, onProgress);
-        console.log("[TurnAwareCPP] eulerianEdges:", eulerianEdges.length, "(deadhead:", eulerianEdges.length - preEulerianCount, ")");
+        console.log(
+          "[TurnAwareCPP] eulerianEdges:",
+          eulerianEdges.length,
+          "(deadhead:",
+          eulerianEdges.length - preEulerianCount,
+          ")",
+        );
 
         onProgress?.("circuit", "Solving Eulerian circuit...");
         const { circuit, totalCost, stats } = solveTurnAwareCPP(eulerianEdges);
-        console.log("[TurnAwareCPP] circuit length:", circuit.length, "totalCost:", Math.round(totalCost));
+        console.log(
+          "[TurnAwareCPP] circuit length:",
+          circuit.length,
+          "totalCost:",
+          Math.round(totalCost),
+        );
 
         // Build edge lookup once for debug stats, distance, and route points
-        const edgeLookup = new Map<string, typeof streetEdges[0]>();
+        const edgeLookup = new Map<string, (typeof streetEdges)[0]>();
         for (let si = 0; si < streetEdges.length; si++) {
           edgeLookup.set(streetEdges[si]!.id, streetEdges[si]!);
         }
 
         // Single pass over circuit for all stats (avoids 6+ separate .filter() passes)
-        let validRefs = 0, bridgeCount = 0, deadheadRefs = 0, missingRefs = 0;
-        let deadheadCount = 0, distanceMeters = 0;
+        let validRefs = 0,
+          bridgeCount = 0,
+          deadheadRefs = 0,
+          missingRefs = 0;
+        let deadheadCount = 0,
+          distanceMeters = 0;
         const coveredEdgeIds = new Set<string>();
         const sampleMissing: string[] = [];
         for (let ci = 0; ci < circuit.length; ci++) {
           const e = circuit[ci]!;
-          if (e.bridge) { bridgeCount++; deadheadCount++; continue; }
-          if (e.deadhead) { deadheadCount++; deadheadRefs++; }
+          if (e.bridge) {
+            bridgeCount++;
+            deadheadCount++;
+            continue;
+          }
+          if (e.deadhead) {
+            deadheadCount++;
+            deadheadRefs++;
+          }
           coveredEdgeIds.add(e.to.edgeId);
           const streetEdge = edgeLookup.get(e.to.edgeId);
           if (streetEdge) {
@@ -249,8 +351,12 @@ export function useRouteOptimization() {
         const distanceFromLength = distanceMeters / 1000;
 
         console.log("[TurnAwareCPP] circuit edge refs:", {
-          total: circuit.length, validStreetEdge: validRefs, bridges: bridgeCount,
-          deadheadNonBridge: deadheadRefs, missingEdgeId: missingRefs, sampleMissing,
+          total: circuit.length,
+          validStreetEdge: validRefs,
+          bridges: bridgeCount,
+          deadheadNonBridge: deadheadRefs,
+          missingEdgeId: missingRefs,
+          sampleMissing,
         });
 
         const routePoints = turnCircuitToRoutePoints(streetEdges, circuit);
@@ -262,10 +368,12 @@ export function useRouteOptimization() {
           uniqueStreetEdgeIds.add(streetEdges[si]!.id);
         }
         let missingEdgeCount = 0;
-        uniqueStreetEdgeIds.forEach((id) => { if (!coveredEdgeIds.has(id)) missingEdgeCount++; });
+        uniqueStreetEdgeIds.forEach((id) => {
+          if (!coveredEdgeIds.has(id)) missingEdgeCount++;
+        });
         const coveragePct =
           uniqueStreetEdgeIds.size > 0
-            ? ((coveredEdgeIds.size / uniqueStreetEdgeIds.size) * 100)
+            ? (coveredEdgeIds.size / uniqueStreetEdgeIds.size) * 100
             : 100;
 
         let turnAwareResult: RouteOptimizationResult = {
@@ -290,9 +398,12 @@ export function useRouteOptimization() {
         turnAwareResult = await attachWeatherAnalysis(
           turnAwareResult,
           routePoints,
-          distanceFromLength
+          distanceFromLength,
         );
-        trackEvent("route_optimized", { type: "turn_aware", distance_km: Math.round(distanceFromLength * 10) / 10 });
+        trackEvent("route_optimized", {
+          type: "turn_aware",
+          distance_km: Math.round(distanceFromLength * 10) / 10,
+        });
         return turnAwareResult;
       }
       // Standard (non-turn-aware) path: fetch penalties sequentially as before
@@ -302,13 +413,18 @@ export function useRouteOptimization() {
       const routePoints = "route" in result ? result.route : [];
       const totalKm = "totalDistance" in result ? result.totalDistance : 0;
       result = await attachWeatherAnalysis(result, routePoints, totalKm);
-      trackEvent("route_optimized", { type: "standard", distance_km: Math.round(totalKm * 10) / 10 });
+      trackEvent("route_optimized", {
+        type: "standard",
+        distance_km: Math.round(totalKm * 10) / 10,
+      });
       return result;
     } catch (error) {
       console.error("[TurnAwareCPP] CAUGHT ERROR:", error);
       if (features.enabled) await recordCrash();
       const err = error instanceof Error ? error : new Error(String(error));
-      recordErrorToCrashlytics(err, "RouteOptimizationFallback", { message: err.message });
+      recordErrorToCrashlytics(err, "RouteOptimizationFallback", {
+        message: err.message,
+      });
       try {
         return runStandard(mlEdgePenalties);
       } catch {

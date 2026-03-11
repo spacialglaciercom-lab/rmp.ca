@@ -68,10 +68,13 @@ export function MediaNoteRecorder({
     try {
       setLoading(true);
       const { Audio } = await import("expo-av");
-      
+
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Permission Required", "Microphone access is required to record audio notes.");
+        Alert.alert(
+          "Permission Required",
+          "Microphone access is required to record audio notes.",
+        );
         setLoading(false);
         return;
       }
@@ -82,14 +85,14 @@ export function MediaNoteRecorder({
       });
 
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
-      
+
       audioRecordingRef.current = recording;
       setIsRecording(true);
       setRecordingTime(0);
       setMode("audio");
-      
+
       timerRef.current = setInterval(() => {
         setRecordingTime((t) => t + 1);
       }, 1000);
@@ -114,7 +117,7 @@ export function MediaNoteRecorder({
       await audioRecordingRef.current.stopAndUnloadAsync();
       const uri = audioRecordingRef.current.getURI();
       const duration = recordingTime;
-      
+
       audioRecordingRef.current = null;
       setIsRecording(false);
       setMode("idle");
@@ -157,7 +160,7 @@ export function MediaNoteRecorder({
     Alert.alert(
       "Video Notes",
       "Video recording will be available in a future update. For now, please use audio notes.",
-      [{ text: "OK" }]
+      [{ text: "OK" }],
     );
   }, []);
 
@@ -170,7 +173,7 @@ export function MediaNoteRecorder({
         [
           { text: "Continue Recording", style: "cancel" },
           { text: "Discard", style: "destructive", onPress: cancelRecording },
-        ]
+        ],
       );
     } else {
       onCancel();
@@ -205,7 +208,11 @@ export function MediaNoteRecorder({
               style={styles.closeBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialCommunityIcons name="close" size={24} color={colors.muted} />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={colors.muted}
+              />
             </TouchableOpacity>
           </View>
 
@@ -219,7 +226,12 @@ export function MediaNoteRecorder({
               </View>
             ) : isRecording ? (
               <View style={styles.recordingContainer}>
-                <View style={[styles.recordingIndicator, { backgroundColor: "#E53935" }]}>
+                <View
+                  style={[
+                    styles.recordingIndicator,
+                    { backgroundColor: "#E53935" },
+                  ]}
+                >
                   <MaterialCommunityIcons
                     name={mode === "audio" ? "microphone" : "video"}
                     size={48}
@@ -249,7 +261,10 @@ export function MediaNoteRecorder({
                   <TouchableOpacity
                     style={[
                       styles.optionButton,
-                      { backgroundColor: colors.primary + "20", borderColor: colors.primary },
+                      {
+                        backgroundColor: colors.primary + "20",
+                        borderColor: colors.primary,
+                      },
                     ]}
                     onPress={startAudioRecording}
                   >
@@ -268,7 +283,10 @@ export function MediaNoteRecorder({
                   <TouchableOpacity
                     style={[
                       styles.optionButton,
-                      { backgroundColor: colors.muted + "20", borderColor: colors.muted },
+                      {
+                        backgroundColor: colors.muted + "20",
+                        borderColor: colors.muted,
+                      },
                     ]}
                     onPress={startVideoRecording}
                   >

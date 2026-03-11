@@ -1,8 +1,14 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import { useColors } from "@/hooks/use-colors";
 import { TECH_NAV } from "./navigationTechStyle";
 
@@ -13,13 +19,20 @@ interface TransportModeSelectorProps {
   onChange: (mode: TransportMode) => void;
 }
 
-const MODES: { id: TransportMode; icon: "car" | "bike" | "walk"; label: string }[] = [
+const MODES: {
+  id: TransportMode;
+  icon: "car" | "bike" | "walk";
+  label: string;
+}[] = [
   { id: "car", icon: "car", label: "Drive" },
   { id: "bike", icon: "bike", label: "Bike" },
   { id: "walk", icon: "walk", label: "Walk" },
 ];
 
-export function TransportModeSelector({ value, onChange }: TransportModeSelectorProps) {
+export function TransportModeSelector({
+  value,
+  onChange,
+}: TransportModeSelectorProps) {
   const colors = useColors();
 
   const handlePress = (mode: TransportMode) => {

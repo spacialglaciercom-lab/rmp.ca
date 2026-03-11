@@ -386,7 +386,7 @@ export class NavigationEngine {
 
     if (!this._routeLine) {
       this._routeLine = createRouteLine(
-        routeCoords.map((p) => [p.lon, p.lat] as [number, number])
+        routeCoords.map((p) => [p.lon, p.lat] as [number, number]),
       );
       this._routeLengthMeters = getRouteLengthMeters(this._routeLine);
     }
@@ -395,7 +395,7 @@ export class NavigationEngine {
       { lon: location.lon, lat: location.lat },
       this._routeLine!,
       this._previousMatch,
-      this.offRouteThreshold
+      this.offRouteThreshold,
     );
     this._previousMatch = matched;
 
@@ -455,7 +455,7 @@ export class NavigationEngine {
     ) {
       this.distanceRemaining = Math.max(
         0,
-        snapped.totalRouteLength - snapped.routeProgressMeters
+        snapped.totalRouteLength - snapped.routeProgressMeters,
       );
       return;
     }

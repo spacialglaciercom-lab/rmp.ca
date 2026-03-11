@@ -44,7 +44,7 @@ export function useMapPerformance() {
         }, 500);
       });
     },
-    []
+    [],
   );
 
   const getReportSummary = useCallback((report: BenchmarkReport): string => {

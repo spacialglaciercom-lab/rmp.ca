@@ -33,7 +33,10 @@ export async function initRagIndex(): Promise<void> {
       const raw = await readFile(INDEX_PATH, "utf-8");
       const data: RagIndexFile = JSON.parse(raw);
       index = data.documents ?? [];
-      log.info("Index loaded", { chunks: index.length, documents: new Set(index.map(d => d.filename)).size });
+      log.info("Index loaded", {
+        chunks: index.length,
+        documents: new Set(index.map((d) => d.filename)).size,
+      });
     } else {
       index = [];
       log.info("No existing index found — starting empty");
@@ -44,7 +47,9 @@ export async function initRagIndex(): Promise<void> {
       await autoIngestSeedDocs();
     }
   } catch (err) {
-    log.warn("Failed to load index, starting empty", { error: err instanceof Error ? err.message : String(err) });
+    log.warn("Failed to load index, starting empty", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     index = [];
   }
 }
@@ -62,7 +67,9 @@ async function autoIngestSeedDocs(): Promise<void> {
 
   try {
     const files = await readdir(docsDir);
-    const docFiles = files.filter((f) => f.endsWith(".md") || f.endsWith(".txt"));
+    const docFiles = files.filter(
+      (f) => f.endsWith(".md") || f.endsWith(".txt"),
+    );
 
     if (docFiles.length === 0) {
       log.info("No seed documents found in rag-docs/");
@@ -77,17 +84,23 @@ async function autoIngestSeedDocs(): Promise<void> {
         if (!content.trim()) continue;
 
         // Derive category from filename: "algorithm-overview.md" -> "algorithm"
-        const category = file.replace(/[-_].*$/, "").replace(/\.(md|txt)$/, "") || undefined;
+        const category =
+          file.replace(/[-_].*$/, "").replace(/\.(md|txt)$/, "") || undefined;
         const result = await ingestDocument(file, content, category);
         log.info("ingested", { file, chunks: result.chunksCreated });
       } catch (err) {
-        log.warn("seed doc failed", { file, error: err instanceof Error ? err.message : String(err) });
+        log.warn("seed doc failed", {
+          file,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     log.info("Auto-ingest complete", { totalChunks: index.length });
   } catch (err) {
-    log.warn("Auto-ingest failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    log.warn("Auto-ingest failed (non-fatal)", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -269,7 +282,10 @@ export function removeDocument(filename: string): { removed: number } {
   const removed = before - index.length;
   if (removed > 0) {
     persistIndex().catch((err) =>
-      log.error("Failed to persist after remove", err instanceof Error ? err : new Error(String(err))),
+      log.error(
+        "Failed to persist after remove",
+        err instanceof Error ? err : new Error(String(err)),
+      ),
     );
   }
   return { removed };

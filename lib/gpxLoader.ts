@@ -15,16 +15,13 @@ import type { Position } from "./routeSnap";
  * - File: reads via file.text() then parses (React Native / web compatible).
  */
 export async function loadGpxAsRoute(
-  gpxSource: File | string
+  gpxSource: File | string,
 ): Promise<Position[]> {
   let gpxString: string;
 
   if (typeof gpxSource === "string") {
     const trimmed = gpxSource.trim();
-    if (
-      trimmed.startsWith("http://") ||
-      trimmed.startsWith("https://")
-    ) {
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
       const res = await fetch(trimmed);
       if (!res.ok) throw new Error(`Failed to fetch GPX: ${res.status}`);
       gpxString = await res.text();

@@ -8,12 +8,13 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-const isNativeProd =
-  Platform.OS !== "web" && Constants.appOwnership !== "expo";
+const isNativeProd = Platform.OS !== "web" && Constants.appOwnership !== "expo";
 
 let startupTrace: { stop: () => Promise<void> } | null = null;
 
-function getPerf(): typeof import("@react-native-firebase/perf").default | null {
+function getPerf():
+  | typeof import("@react-native-firebase/perf").default
+  | null {
   if (!isNativeProd) return null;
   try {
     return require("@react-native-firebase/perf").default;
@@ -58,7 +59,7 @@ export async function stopStartupTrace(): Promise<void> {
  */
 export async function withTrace<T>(
   traceName: string,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<T> {
   const perf = getPerf();
   if (!perf) return fn();
@@ -77,7 +78,7 @@ export async function withTrace<T>(
  * Example: const t = startTrace('route_calculation'); ... await t.stop();
  */
 export function startTrace(
-  traceName: string
+  traceName: string,
 ): { stop: () => Promise<void> } | null {
   const perf = getPerf();
   if (!perf) return null;

@@ -47,16 +47,19 @@ export function ScreenContainer({
   style,
   ...props
 }: ScreenContainerProps) {
-  const nativeStyle = Platform.OS !== "web" ? screenContainerStyles.native : undefined;
+  const nativeStyle =
+    Platform.OS !== "web" ? screenContainerStyles.native : undefined;
   const flatStyle = StyleSheet.flatten(style);
-  const outerBackground = flatStyle && "backgroundColor" in flatStyle ? { backgroundColor: (flatStyle as { backgroundColor?: string }).backgroundColor } : undefined;
+  const outerBackground =
+    flatStyle && "backgroundColor" in flatStyle
+      ? {
+          backgroundColor: (flatStyle as { backgroundColor?: string })
+            .backgroundColor,
+        }
+      : undefined;
   return (
     <View
-      className={cn(
-        "flex-1",
-        "bg-background",
-        containerClassName
-      )}
+      className={cn("flex-1", "bg-background", containerClassName)}
       style={[nativeStyle, outerBackground]}
       {...props}
     >
@@ -65,7 +68,9 @@ export function ScreenContainer({
         className={cn("flex-1", safeAreaClassName)}
         style={[nativeStyle, style]}
       >
-        <View className={cn("flex-1", className)} style={nativeStyle}>{children}</View>
+        <View className={cn("flex-1", className)} style={nativeStyle}>
+          {children}
+        </View>
       </SafeAreaView>
     </View>
   );

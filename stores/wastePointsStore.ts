@@ -14,7 +14,10 @@ function generateId(): string {
 interface WastePointsState {
   points: WastePoint[];
   add: (point: Omit<WastePoint, "id" | "createdAt">) => void;
-  update: (id: string, patch: Partial<Omit<WastePoint, "id" | "createdAt">>) => void;
+  update: (
+    id: string,
+    patch: Partial<Omit<WastePoint, "id" | "createdAt">>,
+  ) => void;
   remove: (id: string) => void;
   setAll: (points: WastePoint[]) => void;
   clearAll: () => void;
@@ -38,7 +41,7 @@ export const useWastePointsStore = create<WastePointsState>()(
       update: (id, patch) => {
         set((state) => ({
           points: state.points.map((p) =>
-            p.id === id ? { ...p, ...patch } : p
+            p.id === id ? { ...p, ...patch } : p,
           ),
         }));
       },
@@ -55,6 +58,6 @@ export const useWastePointsStore = create<WastePointsState>()(
       name: "rmp-waste-points",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ points: s.points }),
-    }
-  )
+    },
+  ),
 );

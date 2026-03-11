@@ -10,7 +10,11 @@ import { getGoogleMapsApiKey } from "@/lib/google-maps-config";
 
 const BASE = "https://weather.googleapis.com/v1";
 
-function buildParams(lat: number, lon: number, extra: Record<string, string> = {}): string {
+function buildParams(
+  lat: number,
+  lon: number,
+  extra: Record<string, string> = {},
+): string {
   const params = new URLSearchParams({
     "location.latitude": String(lat),
     "location.longitude": String(lon),
@@ -77,12 +81,21 @@ export interface GoogleCurrentConditions {
 
 export interface GoogleForecastHour {
   interval?: { startTime?: string; endTime?: string };
-  displayDateTime?: { year?: number; month?: number; day?: number; hours?: number; utcOffset?: string };
+  displayDateTime?: {
+    year?: number;
+    month?: number;
+    day?: number;
+    hours?: number;
+    utcOffset?: string;
+  };
   weatherCondition?: GoogleWeatherCondition;
   temperature?: GoogleTemperature;
   feelsLikeTemperature?: GoogleTemperature;
   relativeHumidity?: number;
-  precipitation?: { probability?: { percent?: number; type?: string }; qpf?: { quantity?: number; unit?: string } };
+  precipitation?: {
+    probability?: { percent?: number; type?: string };
+    qpf?: { quantity?: number; unit?: string };
+  };
   wind?: GoogleWind;
   isDaytime?: boolean;
   cloudCover?: number;
@@ -91,8 +104,24 @@ export interface GoogleForecastHour {
 export interface GoogleForecastDay {
   interval?: { startTime?: string; endTime?: string };
   displayDate?: { year?: number; month?: number; day?: number };
-  daytimeForecast?: { weatherCondition?: GoogleWeatherCondition; precipitation?: { probability?: { percent?: number }; qpf?: { quantity?: number } }; wind?: GoogleWind; cloudCover?: number };
-  nighttimeForecast?: { weatherCondition?: GoogleWeatherCondition; precipitation?: { probability?: { percent?: number }; qpf?: { quantity?: number } }; wind?: GoogleWind; cloudCover?: number };
+  daytimeForecast?: {
+    weatherCondition?: GoogleWeatherCondition;
+    precipitation?: {
+      probability?: { percent?: number };
+      qpf?: { quantity?: number };
+    };
+    wind?: GoogleWind;
+    cloudCover?: number;
+  };
+  nighttimeForecast?: {
+    weatherCondition?: GoogleWeatherCondition;
+    precipitation?: {
+      probability?: { percent?: number };
+      qpf?: { quantity?: number };
+    };
+    wind?: GoogleWind;
+    cloudCover?: number;
+  };
   maxTemperature?: GoogleTemperature;
   minTemperature?: GoogleTemperature;
   feelsLikeMaxTemperature?: GoogleTemperature;
@@ -103,11 +132,19 @@ export interface GoogleForecastDay {
 
 export interface GoogleHistoryHour {
   interval?: { startTime?: string; endTime?: string };
-  displayDateTime?: { year?: number; month?: number; day?: number; hours?: number };
+  displayDateTime?: {
+    year?: number;
+    month?: number;
+    day?: number;
+    hours?: number;
+  };
   weatherCondition?: GoogleWeatherCondition;
   temperature?: GoogleTemperature;
   feelsLikeTemperature?: GoogleTemperature;
-  precipitation?: { probability?: { percent?: number }; qpf?: { quantity?: number } };
+  precipitation?: {
+    probability?: { percent?: number };
+    qpf?: { quantity?: number };
+  };
   wind?: GoogleWind;
   isDaytime?: boolean;
   cloudCover?: number;
@@ -131,7 +168,10 @@ export interface GoogleWeatherAlert {
 // ─── API calls ─────────────────────────────────────────────────────────────
 
 /** Current conditions — real-time weather for a location. */
-export async function getGoogleCurrentConditions(lat: number, lon: number): Promise<GoogleCurrentConditions | null> {
+export async function getGoogleCurrentConditions(
+  lat: number,
+  lon: number,
+): Promise<GoogleCurrentConditions | null> {
   try {
     const params = buildParams(lat, lon);
     const res = await fetchWithKey("/currentConditions:lookup", params);
@@ -145,12 +185,20 @@ export async function getGoogleCurrentConditions(lat: number, lon: number): Prom
 export async function getGoogleHourlyForecast(
   lat: number,
   lon: number,
-  hours: number = 48
-): Promise<{ forecastHours?: GoogleForecastHour[]; timeZone?: { id?: string } } | null> {
+  hours: number = 48,
+): Promise<{
+  forecastHours?: GoogleForecastHour[];
+  timeZone?: { id?: string };
+} | null> {
   try {
-    const params = buildParams(lat, lon, { hours: String(Math.min(240, Math.max(1, hours))) });
+    const params = buildParams(lat, lon, {
+      hours: String(Math.min(240, Math.max(1, hours))),
+    });
     const res = await fetchWithKey("/forecast/hours:lookup", params);
-    return (await res.json()) as { forecastHours?: GoogleForecastHour[]; timeZone?: { id?: string } };
+    return (await res.json()) as {
+      forecastHours?: GoogleForecastHour[];
+      timeZone?: { id?: string };
+    };
   } catch {
     return null;
   }
@@ -160,12 +208,20 @@ export async function getGoogleHourlyForecast(
 export async function getGoogleDailyForecast(
   lat: number,
   lon: number,
-  days: number = 10
-): Promise<{ forecastDays?: GoogleForecastDay[]; timeZone?: { id?: string } } | null> {
+  days: number = 10,
+): Promise<{
+  forecastDays?: GoogleForecastDay[];
+  timeZone?: { id?: string };
+} | null> {
   try {
-    const params = buildParams(lat, lon, { days: String(Math.min(10, Math.max(1, days))) });
+    const params = buildParams(lat, lon, {
+      days: String(Math.min(10, Math.max(1, days))),
+    });
     const res = await fetchWithKey("/forecast/days:lookup", params);
-    return (await res.json()) as { forecastDays?: GoogleForecastDay[]; timeZone?: { id?: string } };
+    return (await res.json()) as {
+      forecastDays?: GoogleForecastDay[];
+      timeZone?: { id?: string };
+    };
   } catch {
     return null;
   }
@@ -175,19 +231,30 @@ export async function getGoogleDailyForecast(
 export async function getGoogleHourlyHistory(
   lat: number,
   lon: number,
-  hours: number = 24
-): Promise<{ historyHours?: GoogleHistoryHour[]; timeZone?: { id?: string } } | null> {
+  hours: number = 24,
+): Promise<{
+  historyHours?: GoogleHistoryHour[];
+  timeZone?: { id?: string };
+} | null> {
   try {
-    const params = buildParams(lat, lon, { hours: String(Math.min(24, Math.max(1, hours))) });
+    const params = buildParams(lat, lon, {
+      hours: String(Math.min(24, Math.max(1, hours))),
+    });
     const res = await fetchWithKey("/history/hours:lookup", params);
-    return (await res.json()) as { historyHours?: GoogleHistoryHour[]; timeZone?: { id?: string } };
+    return (await res.json()) as {
+      historyHours?: GoogleHistoryHour[];
+      timeZone?: { id?: string };
+    };
   } catch {
     return null;
   }
 }
 
 /** Weather alerts — real-time severe weather events (publicAlerts). */
-export async function getGoogleWeatherAlerts(lat: number, lon: number): Promise<GoogleWeatherAlert[]> {
+export async function getGoogleWeatherAlerts(
+  lat: number,
+  lon: number,
+): Promise<GoogleWeatherAlert[]> {
   try {
     const params = buildParams(lat, lon, { languageCode: "en" });
     const res = await fetchWithKey("/publicAlerts:lookup", params);

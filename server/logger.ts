@@ -16,7 +16,11 @@ export interface NamespacedLogger {
   debug(message: string, data?: Record<string, unknown>): void;
   info(message: string, data?: Record<string, unknown>): void;
   warn(message: string, data?: Record<string, unknown>): void;
-  error(message: string, errorOrData?: unknown, data?: Record<string, unknown>): void;
+  error(
+    message: string,
+    errorOrData?: unknown,
+    data?: Record<string, unknown>,
+  ): void;
 }
 
 export function createLogger(namespace: string): NamespacedLogger {
@@ -45,6 +49,7 @@ export function createLogger(namespace: string): NamespacedLogger {
     debug: (msg, data) => emit("debug", console.debug, msg, data),
     info: (msg, data) => emit("info", console.info, msg, data),
     warn: (msg, data) => emit("warn", console.warn, msg, data),
-    error: (msg, errorOrData?, data?) => emit("error", console.error, msg, errorOrData, data),
+    error: (msg, errorOrData?, data?) =>
+      emit("error", console.error, msg, errorOrData, data),
   };
 }

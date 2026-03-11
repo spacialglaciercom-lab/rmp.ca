@@ -4,7 +4,13 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Platform } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Platform,
+} from "react-native";
 import { useTheme } from "@/lib/theme-provider";
 import { fetchWeather } from "./fetchWeather";
 
@@ -12,12 +18,17 @@ const DEFAULT_LAT = 45.5017;
 const DEFAULT_LON = -73.5673;
 
 async function getCoords(): Promise<{ lat: number; lon: number }> {
-  if (Platform.OS === "web" && typeof navigator !== "undefined" && "geolocation" in navigator) {
+  if (
+    Platform.OS === "web" &&
+    typeof navigator !== "undefined" &&
+    "geolocation" in navigator
+  ) {
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (pos) =>
+          resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
         () => resolve({ lat: DEFAULT_LAT, lon: DEFAULT_LON }),
-        { timeout: 5000, maximumAge: 300000 }
+        { timeout: 5000, maximumAge: 300000 },
       );
     });
   }
@@ -71,10 +82,16 @@ export default function WeatherOverlay() {
     load();
   }, [load]);
 
-  const colors = { text: theme.text, muted: theme.textTertiary, surface: theme.surface };
+  const colors = {
+    text: theme.text,
+    muted: theme.textTertiary,
+    surface: theme.surface,
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface + "E8" }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.surface + "E8" }]}
+    >
       {loading ? (
         <ActivityIndicator size="small" color={colors.text} />
       ) : (

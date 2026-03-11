@@ -25,31 +25,58 @@ export interface GeoJSONConvertOptions {
 }
 
 /** Convert GeoJSON roads (LineString/MultiLineString) to optimizer Nodes/Ways. */
-export function geojsonToOsmData(fc: GeoJSONFeatureCollection, opts: GeoJSONConvertOptions = {}): {
+export function geojsonToOsmData(
+  fc: GeoJSONFeatureCollection,
+  opts: GeoJSONConvertOptions = {},
+): {
   nodes: Map<string, Node>;
   ways: Way[];
 } {
-    const defaultVehicular = new Set([
-      "motorway","trunk","primary","secondary","tertiary",
-      "residential","service","unclassified","living_street",
-      "motorway_link","trunk_link","primary_link","secondary_link","tertiary_link",
-    ]);
-    const nonVehicular = new Set([
-      "footway","pedestrian","steps","path","corridor","cycleway","bridleway","elevator","escalator","platform","raceway",
-    ]);
+  const defaultVehicular = new Set([
+    "motorway",
+    "trunk",
+    "primary",
+    "secondary",
+    "tertiary",
+    "residential",
+    "service",
+    "unclassified",
+    "living_street",
+    "motorway_link",
+    "trunk_link",
+    "primary_link",
+    "secondary_link",
+    "tertiary_link",
+  ]);
+  const nonVehicular = new Set([
+    "footway",
+    "pedestrian",
+    "steps",
+    "path",
+    "corridor",
+    "cycleway",
+    "bridleway",
+    "elevator",
+    "escalator",
+    "platform",
+    "raceway",
+  ]);
 
-    function isAllowedClass(c?: string): boolean {
-      if (!c) return opts.vehicularOnly ? true : true; // unknown: allow, RouteOptimizer filters again
-      const cls = String(c).toLowerCase();
-      if (opts.allowClasses && opts.allowClasses.length) return opts.allowClasses.map(s=>s.toLowerCase()).includes(cls);
-      if (opts.denyClasses && opts.denyClasses.length) if (opts.denyClasses.map(s=>s.toLowerCase()).includes(cls)) return false;
-      if (opts.vehicularOnly !== false) {
-        if (nonVehicular.has(cls)) return false;
-        // If a known vehicular set is used, allow it; otherwise defer
-        if (defaultVehicular.has(cls)) return true;
-      }
-      return true;
+  function isAllowedClass(c?: string): boolean {
+    if (!c) return opts.vehicularOnly ? true : true; // unknown: allow, RouteOptimizer filters again
+    const cls = String(c).toLowerCase();
+    if (opts.allowClasses && opts.allowClasses.length)
+      return opts.allowClasses.map((s) => s.toLowerCase()).includes(cls);
+    if (opts.denyClasses && opts.denyClasses.length)
+      if (opts.denyClasses.map((s) => s.toLowerCase()).includes(cls))
+        return false;
+    if (opts.vehicularOnly !== false) {
+      if (nonVehicular.has(cls)) return false;
+      // If a known vehicular set is used, allow it; otherwise defer
+      if (defaultVehicular.has(cls)) return true;
     }
+    return true;
+  }
   const nodes = new Map<string, Node>();
   const coordToNodeId = new Map<string, string>();
   let nextNodeId = 1;
@@ -73,7 +100,8 @@ export function geojsonToOsmData(fc: GeoJSONFeatureCollection, opts: GeoJSONConv
   function pushWay(coords: number[][], props?: Record<string, any>) {
     if (!coords || coords.length < 2) return;
     // Filter by class when requested
-    const roadClass = props?.highway ?? props?.class ?? props?.road_class ?? props?.category;
+    const roadClass =
+      props?.highway ?? props?.class ?? props?.road_class ?? props?.category;
     if (!isAllowedClass(roadClass)) return;
     const nodeIds: string[] = [];
     for (const c of coords) {
@@ -87,12 +115,18 @@ export function geojsonToOsmData(fc: GeoJSONFeatureCollection, opts: GeoJSONConv
 
     // Infer tags from GeoJSON properties (common keys from OSM/Overture)
     const tags: Record<string, string> = {};
-    const highway = props?.highway ?? props?.class ?? props?.road_class ?? props?.category ?? "residential";
+    const highway =
+      props?.highway ??
+      props?.class ??
+      props?.road_class ??
+      props?.category ??
+      "residential";
     tags.highway = String(highway);
     if (props?.name) tags.name = String(props.name);
     if (props?.direction) tags.direction = String(props.direction); // forward|backward|both
     if (props?.oneway === true || props?.oneway === "yes") tags.oneway = "yes";
-    if (props?.oneway === -1 || props?.direction === "backward") tags.oneway = "-1";
+    if (props?.oneway === -1 || props?.direction === "backward")
+      tags.oneway = "-1";
 
     ways.push({ id, nodes: nodeIds, tags });
   }
@@ -137,7 +171,9 @@ export function osmDataToGeoJSON(
 }
 
 /** Convert RoutePoints to a GeoJSON FeatureCollection for inspection. */
-export function routePointsToGeoJSON(points: RoutePoint[]): GeoJSONFeatureCollection {
+export function routePointsToGeoJSON(
+  points: RoutePoint[],
+): GeoJSONFeatureCollection {
   const coords = points.map((p) => [p.longitude, p.latitude]);
   return {
     type: "FeatureCollection",

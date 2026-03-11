@@ -73,7 +73,11 @@ export function WastePointFormModal({
       setLat(editingPoint.lat.toString());
       setLon(editingPoint.lon.toString());
       setType(editingPoint.type);
-      setCapacityLiters(editingPoint.capacityLiters != null ? String(editingPoint.capacityLiters) : "");
+      setCapacityLiters(
+        editingPoint.capacityLiters != null
+          ? String(editingPoint.capacityLiters)
+          : "",
+      );
       setCondition(editingPoint.condition ?? "");
       setAddress(editingPoint.address ?? "");
     } else if (initialCoords) {
@@ -97,13 +101,15 @@ export function WastePointFormModal({
     setLocationLoading(true);
     try {
       if (typeof navigator !== "undefined" && navigator.geolocation) {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 5000,
-          });
-        });
+        const position = await new Promise<GeolocationPosition>(
+          (resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 5000,
+            });
+          },
+        );
         setLat(position.coords.latitude.toString());
         setLon(position.coords.longitude.toString());
       } else {
@@ -113,7 +119,13 @@ export function WastePointFormModal({
           Alert.alert("Location", "Permission denied.");
           return;
         }
-        const getPos = (Loc as { getCurrentPositionAsync?: (o?: object) => Promise<{ coords: { latitude: number; longitude: number } }> }).getCurrentPositionAsync;
+        const getPos = (
+          Loc as {
+            getCurrentPositionAsync?: (
+              o?: object,
+            ) => Promise<{ coords: { latitude: number; longitude: number } }>;
+          }
+        ).getCurrentPositionAsync;
         if (getPos) {
           const pos = await getPos({});
           if (pos?.coords) {
@@ -123,7 +135,10 @@ export function WastePointFormModal({
         }
       }
     } catch (e) {
-      Alert.alert("Location", e instanceof Error ? e.message : "Could not get location.");
+      Alert.alert(
+        "Location",
+        e instanceof Error ? e.message : "Could not get location.",
+      );
     } finally {
       setLocationLoading(false);
     }
@@ -138,16 +153,27 @@ export function WastePointFormModal({
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     if (Number.isNaN(latNum) || Number.isNaN(lonNum)) {
-      Alert.alert("Invalid location", "Enter valid latitude and longitude, or use Use my location / Pick on map.");
+      Alert.alert(
+        "Invalid location",
+        "Enter valid latitude and longitude, or use Use my location / Pick on map.",
+      );
       return;
     }
     if (latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
-      Alert.alert("Invalid location", "Latitude must be between -90 and 90. Longitude must be between -180 and 180.");
+      Alert.alert(
+        "Invalid location",
+        "Latitude must be between -90 and 90. Longitude must be between -180 and 180.",
+      );
       return;
     }
-    const cap = capacityLiters.trim() ? parseInt(capacityLiters, 10) : undefined;
+    const cap = capacityLiters.trim()
+      ? parseInt(capacityLiters, 10)
+      : undefined;
     if (cap != null && (Number.isNaN(cap) || cap < 0)) {
-      Alert.alert("Invalid capacity", "Capacity must be a positive number (liters).");
+      Alert.alert(
+        "Invalid capacity",
+        "Capacity must be a positive number (liters).",
+      );
       return;
     }
     onSave({
@@ -167,7 +193,10 @@ export function WastePointFormModal({
     <Modal transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
-          style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[
+            styles.box,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
           onPress={(e) => e.stopPropagation()}
         >
           <Text style={[styles.title, { color: colors.text }]}>
@@ -178,17 +207,53 @@ export function WastePointFormModal({
           <View style={styles.row}>
             <TouchableOpacity
               onPress={() => setType("bin")}
-              style={[styles.typeBtn, { backgroundColor: type === "bin" ? "#22c55e" : colors.background, borderColor: colors.border }]}
+              style={[
+                styles.typeBtn,
+                {
+                  backgroundColor:
+                    type === "bin" ? "#22c55e" : colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
             >
-              <MaterialCommunityIcons name="delete-outline" size={20} color={type === "bin" ? "#fff" : colors.text} />
-              <Text style={[styles.typeBtnLabel, { color: type === "bin" ? "#fff" : colors.text }]}>Bin</Text>
+              <MaterialCommunityIcons
+                name="delete-outline"
+                size={20}
+                color={type === "bin" ? "#fff" : colors.text}
+              />
+              <Text
+                style={[
+                  styles.typeBtnLabel,
+                  { color: type === "bin" ? "#fff" : colors.text },
+                ]}
+              >
+                Bin
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setType("dumpster")}
-              style={[styles.typeBtn, { backgroundColor: type === "dumpster" ? "#3b82f6" : colors.background, borderColor: colors.border }]}
+              style={[
+                styles.typeBtn,
+                {
+                  backgroundColor:
+                    type === "dumpster" ? "#3b82f6" : colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
             >
-              <MaterialCommunityIcons name="dump-truck" size={20} color={type === "dumpster" ? "#fff" : colors.text} />
-              <Text style={[styles.typeBtnLabel, { color: type === "dumpster" ? "#fff" : colors.text }]}>Dumpster</Text>
+              <MaterialCommunityIcons
+                name="dump-truck"
+                size={20}
+                color={type === "dumpster" ? "#fff" : colors.text}
+              />
+              <Text
+                style={[
+                  styles.typeBtnLabel,
+                  { color: type === "dumpster" ? "#fff" : colors.text },
+                ]}
+              >
+                Dumpster
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -199,7 +264,10 @@ export function WastePointFormModal({
               onChangeText={setLat}
               placeholder="Lat"
               placeholderTextColor={colors.muted}
-              style={[styles.coordInput, { borderColor: colors.border, color: colors.text }]}
+              style={[
+                styles.coordInput,
+                { borderColor: colors.border, color: colors.text },
+              ]}
               keyboardType="numbers-and-punctuation"
             />
             <TextInput
@@ -207,7 +275,10 @@ export function WastePointFormModal({
               onChangeText={setLon}
               placeholder="Lon"
               placeholderTextColor={colors.muted}
-              style={[styles.coordInput, { borderColor: colors.border, color: colors.text }]}
+              style={[
+                styles.coordInput,
+                { borderColor: colors.border, color: colors.text },
+              ]}
               keyboardType="numbers-and-punctuation"
             />
           </View>
@@ -217,58 +288,116 @@ export function WastePointFormModal({
               disabled={locationLoading}
               style={[styles.actionChip, { borderColor: colors.border }]}
             >
-              {locationLoading ? <ActivityIndicator size="small" color={colors.primary} /> : <MaterialCommunityIcons name="crosshairs-gps" size={18} color={colors.primary} />}
-              <Text style={[styles.actionChipLabel, { color: colors.primary }]}>Use my location</Text>
+              {locationLoading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <MaterialCommunityIcons
+                  name="crosshairs-gps"
+                  size={18}
+                  color={colors.primary}
+                />
+              )}
+              <Text style={[styles.actionChipLabel, { color: colors.primary }]}>
+                Use my location
+              </Text>
             </TouchableOpacity>
             {onRequestPickOnMap && !isEdit && (
               <TouchableOpacity
                 onPress={handlePickOnMap}
                 style={[styles.actionChip, { borderColor: colors.border }]}
               >
-                <MaterialCommunityIcons name="map-marker-plus" size={18} color={colors.primary} />
-                <Text style={[styles.actionChipLabel, { color: colors.primary }]}>Pick on map</Text>
+                <MaterialCommunityIcons
+                  name="map-marker-plus"
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text
+                  style={[styles.actionChipLabel, { color: colors.primary }]}
+                >
+                  Pick on map
+                </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <Text style={[styles.label, { color: colors.muted }]}>Capacity (L, optional)</Text>
+          <Text style={[styles.label, { color: colors.muted }]}>
+            Capacity (L, optional)
+          </Text>
           <TextInput
             value={capacityLiters}
             onChangeText={setCapacityLiters}
             placeholder="e.g. 240"
             placeholderTextColor={colors.muted}
-            style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+            style={[
+              styles.input,
+              { borderColor: colors.border, color: colors.text },
+            ]}
             keyboardType="number-pad"
           />
 
-          <Text style={[styles.label, { color: colors.muted }]}>Condition (optional)</Text>
+          <Text style={[styles.label, { color: colors.muted }]}>
+            Condition (optional)
+          </Text>
           <View style={styles.row}>
             {(["good", "overflowing", "damaged"] as const).map((c) => (
               <TouchableOpacity
                 key={c}
                 onPress={() => setCondition(condition === c ? "" : c)}
-                style={[styles.chip, { backgroundColor: condition === c ? colors.primary : colors.background, borderColor: colors.border }]}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor:
+                      condition === c ? colors.primary : colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
               >
-                <Text style={[styles.chipLabel, { color: condition === c ? "#fff" : colors.text }]}>{c}</Text>
+                <Text
+                  style={[
+                    styles.chipLabel,
+                    { color: condition === c ? "#fff" : colors.text },
+                  ]}
+                >
+                  {c}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={[styles.label, { color: colors.muted }]}>Address (optional)</Text>
+          <Text style={[styles.label, { color: colors.muted }]}>
+            Address (optional)
+          </Text>
           <TextInput
             value={address}
             onChangeText={setAddress}
             placeholder="Street, city"
             placeholderTextColor={colors.muted}
-            style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+            style={[
+              styles.input,
+              { borderColor: colors.border, color: colors.text },
+            ]}
           />
 
           <View style={styles.footer}>
-            <TouchableOpacity onPress={onClose} style={[styles.btn, { borderColor: colors.border }]}>
-              <Text style={[styles.btnLabel, { color: colors.text }]}>Cancel</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[styles.btn, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.btnLabel, { color: colors.text }]}>
+                Cancel
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleSave} style={[styles.btn, styles.btnPrimary, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.btnLabel, { color: "#fff" }]}>{isEdit ? "Save" : "Add"}</Text>
+            <TouchableOpacity
+              onPress={handleSave}
+              style={[
+                styles.btn,
+                styles.btnPrimary,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text style={[styles.btnLabel, { color: "#fff" }]}>
+                {isEdit ? "Save" : "Add"}
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>

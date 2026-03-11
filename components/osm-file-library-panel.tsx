@@ -25,7 +25,10 @@ interface OSMFileLibraryPanelProps {
   refreshKey?: number;
 }
 
-export function OSMFileLibraryPanel({ onLoadFile, refreshKey }: OSMFileLibraryPanelProps) {
+export function OSMFileLibraryPanel({
+  onLoadFile,
+  refreshKey,
+}: OSMFileLibraryPanelProps) {
   const colors = useColors();
   const [files, setFiles] = useState<OSMFileEntry[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
@@ -47,7 +50,10 @@ export function OSMFileLibraryPanel({ onLoadFile, refreshKey }: OSMFileLibraryPa
     try {
       const content = await loadOSMFileContent(entry.id);
       if (!content) {
-        Alert.alert("Error", "File content not found. It may have been cleared.");
+        Alert.alert(
+          "Error",
+          "File content not found. It may have been cleared.",
+        );
         await refresh();
         return;
       }
@@ -145,8 +151,12 @@ export function OSMFileLibraryPanel({ onLoadFile, refreshKey }: OSMFileLibraryPa
                 >
                   {entry.name}
                 </Text>
-                <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                  {formatDate(entry.importedAt)} · {formatFileSize(entry.sizeBytes)} · {entry.wayCount} ways · {entry.nodeCount} nodes
+                <Text
+                  style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}
+                >
+                  {formatDate(entry.importedAt)} ·{" "}
+                  {formatFileSize(entry.sizeBytes)} · {entry.wayCount} ways ·{" "}
+                  {entry.nodeCount} nodes
                 </Text>
               </View>
 
@@ -157,11 +167,14 @@ export function OSMFileLibraryPanel({ onLoadFile, refreshKey }: OSMFileLibraryPa
                   paddingHorizontal: 12,
                   paddingVertical: 6,
                   borderRadius: 6,
-                  backgroundColor: loading === entry.id ? colors.muted : colors.primary,
+                  backgroundColor:
+                    loading === entry.id ? colors.muted : colors.primary,
                   marginRight: 6,
                 }}
               >
-                <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>
+                <Text
+                  style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}
+                >
                   {loading === entry.id ? "Loading..." : "Load"}
                 </Text>
               </TouchableOpacity>
@@ -177,7 +190,15 @@ export function OSMFileLibraryPanel({ onLoadFile, refreshKey }: OSMFileLibraryPa
                   borderColor: colors.border,
                 }}
               >
-                <Text style={{ color: colors.error, fontSize: 12, fontWeight: "600" }}>✕</Text>
+                <Text
+                  style={{
+                    color: colors.error,
+                    fontSize: 12,
+                    fontWeight: "600",
+                  }}
+                >
+                  ✕
+                </Text>
               </TouchableOpacity>
             </View>
           ))}

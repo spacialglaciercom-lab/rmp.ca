@@ -72,7 +72,7 @@ export function parseGeoJSON(content: string): GeoJSONFeatureCollection {
  */
 export async function importGeoJSONRoute(
   geojson: GeoJSONFeatureCollection,
-  options: GeoJSONImportOptions = {}
+  options: GeoJSONImportOptions = {},
 ): Promise<GeoJSONImportResult> {
   const { startLat, startLon, turnPenalties } = options;
 
@@ -90,7 +90,7 @@ export async function importGeoJSONRoute(
   if (!optResult.route?.length) {
     throw new Error(
       optResult.message ||
-        "Optimizer returned no route. Check that the GeoJSON contains LineString road features."
+        "Optimizer returned no route. Check that the GeoJSON contains LineString road features.",
     );
   }
 
@@ -119,7 +119,7 @@ export async function importGeoJSONRoute(
  */
 export async function parseAndImportGeoJSON(
   content: string,
-  options: GeoJSONImportOptions = {}
+  options: GeoJSONImportOptions = {},
 ): Promise<GeoJSONImportResult> {
   const geojson = parseGeoJSON(content);
   return importGeoJSONRoute(geojson, options);

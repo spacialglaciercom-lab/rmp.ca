@@ -75,7 +75,9 @@ export async function listVoices(): Promise<ElevenLabsVoice[]> {
         return voices;
       }
     } catch (err) {
-      log.warn("Server proxy voices failed, trying client key", { error: err instanceof Error ? err.message : String(err) });
+      log.warn("Server proxy voices failed, trying client key", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -84,10 +86,15 @@ export async function listVoices(): Promise<ElevenLabsVoice[]> {
 
   try {
     const [personalResp, sharedResp] = await Promise.all([
-      fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": apiKey } }),
-      fetch("https://api.elevenlabs.io/v1/shared-voices?page_size=100&sort=trending&category=professional", {
+      fetch("https://api.elevenlabs.io/v1/voices", {
         headers: { "xi-api-key": apiKey },
-      }).catch(() => null),
+      }),
+      fetch(
+        "https://api.elevenlabs.io/v1/shared-voices?page_size=100&sort=trending&category=professional",
+        {
+          headers: { "xi-api-key": apiKey },
+        },
+      ).catch(() => null),
     ]);
     const allVoices: ElevenLabsVoice[] = [];
     const seenIds = new Set<string>();
@@ -125,7 +132,9 @@ export async function listVoices(): Promise<ElevenLabsVoice[]> {
     _voiceCache = { voices: allVoices, ts: Date.now() };
     return allVoices;
   } catch (err) {
-    log.warn("Failed to list voices", { error: err instanceof Error ? err.message : String(err) });
+    log.warn("Failed to list voices", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return [];
   }
 }
@@ -184,8 +193,12 @@ async function playAudioBlob(audioBlob: Blob): Promise<boolean> {
           resolved = true;
           _isSpeaking = false;
           _currentAudio = null;
-          try { player.remove?.("playbackStatusUpdate", onStatus); } catch {}
-          try { player.release?.(); } catch {}
+          try {
+            player.remove?.("playbackStatusUpdate", onStatus);
+          } catch {}
+          try {
+            player.release?.();
+          } catch {}
           resolve(true);
         }
       };
@@ -221,7 +234,11 @@ export async function speakWithElevenLabs(text: string): Promise<boolean> {
         const resp = await fetch(`${base}/api/elevenlabs/tts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, voice_id: voice, model_id: "eleven_turbo_v2_5" }),
+          body: JSON.stringify({
+            text,
+            voice_id: voice,
+            model_id: "eleven_turbo_v2_5",
+          }),
         });
         if (!resp.ok) {
           _isSpeaking = false;
@@ -231,7 +248,9 @@ export async function speakWithElevenLabs(text: string): Promise<boolean> {
         return await playAudioBlob(audioBlob);
       }
     } catch (err) {
-      log.warn("Server proxy TTS failed, trying client key", { error: err instanceof Error ? err.message : String(err) });
+      log.warn("Server proxy TTS failed, trying client key", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -273,7 +292,9 @@ export async function speakWithElevenLabs(text: string): Promise<boolean> {
     const audioBlob = await resp.blob();
     return await playAudioBlob(audioBlob);
   } catch (err) {
-    log.warn("TTS failed", { error: err instanceof Error ? err.message : String(err) });
+    log.warn("TTS failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     _isSpeaking = false;
     return false;
   }
@@ -291,11 +312,20 @@ export async function stopElevenLabsSpeaking(): Promise<void> {
       } else {
         // expo-audio AudioPlayer: remove listener before release to avoid leaks
         if (_previewStatusListener) {
-          try { _currentAudio.remove?.("playbackStatusUpdate", _previewStatusListener); } catch {}
+          try {
+            _currentAudio.remove?.(
+              "playbackStatusUpdate",
+              _previewStatusListener,
+            );
+          } catch {}
           _previewStatusListener = null;
         }
-        try { _currentAudio.pause?.(); } catch {}
-        try { _currentAudio.release?.(); } catch {}
+        try {
+          _currentAudio.pause?.();
+        } catch {}
+        try {
+          _currentAudio.release?.();
+        } catch {}
       }
     }
   } catch {
@@ -345,10 +375,14 @@ export async function playVoicePreview(previewUrl: string): Promise<void> {
     const onStatus = (status: any) => {
       if (status.playing === false && status.currentTime > 0) {
         _previewStatusListener = null;
-        try { player.remove?.("playbackStatusUpdate", onStatus); } catch {}
+        try {
+          player.remove?.("playbackStatusUpdate", onStatus);
+        } catch {}
         _isSpeaking = false;
         _currentAudio = null;
-        try { player.release?.(); } catch {}
+        try {
+          player.release?.();
+        } catch {}
       }
     };
     _previewStatusListener = onStatus;
@@ -375,10 +409,10 @@ export interface TranscriptionResult {
  */
 export async function transcribeWithElevenLabs(
   audioBase64: string,
-  mimeType: string = "audio/m4a"
+  mimeType: string = "audio/m4a",
 ): Promise<TranscriptionResult | null> {
   const base = getApiBaseUrl();
-  
+
   // Try server proxy first
   if (base) {
     try {
@@ -389,11 +423,13 @@ export async function transcribeWithElevenLabs(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ audioBase64, mimeType }),
         });
-        
+
         if (resp.ok) {
           const data = await resp.json();
           if (data.text) {
-            log.debug("Transcription via server proxy", { textLength: data.text.length });
+            log.debug("Transcription via server proxy", {
+              textLength: data.text.length,
+            });
             return {
               text: data.text,
               languageCode: data.language_code,
@@ -404,7 +440,9 @@ export async function transcribeWithElevenLabs(
         }
       }
     } catch (err) {
-      log.warn("Server proxy STT failed", { error: err instanceof Error ? err.message : String(err) });
+      log.warn("Server proxy STT failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -445,7 +483,9 @@ export async function transcribeWithElevenLabs(
 
     const data = await resp.json();
     if (data.text) {
-      log.debug("Transcription via client API", { textLength: data.text.length });
+      log.debug("Transcription via client API", {
+        textLength: data.text.length,
+      });
       return {
         text: data.text,
         languageCode: data.language_code,
@@ -453,7 +493,9 @@ export async function transcribeWithElevenLabs(
     }
     return null;
   } catch (err) {
-    log.warn("ElevenLabs STT failed", { error: err instanceof Error ? err.message : String(err) });
+    log.warn("ElevenLabs STT failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }

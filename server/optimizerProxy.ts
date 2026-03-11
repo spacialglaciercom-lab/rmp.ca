@@ -26,7 +26,8 @@ const rawOptimizerUrl =
 
 /** Ensure URL has a scheme so fetch() works (env may be set without https://). */
 const OPTIMIZER_BACKEND_URL = rawOptimizerUrl
-  ? rawOptimizerUrl.startsWith("http://") || rawOptimizerUrl.startsWith("https://")
+  ? rawOptimizerUrl.startsWith("http://") ||
+    rawOptimizerUrl.startsWith("https://")
     ? rawOptimizerUrl.replace(/\/$/, "")
     : `https://${rawOptimizerUrl.replace(/\/$/, "")}`
   : "";
@@ -56,7 +57,11 @@ async function proxyToOptimizer(req: Request, res: Response): Promise<void> {
   }
 
   const targetUrl = `${OPTIMIZER_BACKEND_URL.replace(/\/$/, "")}${req.originalUrl}`;
-  log.info("Proxying optimizer request", { method: req.method, path: req.originalUrl, target: targetUrl });
+  log.info("Proxying optimizer request", {
+    method: req.method,
+    path: req.originalUrl,
+    target: targetUrl,
+  });
 
   try {
     const headers: Record<string, string> = {
@@ -86,7 +91,10 @@ async function proxyToOptimizer(req: Request, res: Response): Promise<void> {
     res.send(body);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown proxy error";
-    log.error("Optimizer proxy failed", err instanceof Error ? err : new Error(message));
+    log.error(
+      "Optimizer proxy failed",
+      err instanceof Error ? err : new Error(message),
+    );
     res.status(502).json({
       ok: false,
       error: "Optimizer backend unreachable",
@@ -113,6 +121,8 @@ export function registerOptimizerProxyRoutes(app: Express): void {
     // Rewrite path to /health for the upstream
     const origUrl = req.originalUrl;
     req.originalUrl = "/health";
-    proxyToOptimizer(req, res).finally(() => { req.originalUrl = origUrl; });
+    proxyToOptimizer(req, res).finally(() => {
+      req.originalUrl = origUrl;
+    });
   });
 }

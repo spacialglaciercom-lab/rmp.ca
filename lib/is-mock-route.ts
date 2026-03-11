@@ -13,6 +13,7 @@ export function isMockCollectionPoints(points: CollectionPoint[]): boolean {
   return (
     first?.address === "123 Main Street" ||
     first?.id === "1" ||
-    (first?.locationName === "Residential Area A" && first?.address?.includes("Main"))
+    (first?.locationName === "Residential Area A" &&
+      first?.address?.includes("Main"))
   );
 }

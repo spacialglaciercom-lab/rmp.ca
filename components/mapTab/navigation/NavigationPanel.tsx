@@ -19,14 +19,20 @@ import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
 import { useDeviceType } from "@/hooks/useDeviceType";
-import { TransportModeSelector, type TransportMode } from "./TransportModeSelector";
+import {
+  TransportModeSelector,
+  type TransportMode,
+} from "./TransportModeSelector";
 import { RouteFieldInput, type RoutePoint } from "./RouteFieldInput";
 import { EnhancedQuickDestinations } from "./EnhancedQuickDestinations";
 import { useQuickDestinations } from "@/stores/enhancedQuickDestinationsStore";
 import { AddDestinationModal } from "./AddDestinationModal";
 import { AddressSearchModal } from "./AddressSearchModal";
 import { getRoutingConfigAsync } from "@/lib/routing-config";
-import { routeBetweenPoints, buildOfflineMatchedRoute } from "@/lib/mapMatching";
+import {
+  routeBetweenPoints,
+  buildOfflineMatchedRoute,
+} from "@/lib/mapMatching";
 import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { useRouting } from "@/lib/routing-context";
 import { TECH_NAV } from "./navigationTechStyle";
@@ -39,7 +45,7 @@ interface NavigationPanelProps {
   /** Pre-filled destination when user tapped map before opening panel */
   tapDestination?: { lat: number; lon: number } | null;
   /** Callback when route is ready to display on map (e.g. after Start pressed) */
-  onRouteReady?: (points: Array<{ lat: number; lon: number }>) => void;
+  onRouteReady?: (points: { lat: number; lon: number }[]) => void;
 }
 
 export function NavigationPanel({
@@ -63,24 +69,50 @@ export function NavigationPanel({
   const [to, setTo] = useState<RoutePoint | null>(null);
   const [loading, setLoading] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
-  const [addModalType, setAddModalType] = useState<"home" | "work" | "custom">("custom");
+  const [addModalType, setAddModalType] = useState<"home" | "work" | "custom">(
+    "custom",
+  );
   const [addressSearchVisible, setAddressSearchVisible] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
 
-  const { home, work, custom, recent, addRecent, setHome, setWork, addCustom, updateCustom, deleteCustom } = useQuickDestinations();
+  const {
+    home,
+    work,
+    custom,
+    recent,
+    addRecent,
+    setHome,
+    setWork,
+    addCustom,
+    updateCustom,
+    deleteCustom,
+  } = useQuickDestinations();
 
   // Fetch current location when panel is visible so "Use Current Location" (e.g. set Home) works
   React.useEffect(() => {
     if (!visible) return;
     let cancelled = false;
     (async () => {
-      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
+      if (
+        Platform.OS === "web" &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation
+      ) {
         navigator.geolocation.getCurrentPosition(
           (p) => {
-            if (!cancelled) setCurrentLocation({ lat: p.coords.latitude, lon: p.coords.longitude });
+            if (!cancelled)
+              setCurrentLocation({
+                lat: p.coords.latitude,
+                lon: p.coords.longitude,
+              });
           },
-          () => { if (!cancelled) setCurrentLocation(null); },
-          { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+          () => {
+            if (!cancelled) setCurrentLocation(null);
+          },
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
         );
         return;
       }
@@ -92,15 +124,27 @@ export function NavigationPanel({
           setCurrentLocation(null);
           return;
         }
-        const getPos = (Loc as { getCurrentPositionAsync?: (opts: object) => Promise<{ coords: { latitude: number; longitude: number } }> }).getCurrentPositionAsync;
+        const getPos = (
+          Loc as {
+            getCurrentPositionAsync?: (
+              opts: object,
+            ) => Promise<{ coords: { latitude: number; longitude: number } }>;
+          }
+        ).getCurrentPositionAsync;
         if (!getPos) return;
         const pos = await getPos({});
-        if (!cancelled) setCurrentLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        if (!cancelled)
+          setCurrentLocation({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          });
       } catch {
         if (!cancelled) setCurrentLocation(null);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [visible]);
 
   // Sync tapDestination into "to" when panel opens
@@ -124,34 +168,46 @@ export function NavigationPanel({
     if (!to?.coords) {
       Alert.alert(
         "Select destination",
-        "Tap the To field and choose or search for a destination."
+        "Tap the To field and choose or search for a destination.",
       );
       return;
     }
 
     let fromCoords = from.coords;
     if (from.useGPS || !fromCoords) {
-      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
-        fromCoords = await new Promise<{ lat: number; lon: number } | null>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
-            () => resolve(null),
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-          );
-        });
+      if (
+        Platform.OS === "web" &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation
+      ) {
+        fromCoords = await new Promise<{ lat: number; lon: number } | null>(
+          (resolve) => {
+            navigator.geolocation.getCurrentPosition(
+              (p) =>
+                resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+              () => resolve(null),
+              { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+            );
+          },
+        );
       } else {
         try {
           const Loc = await import("expo-location");
           const { status } = await Loc.requestForegroundPermissionsAsync();
           if (status !== "granted") {
-            Alert.alert("Location", "Allow location access to use My Position as start.");
+            Alert.alert(
+              "Location",
+              "Allow location access to use My Position as start.",
+            );
             return;
           }
-          const getPos = (Loc as {
-            getCurrentPositionAsync?: (opts: object) => Promise<{
-              coords: { latitude: number; longitude: number };
-            }>;
-          }).getCurrentPositionAsync;
+          const getPos = (
+            Loc as {
+              getCurrentPositionAsync?: (opts: object) => Promise<{
+                coords: { latitude: number; longitude: number };
+              }>;
+            }
+          ).getCurrentPositionAsync;
           if (!getPos) return;
           const pos = await getPos({});
           fromCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -177,13 +233,13 @@ export function NavigationPanel({
           fromCoords,
           to.coords,
           routingConfig,
-          getRouteOptionsForRouting()
+          getRouteOptionsForRouting(),
         );
       }
       if (!matched) {
         matched = buildOfflineMatchedRoute([fromCoords, to.coords]);
       }
-      
+
       // Add destination to recent if it has coordinates
       if (to.coords) {
         const recentDest = {
@@ -197,8 +253,11 @@ export function NavigationPanel({
         };
         addRecent(recentDest);
       }
-      
-      const geometry = matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon }));
+
+      const geometry = matched.matchedGeometry.map((p) => ({
+        lat: p.lat,
+        lon: p.lon,
+      }));
       dispatch({ type: "SET_PREVIEW_ROUTE", payload: geometry });
       onRouteReady?.(geometry);
       onClose();
@@ -222,11 +281,11 @@ export function NavigationPanel({
         coords: destination.coords,
         useGPS: false,
       });
-      
+
       // Add to recent destinations
       addRecent(destination);
     },
-    [addRecent]
+    [addRecent],
   );
 
   const handleQuickAdd = useCallback((type: "home" | "work" | "custom") => {
@@ -234,31 +293,40 @@ export function NavigationPanel({
     setAddModalVisible(true);
   }, []);
 
-  const handleAddDestination = useCallback((destination: any) => {
-    switch (destination.type) {
-      case "home":
-        setHome(destination);
-        break;
-      case "work":
-        setWork(destination);
-        break;
-      case "custom":
-        addCustom(destination);
-        break;
-    }
-  }, [setHome, setWork, addCustom]);
+  const handleAddDestination = useCallback(
+    (destination: any) => {
+      switch (destination.type) {
+        case "home":
+          setHome(destination);
+          break;
+        case "work":
+          setWork(destination);
+          break;
+        case "custom":
+          addCustom(destination);
+          break;
+      }
+    },
+    [setHome, setWork, addCustom],
+  );
 
-  const handleEditDestination = useCallback((destination: any) => {
-    if (destination.type === "custom") {
-      updateCustom(destination.id, destination);
-    }
-  }, [updateCustom]);
+  const handleEditDestination = useCallback(
+    (destination: any) => {
+      if (destination.type === "custom") {
+        updateCustom(destination.id, destination);
+      }
+    },
+    [updateCustom],
+  );
 
-  const handleDeleteDestination = useCallback((destinationId: string) => {
-    if (destinationId.startsWith("custom-")) {
-      deleteCustom(destinationId);
-    }
-  }, [deleteCustom]);
+  const handleDeleteDestination = useCallback(
+    (destinationId: string) => {
+      if (destinationId.startsWith("custom-")) {
+        deleteCustom(destinationId);
+      }
+    },
+    [deleteCustom],
+  );
 
   if (!visible) return null;
 
@@ -307,7 +375,9 @@ export function NavigationPanel({
             panelStyle,
           ]}
         >
-          <View style={[styles.header, { borderBottomColor: TECH_NAV.glassBorder }]}>
+          <View
+            style={[styles.header, { borderBottomColor: TECH_NAV.glassBorder }]}
+          >
             <Text style={[styles.headerTitle, { color: colors.text }]}>
               Navigation
             </Text>
@@ -329,121 +399,134 @@ export function NavigationPanel({
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           >
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <TransportModeSelector
-              value={transportMode}
-              onChange={setTransportMode}
-            />
-
-            <View style={{ marginTop: 20 }}>
-              <RouteFieldInput
-                label="From"
-                point={from}
-                placeholder="My Position"
-                onPress={() => {
-                  setFrom({ label: "My Position", coords: null, useGPS: true });
-                }}
-                showSwap={!!to}
-                onSwap={handleSwap}
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <TransportModeSelector
+                value={transportMode}
+                onChange={setTransportMode}
               />
-              <RouteFieldInput
-                label="To"
-                point={to}
-                placeholder="Select destination"
-                onPress={() => setAddressSearchVisible(true)}
-                showAdd
-                onAdd={() => {
-                  setAddModalType("custom");
-                  setAddModalVisible(true);
+
+              <View style={{ marginTop: 20 }}>
+                <RouteFieldInput
+                  label="From"
+                  point={from}
+                  placeholder="My Position"
+                  onPress={() => {
+                    setFrom({
+                      label: "My Position",
+                      coords: null,
+                      useGPS: true,
+                    });
+                  }}
+                  showSwap={!!to}
+                  onSwap={handleSwap}
+                />
+                <RouteFieldInput
+                  label="To"
+                  point={to}
+                  placeholder="Select destination"
+                  onPress={() => setAddressSearchVisible(true)}
+                  showAdd
+                  onAdd={() => {
+                    setAddModalType("custom");
+                    setAddModalVisible(true);
+                  }}
+                />
+              </View>
+
+              <EnhancedQuickDestinations
+                destinations={[
+                  ...(home ? [home] : []),
+                  ...(work ? [work] : []),
+                  ...(custom ?? []),
+                ]}
+                onSelect={handleQuickSelect}
+                onAdd={handleQuickAdd}
+                onEdit={handleEditDestination}
+                onDelete={handleDeleteDestination}
+                recentDestinations={recent}
+                showFavorites={true}
+                maxRecent={3}
+              />
+
+              <AddDestinationModal
+                visible={addModalVisible}
+                onClose={() => setAddModalVisible(false)}
+                onAddDestination={handleAddDestination}
+                destinationType={addModalType}
+                currentLocation={currentLocation}
+              />
+
+              <AddressSearchModal
+                visible={addressSearchVisible}
+                onClose={() => setAddressSearchVisible(false)}
+                onSelect={({ lat, lon, label }) => {
+                  setTo({ label, coords: { lat, lon }, useGPS: false });
                 }}
               />
-            </View>
 
-            <EnhancedQuickDestinations
-              destinations={[...(home ? [home] : []), ...(work ? [work] : []), ...(custom ?? [])]}
-              onSelect={handleQuickSelect}
-              onAdd={handleQuickAdd}
-              onEdit={handleEditDestination}
-              onDelete={handleDeleteDestination}
-              recentDestinations={recent}
-              showFavorites={true}
-              maxRecent={3}
-            />
-
-            <AddDestinationModal
-              visible={addModalVisible}
-              onClose={() => setAddModalVisible(false)}
-              onAddDestination={handleAddDestination}
-              destinationType={addModalType}
-              currentLocation={currentLocation}
-            />
-
-            <AddressSearchModal
-              visible={addressSearchVisible}
-              onClose={() => setAddressSearchVisible(false)}
-              onSelect={({ lat, lon, label }) => {
-                setTo({ label, coords: { lat, lon }, useGPS: false });
-              }}
-            />
-
-            <View style={[styles.footer, { marginTop: 24 }]}>
-              <TouchableOpacity
-                style={[
-                  styles.footerButton,
-                  { backgroundColor: colors.muted + "30", borderColor: TECH_NAV.glassBorder },
-                ]}
-                onPress={handleClose}
-              >
-                <Text style={[styles.footerButtonText, { color: colors.text }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.footerButton,
-                  styles.footerButtonPrimary,
-                  {
-                    backgroundColor: TECH_NAV.blue,
-                    borderColor: TECH_NAV.blue,
-                    shadowColor: TECH_NAV.shadowBlue,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.5,
-                    shadowRadius: 10,
-                    elevation: 6,
-                  },
-                  loading && styles.footerButtonDisabled,
-                ]}
-                onPress={handleStart}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <MaterialCommunityIcons
-                      name="navigation"
-                      size={20}
-                      color="#fff"
-                    />
-                    <Text
-                      style={[
-                        styles.footerButtonText,
-                        styles.footerButtonTextPrimary,
-                        { color: "#fff" },
-                      ]}
-                    >
-                      Start
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+              <View style={[styles.footer, { marginTop: 24 }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.footerButton,
+                    {
+                      backgroundColor: colors.muted + "30",
+                      borderColor: TECH_NAV.glassBorder,
+                    },
+                  ]}
+                  onPress={handleClose}
+                >
+                  <Text
+                    style={[styles.footerButtonText, { color: colors.text }]}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.footerButton,
+                    styles.footerButtonPrimary,
+                    {
+                      backgroundColor: TECH_NAV.blue,
+                      borderColor: TECH_NAV.blue,
+                      shadowColor: TECH_NAV.shadowBlue,
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 10,
+                      elevation: 6,
+                    },
+                    loading && styles.footerButtonDisabled,
+                  ]}
+                  onPress={handleStart}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons
+                        name="navigation"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text
+                        style={[
+                          styles.footerButtonText,
+                          styles.footerButtonTextPrimary,
+                          { color: "#fff" },
+                        ]}
+                      >
+                        Start
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </KeyboardAvoidingView>
         </View>
       </View>

@@ -41,7 +41,8 @@ function formatDate(iso: string): string {
     return d.toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
-      year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+      year:
+        d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
     });
   } catch {
     return "";
@@ -49,7 +50,9 @@ function formatDate(iso: string): string {
 }
 
 function zoneToGeoJSON(item: SavedZoneResult): string {
-  const coords = item.polygon.map(([lat, lon]) => [lon, lat] as [number, number]);
+  const coords = item.polygon.map(
+    ([lat, lon]) => [lon, lat] as [number, number],
+  );
   const ring = coords.length >= 3 ? [...coords, coords[0]] : [];
   const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
   const feature = {
@@ -67,7 +70,11 @@ function zoneToGeoJSON(item: SavedZoneResult): string {
       coordinates: [ring],
     },
   };
-  return JSON.stringify({ type: "FeatureCollection" as const, features: [feature] }, null, 2);
+  return JSON.stringify(
+    { type: "FeatureCollection" as const, features: [feature] },
+    null,
+    2,
+  );
 }
 
 function ZoneResultRow({
@@ -90,24 +97,31 @@ function ZoneResultRow({
   const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
   const handleRemove = useCallback(() => {
     hapticImpact();
-    Alert.alert(
-      "Remove zone result",
-      `Remove "${item.name}" from Zones?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: () => onRemove(item.id) },
-      ]
-    );
+    Alert.alert("Remove zone result", `Remove "${item.name}" from Zones?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => onRemove(item.id),
+      },
+    ]);
   }, [item.id, item.name, onRemove]);
 
   return (
-    <View style={[styles.row, { borderBottomColor: colors.border }]} pointerEvents="box-none">
+    <View
+      style={[styles.row, { borderBottomColor: colors.border }]}
+      pointerEvents="box-none"
+    >
       <View style={styles.rowMain} pointerEvents="box-none">
-        <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
+        <Text
+          style={[styles.rowName, { color: colors.text }]}
+          numberOfLines={1}
+        >
           {item.name || "Unnamed zones"}
         </Text>
         <Text style={[styles.rowMeta, { color: colors.muted }]}>
-          {item.zones.length} zones · {item.truck_count} trucks · {formatDate(item.createdAt)}
+          {item.zones.length} zones · {item.truck_count} trucks ·{" "}
+          {formatDate(item.createdAt)}
         </Text>
         <Text style={[styles.rowMeta, { color: colors.muted, fontSize: 12 }]}>
           Total estimated time: {totalTime.toFixed(1)} · {item.balance_metric}
@@ -126,7 +140,11 @@ function ZoneResultRow({
           ]}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <MaterialCommunityIcons name="pencil" size={20} color={colors.muted} />
+          <MaterialCommunityIcons
+            name="pencil"
+            size={20}
+            color={colors.muted}
+          />
         </Pressable>
         <TouchableOpacity
           onPress={() => onPreview(item)}
@@ -144,14 +162,22 @@ function ZoneResultRow({
           style={styles.rowActionButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <MaterialCommunityIcons name="export" size={22} color={colors.muted} />
+          <MaterialCommunityIcons
+            name="export"
+            size={22}
+            color={colors.muted}
+          />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleRemove}
           style={styles.deleteButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialCommunityIcons name="delete-outline" size={22} color={colors.muted} />
+          <MaterialCommunityIcons
+            name="delete-outline"
+            size={22}
+            color={colors.muted}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -185,8 +211,12 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
       `Remove all ${savedZones.length} saved zone result(s)?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Clear all", style: "destructive", onPress: clearAllSavedZones },
-      ]
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: clearAllSavedZones,
+        },
+      ],
     );
   }, [savedZones.length, clearAllSavedZones]);
 
@@ -216,83 +246,83 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
       setDisplayedZoneId(item.id);
       onClose();
     },
-    [setDisplayedZoneId, onClose]
+    [setDisplayedZoneId, onClose],
   );
 
   const handleExport = useCallback(
     async (item: SavedZoneResult) => {
       hapticImpact();
       if (exporting) return;
-      const baseName = (item.name || "zones").replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
-      Alert.alert(
-        "Export zone",
-        "Choose format to share",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "GeoJSON",
-            onPress: async () => {
-              setExporting(true);
-              try {
-                const Sharing = await import("expo-sharing");
-                const content = zoneToGeoJSON(item);
-                const path = `${FileSystem.cacheDirectory}${baseName}.geojson`;
-                await FileSystem.writeAsStringAsync(path, content, {
-                  encoding: FileSystem.EncodingType.UTF8,
+      const baseName = (item.name || "zones")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 40);
+      Alert.alert("Export zone", "Choose format to share", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "GeoJSON",
+          onPress: async () => {
+            setExporting(true);
+            try {
+              const Sharing = await import("expo-sharing");
+              const content = zoneToGeoJSON(item);
+              const path = `${FileSystem.cacheDirectory}${baseName}.geojson`;
+              await FileSystem.writeAsStringAsync(path, content, {
+                encoding: FileSystem.EncodingType.UTF8,
+              });
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(path, {
+                  mimeType: "application/geo+json",
+                  dialogTitle: "Share zone (GeoJSON)",
                 });
-                if (await Sharing.isAvailableAsync()) {
-                  await Sharing.shareAsync(path, {
-                    mimeType: "application/geo+json",
-                    dialogTitle: "Share zone (GeoJSON)",
-                  });
-                } else if (Platform.OS === "web") {
-                  const blob = new Blob([content], { type: "application/geo+json" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${baseName}.geojson`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              } finally {
-                setExporting(false);
-              }
-            },
-          },
-          {
-            text: "JSON",
-            onPress: async () => {
-              setExporting(true);
-              try {
-                const Sharing = await import("expo-sharing");
-                const content = JSON.stringify(item, null, 2);
-                const path = `${FileSystem.cacheDirectory}${baseName}.json`;
-                await FileSystem.writeAsStringAsync(path, content, {
-                  encoding: FileSystem.EncodingType.UTF8,
+              } else if (Platform.OS === "web") {
+                const blob = new Blob([content], {
+                  type: "application/geo+json",
                 });
-                if (await Sharing.isAvailableAsync()) {
-                  await Sharing.shareAsync(path, {
-                    mimeType: "application/json",
-                    dialogTitle: "Share zone (JSON)",
-                  });
-                } else if (Platform.OS === "web") {
-                  const blob = new Blob([content], { type: "application/json" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${baseName}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              } finally {
-                setExporting(false);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${baseName}.geojson`;
+                a.click();
+                URL.revokeObjectURL(url);
               }
-            },
+            } finally {
+              setExporting(false);
+            }
           },
-        ]
-      );
+        },
+        {
+          text: "JSON",
+          onPress: async () => {
+            setExporting(true);
+            try {
+              const Sharing = await import("expo-sharing");
+              const content = JSON.stringify(item, null, 2);
+              const path = `${FileSystem.cacheDirectory}${baseName}.json`;
+              await FileSystem.writeAsStringAsync(path, content, {
+                encoding: FileSystem.EncodingType.UTF8,
+              });
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(path, {
+                  mimeType: "application/json",
+                  dialogTitle: "Share zone (JSON)",
+                });
+              } else if (Platform.OS === "web") {
+                const blob = new Blob([content], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${baseName}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            } finally {
+              setExporting(false);
+            }
+          },
+        },
+      ]);
     },
-    [exporting]
+    [exporting],
   );
 
   const isIpad = deviceType === "ipad";
@@ -322,146 +352,191 @@ export function ZonesScreen({ visible, onClose }: ZonesScreenProps) {
 
   return (
     <>
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-      presentationStyle="overFullScreen"
-    >
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleClose}
+        presentationStyle="overFullScreen"
+      >
+        <View style={styles.overlay}>
+          <Pressable style={styles.backdrop} onPress={handleClose} />
 
-        <View
-          style={[
-            isIpad ? styles.panelWrapperIpad : styles.panelWrapperIphone,
-            panelStyle,
-          ]}
-        >
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Zones
-            </Text>
-            <View style={styles.headerActions}>
-              {displayedZoneId ? (
+          <View
+            style={[
+              isIpad ? styles.panelWrapperIpad : styles.panelWrapperIphone,
+              panelStyle,
+            ]}
+          >
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>
+                Zones
+              </Text>
+              <View style={styles.headerActions}>
+                {displayedZoneId ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticImpact();
+                      setDisplayedZoneId(null);
+                    }}
+                    style={[
+                      styles.clearPreviewButton,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="map-marker-remove"
+                      size={18}
+                      color={colors.muted}
+                    />
+                    <Text
+                      style={[styles.clearPreviewText, { color: colors.muted }]}
+                    >
+                      Clear preview
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
-                  onPress={() => {
-                    hapticImpact();
-                    setDisplayedZoneId(null);
-                  }}
-                  style={[styles.clearPreviewButton, { borderColor: colors.border }]}
+                  onPress={handleClose}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <MaterialCommunityIcons name="map-marker-remove" size={18} color={colors.muted} />
-                  <Text style={[styles.clearPreviewText, { color: colors.muted }]}>Clear preview</Text>
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={colors.muted}
+                  />
                 </TouchableOpacity>
-              ) : null}
+              </View>
+            </View>
+
+            <Text style={[styles.subtitle, { color: colors.muted }]}>
+              Saved zone partition results. Add new results from the Extract tab
+              after calculating zones.
+            </Text>
+
+            {savedZones.length > 0 && (
               <TouchableOpacity
-                onPress={handleClose}
-                style={styles.closeButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                onPress={handleClearAll}
+                style={[styles.clearButton, { borderColor: colors.border }]}
               >
                 <MaterialCommunityIcons
-                  name="close"
-                  size={24}
+                  name="broom"
+                  size={18}
                   color={colors.muted}
                 />
+                <Text style={[styles.clearButtonText, { color: colors.muted }]}>
+                  Clear all
+                </Text>
               </TouchableOpacity>
-            </View>
-          </View>
-
-          <Text style={[styles.subtitle, { color: colors.muted }]}>
-            Saved zone partition results. Add new results from the Extract tab after calculating zones.
-          </Text>
-
-          {savedZones.length > 0 && (
-            <TouchableOpacity
-              onPress={handleClearAll}
-              style={[styles.clearButton, { borderColor: colors.border }]}
-            >
-              <MaterialCommunityIcons name="broom" size={18} color={colors.muted} />
-              <Text style={[styles.clearButtonText, { color: colors.muted }]}>
-                Clear all
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.listContainer}>
-            {savedZones.length === 0 ? (
-              <View style={styles.emptyState}>
-                <MaterialCommunityIcons
-                  name="vector-polygon"
-                  size={48}
-                  color={colors.muted}
-                />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  No saved zones
-                </Text>
-                <Text style={[styles.emptyHint, { color: colors.muted }]}>
-                  Zone results you save will appear here.
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={savedZones}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <ZoneResultRow
-                    item={item}
-                    onRemove={removeSavedZone}
-                    onRename={handleRename}
-                    onPreview={handlePreview}
-                    onExport={handleExport}
-                    isDisplayed={displayedZoneId === item.id}
-                    colors={colors}
-                  />
-                )}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={true}
-              />
             )}
+
+            <View style={styles.listContainer}>
+              {savedZones.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <MaterialCommunityIcons
+                    name="vector-polygon"
+                    size={48}
+                    color={colors.muted}
+                  />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    No saved zones
+                  </Text>
+                  <Text style={[styles.emptyHint, { color: colors.muted }]}>
+                    Zone results you save will appear here.
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={savedZones}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <ZoneResultRow
+                      item={item}
+                      onRemove={removeSavedZone}
+                      onRename={handleRename}
+                      onPreview={handlePreview}
+                      onExport={handleExport}
+                      isDisplayed={displayedZoneId === item.id}
+                      colors={colors}
+                    />
+                  )}
+                  contentContainerStyle={styles.listContent}
+                  showsVerticalScrollIndicator={true}
+                />
+              )}
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
 
-    <Modal
-      visible={!!renamingZoneId}
-      transparent
-      animationType="fade"
-      onRequestClose={handleRenameCancel}
-    >
-      <Pressable style={styles.renameBackdrop} onPress={handleRenameCancel}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.renameModalCenter}
-        >
-          <Pressable style={[styles.renameBox, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.renameTitle, { color: colors.text }]}>Rename zone</Text>
-            <TextInput
-              value={renamingName}
-              onChangeText={setRenamingName}
-              placeholder="Zone name"
-              placeholderTextColor={colors.muted}
-              style={[styles.renameInput, { color: colors.text, borderColor: colors.border }]}
-              autoFocus
-              selectTextOnFocus
-              onSubmitEditing={handleRenameSave}
-            />
-            <View style={styles.renameActions}>
-              <TouchableOpacity onPress={handleRenameCancel} style={[styles.renameButton, { borderColor: colors.border }]}>
-                <Text style={[styles.renameButtonText, { color: colors.muted }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleRenameSave}
-                style={[styles.renameButton, styles.renameButtonPrimary, { backgroundColor: colors.primary }]}
-              >
-                <Text style={[styles.renameButtonText, styles.renameButtonTextPrimary]}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+      <Modal
+        visible={!!renamingZoneId}
+        transparent
+        animationType="fade"
+        onRequestClose={handleRenameCancel}
+      >
+        <Pressable style={styles.renameBackdrop} onPress={handleRenameCancel}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.renameModalCenter}
+          >
+            <Pressable
+              style={[
+                styles.renameBox,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={[styles.renameTitle, { color: colors.text }]}>
+                Rename zone
+              </Text>
+              <TextInput
+                value={renamingName}
+                onChangeText={setRenamingName}
+                placeholder="Zone name"
+                placeholderTextColor={colors.muted}
+                style={[
+                  styles.renameInput,
+                  { color: colors.text, borderColor: colors.border },
+                ]}
+                autoFocus
+                selectTextOnFocus
+                onSubmitEditing={handleRenameSave}
+              />
+              <View style={styles.renameActions}>
+                <TouchableOpacity
+                  onPress={handleRenameCancel}
+                  style={[styles.renameButton, { borderColor: colors.border }]}
+                >
+                  <Text
+                    style={[styles.renameButtonText, { color: colors.muted }]}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleRenameSave}
+                  style={[
+                    styles.renameButton,
+                    styles.renameButtonPrimary,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.renameButtonText,
+                      styles.renameButtonTextPrimary,
+                    ]}
+                  >
+                    Save
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
     </>
   );
 }

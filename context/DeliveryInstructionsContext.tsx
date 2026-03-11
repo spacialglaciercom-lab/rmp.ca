@@ -3,7 +3,13 @@
  * Default instructions come from data/deliveryInstructions.json (loaded in _layout).
  * User can replace them by tapping "Load from JSON file" and selecting a file.
  */
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 import { Alert, Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -25,7 +31,8 @@ interface DeliveryInstructionsContextValue {
   clearLoadError: () => void;
 }
 
-const DeliveryInstructionsContext = createContext<DeliveryInstructionsContextValue | null>(null);
+const DeliveryInstructionsContext =
+  createContext<DeliveryInstructionsContextValue | null>(null);
 
 function parseInstructionsJson(raw: string): DeliveryInstructionsJson {
   const data = JSON.parse(raw) as unknown;
@@ -44,13 +51,15 @@ function parseInstructionsJson(raw: string): DeliveryInstructionsJson {
         typeof item === "object" &&
         typeof (item as DeliveryInstruction).address === "string" &&
         typeof (item as DeliveryInstruction).title === "string" &&
-        typeof (item as DeliveryInstruction).details === "string"
+        typeof (item as DeliveryInstruction).details === "string",
     )
     .map((item) => ({
       address: (item as DeliveryInstruction).address,
       title: (item as DeliveryInstruction).title,
       details: (item as DeliveryInstruction).details,
-      ...((item as DeliveryInstruction).id != null && { id: (item as DeliveryInstruction).id }),
+      ...((item as DeliveryInstruction).id != null && {
+        id: (item as DeliveryInstruction).id,
+      }),
       ...((item as DeliveryInstruction).priority != null && {
         priority: (item as DeliveryInstruction).priority,
       }),
@@ -58,9 +67,13 @@ function parseInstructionsJson(raw: string): DeliveryInstructionsJson {
   return { instructions: valid };
 }
 
-export function DeliveryInstructionsProvider({ children }: { children: React.ReactNode }) {
+export function DeliveryInstructionsProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [instructions, setInstructions] = useState<DeliveryInstruction[]>(() =>
-    instructionManager.getAll()
+    instructionManager.getAll(),
   );
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -97,7 +110,10 @@ export function DeliveryInstructionsProvider({ children }: { children: React.Rea
         });
       } else {
         const assetWithFile = file as { file?: File; uri?: string };
-        if (assetWithFile.file && typeof (assetWithFile.file as Blob).slice === "function") {
+        if (
+          assetWithFile.file &&
+          typeof (assetWithFile.file as Blob).slice === "function"
+        ) {
           content = await readFileAsText(assetWithFile.file);
         } else if (file.uri) {
           const response = await fetch(file.uri);
@@ -125,7 +141,7 @@ export function DeliveryInstructionsProvider({ children }: { children: React.Rea
 
   const value = useMemo<DeliveryInstructionsContextValue>(
     () => ({ instructions, loadFromFile, loadError, clearLoadError }),
-    [instructions, loadFromFile, loadError, clearLoadError]
+    [instructions, loadFromFile, loadError, clearLoadError],
   );
 
   return (
@@ -138,7 +154,9 @@ export function DeliveryInstructionsProvider({ children }: { children: React.Rea
 export function useDeliveryInstructions(): DeliveryInstructionsContextValue {
   const ctx = useContext(DeliveryInstructionsContext);
   if (!ctx) {
-    throw new Error("useDeliveryInstructions must be used within DeliveryInstructionsProvider");
+    throw new Error(
+      "useDeliveryInstructions must be used within DeliveryInstructionsProvider",
+    );
   }
   return ctx;
 }

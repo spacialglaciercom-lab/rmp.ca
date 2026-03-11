@@ -133,7 +133,9 @@ export async function transcribeAudio(
 
     // Create a Blob from the buffer and append to form
     const filename = `audio.${getFileExtension(mimeType)}`;
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
+      type: mimeType,
+    });
     formData.append("file", audioBlob, filename);
 
     formData.append("model", "whisper-1");
@@ -148,7 +150,9 @@ export async function transcribeAudio(
     formData.append("prompt", prompt);
 
     // Step 4: Call the transcription service
-    const baseUrl = ENV.forgeApiUrl.endsWith("/") ? ENV.forgeApiUrl : `${ENV.forgeApiUrl}/`;
+    const baseUrl = ENV.forgeApiUrl.endsWith("/")
+      ? ENV.forgeApiUrl
+      : `${ENV.forgeApiUrl}/`;
 
     const fullUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
 
@@ -188,7 +192,8 @@ export async function transcribeAudio(
     return {
       error: "Voice transcription failed",
       code: "SERVICE_ERROR",
-      details: error instanceof Error ? error.message : "An unexpected error occurred",
+      details:
+        error instanceof Error ? error.message : "An unexpected error occurred",
     };
   }
 }
@@ -205,50 +210,88 @@ export async function transcribeAudioFromBase64(
 ): Promise<TranscriptionResponse | TranscriptionError> {
   try {
     if (!ENV.forgeApiUrl) {
-      return { error: "Voice transcription service is not configured", code: "SERVICE_ERROR", details: "BUILT_IN_FORGE_API_URL is not set" };
+      return {
+        error: "Voice transcription service is not configured",
+        code: "SERVICE_ERROR",
+        details: "BUILT_IN_FORGE_API_URL is not set",
+      };
     }
     if (!ENV.forgeApiKey) {
-      return { error: "Voice transcription service authentication is missing", code: "SERVICE_ERROR", details: "BUILT_IN_FORGE_API_KEY is not set" };
+      return {
+        error: "Voice transcription service authentication is missing",
+        code: "SERVICE_ERROR",
+        details: "BUILT_IN_FORGE_API_KEY is not set",
+      };
     }
 
     const audioBuffer = Buffer.from(base64Data, "base64");
 
     const sizeMB = audioBuffer.length / (1024 * 1024);
     if (sizeMB > 16) {
-      return { error: "Audio file exceeds maximum size limit", code: "FILE_TOO_LARGE", details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB` };
+      return {
+        error: "Audio file exceeds maximum size limit",
+        code: "FILE_TOO_LARGE",
+        details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB`,
+      };
     }
 
     const filename = `audio.${getFileExtension(mimeType)}`;
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
+      type: mimeType,
+    });
 
     const formData = new FormData();
     formData.append("file", audioBlob, filename);
     formData.append("model", "whisper-1");
     formData.append("response_format", "verbose_json");
-    formData.append("prompt", prompt || (language ? `Transcribe the user's voice to text, the user's working language is ${getLanguageName(language)}` : "Transcribe the user's voice to text"));
+    formData.append(
+      "prompt",
+      prompt ||
+        (language
+          ? `Transcribe the user's voice to text, the user's working language is ${getLanguageName(language)}`
+          : "Transcribe the user's voice to text"),
+    );
 
-    const baseUrl = ENV.forgeApiUrl.endsWith("/") ? ENV.forgeApiUrl : `${ENV.forgeApiUrl}/`;
+    const baseUrl = ENV.forgeApiUrl.endsWith("/")
+      ? ENV.forgeApiUrl
+      : `${ENV.forgeApiUrl}/`;
     const fullUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
 
     const response = await fetch(fullUrl, {
       method: "POST",
-      headers: { authorization: `Bearer ${ENV.forgeApiKey}`, "Accept-Encoding": "identity" },
+      headers: {
+        authorization: `Bearer ${ENV.forgeApiKey}`,
+        "Accept-Encoding": "identity",
+      },
       body: formData,
     });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      return { error: "Transcription service request failed", code: "TRANSCRIPTION_FAILED", details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}` };
+      return {
+        error: "Transcription service request failed",
+        code: "TRANSCRIPTION_FAILED",
+        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`,
+      };
     }
 
     const whisperResponse = (await response.json()) as WhisperResponse;
     if (!whisperResponse.text || typeof whisperResponse.text !== "string") {
-      return { error: "Invalid transcription response", code: "SERVICE_ERROR", details: "Transcription service returned an invalid response format" };
+      return {
+        error: "Invalid transcription response",
+        code: "SERVICE_ERROR",
+        details: "Transcription service returned an invalid response format",
+      };
     }
 
     return whisperResponse;
   } catch (error) {
-    return { error: "Voice transcription failed", code: "SERVICE_ERROR", details: error instanceof Error ? error.message : "An unexpected error occurred" };
+    return {
+      error: "Voice transcription failed",
+      code: "SERVICE_ERROR",
+      details:
+        error instanceof Error ? error.message : "An unexpected error occurred",
+    };
   }
 }
 

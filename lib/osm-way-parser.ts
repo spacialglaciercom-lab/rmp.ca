@@ -43,13 +43,13 @@ export function parseOSMWays(osmXML: string): RoadGraph {
   const nodes = new Map<string, OSMNode>();
   // Use getElementsByTagName for better compatibility with xmldom
   const nodeElements = doc.getElementsByTagName("node");
-  
+
   for (let i = 0; i < nodeElements.length; i++) {
     const nodeEl = nodeElements[i];
     const id = nodeEl.getAttribute("id");
     const lat = parseFloat(nodeEl.getAttribute("lat") || "0");
     const lon = parseFloat(nodeEl.getAttribute("lon") || "0");
-    
+
     if (id && !isNaN(lat) && !isNaN(lon)) {
       nodes.set(id, { id, lat, lon });
     }
@@ -58,7 +58,7 @@ export function parseOSMWays(osmXML: string): RoadGraph {
   // Extract all ways (streets)
   const ways: OSMWay[] = [];
   const wayElements = doc.getElementsByTagName("way");
-  
+
   for (let i = 0; i < wayElements.length; i++) {
     const wayEl = wayElements[i];
     const id = wayEl.getAttribute("id");
@@ -97,15 +97,15 @@ export function parseOSMWays(osmXML: string): RoadGraph {
 
   // Build adjacency graph
   const adjacency = new Map<string, Set<string>>();
-  
+
   ways.forEach((way) => {
     for (let i = 0; i < way.nodes.length - 1; i++) {
       const from = way.nodes[i];
       const to = way.nodes[i + 1];
-      
+
       if (!adjacency.has(from)) adjacency.set(from, new Set());
       if (!adjacency.has(to)) adjacency.set(to, new Set());
-      
+
       adjacency.get(from)!.add(to);
       adjacency.get(to)!.add(from); // Bidirectional
     }
@@ -118,9 +118,12 @@ export function parseOSMWays(osmXML: string): RoadGraph {
  * Find Eulerian path using Hierholzer's algorithm
  * This ensures we traverse every street edge at least once
  */
-export function findEulerianPath(graph: RoadGraph, startNodeId?: string): string[] {
+export function findEulerianPath(
+  graph: RoadGraph,
+  startNodeId?: string,
+): string[] {
   const adjacency = new Map<string, string[]>();
-  
+
   // Copy adjacency list (we'll modify it)
   graph.adjacency.forEach((neighbors, nodeId) => {
     adjacency.set(nodeId, Array.from(neighbors));
@@ -161,7 +164,10 @@ export function findEulerianPath(graph: RoadGraph, startNodeId?: string): string
         let bestDeg = -1;
         for (let ni = 0; ni < neighbors.length; ni++) {
           const deg = (adjacency.get(neighbors[ni]!) || []).length;
-          if (deg > bestDeg) { bestDeg = deg; bestIdx = ni; }
+          if (deg > bestDeg) {
+            bestDeg = deg;
+            bestIdx = ni;
+          }
         }
       }
       const next = neighbors[bestIdx]!;
@@ -185,7 +191,7 @@ export function findEulerianPath(graph: RoadGraph, startNodeId?: string): string
  */
 export function wayRouteToCollectionPoints(
   nodeIds: string[],
-  graph: RoadGraph
+  graph: RoadGraph,
 ): CollectionPoint[] {
   const points: CollectionPoint[] = [];
 
@@ -212,27 +218,32 @@ export function wayRouteToCollectionPoints(
  * Accepts either a File object (web) or a string (native/web)
  */
 export async function importOSMFileWithWays(
-  fileOrContent: File | string
+  fileOrContent: File | string,
 ): Promise<CollectionPoint[]> {
   let text: string;
-  
+
   if (typeof fileOrContent === "string") {
     // Already a string, use directly
     text = fileOrContent;
-  } else if (fileOrContent instanceof File || (fileOrContent && typeof (fileOrContent as Blob).slice === "function")) {
+  } else if (
+    fileOrContent instanceof File ||
+    (fileOrContent && typeof (fileOrContent as Blob).slice === "function")
+  ) {
     // File or Blob (web), read it safely (file.text may be undefined in some envs)
     text = await readFileAsText(fileOrContent as File);
   } else {
-    throw new Error("Invalid file type. Expected File object or string content.");
+    throw new Error(
+      "Invalid file type. Expected File object or string content.",
+    );
   }
-  
+
   const graph = parseOSMWays(text);
-  
+
   // Find Eulerian path that covers all streets
   const routeNodeIds = findEulerianPath(graph);
-  
+
   // Convert to collection points
   const points = wayRouteToCollectionPoints(routeNodeIds, graph);
-  
+
   return points;
 }

@@ -19,7 +19,9 @@ const RETRY_BASE_MS = 1000;
 
 function getApiKey(): string {
   const key =
-    (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_OPENWEATHERMAP_API_KEY) || "";
+    (typeof process !== "undefined" &&
+      process.env?.EXPO_PUBLIC_OPENWEATHERMAP_API_KEY) ||
+    "";
   return key.trim();
 }
 
@@ -76,7 +78,8 @@ function getTodayKey(): string {
 async function loadRateLimitState(): Promise<void> {
   if (rateLimitLoaded) return;
   try {
-    const { default: AsyncStorage } = await import("@react-native-async-storage/async-storage");
+    const { default: AsyncStorage } =
+      await import("@react-native-async-storage/async-storage");
     const raw = await AsyncStorage.getItem(RATE_LIMIT_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as { day: string; count: number };
@@ -85,18 +88,23 @@ async function loadRateLimitState(): Promise<void> {
         callsToday = parsed.count;
       }
     }
-  } catch { /* first launch or storage unavailable */ }
+  } catch {
+    /* first launch or storage unavailable */
+  }
   rateLimitLoaded = true;
 }
 
 async function persistRateLimitState(): Promise<void> {
   try {
-    const { default: AsyncStorage } = await import("@react-native-async-storage/async-storage");
+    const { default: AsyncStorage } =
+      await import("@react-native-async-storage/async-storage");
     await AsyncStorage.setItem(
       RATE_LIMIT_STORAGE_KEY,
       JSON.stringify({ day: lastResetDay, count: callsToday }),
     );
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 function ensureRateLimit(): boolean {
@@ -113,8 +121,17 @@ function recordCall(): void {
   persistRateLimitState();
 }
 
-function parseCurrentWeather(raw: Record<string, unknown>, lat: number, lon: number): CurrentWeather {
-  const w = raw.weather as Array<{ id: number; main: string; description: string; icon: string }>;
+function parseCurrentWeather(
+  raw: Record<string, unknown>,
+  lat: number,
+  lon: number,
+): CurrentWeather {
+  const w = raw.weather as Array<{
+    id: number;
+    main: string;
+    description: string;
+    icon: string;
+  }>;
   const main = raw.main as Record<string, number>;
   const wind = (raw.wind as Record<string, number>) ?? {};
   const rain = raw.rain as Record<string, number> | undefined;
@@ -132,7 +149,12 @@ function parseCurrentWeather(raw: Record<string, unknown>, lat: number, lon: num
     windDeg: wind?.deg ?? 0,
     clouds: (raw.clouds as Record<string, number>)?.all ?? 0,
     condition: w?.[0]
-      ? { id: w[0].id, main: w[0].main, description: w[0].description, icon: w[0].icon }
+      ? {
+          id: w[0].id,
+          main: w[0].main,
+          description: w[0].description,
+          icon: w[0].icon,
+        }
       : { id: 0, main: "Unknown", description: "", icon: "" },
     rain1h: rain?.["1h"],
     snow1h: snow?.["1h"],
@@ -140,7 +162,12 @@ function parseCurrentWeather(raw: Record<string, unknown>, lat: number, lon: num
 }
 
 function parseForecastItem(raw: Record<string, unknown>): HourlyForecastItem {
-  const w = raw.weather as Array<{ id: number; main: string; description: string; icon: string }>;
+  const w = raw.weather as Array<{
+    id: number;
+    main: string;
+    description: string;
+    icon: string;
+  }>;
   const rain = raw.rain as Record<string, number> | undefined;
   const snow = raw.snow as Record<string, number> | undefined;
   return {
@@ -152,7 +179,12 @@ function parseForecastItem(raw: Record<string, unknown>): HourlyForecastItem {
     windSpeed: (raw.wind as Record<string, number>)?.speed ?? 0,
     windDeg: (raw.wind as Record<string, number>)?.deg ?? 0,
     condition: w?.[0]
-      ? { id: w[0].id, main: w[0].main, description: w[0].description, icon: w[0].icon }
+      ? {
+          id: w[0].id,
+          main: w[0].main,
+          description: w[0].description,
+          icon: w[0].icon,
+        }
       : { id: 0, main: "Unknown", description: "", icon: "" },
     rain: rain?.["3h"],
     snow: snow?.["3h"],
@@ -181,7 +213,10 @@ async function fetchWithRetry(url: string): Promise<Response> {
  * Uses persistent + in-memory cache (30-min TTL, 5km clustering).
  * On API failure: returns last cached if available (offline support); otherwise null.
  */
-export async function getCurrentWeather(lat: number, lon: number): Promise<CurrentWeather | null> {
+export async function getCurrentWeather(
+  lat: number,
+  lon: number,
+): Promise<CurrentWeather | null> {
   await loadRateLimitState();
   const cached = await getWeatherCached(lat, lon);
   if (cached) return cached as CurrentWeather;
@@ -213,7 +248,7 @@ export async function getCurrentWeather(lat: number, lon: number): Promise<Curre
  * Uses cache (and 5km clustering) per point; batches with delay. Graceful degradation on failure.
  */
 export async function getWeatherForRoutePoints(
-  points: Array<{ lat: number; lon: number }>
+  points: Array<{ lat: number; lon: number }>,
 ): Promise<Map<string, CurrentWeather | null>> {
   const result = new Map<string, CurrentWeather | null>();
   const key = getApiKey();
@@ -241,7 +276,10 @@ export async function getWeatherForRoutePoints(
 }
 
 /** In-memory forecast cache (30-min); no AsyncStorage for forecast to keep size down. */
-const forecastMemory = new Map<string, { data: HourlyForecastItem[]; fetchedAt: number }>();
+const forecastMemory = new Map<
+  string,
+  { data: HourlyForecastItem[]; fetchedAt: number }
+>();
 const FORECAST_TTL_MS = 30 * 60 * 1000;
 
 function forecastCacheKey(lat: number, lon: number): string {
@@ -252,7 +290,9 @@ function forecastCacheKey(lat: number, lon: number): string {
  * Get hourly forecast. Uses in-memory cache only. On failure returns [] (graceful degradation).
  */
 export async function getHourlyForecast(
-  lat: number, lon: number, hoursCount: number = 24
+  lat: number,
+  lon: number,
+  hoursCount: number = 24,
 ): Promise<HourlyForecastItem[]> {
   await loadRateLimitState();
   const ck = forecastCacheKey(lat, lon);

@@ -50,7 +50,7 @@ export async function fetchRoutesWithGPX(): Promise<RouteMetadata[]> {
   return all.filter(
     (r) =>
       r.gpxData &&
-      (r.gpxData as { dataType?: string }).dataType === "application/gpx+xml"
+      (r.gpxData as { dataType?: string }).dataType === "application/gpx+xml",
   );
 }
 
@@ -59,8 +59,10 @@ export async function fetchRoutesWithGPX(): Promise<RouteMetadata[]> {
  * Returns the title for display; use getGpxDownloadUrl or getGpxFile to load the actual file.
  */
 export function getRouteTitleForDisplay(metadata: RouteMetadata): string {
-  if (metadata.title && typeof metadata.title === "string") return metadata.title;
-  const gpxName = metadata.gpxData && (metadata.gpxData as { name?: string }).name;
+  if (metadata.title && typeof metadata.title === "string")
+    return metadata.title;
+  const gpxName =
+    metadata.gpxData && (metadata.gpxData as { name?: string }).name;
   if (typeof gpxName === "string") return gpxName;
   return metadata.id;
 }

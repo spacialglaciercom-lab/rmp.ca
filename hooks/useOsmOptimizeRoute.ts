@@ -44,7 +44,10 @@ export function useOsmOptimizeRoute() {
         });
 
         if (!result.route?.length) {
-          Alert.alert("Optimization failed", result.message || "No route produced.");
+          Alert.alert(
+            "Optimization failed",
+            result.message || "No route produced.",
+          );
           return;
         }
 

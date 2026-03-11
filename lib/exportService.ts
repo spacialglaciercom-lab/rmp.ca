@@ -104,7 +104,7 @@ function escapeXml(str: string): string {
  */
 export function toOSMXML(
   rawElements: OverpassElement[],
-  bounds: OSMBounds
+  bounds: OSMBounds,
 ): string {
   const lines: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -125,7 +125,9 @@ export function toOSMXML(
       lines.push(`  <node id="${n.id}" lat="${lat}" lon="${lon}">`);
       for (const [k, v] of Object.entries(n.tags)) {
         if (v == null) continue;
-        lines.push(`    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`);
+        lines.push(
+          `    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`,
+        );
       }
       lines.push("  </node>");
     }
@@ -140,7 +142,9 @@ export function toOSMXML(
     if (w.tags) {
       for (const [k, v] of Object.entries(w.tags)) {
         if (v == null) continue;
-        lines.push(`    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`);
+        lines.push(
+          `    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`,
+        );
       }
     }
     lines.push("  </way>");
@@ -156,7 +160,7 @@ export function toOSMXML(
 export async function shareOSM(
   rawElements: OverpassElement[],
   bounds: OSMBounds,
-  filename = "osm-export"
+  filename = "osm-export",
 ): Promise<string> {
   const content = toOSMXML(rawElements, bounds);
   const filePath = `${FileSystem.cacheDirectory}${filename}.osm`;
@@ -180,7 +184,7 @@ export async function shareOSM(
  */
 export async function shareGeoJSON(
   features: GeoJSONFeature[],
-  filename = "osm-export"
+  filename = "osm-export",
 ): Promise<string> {
   const geojson = toGeoJSON(features);
   const content = JSON.stringify(geojson, null, 2);
@@ -205,7 +209,7 @@ export async function shareGeoJSON(
  */
 export async function shareCSV(
   features: GeoJSONFeature[],
-  filename = "osm-export"
+  filename = "osm-export",
 ): Promise<string> {
   const content = toCSV(features);
   const filePath = `${FileSystem.cacheDirectory}${filename}.csv`;

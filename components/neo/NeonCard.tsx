@@ -56,7 +56,7 @@ export function NeonCard({
           borderRadius,
           borderWidth: 1,
           borderColor,
-          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+          backgroundColor: "rgba(255, 255, 255, 0.08)",
           padding,
           ...glowShadow,
         },
@@ -64,10 +64,34 @@ export function NeonCard({
       ]}
     >
       {/* Corner notches - simple overlay squares */}
-      <View style={[styles.notch, styles.notchTL, { width: notchSize, height: notchSize, borderColor }]} />
-      <View style={[styles.notch, styles.notchTR, { width: notchSize, height: notchSize, borderColor }]} />
-      <View style={[styles.notch, styles.notchBL, { width: notchSize, height: notchSize, borderColor }]} />
-      <View style={[styles.notch, styles.notchBR, { width: notchSize, height: notchSize, borderColor }]} />
+      <View
+        style={[
+          styles.notch,
+          styles.notchTL,
+          { width: notchSize, height: notchSize, borderColor },
+        ]}
+      />
+      <View
+        style={[
+          styles.notch,
+          styles.notchTR,
+          { width: notchSize, height: notchSize, borderColor },
+        ]}
+      />
+      <View
+        style={[
+          styles.notch,
+          styles.notchBL,
+          { width: notchSize, height: notchSize, borderColor },
+        ]}
+      />
+      <View
+        style={[
+          styles.notch,
+          styles.notchBR,
+          { width: notchSize, height: notchSize, borderColor },
+        ]}
+      />
       <View style={styles.content}>{children}</View>
     </View>
   );
@@ -78,7 +102,7 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(0, 217, 255, 0.15)',
+    borderColor: "rgba(0, 217, 255, 0.15)",
   },
   content: {
     zIndex: 1,
@@ -89,8 +113,32 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     zIndex: 0,
   },
-  notchTL: { top: -1, left: -1, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 4 },
-  notchTR: { top: -1, right: -1, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 4 },
-  notchBL: { bottom: -1, left: -1, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 4 },
-  notchBR: { bottom: -1, right: -1, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 4 },
+  notchTL: {
+    top: -1,
+    left: -1,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 4,
+  },
+  notchTR: {
+    top: -1,
+    right: -1,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 4,
+  },
+  notchBL: {
+    bottom: -1,
+    left: -1,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 4,
+  },
+  notchBR: {
+    bottom: -1,
+    right: -1,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 4,
+  },
 });

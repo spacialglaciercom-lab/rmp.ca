@@ -27,18 +27,24 @@ export default function ContributionScreen() {
   const cameraRef = useRef<CameraView>(null);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lon: number } | null>(
+    null,
+  );
   const [heading, setHeading] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(
+    null,
+  );
   const magnetometerSubscription = useRef<{ remove: () => void } | null>(null);
 
   const startLocationTracking = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
-      setLocationError("Location permission is required for Mapillary contribution.");
+      setLocationError(
+        "Location permission is required for Mapillary contribution.",
+      );
       return;
     }
     setLocationError(null);
@@ -53,7 +59,7 @@ export default function ContributionScreen() {
           lat: loc.coords.latitude,
           lon: loc.coords.longitude,
         });
-      }
+      },
     );
   }, []);
 
@@ -89,7 +95,7 @@ export default function ContributionScreen() {
     if (!location) {
       Alert.alert(
         "Location required",
-        "Waiting for GPS. Please ensure location is enabled and try again."
+        "Waiting for GPS. Please ensure location is enabled and try again.",
       );
       return;
     }
@@ -98,7 +104,7 @@ export default function ContributionScreen() {
     if (!token) {
       Alert.alert(
         "Not signed in",
-        "Please sign in to Mapillary first from the home screen."
+        "Please sign in to Mapillary first from the home screen.",
       );
       return;
     }
@@ -154,7 +160,10 @@ export default function ContributionScreen() {
           >
             <Text style={styles.buttonText}>Grant camera permission</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
             <Text style={{ color: colors.primary }}>Back</Text>
           </TouchableOpacity>
         </View>
@@ -172,7 +181,9 @@ export default function ContributionScreen() {
         </View>
       )}
 
-      <View style={[styles.overlay, { backgroundColor: colors.surface + "CC" }]}>
+      <View
+        style={[styles.overlay, { backgroundColor: colors.surface + "CC" }]}
+      >
         <Text style={[styles.coords, { color: colors.foreground }]}>
           {location
             ? `${location.lat.toFixed(5)}, ${location.lon.toFixed(5)} · ${Math.round(heading)}°`
@@ -182,7 +193,10 @@ export default function ContributionScreen() {
 
       <View style={styles.controls}>
         <TouchableOpacity
-          style={[styles.captureButton, uploading && styles.captureButtonDisabled]}
+          style={[
+            styles.captureButton,
+            uploading && styles.captureButtonDisabled,
+          ]}
           onPress={handleCapture}
           disabled={uploading}
         >
@@ -194,8 +208,13 @@ export default function ContributionScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-        <Text style={[styles.closeText, { color: colors.foreground }]}>Close</Text>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => router.back()}
+      >
+        <Text style={[styles.closeText, { color: colors.foreground }]}>
+          Close
+        </Text>
       </TouchableOpacity>
     </View>
   );

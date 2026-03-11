@@ -25,8 +25,9 @@ const memoryCache = new Map<string, WeatherCacheEntry>();
 /** Evict oldest entries when the in-memory cache exceeds MAX_MEMORY_CACHE_SIZE. */
 function evictMemoryCache(): void {
   if (memoryCache.size <= MAX_MEMORY_CACHE_SIZE) return;
-  const entries = Array.from(memoryCache.entries())
-    .sort(([, a], [, b]) => a.fetchedAt - b.fetchedAt);
+  const entries = Array.from(memoryCache.entries()).sort(
+    ([, a], [, b]) => a.fetchedAt - b.fetchedAt,
+  );
   const toRemove = entries.length - MAX_MEMORY_CACHE_SIZE;
   for (let i = 0; i < toRemove; i++) {
     memoryCache.delete(entries[i]![0]);
@@ -34,23 +35,39 @@ function evictMemoryCache(): void {
 }
 
 /** Haversine distance in km */
-function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function distanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 function currentHourUtc(): number {
   const d = new Date();
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours());
+  return Date.UTC(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate(),
+    d.getUTCHours(),
+  );
 }
 
-export function weatherCacheKey(lat: number, lon: number, hour?: number): string {
+export function weatherCacheKey(
+  lat: number,
+  lon: number,
+  hour?: number,
+): string {
   const h = hour ?? currentHourUtc();
   return `${CACHE_PREFIX}${lat.toFixed(4)}_${lon.toFixed(4)}_${h}`;
 }
@@ -74,7 +91,10 @@ function findWithinCluster(lat: number, lon: number): WeatherCacheEntry | null {
  * Get cached weather for (lat, lon). Checks exact key then spatial cluster (5km).
  * Returns null if none fresh.
  */
-export async function getWeatherCached(lat: number, lon: number): Promise<WeatherData | null> {
+export async function getWeatherCached(
+  lat: number,
+  lon: number,
+): Promise<WeatherData | null> {
   const hour = currentHourUtc();
   const key = weatherCacheKey(lat, lon, hour);
 
@@ -100,7 +120,10 @@ export async function getWeatherCached(lat: number, lon: number): Promise<Weathe
         const stored = await AsyncStorage.getItem(k);
         if (!stored) continue;
         const entry = JSON.parse(stored) as WeatherCacheEntry;
-        if (isFresh(entry) && distanceKm(lat, lon, entry.lat, entry.lon) <= CLUSTER_RADIUS_KM) {
+        if (
+          isFresh(entry) &&
+          distanceKm(lat, lon, entry.lat, entry.lon) <= CLUSTER_RADIUS_KM
+        ) {
           memoryCache.set(key, { ...entry, lat, lon });
           evictMemoryCache();
           return entry.data;
@@ -116,7 +139,11 @@ export async function getWeatherCached(lat: number, lon: number): Promise<Weathe
 /**
  * Set cached weather for (lat, lon). Key includes current hour; TTL 30 min.
  */
-export async function setWeatherCached(lat: number, lon: number, data: WeatherData): Promise<void> {
+export async function setWeatherCached(
+  lat: number,
+  lon: number,
+  data: WeatherData,
+): Promise<void> {
   const hour = currentHourUtc();
   const key = weatherCacheKey(lat, lon, hour);
   const entry: WeatherCacheEntry = {
@@ -135,7 +162,10 @@ export async function setWeatherCached(lat: number, lon: number, data: WeatherDa
       if (weatherKeys.length > MAX_PERSISTED_KEYS) {
         // Sort by the hour timestamp suffix (oldest first) before trimming
         weatherKeys.sort();
-        const toRemove = weatherKeys.slice(0, weatherKeys.length - MAX_PERSISTED_KEYS);
+        const toRemove = weatherKeys.slice(
+          0,
+          weatherKeys.length - MAX_PERSISTED_KEYS,
+        );
         await AsyncStorage.multiRemove(toRemove);
       }
     } catch {

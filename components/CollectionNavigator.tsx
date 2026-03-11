@@ -15,7 +15,13 @@
  * external apps (Google Maps / Apple Maps / Waze).
  */
 
-import React, { useEffect, useMemo, useCallback, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   Text,
@@ -66,7 +72,7 @@ const COLORS = {
 // ---------------------------------------------------------------------------
 
 export interface CollectionNavigatorProps {
-  routePoints: Array<{ lat: number; lon: number }>;
+  routePoints: { lat: number; lon: number }[];
   collectionPoints: CollectionPoint[];
   onClose: () => void;
 }
@@ -94,14 +100,18 @@ export default function CollectionNavigator({
 
   const segments = useCollectionNavigationStore(useShallow((s) => s.segments));
   const isTracking = useCollectionNavigationStore((s) => s.isTracking);
-  const currentLocation = useCollectionNavigationStore(useShallow((s) => s.currentLocation));
+  const currentLocation = useCollectionNavigationStore(
+    useShallow((s) => s.currentLocation),
+  );
   const activeSegment = useActiveSegment();
   const progress = useCollectionProgress();
   const segmentGroups = useSegmentGroups();
 
   const advanceSegment = useCollectionNavigationStore((s) => s.advanceSegment);
   const skipSegment = useCollectionNavigationStore((s) => s.skipSegment);
-  const resetNavigation = useCollectionNavigationStore((s) => s.resetNavigation);
+  const resetNavigation = useCollectionNavigationStore(
+    (s) => s.resetNavigation,
+  );
 
   // Follow user location on map
   useEffect(() => {
@@ -118,7 +128,12 @@ export default function CollectionNavigator({
       },
       { duration: 800 },
     );
-  }, [currentLocation?.lat, currentLocation?.lon, currentLocation?.bearing, isTracking]);
+  }, [
+    currentLocation?.lat,
+    currentLocation?.lon,
+    currentLocation?.bearing,
+    isTracking,
+  ]);
 
   // Fit map to route bounds on mount
   useEffect(() => {
@@ -142,7 +157,9 @@ export default function CollectionNavigator({
     } catch (error) {
       Alert.alert(
         "Unable to Start",
-        error instanceof Error ? error.message : "Failed to start GPS tracking. Please check your location permissions.",
+        error instanceof Error
+          ? error.message
+          : "Failed to start GPS tracking. Please check your location permissions.",
       );
     } finally {
       setIsStarting(false);
@@ -157,15 +174,15 @@ export default function CollectionNavigator({
 
   // Build polylines per segment, plus a progress overlay for the active segment
   const { polylineGroups, activeProgressOverlay } = useMemo(() => {
-    const groups: Array<{
-      coords: Array<{ latitude: number; longitude: number }>;
+    const groups: {
+      coords: { latitude: number; longitude: number }[];
       color: string;
       zIndex: number;
       strokeWidth: number;
-    }> = [];
+    }[] = [];
 
     let overlay: {
-      coords: Array<{ latitude: number; longitude: number }>;
+      coords: { latitude: number; longitude: number }[];
     } | null = null;
 
     for (const seg of segments) {
@@ -191,8 +208,15 @@ export default function CollectionNavigator({
       });
 
       // Build progress overlay for active segment
-      if (seg.status === "active" && seg.linearProgress > 0 && seg.polyline.length >= 2) {
-        const progressCoords = getProgressCoords(seg.polyline, seg.linearProgress);
+      if (
+        seg.status === "active" &&
+        seg.linearProgress > 0 &&
+        seg.polyline.length >= 2
+      ) {
+        const progressCoords = getProgressCoords(
+          seg.polyline,
+          seg.linearProgress,
+        );
         if (progressCoords.length >= 2) {
           overlay = {
             coords: progressCoords.map((p) => ({
@@ -265,11 +289,15 @@ export default function CollectionNavigator({
           longitudeDelta: 0.02,
         }}
         mapType={
-          activeBaseLayer === "google-maps" ? "standard" :
-          activeBaseLayer === "google-satellite" ? "satellite" :
-          activeBaseLayer === "google-hybrid" ? "hybrid" :
-          activeBaseLayer === "google-terrain" ? "terrain" :
-          "none"
+          activeBaseLayer === "google-maps"
+            ? "standard"
+            : activeBaseLayer === "google-satellite"
+              ? "satellite"
+              : activeBaseLayer === "google-hybrid"
+                ? "hybrid"
+                : activeBaseLayer === "google-terrain"
+                  ? "terrain"
+                  : "none"
         }
         showsBuildings={activeBaseLayer === "google-hybrid"}
         rotateEnabled
@@ -354,9 +382,7 @@ export default function CollectionNavigator({
                     : COLORS.leftArm
             }
             title={m.address}
-            description={
-              m.isRight ? "Right side" : "Left side"
-            }
+            description={m.isRight ? "Right side" : "Left side"}
           />
         ))}
 
@@ -421,9 +447,7 @@ export default function CollectionNavigator({
                   : `Segment ${progress.activeSegmentIndex + 1} of ${progress.totalSegments}`}
               </Text>
               {activeGroupInfo && activeGroupInfo.subSegmentCount > 1 && (
-                <Text
-                  style={[styles.subSegmentBadge, { color: colors.muted }]}
-                >
+                <Text style={[styles.subSegmentBadge, { color: colors.muted }]}>
                   {activeGroupInfo.subSegmentCount} segments
                 </Text>
               )}
@@ -463,10 +487,7 @@ export default function CollectionNavigator({
       {/* Progress bar */}
       {segments.length > 0 && (
         <View
-          style={[
-            styles.progressContainer,
-            { bottom: isTracking ? 180 : 120 },
-          ]}
+          style={[styles.progressContainer, { bottom: isTracking ? 180 : 120 }]}
         >
           <View
             style={[
@@ -487,9 +508,10 @@ export default function CollectionNavigator({
           <Text style={[styles.progressText, { color: colors.text }]}>
             {displayCompleted}/{displayTotal} {displayUnit}
             {" \u2022 "}
-            {progressPct}%
-            {" \u2022 "}
-            {formatDistance(progress.totalDistance - progress.completedDistance)}{" "}
+            {progressPct}%{" \u2022 "}
+            {formatDistance(
+              progress.totalDistance - progress.completedDistance,
+            )}{" "}
             remaining
           </Text>
         </View>
@@ -604,14 +626,13 @@ export default function CollectionNavigator({
           <View style={styles.trackingControls}>
             <View style={styles.controlRow}>
               <TouchableOpacity
-                style={[styles.controlButton, { backgroundColor: COLORS.completed }]}
+                style={[
+                  styles.controlButton,
+                  { backgroundColor: COLORS.completed },
+                ]}
                 onPress={advanceSegment}
               >
-                <MaterialCommunityIcons
-                  name="check"
-                  size={20}
-                  color="#fff"
-                />
+                <MaterialCommunityIcons name="check" size={20} color="#fff" />
                 <Text style={styles.controlButtonText}>Complete</Text>
               </TouchableOpacity>
 
@@ -634,18 +655,17 @@ export default function CollectionNavigator({
                 style={[styles.controlButton, { backgroundColor: "#ef4444" }]}
                 onPress={handleStop}
               >
-                <MaterialCommunityIcons
-                  name="stop"
-                  size={20}
-                  color="#fff"
-                />
+                <MaterialCommunityIcons name="stop" size={20} color="#fff" />
                 <Text style={styles.controlButtonText}>End</Text>
               </TouchableOpacity>
             </View>
 
             {/* Stop list toggle */}
             <TouchableOpacity
-              style={[styles.stopListToggle, { borderColor: colors.muted + "40" }]}
+              style={[
+                styles.stopListToggle,
+                { borderColor: colors.muted + "40" },
+              ]}
               onPress={() => setShowStopList(!showStopList)}
             >
               <MaterialCommunityIcons
@@ -702,7 +722,9 @@ function SegmentGroupRow({
         </Text>
         {group.subSegmentCount > 1 && (
           <View style={styles.subSegmentBadgeContainer}>
-            <Text style={[styles.subSegmentBadgeSmall, { color: colors.muted }]}>
+            <Text
+              style={[styles.subSegmentBadgeSmall, { color: colors.muted }]}
+            >
               {group.subSegmentCount} segments
             </Text>
           </View>
@@ -738,9 +760,9 @@ function formatDistance(meters: number): string {
  * rendering a progress overlay on the map.
  */
 function getProgressCoords(
-  polyline: Array<{ lat: number; lon: number }>,
+  polyline: { lat: number; lon: number }[],
   progress: number,
-): Array<{ lat: number; lon: number }> {
+): { lat: number; lon: number }[] {
   if (polyline.length < 2 || progress <= 0) return [];
   if (progress >= 1) return [...polyline];
 
@@ -753,7 +775,7 @@ function getProgressCoords(
   }
 
   const targetLen = totalLen * progress;
-  const result: Array<{ lat: number; lon: number }> = [polyline[0]];
+  const result: { lat: number; lon: number }[] = [polyline[0]];
   let accumulated = 0;
 
   for (let i = 0; i < segLens.length; i++) {

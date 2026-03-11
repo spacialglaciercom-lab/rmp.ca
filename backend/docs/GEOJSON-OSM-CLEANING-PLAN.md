@@ -6,14 +6,14 @@ Integrate **Fiona** (GDAL/OGR), **GDAL/OGR**, and **NetworkX** in the backend to
 
 ## 1. Current Data Flow
 
-| Entry point | Source | Consumer |
-|-------------|--------|----------|
-| `POST /api/geojson/validate` | GeoJSON body | Validation only |
-| `POST /api/geojson/filter` | GeoJSON + polygon/road_classes | Filtered GeoJSON |
-| `POST /api/geojson/roads` | Raw GeoJSON | Road FeatureCollection |
-| `POST /api/optimize` | GeoJSON road segments | Chinese Postman (NetworkX graph) |
-| `POST /api/zones/partition-from-geojson` | GeoJSON LineStrings | Spectral partition graph |
-| `POST /overture/optimize` | Optional `geojson` in body | Overture route optimization |
+| Entry point                              | Source                         | Consumer                         |
+| ---------------------------------------- | ------------------------------ | -------------------------------- |
+| `POST /api/geojson/validate`             | GeoJSON body                   | Validation only                  |
+| `POST /api/geojson/filter`               | GeoJSON + polygon/road_classes | Filtered GeoJSON                 |
+| `POST /api/geojson/roads`                | Raw GeoJSON                    | Road FeatureCollection           |
+| `POST /api/optimize`                     | GeoJSON road segments          | Chinese Postman (NetworkX graph) |
+| `POST /api/zones/partition-from-geojson` | GeoJSON LineStrings            | Spectral partition graph         |
+| `POST /overture/optimize`                | Optional `geojson` in body     | Overture route optimization      |
 
 All consumers assume **valid LineString/MultiLineString** features. Invalid geometries, wrong CRS, or disconnected segments can cause failures or suboptimal routes.
 
@@ -111,15 +111,15 @@ Run in this order:
 
 These steps run after geometry repair (4.2/4.3) and use the same NetworkX graph built from LineStrings. They remove redundancy, artifacts, and incomplete data so the optimizer gets a single, routable network.
 
-| Step | Purpose | How |
-|------|--------|-----|
-| **Duplicate nodes/edges** | Merged Overture/OSM data often has duplicate geometries or attributes; duplicates add redundant paths and extra computation. | **Nodes:** Merge nodes within a distance tolerance (e.g. 1 m) using spatial indexing: build an R-tree (e.g. `strtree.STRtree` in Shapely) of node points, query by distance, assign a single canonical node id per cluster, then `nx.relabel_nodes(G, mapping)` or rebuild edges with canonical ids. **Edges:** Deduplicate by geometry (e.g. normalized coordinate tuple) or by (u, v) + length; keep one edge per distinct segment. |
-| **Self-loops** | Edges from a node to itself (e.g. from invalid or zero-length LineStrings) add no routing value and can break shortest-path logic. | `G.remove_edges_from(nx.selfloop_edges(G))`. Run after geometry repair and before or after duplicate removal. |
-| **Zero-length / very short edges** | Sub-meter or 0.1 m edges are often rounding or import artifacts; they clutter the graph without adding topology. | Store edge length in graph (e.g. `G[u][v][key]['length']`). Filter with a threshold: `min_length_m` (e.g. 0.1). Use `nx.get_edge_attributes(G, 'length')` and remove edges where `length < min_length_m`. Optionally drop edges that collapse to zero after coordinate snapping. |
-| **Disconnected components** | After removing isolates, the graph may still have several components; if the optimizer assumes one network, keep only the largest. | `comps = list(nx.connected_components(G))`; sort by size (e.g. `len(c)`); keep top `max_components` (e.g. 1). `G = G.subgraph(comps[0]).copy()` (or union of top N). |
-| **Edges with invalid/missing attributes** | Incomplete OSM/Overture data may lack `highway` type, speed, or one-way; such edges make routability inconsistent. | Define required or recommended attributes (e.g. `highway`, or `class` for Overture). **Option A:** Remove edges missing required keys: filter by `G.edges(keys=True, data=True)` and drop if `data.get('highway') is None` (or not in allowlist). **Option B:** Flag only: add `_missing_attrs` in properties and let the optimizer decide. Prefer remove (or configurable) so the optimizer sees consistent data. |
-| **Overlapping / parallel edges** | Multi-lane or duplicate ways can create overlapping LineStrings; merge into one multi-edge or a single edge with aggregated attributes to avoid double-counting in routing. | **Detection:** Shapely `line1.intersects(line2)` (or buffer slightly and intersect) for pairs of edges; or group edges by (u, v) and treat as parallel. **Action:** Either keep as multi-edges (NetworkX MultiGraph) with combined length/attributes, or collapse to one edge with e.g. max speed, union of road class. Use edge geometry + optional `shapely.ops.unary_union` for a single line. |
-| **Topological errors (crossing edges without nodes)** | When two road segments cross without a shared node, routing cannot turn at the intersection. Planarize by inserting nodes at crossings. | **Detection:** For each pair of edges (LineStrings), check `line1.crosses(line2)` or `line1.intersection(line2)`; if a point (or line) intersection exists and is not an endpoint, the graph is non-planar at that point. **Action:** Insert a new node at the intersection, split both edges into two segments each, and reconnect. Use Shapely `line.intersection(other)` and `split(line, point)` (Shapely 2.0 has `split`). Rebuild graph from split segments. Optional: use `nx.planar_layout` only for visualization; for routing, explicit node insertion is required. Libraries like **osmnx** do this (intersection nodes); we can replicate with Shapely or call out to osmnx in a dedicated step if needed. |
+| Step                                                  | Purpose                                                                                                                                                                     | How                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Duplicate nodes/edges**                             | Merged Overture/OSM data often has duplicate geometries or attributes; duplicates add redundant paths and extra computation.                                                | **Nodes:** Merge nodes within a distance tolerance (e.g. 1 m) using spatial indexing: build an R-tree (e.g. `strtree.STRtree` in Shapely) of node points, query by distance, assign a single canonical node id per cluster, then `nx.relabel_nodes(G, mapping)` or rebuild edges with canonical ids. **Edges:** Deduplicate by geometry (e.g. normalized coordinate tuple) or by (u, v) + length; keep one edge per distinct segment.                                                                                                                                                                                                                                                                                  |
+| **Self-loops**                                        | Edges from a node to itself (e.g. from invalid or zero-length LineStrings) add no routing value and can break shortest-path logic.                                          | `G.remove_edges_from(nx.selfloop_edges(G))`. Run after geometry repair and before or after duplicate removal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Zero-length / very short edges**                    | Sub-meter or 0.1 m edges are often rounding or import artifacts; they clutter the graph without adding topology.                                                            | Store edge length in graph (e.g. `G[u][v][key]['length']`). Filter with a threshold: `min_length_m` (e.g. 0.1). Use `nx.get_edge_attributes(G, 'length')` and remove edges where `length < min_length_m`. Optionally drop edges that collapse to zero after coordinate snapping.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Disconnected components**                           | After removing isolates, the graph may still have several components; if the optimizer assumes one network, keep only the largest.                                          | `comps = list(nx.connected_components(G))`; sort by size (e.g. `len(c)`); keep top `max_components` (e.g. 1). `G = G.subgraph(comps[0]).copy()` (or union of top N).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Edges with invalid/missing attributes**             | Incomplete OSM/Overture data may lack `highway` type, speed, or one-way; such edges make routability inconsistent.                                                          | Define required or recommended attributes (e.g. `highway`, or `class` for Overture). **Option A:** Remove edges missing required keys: filter by `G.edges(keys=True, data=True)` and drop if `data.get('highway') is None` (or not in allowlist). **Option B:** Flag only: add `_missing_attrs` in properties and let the optimizer decide. Prefer remove (or configurable) so the optimizer sees consistent data.                                                                                                                                                                                                                                                                                                     |
+| **Overlapping / parallel edges**                      | Multi-lane or duplicate ways can create overlapping LineStrings; merge into one multi-edge or a single edge with aggregated attributes to avoid double-counting in routing. | **Detection:** Shapely `line1.intersects(line2)` (or buffer slightly and intersect) for pairs of edges; or group edges by (u, v) and treat as parallel. **Action:** Either keep as multi-edges (NetworkX MultiGraph) with combined length/attributes, or collapse to one edge with e.g. max speed, union of road class. Use edge geometry + optional `shapely.ops.unary_union` for a single line.                                                                                                                                                                                                                                                                                                                      |
+| **Topological errors (crossing edges without nodes)** | When two road segments cross without a shared node, routing cannot turn at the intersection. Planarize by inserting nodes at crossings.                                     | **Detection:** For each pair of edges (LineStrings), check `line1.crosses(line2)` or `line1.intersection(line2)`; if a point (or line) intersection exists and is not an endpoint, the graph is non-planar at that point. **Action:** Insert a new node at the intersection, split both edges into two segments each, and reconnect. Use Shapely `line.intersection(other)` and `split(line, point)` (Shapely 2.0 has `split`). Rebuild graph from split segments. Optional: use `nx.planar_layout` only for visualization; for routing, explicit node insertion is required. Libraries like **osmnx** do this (intersection nodes); we can replicate with Shapely or call out to osmnx in a dedicated step if needed. |
 
 **Order in pipeline:** Apply 4.2/4.3 (geometry repair) first, then build the graph once and run: self-loops → short edges → duplicate nodes (merge by proximity) → duplicate edges → missing-attribute filter → overlapping/parallel merge → disconnect small components → (optional) planarize / add nodes at crossings. See §9 Implementation plan for the exact sequence and options.
 
@@ -131,6 +131,7 @@ These steps run after geometry repair (4.2/4.3) and use the same NetworkX graph 
 - **Use ogr2ogr for optional OSM → GeoJSON conversion and cleaning:** Run GDAL’s `ogr2ogr` so conversion and basic repair happen in one step, then run the Python graph-cleaning pipeline on the resulting GeoJSON.
 
 **Recommended CLI (conversion + geometry repair):**
+
 ```bash
 # OSM XML → GeoJSON with makevalid (fix invalid geometries during conversion)
 ogr2ogr -makevalid -f GeoJSON output.json input.osm
@@ -150,12 +151,12 @@ ogr2ogr -makevalid -f GeoJSON output.json input.osm
 
 ## 6. Dependencies and Installation
 
-| Package   | Purpose                    | Required | Notes                                      |
-|----------|----------------------------|----------|--------------------------------------------|
-| shapely  | Geometry repair, fallback  | Yes      | Already in `requirements.txt`              |
-| networkx | Topology cleaning          | Yes      | Already in `requirements.txt`              |
-| fiona    | Vector I/O, large files    | Optional | Requires GDAL; `pip install fiona` or conda |
-| gdal     | OGR makevalid, OSM read    | Optional | `conda install gdal` often easiest         |
+| Package  | Purpose                   | Required | Notes                                       |
+| -------- | ------------------------- | -------- | ------------------------------------------- |
+| shapely  | Geometry repair, fallback | Yes      | Already in `requirements.txt`               |
+| networkx | Topology cleaning         | Yes      | Already in `requirements.txt`               |
+| fiona    | Vector I/O, large files   | Optional | Requires GDAL; `pip install fiona` or conda |
+| gdal     | OGR makevalid, OSM read   | Optional | `conda install gdal` often easiest          |
 
 - **Minimal (no GDAL/Fiona):** Use Shapely for make_valid + NetworkX for isolates. Works everywhere.
 - **Full (Fiona + GDAL):** For large files and strongest repair; document `conda install gdal fiona` (or system GDAL + `pip install fiona`) in backend README and Dockerfile.
@@ -185,18 +186,18 @@ backend/
 
 ## 8. Implementation Order (phases)
 
-1. **Phase 1 — In-process cleaning (no new deps)**  
-   - Add `vector_clean.py` with `clean_geojson(geojson_dict, options)` using **Shapely** (make_valid, drop invalid) and **NetworkX** (remove isolates, optional min_component_size).  
-   - Add `POST /api/geojson/clean` that calls `clean_geojson` and returns cleaned GeoJSON + stats.  
+1. **Phase 1 — In-process cleaning (no new deps)**
+   - Add `vector_clean.py` with `clean_geojson(geojson_dict, options)` using **Shapely** (make_valid, drop invalid) and **NetworkX** (remove isolates, optional min_component_size).
+   - Add `POST /api/geojson/clean` that calls `clean_geojson` and returns cleaned GeoJSON + stats.
    - Wire proxy in Node (`optimizerProxy.ts`) and optionally frontend (e.g. “Clean” before “Optimize” or “Partition”).
 
-2. **Phase 2 — Optional Fiona + GDAL**  
-   - Add `requirements-geo.txt` and document GDAL install.  
-   - In `vector_clean.py`, if Fiona/GDAL available, use OGR makevalid in the iteration path; otherwise keep Shapely fallback.  
+2. **Phase 2 — Optional Fiona + GDAL**
+   - Add `requirements-geo.txt` and document GDAL install.
+   - In `vector_clean.py`, if Fiona/GDAL available, use OGR makevalid in the iteration path; otherwise keep Shapely fallback.
    - Optionally support file-path or URL input for large batch (e.g. read with Fiona, write cleaned GeoJSON).
 
-3. **Phase 3 — OSM and batch**  
-   - Optional script `scripts/osm_to_geojson.py` using **ogr2ogr** (subprocess or Python bindings) for OSM → GeoJSON with `-makevalid`.  
+3. **Phase 3 — OSM and batch**
+   - Optional script `scripts/osm_to_geojson.py` using **ogr2ogr** (subprocess or Python bindings) for OSM → GeoJSON with `-makevalid`.
    - Optional “clean then optimize” single endpoint or `clean_before_optimize` flag on `/api/optimize` and `/api/zones/partition-from-geojson`.
 
 ---
@@ -209,21 +210,21 @@ Concrete pipeline order, options schema, and code layout so implementation can s
 
 Run in this order. Each stage consumes the output of the previous one (GeoJSON → GeoJSON until graph stage; graph → graph; then graph → GeoJSON).
 
-| Stage | Input | Action | Output |
-|-------|--------|--------|--------|
-| 1. Ingest | GeoJSON body or (batch) file/OSM | Normalize to FeatureCollection; optional ogr2ogr for OSM→GeoJSON. | GeoJSON |
-| 2. Geometry repair | GeoJSON | make_valid (OGR or Shapely); drop empty/invalid; optional schema normalize. | GeoJSON |
-| 3. Build graph | GeoJSON | LineStrings → NetworkX MultiGraph with node keys (e.g. rounded lon,lat), edge attr `length`, `geometry`, `properties`. | Graph + feature index |
-| 4. Self-loops | Graph | `G.remove_edges_from(nx.selfloop_edges(G))`. | Graph |
-| 5. Short edges | Graph | Remove edges with `length < min_length_m` (e.g. 0.1). | Graph |
-| 6. Duplicate nodes | Graph | Merge nodes within `node_snap_m` (e.g. 1 m): R-tree (Shapely STRtree) on node coords → canonical id per cluster → relabel or rebuild edges. | Graph |
-| 7. Duplicate edges | Graph | Dedupe by (u, v) + geometry hash or normalized coords; keep one edge per distinct segment, merge attributes if desired. | Graph |
-| 8. Missing/invalid attributes | Graph | Remove (or flag) edges missing required keys, e.g. `required_attrs=['highway']` or `required_attrs=['class']` for Overture. | Graph |
-| 9. Overlapping/parallel edges | Graph | Group edges by (u, v) or by geometry overlap (Shapely); merge into one edge (aggregate length/attrs) or keep as multi-edge. | Graph |
-| 10. Isolates | Graph | `G.remove_nodes_from(list(nx.isolates(G)))`. | Graph |
-| 11. Disconnected components | Graph | Keep largest `max_components` (e.g. 1); `G = G.subgraph(union_of_components).copy()`. | Graph |
-| 12. (Optional) Planarize | Graph | Insert nodes at LineString crossings; split edges. Skip in Phase 1; add when needed. | Graph |
-| 13. Export | Graph | Rebuild GeoJSON FeatureCollection from remaining edges (geometry + properties from edge data). | GeoJSON |
+| Stage                         | Input                            | Action                                                                                                                                      | Output                |
+| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| 1. Ingest                     | GeoJSON body or (batch) file/OSM | Normalize to FeatureCollection; optional ogr2ogr for OSM→GeoJSON.                                                                           | GeoJSON               |
+| 2. Geometry repair            | GeoJSON                          | make_valid (OGR or Shapely); drop empty/invalid; optional schema normalize.                                                                 | GeoJSON               |
+| 3. Build graph                | GeoJSON                          | LineStrings → NetworkX MultiGraph with node keys (e.g. rounded lon,lat), edge attr `length`, `geometry`, `properties`.                      | Graph + feature index |
+| 4. Self-loops                 | Graph                            | `G.remove_edges_from(nx.selfloop_edges(G))`.                                                                                                | Graph                 |
+| 5. Short edges                | Graph                            | Remove edges with `length < min_length_m` (e.g. 0.1).                                                                                       | Graph                 |
+| 6. Duplicate nodes            | Graph                            | Merge nodes within `node_snap_m` (e.g. 1 m): R-tree (Shapely STRtree) on node coords → canonical id per cluster → relabel or rebuild edges. | Graph                 |
+| 7. Duplicate edges            | Graph                            | Dedupe by (u, v) + geometry hash or normalized coords; keep one edge per distinct segment, merge attributes if desired.                     | Graph                 |
+| 8. Missing/invalid attributes | Graph                            | Remove (or flag) edges missing required keys, e.g. `required_attrs=['highway']` or `required_attrs=['class']` for Overture.                 | Graph                 |
+| 9. Overlapping/parallel edges | Graph                            | Group edges by (u, v) or by geometry overlap (Shapely); merge into one edge (aggregate length/attrs) or keep as multi-edge.                 | Graph                 |
+| 10. Isolates                  | Graph                            | `G.remove_nodes_from(list(nx.isolates(G)))`.                                                                                                | Graph                 |
+| 11. Disconnected components   | Graph                            | Keep largest `max_components` (e.g. 1); `G = G.subgraph(union_of_components).copy()`.                                                       | Graph                 |
+| 12. (Optional) Planarize      | Graph                            | Insert nodes at LineString crossings; split edges. Skip in Phase 1; add when needed.                                                        | Graph                 |
+| 13. Export                    | Graph                            | Rebuild GeoJSON FeatureCollection from remaining edges (geometry + properties from edge data).                                              | GeoJSON               |
 
 ### 9.2 Clean options schema
 
@@ -326,18 +327,18 @@ def post_geojson_clean(body: CleanRequest) -> CleanResponse
 
 ## 10. Testing
 
-- **Unit:** Feed known bad GeoJSON (self-intersecting line, empty geom, wrong type) into `clean_geojson()`; assert valid output and expected stats.  
-- **Integration:** Call `POST /api/geojson/clean` then `POST /api/optimize` (or partition-from-geojson) and assert no errors and sane route/partitions.  
+- **Unit:** Feed known bad GeoJSON (self-intersecting line, empty geom, wrong type) into `clean_geojson()`; assert valid output and expected stats.
+- **Integration:** Call `POST /api/geojson/clean` then `POST /api/optimize` (or partition-from-geojson) and assert no errors and sane route/partitions.
 - **Regression:** Keep a small fixture of “dirty” Overture/OSM-derived GeoJSON in `tests/fixtures/` and run cleaning + optimizer in CI.
 
 ---
 
 ## 11. References
 
-- **Fiona:** [fiona.readthedocs.io](https://fiona.readthedocs.io/) — I/O and schema.  
-- **GDAL/OGR:** [gdal.org](https://gdal.org) — Geometry validation/repair, ogr2ogr.  
-- **NetworkX:** [networkx.org](https://networkx.org) — Graph cleaning (e.g. isolates, selfloop_edges, connected_components).  
-- **Shapely:** [shapely.readthedocs.io](https://shapely.readthedocs.io/) — `make_valid`, `split`; **STRtree** for spatial indexing (merge duplicate nodes by proximity).  
+- **Fiona:** [fiona.readthedocs.io](https://fiona.readthedocs.io/) — I/O and schema.
+- **GDAL/OGR:** [gdal.org](https://gdal.org) — Geometry validation/repair, ogr2ogr.
+- **NetworkX:** [networkx.org](https://networkx.org) — Graph cleaning (e.g. isolates, selfloop_edges, connected_components).
+- **Shapely:** [shapely.readthedocs.io](https://shapely.readthedocs.io/) — `make_valid`, `split`; **STRtree** for spatial indexing (merge duplicate nodes by proximity).
 - **osmnx** (optional): Intersection node insertion and planarization for street networks.
 
 This plan keeps the optimizer unchanged in contract; cleaning is an explicit step (and optionally an internal step) so GeoJSON and OSM-derived data are valid and routable before use.

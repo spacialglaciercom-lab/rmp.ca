@@ -84,7 +84,10 @@ export function useOvertureOptimizeRoute() {
         });
 
         actions.setRoutePoints(gpxPoints);
-        const gpxString = generateGPXString("overture-optimized-route", gpxPoints);
+        const gpxString = generateGPXString(
+          "overture-optimized-route",
+          gpxPoints,
+        );
         dispatch({ type: "SET_GPX_DATA", payload: gpxString });
 
         setDisplayMode("full");
@@ -106,7 +109,13 @@ export function useOvertureOptimizeRoute() {
         setOptimizationStatus("");
       }
     },
-    [state?.configuration, actions, dispatch, closeOSMExtractor, setDisplayMode],
+    [
+      state?.configuration,
+      actions,
+      dispatch,
+      closeOSMExtractor,
+      setDisplayMode,
+    ],
   );
 
   return {

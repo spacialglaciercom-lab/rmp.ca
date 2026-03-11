@@ -203,11 +203,16 @@ export function StatisticsPanel() {
 
             {stats.onewayViolations !== undefined && (
               <View className="flex-row items-center justify-between">
-                <Text className="text-sm text-foreground">Oneway Violations</Text>
+                <Text className="text-sm text-foreground">
+                  Oneway Violations
+                </Text>
                 <Text
                   className="text-sm font-semibold"
                   style={{
-                    color: stats.onewayViolations === 0 ? colors.success : colors.error,
+                    color:
+                      stats.onewayViolations === 0
+                        ? colors.success
+                        : colors.error,
                   }}
                 >
                   {stats.onewayViolations}

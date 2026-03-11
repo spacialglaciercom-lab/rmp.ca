@@ -87,8 +87,8 @@ function parseCoord(value: string | undefined): number | undefined {
   if (!value) return undefined;
   let cleaned = value
     .replace(/°/g, "")
-    .replace(/[''′]/g, "")  // Remove minute symbols
-    .replace(/["″]/g, "")  // Remove second symbols
+    .replace(/[''′]/g, "") // Remove minute symbols
+    .replace(/["″]/g, "") // Remove second symbols
     .trim();
 
   // If using comma as decimal separator (no other commas in string)
@@ -149,34 +149,79 @@ function findColumnIndex(header: string[], ...names: string[]): number {
  * Handles quoted values and various delimiters (comma, semicolon, tab).
  */
 export function parseWasteCSV(text: string): WasteImportRow[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length < 2) return [];
 
   const delimiter = detectDelimiter(lines[0]);
-  const header = parseCSVLine(lines[0], delimiter).map((h) => h.toLowerCase().replace(/['"]/g, ""));
+  const header = parseCSVLine(lines[0], delimiter).map((h) =>
+    h.toLowerCase().replace(/['"]/g, ""),
+  );
 
   // Find latitude column (try multiple variations)
   const latIdx = findColumnIndex(
     header,
-    "lat", "latitude", "y", "point_y", "lat_y", "latitud"
+    "lat",
+    "latitude",
+    "y",
+    "point_y",
+    "lat_y",
+    "latitud",
   );
 
   // Find longitude column
   const lonIdx = findColumnIndex(
     header,
-    "lon", "lng", "longitude", "long", "x", "point_x", "lon_x", "longitud"
+    "lon",
+    "lng",
+    "longitude",
+    "long",
+    "x",
+    "point_x",
+    "lon_x",
+    "longitud",
   );
 
   // Find combined coordinates column (fallback if lat/lon not found)
   const coordsIdx = findColumnIndex(
     header,
-    "coords", "coordinates", "coord", "location", "point", "geometry", "latlng", "latlon", "position"
+    "coords",
+    "coordinates",
+    "coord",
+    "location",
+    "point",
+    "geometry",
+    "latlng",
+    "latlon",
+    "position",
   );
 
-  const typeIdx = findColumnIndex(header, "type", "asset_type", "point_type", "category");
-  const capacityIdx = findColumnIndex(header, "capacity", "capacity_liters", "liters", "volume", "size");
+  const typeIdx = findColumnIndex(
+    header,
+    "type",
+    "asset_type",
+    "point_type",
+    "category",
+  );
+  const capacityIdx = findColumnIndex(
+    header,
+    "capacity",
+    "capacity_liters",
+    "liters",
+    "volume",
+    "size",
+  );
   const conditionIdx = findColumnIndex(header, "condition", "status", "state");
-  const addressIdx = findColumnIndex(header, "address", "address_string", "location_name", "name", "description");
+  const addressIdx = findColumnIndex(
+    header,
+    "address",
+    "address_string",
+    "location_name",
+    "name",
+    "description",
+  );
 
   const rows: WasteImportRow[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -198,14 +243,26 @@ export function parseWasteCSV(text: string): WasteImportRow[] {
       if (coords.lon !== undefined) lon = coords.lon;
     }
 
-    const type = typeIdx >= 0 && cells[typeIdx] ? normalizeType(cells[typeIdx]) : "bin";
+    const type =
+      typeIdx >= 0 && cells[typeIdx] ? normalizeType(cells[typeIdx]) : "bin";
     const capacityStr = capacityIdx >= 0 ? cells[capacityIdx] : undefined;
-    const capacity = capacityStr ? parseInt(capacityStr.replace(/[^\d.-]/g, ""), 10) : undefined;
-    const condition = conditionIdx >= 0 && cells[conditionIdx] ? normalizeCondition(cells[conditionIdx]) : undefined;
-    const address = addressIdx >= 0 && cells[addressIdx] ? cells[addressIdx].replace(/^["']|["']$/g, "") : undefined;
+    const capacity = capacityStr
+      ? parseInt(capacityStr.replace(/[^\d.-]/g, ""), 10)
+      : undefined;
+    const condition =
+      conditionIdx >= 0 && cells[conditionIdx]
+        ? normalizeCondition(cells[conditionIdx])
+        : undefined;
+    const address =
+      addressIdx >= 0 && cells[addressIdx]
+        ? cells[addressIdx].replace(/^["']|["']$/g, "")
+        : undefined;
 
     // Accept row if it has valid coordinates OR has an address (for geocoding)
-    if ((lat !== undefined && lon !== undefined) || (address && address.length > 0)) {
+    if (
+      (lat !== undefined && lon !== undefined) ||
+      (address && address.length > 0)
+    ) {
       rows.push({
         lat,
         lon,
@@ -224,22 +281,50 @@ export function parseWasteCSV(text: string): WasteImportRow[] {
  * Parse GeoJSON FeatureCollection of Point features. Properties: type, capacity, condition, address.
  */
 export function parseWasteGeoJSON(text: string): WasteImportRow[] {
-  let data: { type?: string; features?: Array<{ type?: string; geometry?: { type?: string; coordinates?: number[] }; properties?: Record<string, unknown> }> };
+  let data: {
+    type?: string;
+    features?: Array<{
+      type?: string;
+      geometry?: { type?: string; coordinates?: number[] };
+      properties?: Record<string, unknown>;
+    }>;
+  };
   try {
     data = JSON.parse(text);
   } catch {
     return [];
   }
-  if (data.type !== "FeatureCollection" || !Array.isArray(data.features)) return [];
+  if (data.type !== "FeatureCollection" || !Array.isArray(data.features))
+    return [];
   const rows: WasteImportRow[] = [];
   for (const f of data.features) {
-    if (f.type !== "Feature" || f.geometry?.type !== "Point" || !Array.isArray(f.geometry.coordinates) || f.geometry.coordinates.length < 2) continue;
+    if (
+      f.type !== "Feature" ||
+      f.geometry?.type !== "Point" ||
+      !Array.isArray(f.geometry.coordinates) ||
+      f.geometry.coordinates.length < 2
+    )
+      continue;
     const [lon, lat] = f.geometry.coordinates;
     const p = (f.properties || {}) as Record<string, unknown>;
     const type = normalizeType(String(p.type ?? p.Type ?? "bin"));
-    const capacity = typeof p.capacity === "number" ? p.capacity : typeof p.capacity === "string" ? parseInt(p.capacity, 10) : undefined;
-    const condition = normalizeCondition(String(p.condition ?? p.Condition ?? ""));
-    const address = [p.address, p.Address, p.name, p.Name, p.description, p.Description].find((a) => typeof a === "string") as string | undefined;
+    const capacity =
+      typeof p.capacity === "number"
+        ? p.capacity
+        : typeof p.capacity === "string"
+          ? parseInt(p.capacity, 10)
+          : undefined;
+    const condition = normalizeCondition(
+      String(p.condition ?? p.Condition ?? ""),
+    );
+    const address = [
+      p.address,
+      p.Address,
+      p.name,
+      p.Name,
+      p.description,
+      p.Description,
+    ].find((a) => typeof a === "string") as string | undefined;
     rows.push({
       lat: typeof lat === "number" && !Number.isNaN(lat) ? lat : undefined,
       lon: typeof lon === "number" && !Number.isNaN(lon) ? lon : undefined,
@@ -255,13 +340,21 @@ export function parseWasteGeoJSON(text: string): WasteImportRow[] {
 /**
  * Detect format and parse. Tries JSON first, then CSV.
  */
-export function parseWasteFile(text: string, filename?: string): WasteImportRow[] {
+export function parseWasteFile(
+  text: string,
+  filename?: string,
+): WasteImportRow[] {
   const lower = (filename || "").toLowerCase();
   if (lower.endsWith(".geojson") || lower.endsWith(".json")) {
     const parsed = parseWasteGeoJSON(text);
     if (parsed.length > 0) return parsed;
   }
-  if (lower.endsWith(".csv") || text.trim().startsWith("lat") || text.trim().startsWith("type") || /[,;\t]/.test(text.split(/\r?\n/)[0] || "")) {
+  if (
+    lower.endsWith(".csv") ||
+    text.trim().startsWith("lat") ||
+    text.trim().startsWith("type") ||
+    /[,;\t]/.test(text.split(/\r?\n/)[0] || "")
+  ) {
     return parseWasteCSV(text);
   }
   try {

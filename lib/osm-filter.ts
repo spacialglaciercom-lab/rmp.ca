@@ -105,7 +105,7 @@ export function shouldExcludeWay(way: OSMWay): boolean {
  * Filter OSM ways based on collection route requirements
  */
 export function filterOSMWays(ways: OSMWay[]): OSMWay[] {
-  return ways.filter(way => {
+  return ways.filter((way) => {
     // First check if it should be excluded
     if (shouldExcludeWay(way)) {
       return false;
@@ -128,8 +128,7 @@ export function isOneWay(way: OSMWay): boolean {
  * Get street name from way tags
  */
 export function getStreetName(way: OSMWay): string | undefined {
-  return way.tags.name || 
-         way.tags["addr:street"] || 
-         way.tags["name:en"] ||
-         undefined;
+  return (
+    way.tags.name || way.tags["addr:street"] || way.tags["name:en"] || undefined
+  );
 }

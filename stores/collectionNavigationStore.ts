@@ -48,7 +48,7 @@ function isPointOnRightSide(
 }
 
 /**
-* Project a GPS coordinate onto a segment polyline using turf.js.
+ * Project a GPS coordinate onto a segment polyline using turf.js.
  * Returns a linear progress value (0.0 to 1.0) or null if projection fails.
  */
 function computeLinearProgress(
@@ -428,13 +428,24 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
             continue;
           }
           const segProgress = computeLinearProgress(location, seg.polyline);
-          if (segProgress !== null && segProgress >= LINEAR_PROGRESS_ADVANCE_THRESHOLD) {
-            newSegments[i] = { ...newSegments[i], status: "completed", linearProgress: 1 };
+          if (
+            segProgress !== null &&
+            segProgress >= LINEAR_PROGRESS_ADVANCE_THRESHOLD
+          ) {
+            newSegments[i] = {
+              ...newSegments[i],
+              status: "completed",
+              linearProgress: 1,
+            };
             advanceTo = i;
           } else {
             const distToEnd = haversineDistance(location, seg.to);
             if (distToEnd <= state.autoAdvanceRadius) {
-              newSegments[i] = { ...newSegments[i], status: "completed", linearProgress: 1 };
+              newSegments[i] = {
+                ...newSegments[i],
+                status: "completed",
+                linearProgress: 1,
+              };
               advanceTo = i;
             } else {
               break;
@@ -444,7 +455,10 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
 
         // Activate the next pending segment after the furthest completed one
         const nextIdx = Math.min(advanceTo + 1, newSegments.length - 1);
-        if (nextIdx !== activeIdx && newSegments[nextIdx].status === "pending") {
+        if (
+          nextIdx !== activeIdx &&
+          newSegments[nextIdx].status === "pending"
+        ) {
           newSegments[nextIdx] = { ...newSegments[nextIdx], status: "active" };
         }
 
@@ -605,10 +619,22 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
 
       const newSegments = state.segments.map((seg, i) => {
         if (i < index)
-          return { ...seg, status: "completed" as SegmentStatus, linearProgress: 1 };
+          return {
+            ...seg,
+            status: "completed" as SegmentStatus,
+            linearProgress: 1,
+          };
         if (i === index)
-          return { ...seg, status: "active" as SegmentStatus, linearProgress: 0 };
-        return { ...seg, status: "pending" as SegmentStatus, linearProgress: 0 };
+          return {
+            ...seg,
+            status: "active" as SegmentStatus,
+            linearProgress: 0,
+          };
+        return {
+          ...seg,
+          status: "pending" as SegmentStatus,
+          linearProgress: 0,
+        };
       });
 
       const completedDistance = newSegments

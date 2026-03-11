@@ -17,7 +17,10 @@ type FirestoreSnapshot = {
 };
 
 type FirestoreCollectionRef = {
-  onSnapshot: (onNext: (s: { docs: FirestoreDoc[] }) => void, onError?: (err: Error) => void) => () => void;
+  onSnapshot: (
+    onNext: (s: { docs: FirestoreDoc[] }) => void,
+    onError?: (err: Error) => void,
+  ) => () => void;
   get: () => Promise<FirestoreSnapshot>;
 };
 
@@ -63,7 +66,11 @@ let nativeInitDone = false;
  * (e.g. tablets, Rebecco) where gRPC can exhaust the heap if loaded too early.
  */
 function ensureFirebaseNativeLoaded(): void {
-  if (nativeInitDone || Platform.OS === "web" || Constants.appOwnership === "expo") {
+  if (
+    nativeInitDone ||
+    Platform.OS === "web" ||
+    Constants.appOwnership === "expo"
+  ) {
     return;
   }
   nativeInitDone = true;
@@ -78,31 +85,61 @@ function ensureFirebaseNativeLoaded(): void {
     db = (database as () => unknown)();
     storageRef = (storage as () => unknown)();
 
-    const appCheckApi = (firebase as { appCheck: () => { initializeAppCheck: (opts: unknown) => Promise<void>; newReactNativeFirebaseAppCheckProvider: () => { configure: (opts: unknown) => void } } }).appCheck?.();
+    const appCheckApi = (
+      firebase as {
+        appCheck: () => {
+          initializeAppCheck: (opts: unknown) => Promise<void>;
+          newReactNativeFirebaseAppCheckProvider: () => {
+            configure: (opts: unknown) => void;
+          };
+        };
+      }
+    ).appCheck?.();
     if (appCheckApi) {
       const debugToken =
-        (typeof Constants.expoConfig?.extra === "object" && Constants.expoConfig?.extra !== null && "firebaseAppCheckDebugToken" in Constants.expoConfig.extra
-          ? (Constants.expoConfig.extra as { firebaseAppCheckDebugToken?: string }).firebaseAppCheckDebugToken
+        (typeof Constants.expoConfig?.extra === "object" &&
+        Constants.expoConfig?.extra !== null &&
+        "firebaseAppCheckDebugToken" in Constants.expoConfig.extra
+          ? (
+              Constants.expoConfig.extra as {
+                firebaseAppCheckDebugToken?: string;
+              }
+            ).firebaseAppCheckDebugToken
           : undefined) ??
-        (typeof process !== "undefined" ? (process as NodeJS.Process & { env?: Record<string, string> }).env?.EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN : undefined);
-      const token = (typeof debugToken === "string" ? debugToken : "").trim() || undefined;
+        (typeof process !== "undefined"
+          ? (process as NodeJS.Process & { env?: Record<string, string> }).env
+              ?.EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN
+          : undefined);
+      const token =
+        (typeof debugToken === "string" ? debugToken : "").trim() || undefined;
       const provider = appCheckApi.newReactNativeFirebaseAppCheckProvider();
       provider.configure({
-        android: { provider: __DEV__ ? "debug" : "playIntegrity", debugToken: token },
-        apple: { provider: __DEV__ ? "debug" : "deviceCheck", debugToken: token },
+        android: {
+          provider: __DEV__ ? "debug" : "playIntegrity",
+          debugToken: token,
+        },
+        apple: {
+          provider: __DEV__ ? "debug" : "deviceCheck",
+          debugToken: token,
+        },
         web: { provider: "reCaptchaV3", siteKey: "none" },
       });
-      appCheckReadyPromise = appCheckApi.initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true }).catch((e: unknown) => {
-        if (__DEV__) {
-          console.warn("[Firebase] App Check init failed (Firestore/Storage may return invalid token):", e instanceof Error ? e.message : e);
-        }
-      });
+      appCheckReadyPromise = appCheckApi
+        .initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true })
+        .catch((e: unknown) => {
+          if (__DEV__) {
+            console.warn(
+              "[Firebase] App Check init failed (Firestore/Storage may return invalid token):",
+              e instanceof Error ? e.message : e,
+            );
+          }
+        });
     }
   } catch (e) {
     if (__DEV__) {
       console.warn(
         "[Firebase] Init skipped (missing native module or Firebase not configured):",
-        (e as Error).message
+        (e as Error).message,
       );
     }
   }

@@ -30,26 +30,31 @@ export interface RecoveryData {
 /**
  * Save application state for crash recovery
  */
-export async function saveRecoveryData(data: Partial<RecoveryData>): Promise<void> {
+export async function saveRecoveryData(
+  data: Partial<RecoveryData>,
+): Promise<void> {
   try {
     const timestamp = Date.now();
 
     if (data.collectionPoints) {
       await AsyncStorage.setItem(
         STORAGE_KEYS.COLLECTION_POINTS,
-        JSON.stringify(data.collectionPoints)
+        JSON.stringify(data.collectionPoints),
       );
     }
 
     if (data.statistics) {
       await AsyncStorage.setItem(
         STORAGE_KEYS.ROUTE_STATISTICS,
-        JSON.stringify(data.statistics)
+        JSON.stringify(data.statistics),
       );
     }
 
     if (data.report) {
-      await AsyncStorage.setItem(STORAGE_KEYS.ROUTE_REPORT, JSON.stringify(data.report));
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.ROUTE_REPORT,
+        JSON.stringify(data.report),
+      );
     }
 
     if (data.gpxData) {
@@ -57,11 +62,17 @@ export async function saveRecoveryData(data: Partial<RecoveryData>): Promise<voi
     }
 
     if (data.outputFileName) {
-      await AsyncStorage.setItem(STORAGE_KEYS.OUTPUT_FILENAME, data.outputFileName);
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.OUTPUT_FILENAME,
+        data.outputFileName,
+      );
     }
 
     // Update recovery timestamp
-    await AsyncStorage.setItem(STORAGE_KEYS.RECOVERY_TIMESTAMP, timestamp.toString());
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.RECOVERY_TIMESTAMP,
+      timestamp.toString(),
+    );
   } catch (error) {
     console.error("Failed to save recovery data:", error);
   }
@@ -72,7 +83,9 @@ export async function saveRecoveryData(data: Partial<RecoveryData>): Promise<voi
  */
 export async function loadRecoveryData(): Promise<RecoveryData | null> {
   try {
-    const timestamp = await AsyncStorage.getItem(STORAGE_KEYS.RECOVERY_TIMESTAMP);
+    const timestamp = await AsyncStorage.getItem(
+      STORAGE_KEYS.RECOVERY_TIMESTAMP,
+    );
 
     if (!timestamp) {
       return null;
@@ -85,21 +98,31 @@ export async function loadRecoveryData(): Promise<RecoveryData | null> {
       return null;
     }
 
-    const collectionPointsStr = await AsyncStorage.getItem(STORAGE_KEYS.COLLECTION_POINTS);
-    const statisticsStr = await AsyncStorage.getItem(STORAGE_KEYS.ROUTE_STATISTICS);
+    const collectionPointsStr = await AsyncStorage.getItem(
+      STORAGE_KEYS.COLLECTION_POINTS,
+    );
+    const statisticsStr = await AsyncStorage.getItem(
+      STORAGE_KEYS.ROUTE_STATISTICS,
+    );
     const reportStr = await AsyncStorage.getItem(STORAGE_KEYS.ROUTE_REPORT);
     const gpxData = await AsyncStorage.getItem(STORAGE_KEYS.GPX_DATA);
-    const outputFileName = await AsyncStorage.getItem(STORAGE_KEYS.OUTPUT_FILENAME);
+    const outputFileName = await AsyncStorage.getItem(
+      STORAGE_KEYS.OUTPUT_FILENAME,
+    );
 
     const safeParse = <T>(str: string | null): T | null => {
       if (!str) return null;
-      try { return JSON.parse(str) as T; } catch { return null; }
+      try {
+        return JSON.parse(str) as T;
+      } catch {
+        return null;
+      }
     };
     const statistics = safeParse<RouteStatistics>(statisticsStr);
     const report = safeParse<RouteReport>(reportStr);
 
     return {
-      collectionPoints: (safeParse<CollectionPoint[]>(collectionPointsStr)) ?? [],
+      collectionPoints: safeParse<CollectionPoint[]>(collectionPointsStr) ?? [],
       statistics: statistics ? sanitizeRouteStatistics(statistics) : null,
       report: report ?? null,
       gpxData: gpxData || null,
@@ -135,9 +158,13 @@ export async function logError(error: Error | string): Promise<void> {
       stack: typeof error === "object" ? error.stack : undefined,
     };
 
-    await AsyncStorage.setItem(STORAGE_KEYS.LAST_ERROR, JSON.stringify(errorLog));
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.LAST_ERROR,
+      JSON.stringify(errorLog),
+    );
 
-    const { recordErrorToCrashlytics } = await import("@/lib/crashlytics-report");
+    const { recordErrorToCrashlytics } =
+      await import("@/lib/crashlytics-report");
     const err = typeof error === "string" ? new Error(error) : error;
     recordErrorToCrashlytics(err, "logError");
   } catch (err) {

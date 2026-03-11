@@ -40,7 +40,9 @@ export class WorkerPool {
 
   private createWorker(): Worker {
     if (this.workerScript) {
-      const blob = new Blob([this.workerScript], { type: "application/javascript" });
+      const blob = new Blob([this.workerScript], {
+        type: "application/javascript",
+      });
       const url = URL.createObjectURL(blob);
       const w = new Worker(url);
       URL.revokeObjectURL(url);
@@ -67,7 +69,7 @@ export class WorkerPool {
     const w = this.workers[workerIndex];
     w.postMessage(
       { id: task.id, data: task.data },
-      task.transferables.length ? task.transferables : undefined
+      task.transferables.length ? task.transferables : undefined,
     );
   }
 
@@ -113,7 +115,10 @@ export class WorkerPool {
   /**
    * Post data to next available worker. Transfer transferables to avoid copy.
    */
-  postMessage<T = unknown>(data: unknown, transferables: Transferable[] = []): Promise<T> {
+  postMessage<T = unknown>(
+    data: unknown,
+    transferables: Transferable[] = [],
+  ): Promise<T> {
     return new Promise((resolve, reject) => {
       const id = nextId++;
       const task: WorkerTask<T> = {
@@ -132,8 +137,10 @@ export class WorkerPool {
   terminate(): void {
     for (const w of this.workers) w.terminate();
     this.workers = [];
-    for (const t of this.pending.values()) t.reject(new Error("WorkerPool terminated"));
-    for (const t of this.taskQueue) t.reject(new Error("WorkerPool terminated"));
+    for (const t of this.pending.values())
+      t.reject(new Error("WorkerPool terminated"));
+    for (const t of this.taskQueue)
+      t.reject(new Error("WorkerPool terminated"));
     this.pending.clear();
     this.taskQueue = [];
   }

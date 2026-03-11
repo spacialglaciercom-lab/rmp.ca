@@ -79,7 +79,12 @@ export interface CollectionRouteState {
   /** Whether the navigator is actively tracking GPS. */
   isTracking: boolean;
   /** Current GPS position. */
-  currentLocation: { lat: number; lon: number; bearing?: number; speed?: number } | null;
+  currentLocation: {
+    lat: number;
+    lon: number;
+    bearing?: number;
+    speed?: number;
+  } | null;
   /** Auto-advance threshold in meters (advance to next segment when within this range). */
   autoAdvanceRadius: number;
   /** Segment groups by source_id for split-segment street grouping. */

@@ -6,7 +6,10 @@ const STORAGE_KEY = "@trashroute:turn_penalty_config";
 
 export type PresetName = "balanced" | "aggressive" | "minimal" | "custom";
 
-export const PRESETS: Record<"balanced" | "aggressive" | "minimal", TurnPenalties> = {
+export const PRESETS: Record<
+  "balanced" | "aggressive" | "minimal",
+  TurnPenalties
+> = {
   balanced: { leftTurn: 60, uTurn: 95, rightTurn: 25 },
   aggressive: { leftTurn: 85, uTurn: 100, rightTurn: 45 },
   minimal: { leftTurn: 0, uTurn: 0, rightTurn: 0 },
@@ -32,21 +35,30 @@ export function findPresetName(penalties: TurnPenalties): PresetName {
   return "custom";
 }
 
-function toConfig(penalties: TurnPenalties | TurnPenaltyConfig | null | undefined): TurnPenaltyConfig {
+function toConfig(
+  penalties: TurnPenalties | TurnPenaltyConfig | null | undefined,
+): TurnPenaltyConfig {
   if (!penalties) return DEFAULT_CONFIG;
-  const p = { leftTurn: penalties.leftTurn, uTurn: penalties.uTurn, rightTurn: penalties.rightTurn };
-  const preset = "preset" in penalties && penalties.preset ? penalties.preset : findPresetName(p);
+  const p = {
+    leftTurn: penalties.leftTurn,
+    uTurn: penalties.uTurn,
+    rightTurn: penalties.rightTurn,
+  };
+  const preset =
+    "preset" in penalties && penalties.preset
+      ? penalties.preset
+      : findPresetName(p);
   return { ...p, preset };
 }
 
 export function useTurnPenaltyConfig(
-  initialConfig?: TurnPenalties | TurnPenaltyConfig | null
+  initialConfig?: TurnPenalties | TurnPenaltyConfig | null,
 ) {
   const [config, setConfig] = useState<TurnPenaltyConfig>(() =>
-    toConfig(initialConfig ?? null)
+    toConfig(initialConfig ?? null),
   );
   const [appliedConfig, setAppliedConfig] = useState<TurnPenaltyConfig>(() =>
-    toConfig(initialConfig ?? null)
+    toConfig(initialConfig ?? null),
   );
   const [isDirty, setIsDirty] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -84,32 +96,45 @@ export function useTurnPenaltyConfig(
     };
   }, []);
 
-  const setPreset = useCallback((presetName: "balanced" | "aggressive" | "minimal") => {
-    const p = PRESETS[presetName];
-    setConfig((prev) => ({ ...prev, ...p, preset: presetName }));
-    setIsDirty(true);
-  }, []);
+  const setPreset = useCallback(
+    (presetName: "balanced" | "aggressive" | "minimal") => {
+      const p = PRESETS[presetName];
+      setConfig((prev) => ({ ...prev, ...p, preset: presetName }));
+      setIsDirty(true);
+    },
+    [],
+  );
 
-  const updatePenalty = useCallback((turnType: keyof TurnPenalties, value: number) => {
-    const clamped = Math.max(0, Math.min(100, value));
-    setConfig((prev) => ({
-      ...prev,
-      [turnType]: clamped,
-      preset: "custom",
-    }));
-    setIsDirty(true);
-  }, []);
+  const updatePenalty = useCallback(
+    (turnType: keyof TurnPenalties, value: number) => {
+      const clamped = Math.max(0, Math.min(100, value));
+      setConfig((prev) => ({
+        ...prev,
+        [turnType]: clamped,
+        preset: "custom",
+      }));
+      setIsDirty(true);
+    },
+    [],
+  );
 
   const applySettings = useCallback(() => {
     const toApply = { ...config };
     setAppliedConfig(toApply);
     setIsDirty(false);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+    AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        leftTurn: toApply.leftTurn,
+        uTurn: toApply.uTurn,
+        rightTurn: toApply.rightTurn,
+      }),
+    ).catch(() => {});
+    return {
       leftTurn: toApply.leftTurn,
       uTurn: toApply.uTurn,
       rightTurn: toApply.rightTurn,
-    })).catch(() => {});
-    return { leftTurn: toApply.leftTurn, uTurn: toApply.uTurn, rightTurn: toApply.rightTurn };
+    };
   }, [config]);
 
   const resetSettings = useCallback(() => {
@@ -118,7 +143,10 @@ export function useTurnPenaltyConfig(
   }, [appliedConfig]);
 
   const priorityOrder = useMemo(() => {
-    const entries: Array<{ type: "right" | "left" | "uturn"; penalty: number }> = [
+    const entries: Array<{
+      type: "right" | "left" | "uturn";
+      penalty: number;
+    }> = [
       { type: "right", penalty: config.rightTurn },
       { type: "left", penalty: config.leftTurn },
       { type: "uturn", penalty: config.uTurn },

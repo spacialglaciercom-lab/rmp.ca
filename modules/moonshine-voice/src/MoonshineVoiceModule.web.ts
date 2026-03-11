@@ -3,7 +3,8 @@
  * All methods return sensible defaults or throw unavailable errors.
  */
 
-const UNAVAILABLE = "Moonshine Voice is not available on web. Use server-side transcription.";
+const UNAVAILABLE =
+  "Moonshine Voice is not available on web. Use server-side transcription.";
 
 export default {
   isAvailable: () => false,

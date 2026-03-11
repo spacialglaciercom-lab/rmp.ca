@@ -10,7 +10,9 @@ import Constants from "expo-constants";
 /** Max ambient cache size in bytes (500MB). Prevents PMTiles/vector tiles from blowing up storage. */
 export const MAPLIBRE_MAX_AMBIENT_CACHE_BYTES = 500 * 1024 * 1024;
 
-function getOfflineManager(): typeof import("@maplibre/maplibre-react-native").OfflineManager | null {
+function getOfflineManager():
+  | typeof import("@maplibre/maplibre-react-native").OfflineManager
+  | null {
   if (Platform.OS === "web") return null;
   if (Constants.appOwnership === "expo") return null;
   try {
@@ -30,7 +32,9 @@ export async function initMapLibreCacheCap(): Promise<void> {
   const OfflineManager = getOfflineManager();
   if (!OfflineManager) return;
   try {
-    await OfflineManager.setMaximumAmbientCacheSize(MAPLIBRE_MAX_AMBIENT_CACHE_BYTES);
+    await OfflineManager.setMaximumAmbientCacheSize(
+      MAPLIBRE_MAX_AMBIENT_CACHE_BYTES,
+    );
   } catch (_e) {
     // Native module not available (e.g. Expo Go) or API failed
   }

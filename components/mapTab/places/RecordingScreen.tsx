@@ -109,7 +109,9 @@ export function RecordingScreen({ visible, onClose }: RecordingScreenProps) {
             </Text>
           </ScrollView>
 
-          <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+          <View
+            style={[styles.sectionHeader, { borderBottomColor: colors.border }]}
+          >
             <MaterialCommunityIcons
               name="map-marker-path"
               size={20}

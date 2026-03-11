@@ -2,8 +2,19 @@
  * Map Orientation setting: North up, direction of movement, or compass.
  */
 import React from "react";
-import { View, Text, TouchableOpacity, Alert, Platform, StyleSheet } from "react-native";
-import { useMapOrientation, MAP_ORIENTATION_LABELS, type MapOrientation } from "@/lib/map-orientation-preference";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  StyleSheet,
+} from "react-native";
+import {
+  useMapOrientation,
+  MAP_ORIENTATION_LABELS,
+  type MapOrientation,
+} from "@/lib/map-orientation-preference";
 import { useTheme } from "@/lib/theme-provider";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
@@ -21,24 +32,22 @@ export const MapOrientationSection: React.FC = () => {
   const handlePress = () => {
     if (Platform.OS !== "web") {
       hapticImpact();
-      Alert.alert(
-        "Map Orientation",
-        "Choose how the map rotates:",
-        [
-          { text: "Cancel", style: "cancel" },
-          ...OPTIONS.map((opt) => ({
-            text: MAP_ORIENTATION_LABELS[opt],
-            onPress: () => setOrientation(opt),
-          })),
-        ]
-      );
+      Alert.alert("Map Orientation", "Choose how the map rotates:", [
+        { text: "Cancel", style: "cancel" },
+        ...OPTIONS.map((opt) => ({
+          text: MAP_ORIENTATION_LABELS[opt],
+          onPress: () => setOrientation(opt),
+        })),
+      ]);
     }
   };
 
   if (Platform.OS === "web") {
     return (
       <View style={styles.section}>
-        <Text style={[styles.label, { color: theme.text }]}>Map Orientation</Text>
+        <Text style={[styles.label, { color: theme.text }]}>
+          Map Orientation
+        </Text>
         <Text style={[styles.description, { color: theme.textTertiary }]}>
           North up, direction of movement, or compass
         </Text>
@@ -50,19 +59,28 @@ export const MapOrientationSection: React.FC = () => {
               style={[
                 styles.optionButton,
                 {
-                  backgroundColor: orientation === opt ? theme.accent + "30" : theme.border,
-                  borderColor: orientation === opt ? theme.accent : "transparent",
+                  backgroundColor:
+                    orientation === opt ? theme.accent + "30" : theme.border,
+                  borderColor:
+                    orientation === opt ? theme.accent : "transparent",
                 },
               ]}
             >
               <Text
                 style={[
                   styles.optionText,
-                  { color: orientation === opt ? theme.accent : theme.textSecondary },
+                  {
+                    color:
+                      orientation === opt ? theme.accent : theme.textSecondary,
+                  },
                 ]}
                 numberOfLines={2}
               >
-                {opt === "north" ? "North up" : opt === "course" ? "Direction" : "Compass"}
+                {opt === "north"
+                  ? "North up"
+                  : opt === "course"
+                    ? "Direction"
+                    : "Compass"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -78,7 +96,9 @@ export const MapOrientationSection: React.FC = () => {
       activeOpacity={0.7}
     >
       <View style={{ flex: 1 }}>
-        <Text style={[styles.label, { color: theme.text }]}>Map Orientation</Text>
+        <Text style={[styles.label, { color: theme.text }]}>
+          Map Orientation
+        </Text>
         <Text style={[styles.description, { color: theme.textTertiary }]}>
           North up, direction of movement, or compass
         </Text>

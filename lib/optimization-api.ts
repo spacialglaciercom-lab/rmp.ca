@@ -67,7 +67,7 @@ export class OptimizationError extends Error {
   constructor(
     message: string,
     public statusCode: number,
-    public responseBody: unknown
+    public responseBody: unknown,
   ) {
     super(message);
     this.name = "OptimizationError";
@@ -82,19 +82,22 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 export async function optimizeRoute(
   request: OptimizationRequest,
   baseUrl: string,
-  options?: { timeoutMs?: number }
+  options?: { timeoutMs?: number },
 ): Promise<OptimizationResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/route/optimize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-      signal: controller.signal,
-    });
+    const response = await fetch(
+      `${baseUrl.replace(/\/$/, "")}/route/optimize`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      },
+    );
 
     clearTimeout(timeout);
 
@@ -103,7 +106,7 @@ export async function optimizeRoute(
       throw new OptimizationError(
         `Optimization failed (HTTP ${response.status})`,
         response.status,
-        errorBody
+        errorBody,
       );
     }
 
@@ -115,13 +118,13 @@ export async function optimizeRoute(
       throw new OptimizationError(
         `Request timed out after ${timeoutMs / 1000} seconds`,
         408,
-        {}
+        {},
       );
     }
     throw new OptimizationError(
       `Network error: ${(err as Error).message}`,
       0,
-      {}
+      {},
     );
   }
 }

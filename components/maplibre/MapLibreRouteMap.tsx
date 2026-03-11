@@ -11,7 +11,12 @@ import React, {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { View, StyleSheet, Text, type NativeSyntheticEvent } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Text,
+  type NativeSyntheticEvent,
+} from "react-native";
 import {
   MapView,
   Camera,
@@ -31,8 +36,17 @@ import { useMapType } from "@/lib/map-type-preference";
 import { useMapDisplayStore } from "@/stores/mapDisplayStore";
 import { useMapOrientation } from "@/lib/map-orientation-preference";
 import type { CollectionPoint } from "@/types";
-import { MAPLIBRE_STYLE_OSM, MAPLIBRE_STYLE_OSM_DARK, MAPLIBRE_RENDER_CONFIG, MAP_TILES_OVERLAY_TEMPLATE } from "./constants";
-import { getPMTilesUrl, PMTILES_CITIES, OVERTURE_ROAD_LAYERS } from "./overture-style";
+import {
+  MAPLIBRE_STYLE_OSM,
+  MAPLIBRE_STYLE_OSM_DARK,
+  MAPLIBRE_RENDER_CONFIG,
+  MAP_TILES_OVERLAY_TEMPLATE,
+} from "./constants";
+import {
+  getPMTilesUrl,
+  PMTILES_CITIES,
+  OVERTURE_ROAD_LAYERS,
+} from "./overture-style";
 import { getOverturePmtilesUrl } from "@/lib/offline-map-download";
 import { registerLocalPmtilesPath } from "@/lib/maplibre-pmtiles-protocol";
 
@@ -50,7 +64,7 @@ export interface SegmentRisk {
 
 export interface RouteMapProps {
   collectionPoints: CollectionPoint[];
-  routePoints?: Array<{ lat: number; lon: number; label?: string }>;
+  routePoints?: { lat: number; lon: number; label?: string }[];
   segmentRisks?: SegmentRisk[];
   height?: number;
   width?: number;
@@ -64,24 +78,29 @@ export interface RouteMapProps {
   userBearing?: number | null;
   showAerial?: boolean;
   showTraffic?: boolean;
-  osmExtractionPolygon?: Array<{ latitude: number; longitude: number }>;
-  osmExtractionPoints?: Array<{ latitude: number; longitude: number }>;
-  osmExtractedFeatures?: Array<{
+  osmExtractionPolygon?: { latitude: number; longitude: number }[];
+  osmExtractionPoints?: { latitude: number; longitude: number }[];
+  osmExtractedFeatures?: {
     id: string;
     geometry: {
       type: "Point" | "LineString" | "Polygon";
       coordinates: number[] | number[][] | number[][][];
     };
-  }>;
+  }[];
   osmExtractorVisible?: boolean;
   /** Show Overture Maps transportation overlay from PMTiles. */
   showOverture?: boolean;
   /** Zones panel: preview polygon (boundary of selected zone result). */
-  zonesPreviewPolygon?: Array<{ latitude: number; longitude: number }>;
+  zonesPreviewPolygon?: { latitude: number; longitude: number }[];
   /** Zones panel: sector division — one polygon per zone. */
-  zonesPreviewPolygons?: Array<Array<{ latitude: number; longitude: number }>>;
+  zonesPreviewPolygons?: { latitude: number; longitude: number }[][];
   /** Optional initial bounds to fit map on load (e.g. zone polygons). */
-  initialBounds?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
+  initialBounds?: {
+    minLat: number;
+    minLon: number;
+    maxLat: number;
+    maxLon: number;
+  };
   /** Which city's PMTiles to load (default: auto-detect or "montreal"). */
   overtureCity?: string;
 }
@@ -98,7 +117,7 @@ function getMarkerColor(collectionType?: string): string {
 
 function segmentRiskToColor(
   riskScore: number,
-  colors: ReturnType<typeof useColors>
+  colors: ReturnType<typeof useColors>,
 ): string {
   if (riskScore >= 70) return colors.error ?? "#ef4444";
   if (riskScore >= 40) return colors.warning ?? "#ff6b4a";
@@ -107,7 +126,7 @@ function segmentRiskToColor(
 
 /** GeoJSON LineString from [{ lat, lon }, ...] */
 function routeToLineString(
-  points: Array<{ lat: number; lon: number }>
+  points: { lat: number; lon: number }[],
 ): GeoJSON.LineString {
   return {
     type: "LineString",
@@ -115,11 +134,20 @@ function routeToLineString(
   };
 }
 
-function extractCoordsFromPressEvent(e: unknown): { lat: number; lon: number } | null {
-  const ev = e as NativeSyntheticEvent<{ payload: GeoJSON.Feature }> | undefined;
-  const payload = ev?.nativeEvent?.payload ?? (e as GeoJSON.Feature | undefined);
+function extractCoordsFromPressEvent(
+  e: unknown,
+): { lat: number; lon: number } | null {
+  const ev = e as
+    | NativeSyntheticEvent<{ payload: GeoJSON.Feature }>
+    | undefined;
+  const payload =
+    ev?.nativeEvent?.payload ?? (e as GeoJSON.Feature | undefined);
   const geom = payload?.geometry;
-  if (geom?.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+  if (
+    geom?.type === "Point" &&
+    Array.isArray(geom.coordinates) &&
+    geom.coordinates.length >= 2
+  ) {
     const [lon, lat] = geom.coordinates;
     return { lat: Number(lat), lon: Number(lon) };
   }
@@ -152,7 +180,7 @@ export const MapLibreRouteMap = React.memo(
       zonesPreviewPolygons,
       initialBounds,
     },
-    ref
+    ref,
   ) {
     const colors = useColors();
     const showRouteMarkers = useMapDisplayStore((s) => s.showRouteMarkers);
@@ -165,7 +193,9 @@ export const MapLibreRouteMap = React.memo(
     const [mapTypePreference] = useMapType();
     const [orientation] = useMapOrientation();
     const mapTilesAsOverlay = useMapDisplayStore((s) => s.mapTilesAsOverlay);
-    const [overturePmtilesUrl, setOverturePmtilesUrl] = useState<string | null>(null);
+    const [overturePmtilesUrl, setOverturePmtilesUrl] = useState<string | null>(
+      null,
+    );
 
     const resolvedCity = overtureCity ?? PMTILES_CITIES[0] ?? "montreal";
 
@@ -177,7 +207,7 @@ export const MapLibreRouteMap = React.memo(
           : mapTypePreference === "dark"
             ? MAPLIBRE_STYLE_OSM_DARK
             : MAPLIBRE_STYLE_OSM,
-      [showAerial, mapTypePreference]
+      [showAerial, mapTypePreference],
     );
 
     const styleUrl = baseStyleUrl;
@@ -202,7 +232,10 @@ export const MapLibreRouteMap = React.memo(
 
     const pointsForBounds = useMemo(() => {
       if (collectionPoints.length > 0)
-        return collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+        return collectionPoints.map((p) => ({
+          lat: p.latitude,
+          lon: p.longitude,
+        }));
       if ((routePoints ?? []).length > 0) return routePoints!;
       if (initialBounds) {
         const { minLat, maxLat, minLon, maxLon } = initialBounds;
@@ -228,25 +261,20 @@ export const MapLibreRouteMap = React.memo(
 
     const routeCoords = useMemo(
       () => (routePoints ?? []).map((p) => ({ lat: p.lat, lon: p.lon })),
-      [routePoints]
+      [routePoints],
     );
 
     const routeLineString = useMemo(
-      () =>
-        routeCoords.length >= 2
-          ? routeToLineString(routeCoords)
-          : null,
-      [routeCoords]
+      () => (routeCoords.length >= 2 ? routeToLineString(routeCoords) : null),
+      [routeCoords],
     );
 
     const segmentLines = useMemo(() => {
-      if (
-        !segmentRisks?.length ||
-        !routePoints ||
-        routePoints.length < 2
-      )
+      if (!segmentRisks?.length || !routePoints || routePoints.length < 2)
         return null;
-      const riskMap = new Map(segmentRisks.map((s) => [s.segmentIndex, s.riskScore]));
+      const riskMap = new Map(
+        segmentRisks.map((s) => [s.segmentIndex, s.riskScore]),
+      );
       return routePoints.slice(0, -1).map((_, i) => {
         const p1 = routePoints[i];
         const p2 = routePoints[i + 1];
@@ -291,7 +319,7 @@ export const MapLibreRouteMap = React.memo(
             if (pos?.coords)
               cameraRef.current?.flyTo(
                 [pos.coords.longitude, pos.coords.latitude],
-                300
+                300,
               );
           } catch {
             /* ignore */
@@ -301,7 +329,7 @@ export const MapLibreRouteMap = React.memo(
           cameraRef.current?.setCamera({ heading: 0, animationDuration: 200 });
         },
       }),
-      []
+      [],
     );
 
     const handlePress = useCallback(
@@ -309,7 +337,7 @@ export const MapLibreRouteMap = React.memo(
         const coords = extractCoordsFromPressEvent(e);
         if (coords) onMapPress?.(coords.lat, coords.lon);
       },
-      [onMapPress]
+      [onMapPress],
     );
 
     const handleLongPress = useCallback(
@@ -317,7 +345,7 @@ export const MapLibreRouteMap = React.memo(
         const coords = extractCoordsFromPressEvent(e);
         if (coords) onMapLongPress?.(coords.lat, coords.lon);
       },
-      [onMapLongPress]
+      [onMapLongPress],
     );
 
     const hasLoadedRef = useRef(false);
@@ -369,9 +397,17 @@ export const MapLibreRouteMap = React.memo(
     }, [styleUrl]);
 
     useEffect(() => {
-      if (orientation !== "course" || userBearing == null || userBearing < 0 || userBearing >= 360)
+      if (
+        orientation !== "course" ||
+        userBearing == null ||
+        userBearing < 0 ||
+        userBearing >= 360
+      )
         return;
-      cameraRef.current?.setCamera({ heading: userBearing, animationDuration: 0 });
+      cameraRef.current?.setCamera({
+        heading: userBearing,
+        animationDuration: 0,
+      });
     }, [orientation, userBearing]);
 
     const safeWidth = typeof width === "number" && width > 0 ? width : 320;
@@ -398,9 +434,13 @@ export const MapLibreRouteMap = React.memo(
           onDidFinishLoadingMap={handleMapLoaded}
           onDidFinishLoadingStyle={handleStyleLoaded}
           onRegionDidChange={handleRegionDidChange}
-          preferredFramesPerSecond={MAPLIBRE_RENDER_CONFIG.preferredFramesPerSecond}
+          preferredFramesPerSecond={
+            MAPLIBRE_RENDER_CONFIG.preferredFramesPerSecond
+          }
           localizeLabels={MAPLIBRE_RENDER_CONFIG.localizeLabels}
-          regionDidChangeDebounceTime={MAPLIBRE_RENDER_CONFIG.regionDidChangeDebounceTime}
+          regionDidChangeDebounceTime={
+            MAPLIBRE_RENDER_CONFIG.regionDidChangeDebounceTime
+          }
           zoomEnabled
           scrollEnabled
           rotateEnabled={rotateEnabled}
@@ -420,35 +460,44 @@ export const MapLibreRouteMap = React.memo(
           />
           <UserLocation visible={true} />
 
-          {showOverture && PMTILES_CITIES.includes(resolvedCity) && overturePmtilesUrl && (
-            <VectorSource
-              id="overture-transportation"
-              url={overturePmtilesUrl}
-              minZoomLevel={8}
-              maxZoomLevel={14}
-            >
-              {OVERTURE_ROAD_LAYERS.filter((l) => l.type === "line").map((layer) => {
-                const paint = layer.paint as Record<string, unknown>;
-                const lineWidth = typeof paint["line-width"] === "number" ? paint["line-width"] : 2;
-                return (
-                  <LineLayer
-                    key={layer.id}
-                    id={layer.id}
-                    sourceLayerID="transportation"
-                    filter={layer.filter}
-                    minZoomLevel={layer.minzoom}
-                    style={{
-                      lineColor: (paint["line-color"] as string) ?? "rgba(200,200,200,0.6)",
-                      lineWidth: lineWidth as number,
-                      lineOpacity: (paint["line-opacity"] as number) ?? 1,
-                      lineCap: "round",
-                      lineJoin: "round",
-                    }}
-                  />
-                );
-              })}
-            </VectorSource>
-          )}
+          {showOverture &&
+            PMTILES_CITIES.includes(resolvedCity) &&
+            overturePmtilesUrl && (
+              <VectorSource
+                id="overture-transportation"
+                url={overturePmtilesUrl}
+                minZoomLevel={8}
+                maxZoomLevel={14}
+              >
+                {OVERTURE_ROAD_LAYERS.filter((l) => l.type === "line").map(
+                  (layer) => {
+                    const paint = layer.paint as Record<string, unknown>;
+                    const lineWidth =
+                      typeof paint["line-width"] === "number"
+                        ? paint["line-width"]
+                        : 2;
+                    return (
+                      <LineLayer
+                        key={layer.id}
+                        id={layer.id}
+                        sourceLayerID="transportation"
+                        filter={layer.filter}
+                        minZoomLevel={layer.minzoom}
+                        style={{
+                          lineColor:
+                            (paint["line-color"] as string) ??
+                            "rgba(200,200,200,0.6)",
+                          lineWidth: lineWidth as number,
+                          lineOpacity: (paint["line-opacity"] as number) ?? 1,
+                          lineCap: "round",
+                          lineJoin: "round",
+                        }}
+                      />
+                    );
+                  },
+                )}
+              </VectorSource>
+            )}
 
           {showOverture && mapTilesAsOverlay && (
             <RasterSource
@@ -458,7 +507,10 @@ export const MapLibreRouteMap = React.memo(
               minZoomLevel={0}
               maxZoomLevel={19}
             >
-              <RasterLayer id="osm-overlay-layer" style={{ rasterOpacity: 0.55 }} />
+              <RasterLayer
+                id="osm-overlay-layer"
+                style={{ rasterOpacity: 0.55 }}
+              />
             </RasterSource>
           )}
 
@@ -476,26 +528,27 @@ export const MapLibreRouteMap = React.memo(
             </ShapeSource>
           )}
 
-          {showRouteLine && segmentLines?.map((seg) => (
-            <ShapeSource
-              key={seg.id}
-              id={seg.id}
-              shape={{
-                type: "LineString",
-                coordinates: seg.coordinates,
-              }}
-            >
-              <LineLayer
-                id={`${seg.id}-layer`}
-                style={{
-                  lineColor: seg.color,
-                  lineWidth: 4,
-                  lineCap: "round",
-                  lineJoin: "round",
+          {showRouteLine &&
+            segmentLines?.map((seg) => (
+              <ShapeSource
+                key={seg.id}
+                id={seg.id}
+                shape={{
+                  type: "LineString",
+                  coordinates: seg.coordinates,
                 }}
-              />
-            </ShapeSource>
-          ))}
+              >
+                <LineLayer
+                  id={`${seg.id}-layer`}
+                  style={{
+                    lineColor: seg.color,
+                    lineWidth: 4,
+                    lineCap: "round",
+                    lineJoin: "round",
+                  }}
+                />
+              </ShapeSource>
+            ))}
 
           {osmExtractionPolygon && osmExtractionPolygon.length >= 3 && (
             <ShapeSource
@@ -504,8 +557,13 @@ export const MapLibreRouteMap = React.memo(
                 type: "Polygon",
                 coordinates: [
                   [
-                    ...osmExtractionPolygon.map((p) => [p.longitude, p.latitude] as [number, number]),
-                    [osmExtractionPolygon[0].longitude, osmExtractionPolygon[0].latitude],
+                    ...osmExtractionPolygon.map(
+                      (p) => [p.longitude, p.latitude] as [number, number],
+                    ),
+                    [
+                      osmExtractionPolygon[0].longitude,
+                      osmExtractionPolygon[0].latitude,
+                    ],
                   ],
                 ],
               }}
@@ -540,11 +598,21 @@ export const MapLibreRouteMap = React.memo(
                   "rgba(234, 179, 8, 0.3)",
                   "rgba(239, 68, 68, 0.3)",
                 ];
-                const zoneStrokeColors = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+                const zoneStrokeColors = [
+                  "#f97316",
+                  "#3b82f6",
+                  "#22c55e",
+                  "#a855f7",
+                  "#eab308",
+                  "#ef4444",
+                ];
                 const fillColor = zoneFillColors[idx % zoneFillColors.length];
-                const strokeColor = zoneStrokeColors[idx % zoneStrokeColors.length];
+                const strokeColor =
+                  zoneStrokeColors[idx % zoneStrokeColors.length];
                 const ring = [
-                  ...poly.map((p) => [p.longitude, p.latitude] as [number, number]),
+                  ...poly.map(
+                    (p) => [p.longitude, p.latitude] as [number, number],
+                  ),
                   [poly[0].longitude, poly[0].latitude],
                 ];
                 return (
@@ -569,15 +637,21 @@ export const MapLibreRouteMap = React.memo(
                   </ShapeSource>
                 );
               })
-            : zonesPreviewPolygon && zonesPreviewPolygon.length >= 3 && (
+            : zonesPreviewPolygon &&
+              zonesPreviewPolygon.length >= 3 && (
                 <ShapeSource
                   id="zones-preview-polygon"
                   shape={{
                     type: "Polygon",
                     coordinates: [
                       [
-                        ...zonesPreviewPolygon.map((p) => [p.longitude, p.latitude] as [number, number]),
-                        [zonesPreviewPolygon[0].longitude, zonesPreviewPolygon[0].latitude],
+                        ...zonesPreviewPolygon.map(
+                          (p) => [p.longitude, p.latitude] as [number, number],
+                        ),
+                        [
+                          zonesPreviewPolygon[0].longitude,
+                          zonesPreviewPolygon[0].latitude,
+                        ],
                       ],
                     ],
                   }}
@@ -603,14 +677,22 @@ export const MapLibreRouteMap = React.memo(
 
           {osmExtractedFeatures?.map((f) => {
             const geom = f.geometry;
-            if (!geom || geom.type !== "LineString" || !Array.isArray(geom.coordinates))
+            if (
+              !geom ||
+              geom.type !== "LineString" ||
+              !Array.isArray(geom.coordinates)
+            )
               return null;
             const coords = (geom.coordinates as number[][]).map(
-              (c) => [c[0], c[1]] as [number, number]
+              (c) => [c[0], c[1]] as [number, number],
             );
             if (coords.length < 2) return null;
             return (
-              <ShapeSource key={f.id} id={`osm-line-${f.id}`} shape={{ type: "LineString", coordinates: coords }}>
+              <ShapeSource
+                key={f.id}
+                id={`osm-line-${f.id}`}
+                shape={{ type: "LineString", coordinates: coords }}
+              >
                 <LineLayer
                   id={`osm-line-layer-${f.id}`}
                   style={{
@@ -624,21 +706,22 @@ export const MapLibreRouteMap = React.memo(
             );
           })}
 
-          {showRouteMarkers && collectionPoints.map((point) => (
-            <PointAnnotation
-              key={point.id}
-              id={point.id}
-              coordinate={[point.longitude, point.latitude]}
-              onSelected={() => onPointClick?.(point)}
-            >
-              <View
-                style={[
-                  styles.marker,
-                  { backgroundColor: getMarkerColor(point.collectionType) },
-                ]}
-              />
-            </PointAnnotation>
-          ))}
+          {showRouteMarkers &&
+            collectionPoints.map((point) => (
+              <PointAnnotation
+                key={point.id}
+                id={point.id}
+                coordinate={[point.longitude, point.latitude]}
+                onSelected={() => onPointClick?.(point)}
+              >
+                <View
+                  style={[
+                    styles.marker,
+                    { backgroundColor: getMarkerColor(point.collectionType) },
+                  ]}
+                />
+              </PointAnnotation>
+            ))}
 
           {routePoints && routePoints.length >= 2 && !segmentRisks?.length && (
             <>
@@ -690,7 +773,7 @@ export const MapLibreRouteMap = React.memo(
         </View>
       </View>
     );
-  })
+  }),
 );
 
 const styles = StyleSheet.create({

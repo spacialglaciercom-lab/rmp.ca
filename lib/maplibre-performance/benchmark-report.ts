@@ -31,7 +31,7 @@ const DEFAULT_TARGETS: BenchmarkTargets = {
 export function evaluateBenchmark(
   metrics: PerformanceMetrics,
   durationSeconds: number,
-  targets: Partial<BenchmarkTargets> = {}
+  targets: Partial<BenchmarkTargets> = {},
 ): BenchmarkReport {
   const t = { ...DEFAULT_TARGETS, ...targets };
   const maxTileLoad =
@@ -45,9 +45,18 @@ export function evaluateBenchmark(
   const passed = fpsOk && tileOk && droppedOk && frameOk;
   const parts: string[] = [];
   if (!fpsOk) parts.push(`FPS ${metrics.fps.toFixed(1)} < ${t.minFps}`);
-  if (!tileOk) parts.push(`max tile load ${maxTileLoad.toFixed(0)}ms > ${t.maxTileLoadTimeMs}ms`);
-  if (!droppedOk) parts.push(`dropped ${metrics.percentDropped.toFixed(1)}% > ${t.maxPercentDropped}%`);
-  if (!frameOk) parts.push(`avg frame ${metrics.avgFrameTime.toFixed(2)}ms > ${t.maxAvgFrameTimeMs}ms`);
+  if (!tileOk)
+    parts.push(
+      `max tile load ${maxTileLoad.toFixed(0)}ms > ${t.maxTileLoadTimeMs}ms`,
+    );
+  if (!droppedOk)
+    parts.push(
+      `dropped ${metrics.percentDropped.toFixed(1)}% > ${t.maxPercentDropped}%`,
+    );
+  if (!frameOk)
+    parts.push(
+      `avg frame ${metrics.avgFrameTime.toFixed(2)}ms > ${t.maxAvgFrameTimeMs}ms`,
+    );
   const summary = passed
     ? `Passed: ${metrics.fps.toFixed(1)} fps, ${metrics.percentDropped.toFixed(1)}% dropped`
     : `Failed: ${parts.join("; ")}`;

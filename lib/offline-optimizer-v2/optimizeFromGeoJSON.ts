@@ -5,7 +5,10 @@
 
 import type { OptimizationResult } from "@/lib/route-optimizer-v2/types";
 import { geojsonToOsmData } from "@/lib/geojsonToOsmData";
-import type { GeoJSONFeatureCollection, GeoJSONConvertOptions } from "@/lib/geojsonToOsmData";
+import type {
+  GeoJSONFeatureCollection,
+  GeoJSONConvertOptions,
+} from "@/lib/geojsonToOsmData";
 import { RouteOptimizerSimpleV2 } from "./routeOptimizerSimple";
 
 export type { GeoJSONFeatureCollection, GeoJSONConvertOptions };
@@ -23,7 +26,7 @@ export interface OptimizeFromGeoJSONOptions extends GeoJSONConvertOptions {
  */
 export function optimizeFromGeoJSON(
   geojson: GeoJSONFeatureCollection,
-  options: OptimizeFromGeoJSONOptions = {}
+  options: OptimizeFromGeoJSONOptions = {},
 ): OptimizationResult {
   const { customLat, customLon, ...convertOpts } = options;
   const { nodes, ways } = geojsonToOsmData(geojson, convertOpts);

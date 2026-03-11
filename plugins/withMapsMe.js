@@ -8,8 +8,12 @@ const { createRequire } = require("module");
 const fs = require("fs");
 
 // Require from project root so EAS Build and pnpm resolve correctly
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
-const { withXcodeProject, withDangerousMod, withPlugins } = requireFromRoot("expo/config-plugins");
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
+const { withXcodeProject, withDangerousMod, withPlugins } = requireFromRoot(
+  "expo/config-plugins",
+);
 
 const DEFAULT_OPTIONS = {
   // Path to the MapsMeReactNative module relative to project root
@@ -32,17 +36,26 @@ function copyMapsMeModuleToIOS(config, options) {
     async (config) => {
       const projectRoot = config.modRequest?.projectRoot;
       if (!projectRoot) {
-        console.warn("MAPS.ME: modRequest.projectRoot not available, skipping module copy");
+        console.warn(
+          "MAPS.ME: modRequest.projectRoot not available, skipping module copy",
+        );
         return config;
       }
 
       const iosProjectRoot = path.join(projectRoot, "ios");
-      const sourceModulePath = path.join(projectRoot, opts.modulePath, "ios", "MapsMeReactNative");
+      const sourceModulePath = path.join(
+        projectRoot,
+        opts.modulePath,
+        "ios",
+        "MapsMeReactNative",
+      );
       const destModulePath = path.join(iosProjectRoot, "MapsMeReactNative");
 
       // Ensure the iOS project directory exists
       if (!fs.existsSync(iosProjectRoot)) {
-        console.warn("iOS project directory does not exist, skipping MAPS.ME module copy");
+        console.warn(
+          "iOS project directory does not exist, skipping MAPS.ME module copy",
+        );
         return config;
       }
 
@@ -58,7 +71,10 @@ function copyMapsMeModuleToIOS(config, options) {
           fs.cpSync(sourceModulePath, destModulePath, { recursive: true });
           console.log("✅ MAPS.ME React Native module copied to iOS project");
         } else {
-          console.warn("MAPS.ME module source path does not exist:", sourceModulePath);
+          console.warn(
+            "MAPS.ME module source path does not exist:",
+            sourceModulePath,
+          );
         }
       } catch (error) {
         console.error("Failed to copy MAPS.ME module:", error);
@@ -85,32 +101,44 @@ function addMapsMeFrameworkToXcodeProject(config, options) {
     for (const key of buildConfigKeys) {
       if (key.includes("_comment")) continue;
       const buildConfig = objects.XCBuildConfiguration[key];
-      
+
       // Add framework search paths
       if (!buildConfig.buildSettings) buildConfig.buildSettings = {};
-      
-      const frameworkSearchPaths = buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS || [];
+
+      const frameworkSearchPaths =
+        buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS || [];
       if (!Array.isArray(frameworkSearchPaths)) {
         // Convert string to array if needed
         const paths = frameworkSearchPaths.split(" ") || [];
         buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS = paths;
       }
-      
+
       // Add MAPS.ME framework path
       const mapsMeFrameworkPath = "$(PROJECT_DIR)/../iphone/Maps";
-      if (!buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS.includes(mapsMeFrameworkPath)) {
-        buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS.push(mapsMeFrameworkPath);
+      if (
+        !buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS.includes(
+          mapsMeFrameworkPath,
+        )
+      ) {
+        buildConfig.buildSettings.FRAMEWORK_SEARCH_PATHS.push(
+          mapsMeFrameworkPath,
+        );
       }
-      
+
       // Add header search paths
-      const headerSearchPaths = buildConfig.buildSettings.HEADER_SEARCH_PATHS || [];
+      const headerSearchPaths =
+        buildConfig.buildSettings.HEADER_SEARCH_PATHS || [];
       if (!Array.isArray(headerSearchPaths)) {
         const paths = headerSearchPaths.split(" ") || [];
         buildConfig.buildSettings.HEADER_SEARCH_PATHS = paths;
       }
-      
+
       const mapsMeHeadersPath = "$(PROJECT_DIR)/../iphone/Maps/include";
-      if (!buildConfig.buildSettings.HEADER_SEARCH_PATHS.includes(mapsMeHeadersPath)) {
+      if (
+        !buildConfig.buildSettings.HEADER_SEARCH_PATHS.includes(
+          mapsMeHeadersPath,
+        )
+      ) {
         buildConfig.buildSettings.HEADER_SEARCH_PATHS.push(mapsMeHeadersPath);
       }
     }
@@ -142,15 +170,19 @@ function addMapsMeToMainTarget(config, options) {
     const mainTarget = nativeTargets[0];
 
     // Add MapsMeReactNative pod dependency
-    const podfilePath = path.join(config.modRequest.projectRoot, "ios", "Podfile");
+    const podfilePath = path.join(
+      config.modRequest.projectRoot,
+      "ios",
+      "Podfile",
+    );
     if (fs.existsSync(podfilePath)) {
       let podfileContent = fs.readFileSync(podfilePath, "utf8");
-      
+
       // Add the MapsMeReactNative pod if not already present
       if (!podfileContent.includes("pod 'MapsMeReactNative'")) {
-        const lines = podfileContent.split('\n');
+        const lines = podfileContent.split("\n");
         let targetBlockEnd = -1;
-        
+
         // Find the end of the main target block
         for (let i = 0; i < lines.length; i++) {
           if (lines[i].includes("target '") && lines[i].includes("do")) {
@@ -163,7 +195,10 @@ function addMapsMeToMainTarget(config, options) {
                   targetBlockEnd = j;
                   break;
                 }
-              } else if (lines[j].includes("target '") && lines[j].includes("do")) {
+              } else if (
+                lines[j].includes("target '") &&
+                lines[j].includes("do")
+              ) {
                 depth++;
               }
             }
@@ -173,8 +208,12 @@ function addMapsMeToMainTarget(config, options) {
 
         if (targetBlockEnd > 0) {
           // Insert the MapsMeReactNative pod before the end of the target block
-          lines.splice(targetBlockEnd, 0, "  pod 'MapsMeReactNative', :path => './MapsMeReactNative'");
-          podfileContent = lines.join('\n');
+          lines.splice(
+            targetBlockEnd,
+            0,
+            "  pod 'MapsMeReactNative', :path => './MapsMeReactNative'",
+          );
+          podfileContent = lines.join("\n");
           fs.writeFileSync(podfilePath, podfileContent);
           console.log("✅ Added MapsMeReactNative pod to Podfile");
         }

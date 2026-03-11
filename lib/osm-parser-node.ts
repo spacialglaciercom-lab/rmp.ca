@@ -49,7 +49,8 @@ export function parseOSMFileNode(xmlContent: string): RoadGraph {
   console.log(`✓ Parsed ${nodeCount} nodes`);
 
   // Parse ways using regex
-  const wayRegex = /<way[^>]*id="(\d+)"[^>]*>([^<]*(?:<[^/][^>]*>[^<]*)*)<\/way>/g;
+  const wayRegex =
+    /<way[^>]*id="(\d+)"[^>]*>([^<]*(?:<[^/][^>]*>[^<]*)*)<\/way>/g;
   const nodeRefRegex = /<nd[^>]*ref="(\d+)"/g;
   const tagRegex = /<tag[^>]*k="([^"]*)"[^>]*v="([^"]*)"/g;
 
@@ -75,38 +76,38 @@ export function parseOSMFileNode(xmlContent: string): RoadGraph {
       tags[tagMatch[1]] = tagMatch[2];
     }
 
-      // Only include ways with nodes
-      if (nodeRefs.length > 0) {
-        ways.push({
-          id: wayId,
-          nodes: nodeRefs,
-          tags,
-        });
-        wayCount++;
+    // Only include ways with nodes
+    if (nodeRefs.length > 0) {
+      ways.push({
+        id: wayId,
+        nodes: nodeRefs,
+        tags,
+      });
+      wayCount++;
 
-        // Add all nodes from way to graph
-        for (const nodeId of nodeRefs) {
-          if (allNodes.has(nodeId) && !nodes.has(nodeId)) {
-            nodes.set(nodeId, allNodes.get(nodeId)!);
-          }
-        }
-
-        // Build adjacency list
-        for (let i = 0; i < nodeRefs.length - 1; i++) {
-          const from = nodeRefs[i];
-          const to = nodeRefs[i + 1];
-
-          if (!adjacency.has(from)) {
-            adjacency.set(from, new Set());
-          }
-          if (!adjacency.has(to)) {
-            adjacency.set(to, new Set());
-          }
-
-          adjacency.get(from)!.add(to);
-          adjacency.get(to)!.add(from); // Bidirectional
+      // Add all nodes from way to graph
+      for (const nodeId of nodeRefs) {
+        if (allNodes.has(nodeId) && !nodes.has(nodeId)) {
+          nodes.set(nodeId, allNodes.get(nodeId)!);
         }
       }
+
+      // Build adjacency list
+      for (let i = 0; i < nodeRefs.length - 1; i++) {
+        const from = nodeRefs[i];
+        const to = nodeRefs[i + 1];
+
+        if (!adjacency.has(from)) {
+          adjacency.set(from, new Set());
+        }
+        if (!adjacency.has(to)) {
+          adjacency.set(to, new Set());
+        }
+
+        adjacency.get(from)!.add(to);
+        adjacency.get(to)!.add(from); // Bidirectional
+      }
+    }
   }
   console.log(`✓ Parsed ${wayCount} ways`);
 
@@ -120,7 +121,10 @@ export function parseOSMFileNode(xmlContent: string): RoadGraph {
 /**
  * Find Eulerian path in the graph (for Chinese Postman Problem)
  */
-export function findEulerianPathNode(graph: RoadGraph, startNodeId?: string): string[] {
+export function findEulerianPathNode(
+  graph: RoadGraph,
+  startNodeId?: string,
+): string[] {
   const adjacency = new Map(graph.adjacency);
   const path: string[] = [];
   const stack: string[] = [];
@@ -162,7 +166,7 @@ export function findEulerianPathNode(graph: RoadGraph, startNodeId?: string): st
  */
 export function nodePathToCollectionPoints(
   nodeIds: string[],
-  graph: RoadGraph
+  graph: RoadGraph,
 ): Array<{
   id: string;
   address: string;
@@ -204,7 +208,7 @@ export function nodePathToCollectionPoints(
  * Calculate route statistics
  */
 export function calculateRouteStats(
-  points: Array<{ latitude: number; longitude: number }>
+  points: Array<{ latitude: number; longitude: number }>,
 ): {
   totalDistance: number;
   estimatedTime: number;

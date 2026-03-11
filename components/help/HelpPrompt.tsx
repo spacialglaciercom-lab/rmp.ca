@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useHelpStore } from "@/stores/helpStore";
@@ -18,11 +24,13 @@ export function HelpPrompt({ delay = 5000, autoShow = true }: HelpPromptProps) {
   const colors = useColors();
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(false);
-  
+
   // Help store state
   const hasSeenTutorial = useHelpStore((s) => s.hasSeenTutorial);
   const hasDismissedHelpPrompt = useHelpStore((s) => s.hasDismissedHelpPrompt);
-  const setHasDismissedHelpPrompt = useHelpStore((s) => s.setHasDismissedHelpPrompt);
+  const setHasDismissedHelpPrompt = useHelpStore(
+    (s) => s.setHasDismissedHelpPrompt,
+  );
   const setLastHelpAccess = useHelpStore((s) => s.setLastHelpAccess);
 
   useEffect(() => {
@@ -56,34 +64,61 @@ export function HelpPrompt({ delay = 5000, autoShow = true }: HelpPromptProps) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface + "E6" }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.surface + "E6" }]}
+    >
       <View style={styles.content}>
         <View style={styles.header}>
-          <MaterialCommunityIcons name="help-circle" size={24} color={colors.primary} />
-          <Text style={[Fonts.body, { color: colors.text, fontWeight: "600", marginLeft: 8 }]}>
+          <MaterialCommunityIcons
+            name="help-circle"
+            size={24}
+            color={colors.primary}
+          />
+          <Text
+            style={[
+              Fonts.body,
+              { color: colors.text, fontWeight: "600", marginLeft: 8 },
+            ]}
+          >
             Need Help?
           </Text>
         </View>
-        
-        <Text style={[Fonts.caption, { color: colors.muted, marginVertical: 8, lineHeight: 18 }]}>
-          New to RouteMasterPro? Check out our help section to learn how to plan efficient routes and use all features.
+
+        <Text
+          style={[
+            Fonts.caption,
+            { color: colors.muted, marginVertical: 8, lineHeight: 18 },
+          ]}
+        >
+          New to RouteMasterPro? Check out our help section to learn how to plan
+          efficient routes and use all features.
         </Text>
 
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[styles.button, styles.dismissButton, { borderColor: colors.border }]}
+            style={[
+              styles.button,
+              styles.dismissButton,
+              { borderColor: colors.border },
+            ]}
             onPress={handleDismiss}
           >
             <Text style={[Fonts.caption, { color: colors.muted }]}>
               Dismiss
             </Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
-            style={[styles.button, styles.helpButton, { backgroundColor: colors.primary }]}
+            style={[
+              styles.button,
+              styles.helpButton,
+              { backgroundColor: colors.primary },
+            ]}
             onPress={handleHelpPress}
           >
-            <Text style={[Fonts.caption, { color: "white", fontWeight: "600" }]}>
+            <Text
+              style={[Fonts.caption, { color: "white", fontWeight: "600" }]}
+            >
               Get Help
             </Text>
           </TouchableOpacity>

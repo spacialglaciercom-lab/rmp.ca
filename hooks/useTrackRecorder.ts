@@ -55,7 +55,10 @@ export function useTrackRecorder() {
   const batchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedBase = useRef(0); // accumulated ms before current resume
   const resumeTimestamp = useRef(0); // when current recording/resume started
-  const bgTrackingRef = useRef<{ start: () => Promise<void>; stop: () => Promise<void> } | null>(null);
+  const bgTrackingRef = useRef<{
+    start: () => Promise<void>;
+    stop: () => Promise<void>;
+  } | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -72,41 +75,47 @@ export function useTrackRecorder() {
     };
   }, []);
 
-  const onLocationUpdate = useCallback((loc: {
-    coords: {
-      latitude: number;
-      longitude: number;
-      altitude?: number | null;
-      heading?: number | null;
-      speed?: number | null;
-      accuracy?: number | null;
-    };
-    timestamp?: number;
-  }) => {
-    const point: TrackPoint = {
-      lat: loc.coords.latitude,
-      lon: loc.coords.longitude,
-      altitude: loc.coords.altitude ?? null,
-      timestamp: loc.timestamp ?? Date.now(),
-      speed: loc.coords.speed ?? null,
-      accuracy: loc.coords.accuracy ?? null,
-    };
+  const onLocationUpdate = useCallback(
+    (loc: {
+      coords: {
+        latitude: number;
+        longitude: number;
+        altitude?: number | null;
+        heading?: number | null;
+        speed?: number | null;
+        accuracy?: number | null;
+      };
+      timestamp?: number;
+    }) => {
+      const point: TrackPoint = {
+        lat: loc.coords.latitude,
+        lon: loc.coords.longitude,
+        altitude: loc.coords.altitude ?? null,
+        timestamp: loc.timestamp ?? Date.now(),
+        speed: loc.coords.speed ?? null,
+        accuracy: loc.coords.accuracy ?? null,
+      };
 
-    // Accumulate distance
-    if (lastPoint.current) {
-      internalDistance.current += haversineDistance(lastPoint.current, point);
-    }
-    lastPoint.current = point;
-    internalPoints.current.push(point);
+      // Accumulate distance
+      if (lastPoint.current) {
+        internalDistance.current += haversineDistance(lastPoint.current, point);
+      }
+      lastPoint.current = point;
+      internalPoints.current.push(point);
 
-    // Update currentPosition and heading immediately for the map
-    const heading = loc.coords.heading != null && !Number.isNaN(loc.coords.heading) ? loc.coords.heading : null;
-    setState((prev) => ({
-      ...prev,
-      currentPosition: point,
-      currentHeading: heading ?? prev.currentHeading,
-    }));
-  }, []);
+      // Update currentPosition and heading immediately for the map
+      const heading =
+        loc.coords.heading != null && !Number.isNaN(loc.coords.heading)
+          ? loc.coords.heading
+          : null;
+      setState((prev) => ({
+        ...prev,
+        currentPosition: point,
+        currentHeading: heading ?? prev.currentHeading,
+      }));
+    },
+    [],
+  );
 
   const startTimers = useCallback(() => {
     resumeTimestamp.current = Date.now();
@@ -164,17 +173,20 @@ export function useTrackRecorder() {
       };
       const watchId = navigator.geolocation.watchPosition(
         handlePos,
-        (err) => log.error("Geolocation error", err instanceof Error ? err : new Error(String(err))),
-        { enableHighAccuracy: true, maximumAge: 1000 }
+        (err) =>
+          log.error(
+            "Geolocation error",
+            err instanceof Error ? err : new Error(String(err)),
+          ),
+        { enableHighAccuracy: true, maximumAge: 1000 },
       );
       // Poll every 3s so points accumulate even when stationary
       // (watchPosition only fires on position change)
       const pollId = setInterval(() => {
-        navigator.geolocation.getCurrentPosition(
-          handlePos,
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 0 }
-        );
+        navigator.geolocation.getCurrentPosition(handlePos, () => {}, {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+        });
       }, 3000);
       locationSub.current = {
         remove: () => {
@@ -191,16 +203,19 @@ export function useTrackRecorder() {
         }
 
         const { loggingIntervalSeconds } = useRecordingSettingsStore.getState();
-        const distanceInterval = loggingIntervalSecondsToDistanceMeters(loggingIntervalSeconds);
+        const distanceInterval = loggingIntervalSecondsToDistanceMeters(
+          loggingIntervalSeconds,
+        );
         // Use High accuracy for more reliable updates (BestForNavigation can delay or skip on some devices).
-        const watchOptions: Parameters<typeof Location.watchPositionAsync>[0] = {
-          accuracy: Location.Accuracy.High,
-          distanceInterval,
-          timeInterval: loggingIntervalSeconds * 1000,
-        };
+        const watchOptions: Parameters<typeof Location.watchPositionAsync>[0] =
+          {
+            accuracy: Location.Accuracy.High,
+            distanceInterval,
+            timeInterval: loggingIntervalSeconds * 1000,
+          };
         locationSub.current = await Location.watchPositionAsync(
           watchOptions,
-          (loc: any) => onLocationUpdate(loc)
+          (loc: any) => onLocationUpdate(loc),
         );
 
         // Fallback poll: expo-location often ignores timeInterval when distanceInterval is set,
@@ -214,11 +229,17 @@ export function useTrackRecorder() {
             });
             onLocationUpdate(loc);
           } catch (e) {
-            log.warn("Fallback getCurrentPosition failed", e instanceof Error ? e : new Error(String(e)));
+            log.warn(
+              "Fallback getCurrentPosition failed",
+              e instanceof Error ? e : new Error(String(e)),
+            );
           }
         }, intervalMs);
       } catch (err) {
-        log.error("Failed to start location watch", err instanceof Error ? err : new Error(String(err)));
+        log.error(
+          "Failed to start location watch",
+          err instanceof Error ? err : new Error(String(err)),
+        );
         throw err;
       }
     }
@@ -232,7 +253,9 @@ export function useTrackRecorder() {
     try {
       locationSub.current?.remove();
     } catch (err) {
-      log.warn("stopLocationWatch: remove() failed, clearing ref", { error: err instanceof Error ? err.message : String(err) });
+      log.warn("stopLocationWatch: remove() failed, clearing ref", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     locationSub.current = null;
   }, []);

@@ -11,14 +11,14 @@ This document records verification of export and formatting behavior for GPX gen
 ## Pipeline Points That Affect Geometry Before GPX
 
 1. **Planner → GPX**
-   - **Optimizer (v2)**  
-     - Returns full edge geometry from `buildRoutePointsFromCircuit` when available, so curves and short edges are represented by multiple points.  
+   - **Optimizer (v2)**
+     - Returns full edge geometry from `buildRoutePointsFromCircuit` when available, so curves and short edges are represented by multiple points.
      - Consecutive duplicate points are removed with a 1e-6 degree threshold (~0.1 m); this only collapses true duplicates (e.g. same node twice), not distinct short streets.
-   - **Map-matching (`routeThroughWaypoints`)**  
+   - **Map-matching (`routeThroughWaypoints`)**
      - Uses OSRM `overview=full` and `geometries=geojson` (or Google step polylines). Full geometry is concatenated; boundary points are deduplicated when stitching chunks. No intentional simplification.
-   - **Gap repair (`repairRouteGaps`)**  
+   - **Gap repair (`repairRouteGaps`)**
      - Replaces large gaps with routed segments; repaired geometry is full segment geometry, not simplified.
-   - **Storage vs GPX**  
+   - **Storage vs GPX**
      - Douglas–Peucker (5 m tolerance) is applied only to `pointsForStorage` (stats, saved route). GPX is generated from `gpxPoints` (full matched geometry), so export is not simplified.
 
 2. **Downsampling**

@@ -110,12 +110,19 @@ export function MapillaryViewer({
         >
           {/* Drag handle */}
           <View style={styles.dragHandleContainer}>
-            <View style={[styles.dragHandle, { backgroundColor: colors.border ?? "#999" }]} />
+            <View
+              style={[
+                styles.dragHandle,
+                { backgroundColor: colors.border ?? "#999" },
+              ]}
+            />
           </View>
 
           {/* Header with Close in top right */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>Mapillary Street View</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Mapillary Street View
+            </Text>
             <TouchableOpacity
               onPress={handleClose}
               style={styles.closeButton}
@@ -124,7 +131,11 @@ export function MapillaryViewer({
               accessibilityLabel="Close"
               accessibilityRole="button"
             >
-              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={colors.text}
+              />
             </TouchableOpacity>
           </View>
 
@@ -160,7 +171,12 @@ export function MapillaryViewer({
                 domStorageEnabled={true}
                 startInLoadingState={true}
                 renderLoading={() => (
-                  <View style={[styles.webviewLoading, { backgroundColor: colors.background }]}>
+                  <View
+                    style={[
+                      styles.webviewLoading,
+                      { backgroundColor: colors.background },
+                    ]}
+                  >
                     <ActivityIndicator size="large" color={colors.primary} />
                   </View>
                 )}

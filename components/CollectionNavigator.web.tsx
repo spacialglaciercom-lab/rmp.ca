@@ -18,7 +18,7 @@ import { useMapType } from "@/lib/map-type-preference";
 import type { CollectionPoint } from "@/types";
 
 export interface CollectionNavigatorProps {
-  routePoints: Array<{ lat: number; lon: number }>;
+  routePoints: { lat: number; lon: number }[];
   collectionPoints: CollectionPoint[];
   onClose: () => void;
 }
@@ -64,7 +64,7 @@ function formatDistance(meters: number): string {
 
 function haversineDistance(
   a: { lat: number; lon: number },
-  b: { lat: number; lon: number }
+  b: { lat: number; lon: number },
 ): number {
   const R = 6371000;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -106,7 +106,7 @@ export default function CollectionNavigator({
 
   const routePositions = useMemo(
     () => routePoints.map((p) => [p.lat, p.lon] as [number, number]),
-    [routePoints]
+    [routePoints],
   );
 
   const bounds = useMemo(() => {
@@ -146,7 +146,9 @@ export default function CollectionNavigator({
               bounds={bounds ?? undefined}
               boundsOptions={bounds ? { padding: [30, 30] } : undefined}
               center={
-                bounds ? undefined : [routePositions[0][0], routePositions[0][1]]
+                bounds
+                  ? undefined
+                  : [routePositions[0][0], routePositions[0][1]]
               }
               zoom={bounds ? undefined : 14}
               style={{ height, width: "100%" }}
@@ -179,7 +181,9 @@ export default function CollectionNavigator({
         </View>
       )}
 
-      <View style={[styles.overlay, { backgroundColor: colors.background + "E6" }]}>
+      <View
+        style={[styles.overlay, { backgroundColor: colors.background + "E6" }]}
+      >
         <Text style={[styles.overlayStat, { color: colors.foreground }]}>
           {collectionPoints.length} stops · {formatDistance(totalDistance)}
         </Text>

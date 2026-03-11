@@ -8,7 +8,9 @@ export type TrpcContext = {
   user: User | null;
 };
 
-export async function createContext(opts: CreateExpressContextOptions): Promise<TrpcContext> {
+export async function createContext(
+  opts: CreateExpressContextOptions,
+): Promise<TrpcContext> {
   try {
     let user: User | null = null;
     try {

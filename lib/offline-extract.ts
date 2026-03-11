@@ -6,7 +6,10 @@
 
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
-import { getDownloadedRegions, getRegionDataDir } from "@/lib/offline-map-download";
+import {
+  getDownloadedRegions,
+  getRegionDataDir,
+} from "@/lib/offline-map-download";
 import type { DownloadedRegion } from "@/lib/offline-map-download";
 import type {
   GeoJSONFeatureCollection,
@@ -30,7 +33,10 @@ interface BBox {
 }
 
 function bboxFromPolygon(coords: [number, number][]): BBox {
-  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  let minLon = Infinity,
+    maxLon = -Infinity,
+    minLat = Infinity,
+    maxLat = -Infinity;
   for (const [lon, lat] of coords) {
     if (lon < minLon) minLon = lon;
     if (lon > maxLon) maxLon = lon;
@@ -40,8 +46,16 @@ function bboxFromPolygon(coords: [number, number][]): BBox {
   return { minLat, maxLat, minLon, maxLon };
 }
 
-function bboxOverlaps(a: BBox, b: { minLat: number; maxLat: number; minLon: number; maxLon: number }): boolean {
-  return a.minLat <= b.maxLat && a.maxLat >= b.minLat && a.minLon <= b.maxLon && a.maxLon >= b.minLon;
+function bboxOverlaps(
+  a: BBox,
+  b: { minLat: number; maxLat: number; minLon: number; maxLon: number },
+): boolean {
+  return (
+    a.minLat <= b.maxLat &&
+    a.maxLat >= b.minLat &&
+    a.minLon <= b.maxLon &&
+    a.maxLon >= b.minLon
+  );
 }
 
 function lonToTileX(lon: number, z: number): number {
@@ -51,21 +65,34 @@ function lonToTileX(lon: number, z: number): number {
 function latToTileY(lat: number, z: number): number {
   const latRad = (lat * Math.PI) / 180;
   return Math.floor(
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * (1 << z)
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) *
+      (1 << z),
   );
 }
 
 /** Tile (z,x,y) to lon/lat for a point (xt, yt) in tile coordinates [0..MVT_EXTENT]. */
-function tileToLonLat(z: number, x: number, y: number, xt: number, yt: number): [number, number] {
+function tileToLonLat(
+  z: number,
+  x: number,
+  y: number,
+  xt: number,
+  yt: number,
+): [number, number] {
   const n = 1 << z;
-  const lon = (x + xt / MVT_EXTENT) / n * 360 - 180;
-  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1 - yt / MVT_EXTENT)) / n)));
+  const lon = ((x + xt / MVT_EXTENT) / n) * 360 - 180;
+  const latRad = Math.atan(
+    Math.sinh(Math.PI * (1 - (2 * (y + 1 - yt / MVT_EXTENT)) / n)),
+  );
   const lat = (latRad * 180) / Math.PI;
   return [lon, lat];
 }
 
 /** Enumerate tile coords for a bbox at zoom levels [minZ, maxZ]. */
-function enumerateTiles(bbox: BBox, minZ: number, maxZ: number): Array<{ z: number; x: number; y: number }> {
+function enumerateTiles(
+  bbox: BBox,
+  minZ: number,
+  maxZ: number,
+): Array<{ z: number; x: number; y: number }> {
   const tiles: Array<{ z: number; x: number; y: number }> = [];
   for (let z = minZ; z <= maxZ; z++) {
     const xMin = lonToTileX(bbox.minLon, z);
@@ -82,7 +109,10 @@ function enumerateTiles(bbox: BBox, minZ: number, maxZ: number): Array<{ z: numb
 }
 
 /** PMTiles Source that reads from an in-memory buffer (for local file). */
-function createBufferSource(buffer: ArrayBuffer): { getBytes: (offset: number, length: number) => Promise<{ data?: ArrayBuffer }>; getKey: () => string } {
+function createBufferSource(buffer: ArrayBuffer): {
+  getBytes: (offset: number, length: number) => Promise<{ data?: ArrayBuffer }>;
+  getKey: () => string;
+} {
   const u8 = new Uint8Array(buffer);
   return {
     getBytes: async (offset: number, length: number) => {
@@ -105,7 +135,8 @@ function decodeMvtToFeatures(
   ty: number,
   polygon: Polygon,
 ): Array<Feature<GeoJSON.LineString, Record<string, unknown>>> {
-  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> =
+    [];
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const VectorTile = require("@mapbox/vector-tile").VectorTile;
@@ -121,10 +152,12 @@ function decodeMvtToFeatures(
         for (const ring of geom) {
           if (ring.length < 2) continue;
           const coords: [number, number][] = ring.map(
-            (p: { x: number; y: number }) => tileToLonLat(z, tx, ty, p.x, p.y)
+            (p: { x: number; y: number }) => tileToLonLat(z, tx, ty, p.x, p.y),
           );
           // Keep if any vertex is inside the polygon (simple filter; could clip exactly)
-          const inside = coords.some((c) => booleanPointInPolygon([c[0], c[1]], polygon));
+          const inside = coords.some((c) =>
+            booleanPointInPolygon([c[0], c[1]], polygon),
+          );
           if (!inside) continue;
           const props: Record<string, unknown> = {};
           if (feature.properties) {
@@ -179,8 +212,7 @@ export interface OfflineExtractResult {
  */
 function getRoadClass(props: Record<string, unknown> | undefined): string {
   if (!props) return "";
-  const v =
-    props.class ?? props.road_class ?? props.highway ?? props.category;
+  const v = props.class ?? props.road_class ?? props.highway ?? props.category;
   return typeof v === "string" ? v.toLowerCase().trim() : "";
 }
 
@@ -203,7 +235,8 @@ function haversineKm(a: [number, number], b: [number, number]): number {
 
 function coordLengthKm(coords: [number, number][]): number {
   let d = 0;
-  for (let i = 1; i < coords.length; i++) d += haversineKm(coords[i - 1], coords[i]);
+  for (let i = 1; i < coords.length; i++)
+    d += haversineKm(coords[i - 1], coords[i]);
   return d;
 }
 
@@ -224,7 +257,9 @@ function ck(lon: number, lat: number): string {
  * This replicates the backend's `building_graph` stage for offline use.
  * The returned GeoJSON is compatible with `partitionZonesFromGeoJSON`.
  */
-export function buildRoadGraph(rawGeojson: GeoJSONFeatureCollection): RoadGraphResult {
+export function buildRoadGraph(
+  rawGeojson: GeoJSONFeatureCollection,
+): RoadGraphResult {
   const features = (rawGeojson.features ?? []).filter(
     (f): f is Feature<GeoJSON.LineString, Record<string, unknown>> =>
       f.geometry?.type === "LineString" &&
@@ -257,7 +292,9 @@ export function buildRoadGraph(rawGeojson: GeoJSONFeatureCollection): RoadGraphR
   for (let fi = 0; fi < features.length; fi++) {
     const coords = features[fi].geometry.coordinates as [number, number][];
     nodeKeySet.add(ck(coords[0][0], coords[0][1]));
-    nodeKeySet.add(ck(coords[coords.length - 1][0], coords[coords.length - 1][1]));
+    nodeKeySet.add(
+      ck(coords[coords.length - 1][0], coords[coords.length - 1][1]),
+    );
   }
   for (const [k, uses] of coordUsage) {
     if (uses.size >= 2) nodeKeySet.add(k);
@@ -271,7 +308,9 @@ export function buildRoadGraph(rawGeojson: GeoJSONFeatureCollection): RoadGraphR
   }
 
   // Split each feature at intersection nodes → directed graph edges.
-  const edgeFeatures: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const edgeFeatures: Array<
+    Feature<GeoJSON.LineString, Record<string, unknown>>
+  > = [];
   let edgeCounter = 0;
   let totalLengthKm = 0;
 
@@ -296,7 +335,10 @@ export function buildRoadGraph(rawGeojson: GeoJSONFeatureCollection): RoadGraphR
       if (segCoords.length < 2) continue;
 
       const fromKey = ck(segCoords[0][0], segCoords[0][1]);
-      const toKey = ck(segCoords[segCoords.length - 1][0], segCoords[segCoords.length - 1][1]);
+      const toKey = ck(
+        segCoords[segCoords.length - 1][0],
+        segCoords[segCoords.length - 1][1],
+      );
       const fromNodeId = nodeIdMap.get(fromKey) ?? `n${nodeCounter++}`;
       const toNodeId = nodeIdMap.get(toKey) ?? `n${nodeCounter++}`;
       const lengthKm = coordLengthKm(segCoords);
@@ -339,9 +381,7 @@ export function filterGeoJSONLocal(params: {
   polygon?: Array<{ lat: number; lon: number }>;
   road_classes: string[];
 }): FilterResponse {
-  const allow = new Set(
-    params.road_classes.map((c) => c.toLowerCase().trim()),
-  );
+  const allow = new Set(params.road_classes.map((c) => c.toLowerCase().trim()));
   const polygon =
     params.polygon && params.polygon.length >= 3
       ? ({
@@ -380,7 +420,9 @@ export function filterGeoJSONLocal(params: {
 /**
  * Find a downloaded region (R2, S3, or OSM PBF) whose bounds overlap the polygon.
  */
-export async function findRegionForPolygon(polygonCoords: [number, number][]): Promise<DownloadedRegion | null> {
+export async function findRegionForPolygon(
+  polygonCoords: [number, number][],
+): Promise<DownloadedRegion | null> {
   const bbox = bboxFromPolygon(polygonCoords);
   const regions = await getDownloadedRegions();
   if (!regions || regions.length === 0) return null;
@@ -408,7 +450,9 @@ export async function extractFromR2Tiles(
 
   const info = await FileSystem.getInfoAsync(localPath, { size: false });
   if (!info.exists) {
-    throw new Error(`Offline R2 file not found: ${filename}. Re-download the region in Settings.`);
+    throw new Error(
+      `Offline R2 file not found: ${filename}. Re-download the region in Settings.`,
+    );
   }
 
   onProgress?.({ phase: "Reading PMTiles file…" });
@@ -430,7 +474,9 @@ export async function extractFromR2Tiles(
 
   onProgress?.({ phase: "Extracting tiles…", done: 0, total: tiles.length });
 
-  const allFeatures: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const allFeatures: Array<
+    Feature<GeoJSON.LineString, Record<string, unknown>>
+  > = [];
   const seen = new Set<string>();
 
   for (let i = 0; i < tiles.length; i++) {
@@ -446,7 +492,11 @@ export async function extractFromR2Tiles(
       }
     }
     if ((i + 1) % 10 === 0 || i === tiles.length - 1) {
-      onProgress?.({ phase: "Extracting tiles…", done: i + 1, total: tiles.length });
+      onProgress?.({
+        phase: "Extracting tiles…",
+        done: i + 1,
+        total: tiles.length,
+      });
     }
   }
 
@@ -494,7 +544,9 @@ export async function extractFromOSMPBF(
 
   const info = await FileSystem.getInfoAsync(localPath, { size: false });
   if (!info.exists) {
-    throw new Error(`Offline OSM file not found: ${cityId}.osm. Re-download in Settings.`);
+    throw new Error(
+      `Offline OSM file not found: ${cityId}.osm. Re-download in Settings.`,
+    );
   }
 
   onProgress?.({ phase: "Reading OSM file…" });
@@ -506,9 +558,14 @@ export async function extractFromOSMPBF(
   const parser = new OSMParser();
   const { nodes, ways } = parser.parseOSM(osmContent);
 
-  onProgress?.({ phase: "Building GeoJSON features…", done: 0, total: ways.length });
+  onProgress?.({
+    phase: "Building GeoJSON features…",
+    done: 0,
+    total: ways.length,
+  });
 
-  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> =
+    [];
   const seen = new Set<string>();
 
   for (let i = 0; i < ways.length; i++) {
@@ -520,7 +577,9 @@ export async function extractFromOSMPBF(
     }
     if (coords.length < 2) continue;
 
-    const inside = coords.some((c) => booleanPointInPolygon([c[0], c[1]], polygon));
+    const inside = coords.some((c) =>
+      booleanPointInPolygon([c[0], c[1]], polygon),
+    );
     if (!inside) continue;
 
     const key = way.id;
@@ -539,7 +598,11 @@ export async function extractFromOSMPBF(
     });
 
     if ((i + 1) % 500 === 0 || i === ways.length - 1) {
-      onProgress?.({ phase: "Building GeoJSON features…", done: i + 1, total: ways.length });
+      onProgress?.({
+        phase: "Building GeoJSON features…",
+        done: i + 1,
+        total: ways.length,
+      });
     }
   }
 
@@ -598,5 +661,12 @@ export async function extractFromDownloadedData(
   onProgress?.({ phase: "Building road graph…" });
   const { geojson: graphGeojson, stats } = buildRoadGraph(geojson);
 
-  return { geojson, graphGeojson, stats, source: source!, regionId: region.id, regionName: region.name };
+  return {
+    geojson,
+    graphGeojson,
+    stats,
+    source: source!,
+    regionId: region.id,
+    regionName: region.name,
+  };
 }

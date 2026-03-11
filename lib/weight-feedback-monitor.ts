@@ -69,13 +69,13 @@ export interface WeightEffectivenessAnalysis {
 }
 
 export interface WeightAdjustmentRecommendation {
-  type: 'increase' | 'decrease' | 'recalibrate';
+  type: "increase" | "decrease" | "recalibrate";
   factor: string;
   currentValue: number;
   recommendedValue: number;
   confidence: number;
   reasoning: string;
-  impact: 'low' | 'medium' | 'high';
+  impact: "low" | "medium" | "high";
 }
 
 /**
@@ -107,11 +107,16 @@ export class WeightFeedbackMonitor {
     await this.collectFeedbackData();
 
     // Schedule periodic collection
-    this.monitoringInterval = setInterval(async () => {
-      await this.collectFeedbackData();
-    }, this.config.collectionInterval * 60 * 60 * 1000);
+    this.monitoringInterval = setInterval(
+      async () => {
+        await this.collectFeedbackData();
+      },
+      this.config.collectionInterval * 60 * 60 * 1000,
+    );
 
-    console.log(`✅ Weight feedback monitoring started with ${this.config.collectionInterval} hour intervals`);
+    console.log(
+      `✅ Weight feedback monitoring started with ${this.config.collectionInterval} hour intervals`,
+    );
   }
 
   /**
@@ -142,7 +147,7 @@ export class WeightFeedbackMonitor {
     try {
       // Get recent routes with weight updates
       const recentRoutes = await this.getRecentRoutesWithWeights();
-      
+
       if (recentRoutes.length === 0) {
         console.log("No recent routes with weight updates found");
         return;
@@ -150,31 +155,32 @@ export class WeightFeedbackMonitor {
 
       // Collect feedback for each route
       const feedbackBatch = await Promise.all(
-        recentRoutes.map(route => this.collectSingleRouteFeedback(route))
+        recentRoutes.map((route) => this.collectSingleRouteFeedback(route)),
       );
 
       // Filter valid feedback
-      const validFeedback = feedbackBatch.filter(f => f !== null);
-      
+      const validFeedback = feedbackBatch.filter((f) => f !== null);
+
       if (validFeedback.length > 0) {
         // Store feedback data
         await this.storeFeedbackBatch(validFeedback);
-        
+
         // Update local cache
         this.feedbackData.push(...validFeedback);
-        
+
         // Keep only recent data
         this.cleanupOldData();
-        
+
         const duration = (Date.now() - startTime) / 1000;
-        console.log(`✅ Collected ${validFeedback.length} feedback entries in ${duration.toFixed(2)}s`);
-        
+        console.log(
+          `✅ Collected ${validFeedback.length} feedback entries in ${duration.toFixed(2)}s`,
+        );
+
         // Analyze and generate recommendations
         if (validFeedback.length >= this.config.minSampleSize) {
           await this.analyzeAndRecommend(validFeedback);
         }
       }
-
     } catch (error) {
       console.error("❌ Error collecting feedback data:", error);
     }
@@ -183,19 +189,25 @@ export class WeightFeedbackMonitor {
   /**
    * Collect feedback for a single route
    */
-  private async collectSingleRouteFeedback(route: any): Promise<WeightFeedbackMetrics | null> {
+  private async collectSingleRouteFeedback(
+    route: any,
+  ): Promise<WeightFeedbackMetrics | null> {
     try {
       // Get route performance data
-      const originalPerformance = await this.getOriginalRoutePerformance(route.routeId);
-      const correctedPerformance = await this.getCorrectedRoutePerformance(route.routeId);
-      
+      const originalPerformance = await this.getOriginalRoutePerformance(
+        route.routeId,
+      );
+      const correctedPerformance = await this.getCorrectedRoutePerformance(
+        route.routeId,
+      );
+
       if (!originalPerformance || !correctedPerformance) {
         return null;
       }
 
       // Get weight information used for this route
       const weightInfo = await this.getWeightInfoForRoute(route.routeId);
-      
+
       if (!weightInfo) {
         return null;
       }
@@ -203,14 +215,14 @@ export class WeightFeedbackMonitor {
       // Calculate improvements
       const effectiveness = this.calculateEffectiveness(
         originalPerformance,
-        correctedPerformance
+        correctedPerformance,
       );
 
       // Calculate weight accuracy
       const accuracy = this.calculateWeightAccuracy(
         weightInfo,
         originalPerformance,
-        correctedPerformance
+        correctedPerformance,
       );
 
       return {
@@ -226,12 +238,14 @@ export class WeightFeedbackMonitor {
           totalDistance: route.totalDistance,
           complexityScore: route.complexityScore,
           weatherConditions: route.weatherConditions,
-          driverExperience: route.driverExperience
-        }
+          driverExperience: route.driverExperience,
+        },
       };
-
     } catch (error) {
-      console.error(`Error collecting feedback for route ${route.routeId}:`, error);
+      console.error(
+        `Error collecting feedback for route ${route.routeId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -239,21 +253,23 @@ export class WeightFeedbackMonitor {
   /**
    * Get original route performance (before weight correction)
    */
-  private async getOriginalRoutePerformance(routeId: string): Promise<WeightFeedbackMetrics['originalPerformance'] | null> {
+  private async getOriginalRoutePerformance(
+    routeId: string,
+  ): Promise<WeightFeedbackMetrics["originalPerformance"] | null> {
     const client = getMongoClient();
     if (!client) return null;
 
     try {
       const db = client.db("trashroute");
       const collection = db.collection("route_performance_history");
-      
+
       // Get performance before weight correction
       const performance = await collection.findOne({
         routeId,
-        weightVersion: 'original',
+        weightVersion: "original",
         timestamp: {
-          $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
-        }
+          $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+        },
       });
 
       if (!performance) return null;
@@ -262,10 +278,13 @@ export class WeightFeedbackMonitor {
         totalCost: performance.totalCost,
         totalTime: performance.totalTime,
         fuelConsumption: performance.fuelConsumption,
-        efficiencyScore: performance.efficiencyScore
+        efficiencyScore: performance.efficiencyScore,
       };
     } catch (error) {
-      console.error(`Error getting original performance for route ${routeId}:`, error);
+      console.error(
+        `Error getting original performance for route ${routeId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -273,21 +292,23 @@ export class WeightFeedbackMonitor {
   /**
    * Get corrected route performance (after weight correction)
    */
-  private async getCorrectedRoutePerformance(routeId: string): Promise<WeightFeedbackMetrics['correctedPerformance'] | null> {
+  private async getCorrectedRoutePerformance(
+    routeId: string,
+  ): Promise<WeightFeedbackMetrics["correctedPerformance"] | null> {
     const client = getMongoClient();
     if (!client) return null;
 
     try {
       const db = client.db("trashroute");
       const collection = db.collection("route_performance_history");
-      
+
       // Get performance after weight correction
       const performance = await collection.findOne({
         routeId,
-        weightVersion: { $ne: 'original' },
+        weightVersion: { $ne: "original" },
         timestamp: {
-          $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
-        }
+          $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+        },
       });
 
       if (!performance) return null;
@@ -296,10 +317,13 @@ export class WeightFeedbackMonitor {
         totalCost: performance.totalCost,
         totalTime: performance.totalTime,
         fuelConsumption: performance.fuelConsumption,
-        efficiencyScore: performance.efficiencyScore
+        efficiencyScore: performance.efficiencyScore,
       };
     } catch (error) {
-      console.error(`Error getting corrected performance for route ${routeId}:`, error);
+      console.error(
+        `Error getting corrected performance for route ${routeId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -314,12 +338,12 @@ export class WeightFeedbackMonitor {
     try {
       const db = client.db("trashroute");
       const collection = db.collection("route_weight_assignments");
-      
+
       const weightInfo = await collection.findOne({
         routeId,
         timestamp: {
-          $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) // Last 14 days
-        }
+          $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), // Last 14 days
+        },
       });
 
       return weightInfo;
@@ -333,19 +357,24 @@ export class WeightFeedbackMonitor {
    * Calculate weight effectiveness (improvement metrics)
    */
   private calculateEffectiveness(
-    original: WeightFeedbackMetrics['originalPerformance'],
-    corrected: WeightFeedbackMetrics['correctedPerformance']
-  ): WeightFeedbackMetrics['weightEffectiveness'] {
-    const costImprovement = (original.totalCost - corrected.totalCost) / original.totalCost;
-    const timeImprovement = (original.totalTime - corrected.totalTime) / original.totalTime;
-    const fuelImprovement = (original.fuelConsumption - corrected.fuelConsumption) / original.fuelConsumption;
-    const overallImprovement = (costImprovement + timeImprovement + fuelImprovement) / 3;
+    original: WeightFeedbackMetrics["originalPerformance"],
+    corrected: WeightFeedbackMetrics["correctedPerformance"],
+  ): WeightFeedbackMetrics["weightEffectiveness"] {
+    const costImprovement =
+      (original.totalCost - corrected.totalCost) / original.totalCost;
+    const timeImprovement =
+      (original.totalTime - corrected.totalTime) / original.totalTime;
+    const fuelImprovement =
+      (original.fuelConsumption - corrected.fuelConsumption) /
+      original.fuelConsumption;
+    const overallImprovement =
+      (costImprovement + timeImprovement + fuelImprovement) / 3;
 
     return {
       costImprovement,
       timeImprovement,
       fuelImprovement,
-      overallImprovement
+      overallImprovement,
     };
   }
 
@@ -354,37 +383,44 @@ export class WeightFeedbackMonitor {
    */
   private calculateWeightAccuracy(
     weightInfo: any,
-    original: WeightFeedbackMetrics['originalPerformance'],
-    corrected: WeightFeedbackMetrics['correctedPerformance']
-  ): WeightFeedbackMetrics['weightAccuracy'] {
+    original: WeightFeedbackMetrics["originalPerformance"],
+    corrected: WeightFeedbackMetrics["correctedPerformance"],
+  ): WeightFeedbackMetrics["weightAccuracy"] {
     // Calculate how well the weight predictions matched actual performance
-    const predictedVsActual = Math.abs(weightInfo.predictedImprovement - (corrected.totalCost / original.totalCost));
+    const predictedVsActual = Math.abs(
+      weightInfo.predictedImprovement -
+        corrected.totalCost / original.totalCost,
+    );
     const predictionError = predictedVsActual / weightInfo.predictedImprovement;
     const confidenceAlignment = weightInfo.confidence * (1 - predictionError);
 
     return {
       predictedVsActual,
       predictionError,
-      confidenceAlignment
+      confidenceAlignment,
     };
   }
 
   /**
    * Store feedback batch in database
    */
-  private async storeFeedbackBatch(feedback: WeightFeedbackMetrics[]): Promise<void> {
+  private async storeFeedbackBatch(
+    feedback: WeightFeedbackMetrics[],
+  ): Promise<void> {
     const client = getMongoClient();
     if (!client) return;
 
     try {
       const db = client.db("trashroute");
       const collection = db.collection("weight_feedback_metrics");
-      
-      await collection.insertMany(feedback.map(f => ({
-        ...f,
-        _id: new ObjectId()
-      })));
-      
+
+      await collection.insertMany(
+        feedback.map((f) => ({
+          ...f,
+          _id: new ObjectId(),
+        })),
+      );
+
       console.log(`Stored ${feedback.length} feedback entries`);
     } catch (error) {
       console.error("Error storing feedback batch:", error);
@@ -401,13 +437,13 @@ export class WeightFeedbackMonitor {
     try {
       const db = client.db("trashroute");
       const collection = db.collection("completed_routes");
-      
+
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
-      
+
       return await collection
         .find({
           completionDate: { $gte: since },
-          weightUpdateId: { $exists: true }
+          weightUpdateId: { $exists: true },
         })
         .sort({ completionDate: -1 })
         .limit(100)
@@ -421,27 +457,30 @@ export class WeightFeedbackMonitor {
   /**
    * Analyze feedback data and generate recommendations
    */
-  private async analyzeAndRecommend(feedback: WeightFeedbackMetrics[]): Promise<void> {
+  private async analyzeAndRecommend(
+    feedback: WeightFeedbackMetrics[],
+  ): Promise<void> {
     console.log("🔍 Analyzing feedback data for recommendations...");
-    
+
     try {
       const analysis = this.analyzeEffectiveness(feedback);
       const recommendations = this.generateWeightAdjustments(analysis);
-      
+
       if (recommendations.length > 0) {
         console.log("💡 Weight adjustment recommendations:");
-        recommendations.forEach(rec => {
-          console.log(`   ${rec.type.toUpperCase()} ${rec.factor}: ${rec.currentValue.toFixed(3)} → ${rec.recommendedValue.toFixed(3)}`);
+        recommendations.forEach((rec) => {
+          console.log(
+            `   ${rec.type.toUpperCase()} ${rec.factor}: ${rec.currentValue.toFixed(3)} → ${rec.recommendedValue.toFixed(3)}`,
+          );
           console.log(`   Reason: ${rec.reasoning}`);
           console.log(`   Impact: ${rec.impact}`);
         });
-        
+
         // Apply automatic adjustments if enabled
         if (this.config.autoAdjustWeights) {
           await this.applyWeightAdjustments(recommendations);
         }
       }
-      
     } catch (error) {
       console.error("Error analyzing feedback data:", error);
     }
@@ -450,50 +489,70 @@ export class WeightFeedbackMonitor {
   /**
    * Analyze weight effectiveness
    */
-  private analyzeEffectiveness(feedback: WeightFeedbackMetrics[]): WeightEffectivenessAnalysis {
+  private analyzeEffectiveness(
+    feedback: WeightFeedbackMetrics[],
+  ): WeightEffectivenessAnalysis {
     const totalRoutes = feedback.length;
-    const improvedRoutes = feedback.filter(f => f.weightEffectiveness.overallImprovement > 0).length;
-    const averageImprovement = feedback.reduce((sum, f) => sum + f.weightEffectiveness.overallImprovement, 0) / totalRoutes;
-    
+    const improvedRoutes = feedback.filter(
+      (f) => f.weightEffectiveness.overallImprovement > 0,
+    ).length;
+    const averageImprovement =
+      feedback.reduce(
+        (sum, f) => sum + f.weightEffectiveness.overallImprovement,
+        0,
+      ) / totalRoutes;
+
     // Analyze by factors
     const improvementByFactor: Record<string, number> = {};
-    const confidenceLevels = ['low', 'medium', 'high'];
-    const dataSources = ['prediction', 'historical', 'ml_enhanced'];
-    
-    confidenceLevels.forEach(level => {
-      const levelData = feedback.filter(f => {
+    const confidenceLevels = ["low", "medium", "high"];
+    const dataSources = ["prediction", "historical", "ml_enhanced"];
+
+    confidenceLevels.forEach((level) => {
+      const levelData = feedback.filter((f) => {
         const confidence = f.weightAccuracy.confidenceAlignment;
-        if (level === 'low') return confidence < 0.6;
-        if (level === 'medium') return confidence >= 0.6 && confidence < 0.8;
+        if (level === "low") return confidence < 0.6;
+        if (level === "medium") return confidence >= 0.6 && confidence < 0.8;
         return confidence >= 0.8;
       });
-      
+
       if (levelData.length > 0) {
-        improvementByFactor[`confidence_${level}`] = levelData.reduce((sum, f) => sum + f.weightEffectiveness.overallImprovement, 0) / levelData.length;
+        improvementByFactor[`confidence_${level}`] =
+          levelData.reduce(
+            (sum, f) => sum + f.weightEffectiveness.overallImprovement,
+            0,
+          ) / levelData.length;
       }
     });
 
     // Weight accuracy analysis
-    const averageAccuracy = feedback.reduce((sum, f) => sum + f.weightAccuracy.confidenceAlignment, 0) / totalRoutes;
-    
+    const averageAccuracy =
+      feedback.reduce(
+        (sum, f) => sum + f.weightAccuracy.confidenceAlignment,
+        0,
+      ) / totalRoutes;
+
     const accuracyByConfidence: Record<string, number> = {};
     const accuracyBySource: Record<string, number> = {};
-    
-    confidenceLevels.forEach(level => {
-      const levelData = feedback.filter(f => {
+
+    confidenceLevels.forEach((level) => {
+      const levelData = feedback.filter((f) => {
         const confidence = f.weightAccuracy.confidenceAlignment;
-        if (level === 'low') return confidence < 0.6;
-        if (level === 'medium') return confidence >= 0.6 && confidence < 0.8;
+        if (level === "low") return confidence < 0.6;
+        if (level === "medium") return confidence >= 0.6 && confidence < 0.8;
         return confidence >= 0.8;
       });
-      
+
       if (levelData.length > 0) {
-        accuracyByConfidence[level] = levelData.reduce((sum, f) => sum + f.weightAccuracy.confidenceAlignment, 0) / levelData.length;
+        accuracyByConfidence[level] =
+          levelData.reduce(
+            (sum, f) => sum + f.weightAccuracy.confidenceAlignment,
+            0,
+          ) / levelData.length;
       }
     });
 
     return {
-      period: 'recent',
+      period: "recent",
       totalRoutes,
       improvedRoutes,
       averageImprovement,
@@ -501,113 +560,140 @@ export class WeightFeedbackMonitor {
       weightAccuracy: {
         average: averageAccuracy,
         byConfidence: accuracyByConfidence,
-        byDataSource: accuracyBySource
+        byDataSource: accuracyBySource,
       },
-      recommendations: this.generateAnalysisRecommendations(improvedRoutes, totalRoutes, averageImprovement)
+      recommendations: this.generateAnalysisRecommendations(
+        improvedRoutes,
+        totalRoutes,
+        averageImprovement,
+      ),
     };
   }
 
   /**
    * Generate analysis-based recommendations
    */
-  private generateAnalysisRecommendations(improvedRoutes: number, totalRoutes: number, averageImprovement: number): string[] {
+  private generateAnalysisRecommendations(
+    improvedRoutes: number,
+    totalRoutes: number,
+    averageImprovement: number,
+  ): string[] {
     const recommendations: string[] = [];
     const improvementRate = improvedRoutes / totalRoutes;
-    
+
     if (improvementRate < 0.7) {
-      recommendations.push("Less than 70% of routes show improvement - review weight calculation methodology");
+      recommendations.push(
+        "Less than 70% of routes show improvement - review weight calculation methodology",
+      );
     }
-    
+
     if (averageImprovement < 0.05) {
-      recommendations.push("Average improvement below 5% - consider collecting more diverse training data");
+      recommendations.push(
+        "Average improvement below 5% - consider collecting more diverse training data",
+      );
     }
-    
+
     if (improvementRate > 0.9 && averageImprovement > 0.1) {
-      recommendations.push("Excellent performance - consider expanding to more route types");
+      recommendations.push(
+        "Excellent performance - consider expanding to more route types",
+      );
     }
-    
+
     recommendations.push("Continue monitoring weight effectiveness");
-    recommendations.push("Regularly review and adjust weight calculation factors");
-    
+    recommendations.push(
+      "Regularly review and adjust weight calculation factors",
+    );
+
     return recommendations;
   }
 
   /**
    * Generate weight adjustment recommendations
    */
-  private generateWeightAdjustments(analysis: WeightEffectivenessAnalysis): WeightAdjustmentRecommendation[] {
+  private generateWeightAdjustments(
+    analysis: WeightEffectivenessAnalysis,
+  ): WeightAdjustmentRecommendation[] {
     const recommendations: WeightAdjustmentRecommendation[] = [];
-    
+
     // Analyze by confidence levels
-    Object.entries(analysis.weightAccuracy.byConfidence).forEach(([level, accuracy]) => {
-      if (accuracy < 0.7) {
-        recommendations.push({
-          type: 'recalibrate',
-          factor: `confidence_${level}`,
-          currentValue: accuracy,
-          recommendedValue: 0.8,
-          confidence: 0.8,
-          reasoning: `Low accuracy for ${level} confidence predictions`,
-          impact: 'high'
-        });
-      }
-    });
-    
+    Object.entries(analysis.weightAccuracy.byConfidence).forEach(
+      ([level, accuracy]) => {
+        if (accuracy < 0.7) {
+          recommendations.push({
+            type: "recalibrate",
+            factor: `confidence_${level}`,
+            currentValue: accuracy,
+            recommendedValue: 0.8,
+            confidence: 0.8,
+            reasoning: `Low accuracy for ${level} confidence predictions`,
+            impact: "high",
+          });
+        }
+      },
+    );
+
     // Analyze by data source if available
-    Object.entries(analysis.improvementByFactor).forEach(([factor, improvement]) => {
-      if (improvement < 0.02) {
-        recommendations.push({
-          type: 'increase',
-          factor,
-          currentValue: improvement,
-          recommendedValue: improvement * 1.5,
-          confidence: 0.7,
-          reasoning: `Low improvement for ${factor} factor`,
-          impact: 'medium'
-        });
-      }
-    });
-    
+    Object.entries(analysis.improvementByFactor).forEach(
+      ([factor, improvement]) => {
+        if (improvement < 0.02) {
+          recommendations.push({
+            type: "increase",
+            factor,
+            currentValue: improvement,
+            recommendedValue: improvement * 1.5,
+            confidence: 0.7,
+            reasoning: `Low improvement for ${factor} factor`,
+            impact: "medium",
+          });
+        }
+      },
+    );
+
     return recommendations;
   }
 
   /**
    * Apply weight adjustments
    */
-  private async applyWeightAdjustments(recommendations: WeightAdjustmentRecommendation[]): Promise<void> {
+  private async applyWeightAdjustments(
+    recommendations: WeightAdjustmentRecommendation[],
+  ): Promise<void> {
     console.log("🔧 Applying weight adjustments...");
-    
+
     for (const rec of recommendations) {
       try {
         // This would integrate with the weight calculation system
-        console.log(`   Applying ${rec.type} to ${rec.factor}: ${rec.currentValue.toFixed(3)} → ${rec.recommendedValue.toFixed(3)}`);
-        
+        console.log(
+          `   Applying ${rec.type} to ${rec.factor}: ${rec.currentValue.toFixed(3)} → ${rec.recommendedValue.toFixed(3)}`,
+        );
+
         // Store adjustment for tracking
         await this.storeAdjustment(rec);
-        
       } catch (error) {
         console.error(`Error applying adjustment for ${rec.factor}:`, error);
       }
     }
-    
+
     console.log("✅ Weight adjustments applied");
   }
 
   /**
    * Store weight adjustment
    */
-  private async storeAdjustment(recommendation: WeightAdjustmentRecommendation): Promise<void> {
+  private async storeAdjustment(
+    recommendation: WeightAdjustmentRecommendation,
+  ): Promise<void> {
     const client = getMongoClient();
     if (!client) return;
 
     try {
       const db = client.db("trashroute");
       const collection = db.collection("weight_adjustments");
-      
+
       await collection.insertOne({
         ...recommendation,
         _id: new ObjectId(),
-        appliedAt: new Date()
+        appliedAt: new Date(),
       });
     } catch (error) {
       console.error("Error storing adjustment:", error);
@@ -619,7 +705,7 @@ export class WeightFeedbackMonitor {
    */
   private cleanupOldData(): void {
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // Keep 90 days
-    this.feedbackData = this.feedbackData.filter(d => d.timestamp > cutoff);
+    this.feedbackData = this.feedbackData.filter((d) => d.timestamp > cutoff);
   }
 
   /**
@@ -630,7 +716,7 @@ export class WeightFeedbackMonitor {
     averageImprovement: number;
     improvementRate: number;
     averageAccuracy: number;
-    recentTrend: 'improving' | 'declining' | 'stable';
+    recentTrend: "improving" | "declining" | "stable";
   } {
     if (this.feedbackData.length === 0) {
       return {
@@ -638,48 +724,65 @@ export class WeightFeedbackMonitor {
         averageImprovement: 0,
         improvementRate: 0,
         averageAccuracy: 0,
-        recentTrend: 'stable'
+        recentTrend: "stable",
       };
     }
 
     const totalFeedback = this.feedbackData.length;
-    const averageImprovement = this.feedbackData.reduce((sum, f) => 
-      sum + f.weightEffectiveness.overallImprovement, 0) / totalFeedback;
-    
-    const improvedCount = this.feedbackData.filter(f => 
-      f.weightEffectiveness.overallImprovement > 0).length;
+    const averageImprovement =
+      this.feedbackData.reduce(
+        (sum, f) => sum + f.weightEffectiveness.overallImprovement,
+        0,
+      ) / totalFeedback;
+
+    const improvedCount = this.feedbackData.filter(
+      (f) => f.weightEffectiveness.overallImprovement > 0,
+    ).length;
     const improvementRate = improvedCount / totalFeedback;
-    
-    const averageAccuracy = this.feedbackData.reduce((sum, f) => 
-      sum + f.weightAccuracy.confidenceAlignment, 0) / totalFeedback;
+
+    const averageAccuracy =
+      this.feedbackData.reduce(
+        (sum, f) => sum + f.weightAccuracy.confidenceAlignment,
+        0,
+      ) / totalFeedback;
 
     // Calculate trend (simplified)
     const recent = this.feedbackData.slice(-10);
     const older = this.feedbackData.slice(-20, -10);
-    
-    const recentAvg = recent.reduce((sum, f) => sum + f.weightEffectiveness.overallImprovement, 0) / recent.length;
-    const olderAvg = older.reduce((sum, f) => sum + f.weightEffectiveness.overallImprovement, 0) / older.length;
-    
-    let recentTrend: 'improving' | 'declining' | 'stable' = 'stable';
-    if (recentAvg > olderAvg + 0.02) recentTrend = 'improving';
-    else if (recentAvg < olderAvg - 0.02) recentTrend = 'declining';
+
+    const recentAvg =
+      recent.reduce(
+        (sum, f) => sum + f.weightEffectiveness.overallImprovement,
+        0,
+      ) / recent.length;
+    const olderAvg =
+      older.reduce(
+        (sum, f) => sum + f.weightEffectiveness.overallImprovement,
+        0,
+      ) / older.length;
+
+    let recentTrend: "improving" | "declining" | "stable" = "stable";
+    if (recentAvg > olderAvg + 0.02) recentTrend = "improving";
+    else if (recentAvg < olderAvg - 0.02) recentTrend = "declining";
 
     return {
       totalFeedback,
       averageImprovement,
       improvementRate,
       averageAccuracy,
-      recentTrend
+      recentTrend,
     };
   }
 
   /**
    * Generate comprehensive feedback report
    */
-  async generateFeedbackReport(period: 'daily' | 'weekly' | 'monthly'): Promise<string> {
+  async generateFeedbackReport(
+    period: "daily" | "weekly" | "monthly",
+  ): Promise<string> {
     const stats = this.getFeedbackStats();
     const analysis = this.analyzeEffectiveness(this.feedbackData);
-    
+
     return `
 # Weight Feedback Loop Report
 **Period:** ${period}
@@ -698,11 +801,11 @@ export class WeightFeedbackMonitor {
 - **Average Improvement:** ${(analysis.averageImprovement * 100).toFixed(2)}%
 
 ## Recommendations
-${analysis.recommendations.map(rec => `- ${rec}`).join('\n')}
+${analysis.recommendations.map((rec) => `- ${rec}`).join("\n")}
 
 ## System Health
-- Monitoring Status: ${this.isMonitoring ? 'Active' : 'Inactive'}
-- Data Quality: ${stats.averageAccuracy > 0.8 ? 'Good' : stats.averageAccuracy > 0.6 ? 'Fair' : 'Poor'}
+- Monitoring Status: ${this.isMonitoring ? "Active" : "Inactive"}
+- Data Quality: ${stats.averageAccuracy > 0.8 ? "Good" : stats.averageAccuracy > 0.6 ? "Fair" : "Poor"}
 - Performance Trend: ${stats.recentTrend}
 
 ## Next Steps
@@ -722,8 +825,10 @@ export const defaultFeedbackConfig: FeedbackLoopConfig = {
   significanceThreshold: 0.05,
   confidenceThreshold: 0.7,
   autoAdjustWeights: true,
-  maxAdjustmentFactor: 0.2
+  maxAdjustmentFactor: 0.2,
 };
 
 // Export singleton instance
-export const weightFeedbackMonitor = new WeightFeedbackMonitor(defaultFeedbackConfig);
+export const weightFeedbackMonitor = new WeightFeedbackMonitor(
+  defaultFeedbackConfig,
+);

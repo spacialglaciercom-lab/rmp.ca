@@ -14,7 +14,9 @@ const PlannerContent = lazy(() => import("@/components/planner-content"));
 
 export default function PlannerScreen() {
   const router = useRouter();
-  const routeOptimizerEnabled = usePluginStore((s) => s.isPluginEnabled("routeOptimization", true));
+  const routeOptimizerEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("routeOptimization", true),
+  );
 
   useEffect(() => {
     if (!routeOptimizerEnabled) {
@@ -30,10 +32,7 @@ export default function PlannerScreen() {
     <ErrorBoundary>
       <Suspense
         fallback={
-          <TabScreenSkeleton
-            title="Route Planner"
-            subtitle="Loading..."
-          />
+          <TabScreenSkeleton title="Route Planner" subtitle="Loading..." />
         }
       >
         <PlannerContent />

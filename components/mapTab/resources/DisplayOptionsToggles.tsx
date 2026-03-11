@@ -15,15 +15,40 @@ const DISPLAY_OPTIONS: {
 ];
 
 const WIDGET_OPTIONS: {
-  key: "showMapillary" | "showSpeed" | "transparentWidgets" | "showRouteMarkers" | "showRouteLine";
+  key:
+    | "showMapillary"
+    | "showSpeed"
+    | "transparentWidgets"
+    | "showRouteMarkers"
+    | "showRouteLine";
   label: string;
   description?: string;
 }[] = [
-  { key: "showMapillary", label: "Mapillary", description: "Street View / Mapillary button when a location is selected" },
-  { key: "showSpeed", label: "Speed", description: "Show current speed during navigation" },
-  { key: "transparentWidgets", label: "Transparent widgets", description: "Use semi-transparent map overlay controls" },
-  { key: "showRouteMarkers", label: "Route markers", description: "Show numbered stops and point markers on the map" },
-  { key: "showRouteLine", label: "Route line", description: "Show route polyline on the map" },
+  {
+    key: "showMapillary",
+    label: "Mapillary",
+    description: "Street View / Mapillary button when a location is selected",
+  },
+  {
+    key: "showSpeed",
+    label: "Speed",
+    description: "Show current speed during navigation",
+  },
+  {
+    key: "transparentWidgets",
+    label: "Transparent widgets",
+    description: "Use semi-transparent map overlay controls",
+  },
+  {
+    key: "showRouteMarkers",
+    label: "Route markers",
+    description: "Show numbered stops and point markers on the map",
+  },
+  {
+    key: "showRouteLine",
+    label: "Route line",
+    description: "Show route polyline on the map",
+  },
 ];
 
 function DisplayOptionsTogglesInner() {
@@ -32,7 +57,10 @@ function DisplayOptionsTogglesInner() {
 
   return (
     <View style={{ paddingVertical: 4 }}>
-      <SectionLabel color={colors.primary} style={{ marginTop: 0, marginBottom: 12 }}>
+      <SectionLabel
+        color={colors.primary}
+        style={{ marginTop: 0, marginBottom: 12 }}
+      >
         Display options
       </SectionLabel>
       {DISPLAY_OPTIONS.map(({ key, label }) => {
@@ -51,7 +79,10 @@ function DisplayOptionsTogglesInner() {
           />
         );
       })}
-      <SectionLabel color={colors.primary} style={{ marginTop: 20, marginBottom: 12 }}>
+      <SectionLabel
+        color={colors.primary}
+        style={{ marginTop: 20, marginBottom: 12 }}
+      >
         Map & widgets
       </SectionLabel>
       {WIDGET_OPTIONS.map(({ key, label, description }) => {

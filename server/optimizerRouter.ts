@@ -25,7 +25,7 @@ const PARTITION_TIMEOUT_MS = 120_000;
 async function proxy(
   path: string,
   body: unknown,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<unknown> {
   if (!OPTIMIZER_BACKEND_URL) {
     throw new TRPCError({
@@ -113,7 +113,7 @@ const partitionRequestSchema = z.object({
       intersection_density: z.number().optional(),
       cul_de_sac_penalty: z.number().optional(),
       width_penalty: z.number().optional(),
-    })
+    }),
   ),
   node_count: z.number(),
   truck_count: z.number(),
@@ -134,7 +134,7 @@ const partitionFromPointsSchema = z.object({
       lat: z.number(),
       lon: z.number(),
       weight: z.number().optional(),
-    })
+    }),
   ),
   truck_count: z.number(),
   balance_metric: z.enum(["count", "weight", "distance"]).optional(),
@@ -152,21 +152,21 @@ export const optimizerRouter = router({
   partition: publicProcedure
     .input(partitionRequestSchema)
     .mutation(({ input }) =>
-      proxy("/api/zones/partition", input, PARTITION_TIMEOUT_MS)
+      proxy("/api/zones/partition", input, PARTITION_TIMEOUT_MS),
     ),
 
   /** Partition road GeoJSON into zones. */
   partitionFromGeoJSON: publicProcedure
     .input(partitionFromGeoJSONSchema)
     .mutation(({ input }) =>
-      proxy("/api/zones/partition-from-geojson", input, PARTITION_TIMEOUT_MS)
+      proxy("/api/zones/partition-from-geojson", input, PARTITION_TIMEOUT_MS),
     ),
 
   /** Partition points (lat/lon/weight) into zones. */
   partitionFromPoints: publicProcedure
     .input(partitionFromPointsSchema)
     .mutation(({ input }) =>
-      proxy("/api/zones/partition-from-points", input, PARTITION_TIMEOUT_MS)
+      proxy("/api/zones/partition-from-points", input, PARTITION_TIMEOUT_MS),
     ),
 
   /** Health check for the Python optimizer backend. */

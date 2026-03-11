@@ -11,7 +11,8 @@ const path = require("path");
 
 function findCrashlyticsRoot() {
   try {
-    const resolved = require.resolve("@react-native-firebase/crashlytics/package.json");
+    const resolved =
+      require.resolve("@react-native-firebase/crashlytics/package.json");
     return path.dirname(resolved);
   } catch {
     const fromNodeModules = path.join(
@@ -19,7 +20,7 @@ function findCrashlyticsRoot() {
       "..",
       "node_modules",
       "@react-native-firebase",
-      "crashlytics"
+      "crashlytics",
     );
     if (fs.existsSync(fromNodeModules)) return fromNodeModules;
   }
@@ -32,11 +33,13 @@ const headerPath = path.join(
   findCrashlyticsRoot() || "",
   "ios",
   "RNFBCrashlytics",
-  "RNFBCrashlyticsModule.h"
+  "RNFBCrashlyticsModule.h",
 );
 
 if (!fs.existsSync(headerPath)) {
-  console.warn("patch-crashlytics-ios: RNFBCrashlyticsModule.h not found, skipping");
+  console.warn(
+    "patch-crashlytics-ios: RNFBCrashlyticsModule.h not found, skipping",
+  );
   process.exit(0);
 }
 
@@ -47,7 +50,9 @@ if (!content.includes(rnfbAppModuleImport)) {
   const anchor = "#import <React/RCTBridgeModule.h>";
   content = content.replace(anchor, rnfbAppModuleImport + "\n" + anchor);
   fs.writeFileSync(headerPath, content);
-  console.log("patch-crashlytics-ios: applied RNFBAppModule import to RNFBCrashlyticsModule.h");
+  console.log(
+    "patch-crashlytics-ios: applied RNFBAppModule import to RNFBCrashlyticsModule.h",
+  );
 }
 
 // Fix RNFBCrashlyticsModule.m: import RCTBridgeModule before any RNFBApp imports so it's in scope
@@ -56,7 +61,7 @@ const modulePath = path.join(
   findCrashlyticsRoot() || "",
   "ios",
   "RNFBCrashlytics",
-  "RNFBCrashlyticsModule.m"
+  "RNFBCrashlyticsModule.m",
 );
 
 if (fs.existsSync(modulePath)) {
@@ -64,9 +69,17 @@ if (fs.existsSync(modulePath)) {
   const rctBridgeImport = "#import <React/RCTBridgeModule.h>";
   const firstReactImport = "#import <React/RCTConvert.h>";
 
-  if (!mContent.includes(rctBridgeImport) && mContent.includes(firstReactImport)) {
-    mContent = mContent.replace(firstReactImport, rctBridgeImport + "\n" + firstReactImport);
+  if (
+    !mContent.includes(rctBridgeImport) &&
+    mContent.includes(firstReactImport)
+  ) {
+    mContent = mContent.replace(
+      firstReactImport,
+      rctBridgeImport + "\n" + firstReactImport,
+    );
     fs.writeFileSync(modulePath, mContent);
-    console.log("patch-crashlytics-ios: applied RCTBridgeModule import to RNFBCrashlyticsModule.m");
+    console.log(
+      "patch-crashlytics-ios: applied RCTBridgeModule import to RNFBCrashlyticsModule.m",
+    );
   }
 }

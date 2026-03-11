@@ -9,7 +9,7 @@ import { Platform } from "react-native";
 
 export async function reportErrorToServer(
   error: Error,
-  context?: { name?: string; isFatal?: boolean }
+  context?: { name?: string; isFatal?: boolean },
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   if (!baseUrl) return;
@@ -17,7 +17,8 @@ export async function reportErrorToServer(
   const payload = {
     message: error?.message ?? String(error),
     stack: error?.stack,
-    appVersion: Constants.expoConfig?.version ?? Constants.manifest?.version ?? "1.0.0",
+    appVersion:
+      Constants.expoConfig?.version ?? Constants.manifest?.version ?? "1.0.0",
     platform: Platform.OS,
     ...(context?.name && { name: context.name }),
     ...(context?.isFatal !== undefined && { isFatal: context.isFatal }),

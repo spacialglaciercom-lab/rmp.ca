@@ -36,7 +36,7 @@ export function getTurnColor(turnType: TurnType): string {
  */
 export function calculateBearing(
   from: { lat: number; lon: number },
-  to: { lat: number; lon: number }
+  to: { lat: number; lon: number },
 ): number {
   const dLon = to.lon - from.lon;
   const y = Math.sin(dLon) * Math.cos(to.lat);
@@ -53,7 +53,7 @@ export function calculateBearing(
  */
 export function determineTurnType(
   incomingBearing: number,
-  outgoingBearing: number
+  outgoingBearing: number,
 ): TurnType {
   let turnAngle = outgoingBearing - incomingBearing;
 
@@ -83,7 +83,7 @@ export function determineTurnType(
  */
 export function calculateDistance(
   from: { lat: number; lon: number },
-  to: { lat: number; lon: number }
+  to: { lat: number; lon: number },
 ): number {
   const R = 6371; // Earth's radius in km
   const dLat = ((to.lat - from.lat) * Math.PI) / 180;
@@ -104,7 +104,7 @@ export function calculateDistance(
  * Analyze route and generate colored segments
  */
 export function analyzeRoute(
-  points: Array<{ lat: number; lon: number }>
+  points: Array<{ lat: number; lon: number }>,
 ): RouteSegment[] {
   if (points.length < 2) {
     return [];

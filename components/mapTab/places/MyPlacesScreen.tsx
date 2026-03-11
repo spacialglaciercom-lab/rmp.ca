@@ -103,7 +103,9 @@ export function MyPlacesScreen({ visible, onClose }: MyPlacesScreenProps) {
 
           <ImportExportActions />
 
-          <View style={[styles.segmentRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[styles.segmentRow, { borderBottomColor: colors.border }]}
+          >
             <TouchableOpacity
               style={[
                 styles.segmentTab,
@@ -120,13 +122,16 @@ export function MyPlacesScreen({ visible, onClose }: MyPlacesScreenProps) {
               <MaterialCommunityIcons
                 name="star-outline"
                 size={20}
-                color={activeTab === "favorites" ? colors.primary : colors.muted}
+                color={
+                  activeTab === "favorites" ? colors.primary : colors.muted
+                }
               />
               <Text
                 style={[
                   styles.segmentLabel,
                   {
-                    color: activeTab === "favorites" ? colors.text : colors.muted,
+                    color:
+                      activeTab === "favorites" ? colors.text : colors.muted,
                   },
                 ]}
               >

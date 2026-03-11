@@ -14,15 +14,12 @@ export function TurnPenaltiesConfig() {
       type: "ADD_LOG_ENTRY",
       payload: generateLogEntry(
         `Turn penalties updated: Left=${penalties.leftTurn}, U-Turn=${penalties.uTurn}, Right=${penalties.rightTurn}`,
-        "success"
+        "success",
       ),
     });
   };
 
   return (
-    <TurnPenaltyConfig
-      initialConfig={initialConfig}
-      onApply={handleApply}
-    />
+    <TurnPenaltyConfig initialConfig={initialConfig} onApply={handleApply} />
   );
 }

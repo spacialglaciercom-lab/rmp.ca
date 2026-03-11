@@ -144,13 +144,22 @@ function SheetContent({
       ]}
       pointerEvents="box-none"
     >
-      <View style={[styles.header, { borderBottomColor: colors.border }]} pointerEvents="box-none">
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+      <View
+        style={[styles.header, { borderBottomColor: colors.border }]}
+        pointerEvents="box-none"
+      >
+        <Text
+          style={[styles.headerTitle, { color: colors.text }]}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         <View style={styles.headerActions}>
           {collapsible && (
-            <TouchableOpacity onPress={handleCollapsePress} style={styles.headerBtn}>
+            <TouchableOpacity
+              onPress={handleCollapsePress}
+              style={styles.headerBtn}
+            >
               <MaterialCommunityIcons
                 name={collapsed ? "chevron-up" : "chevron-down"}
                 size={24}
@@ -159,11 +168,19 @@ function SheetContent({
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+            <MaterialCommunityIcons
+              name="close"
+              size={24}
+              color={colors.text}
+            />
           </TouchableOpacity>
         </View>
       </View>
-      {!isCollapsed && <View style={styles.content} pointerEvents="box-none">{children}</View>}
+      {!isCollapsed && (
+        <View style={styles.content} pointerEvents="box-none">
+          {children}
+        </View>
+      )}
     </View>
   );
 }
@@ -237,7 +254,10 @@ function BottomSheetInner({
     >
       <View style={styles.overlay}>
         <Pressable
-          style={[styles.backdrop, { pointerEvents: dismissOnBackdrop ? "auto" : "none" }]}
+          style={[
+            styles.backdrop,
+            { pointerEvents: dismissOnBackdrop ? "auto" : "none" },
+          ]}
           onPress={dismissOnBackdrop ? handleClose : undefined}
         />
         {sheetNode}

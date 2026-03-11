@@ -12,9 +12,9 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Switch,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Switch } from "react-native";
 
 import { useColors } from "@/hooks/use-colors";
 import { useFavoritesStore, type Favorite } from "@/stores/favoritesStore";
@@ -32,7 +32,12 @@ interface FavoritesTabProps {
 
 /** Sanitize a string for use as a filename (no path chars, reasonable length). */
 function sanitizeFilename(name: string): string {
-  return name.replace(/[^\w\s-.]/g, "").replace(/\s+/g, "-").slice(0, 40) || "waypoint";
+  return (
+    name
+      .replace(/[^\w\s-.]/g, "")
+      .replace(/\s+/g, "-")
+      .slice(0, 40) || "waypoint"
+  );
 }
 
 export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
@@ -44,7 +49,13 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
   const { dispatch } = useRouting();
 
   const [plannerPoints, setPlannerPoints] = useState<
-    Array<{ id: string; name: string; lat: number; lon: number; source: "depot" | "collection" }>
+    {
+      id: string;
+      name: string;
+      lat: number;
+      lon: number;
+      source: "depot" | "collection";
+    }[]
   >([]);
   /** ID of the item currently previewed on the map (only one at a time). */
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -62,8 +73,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
       }
       const pts: typeof plannerPoints = [];
       route.points.forEach((p: CollectionPoint, i: number) => {
-        const name =
-          p.locationName || p.address || `Point ${i + 1}`;
+        const name = p.locationName || p.address || `Point ${i + 1}`;
         pts.push({
           id: p.id,
           name: i === 0 ? `Depot — ${name}` : `Collection — ${name}`,
@@ -106,11 +116,14 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
       }
       onShowOnMap?.(lat, lon);
     },
-    [dispatch, onShowOnMap, findMatchingTrack]
+    [dispatch, onShowOnMap, findMatchingTrack],
   );
 
   const handlePreviewToggle = useCallback(
-    (item: { id: string; name: string; lat: number; lon: number }, on: boolean) => {
+    (
+      item: { id: string; name: string; lat: number; lon: number },
+      on: boolean,
+    ) => {
       impactAsync?.();
       if (on) {
         setPreviewId(item.id);
@@ -132,13 +145,16 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
         dispatch({ type: "SET_PREVIEW_ROUTE", payload: null });
       }
     },
-    [dispatch, onShowOnMap, findMatchingTrack]
+    [dispatch, onShowOnMap, findMatchingTrack],
   );
 
   const handleRemove = useCallback(
     (fav: Favorite) => {
       if (Platform.OS === "web") {
-        if (typeof window !== "undefined" && window.confirm(`Remove "${fav.name}" from favorites?`)) {
+        if (
+          typeof window !== "undefined" &&
+          window.confirm(`Remove "${fav.name}" from favorites?`)
+        ) {
           removeFavorite(fav.id);
         }
       } else {
@@ -152,7 +168,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
         ]);
       }
     },
-    [removeFavorite]
+    [removeFavorite],
   );
 
   const handleClearAllFavorites = useCallback(() => {
@@ -223,7 +239,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
         Alert.alert("Export failed", "Could not export as GPX.");
       }
     },
-    [exportFavoriteToGPX]
+    [exportFavoriteToGPX],
   );
 
   const allItems = [
@@ -265,7 +281,9 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
           size={20}
           color={colors.error ?? "#ef4444"}
         />
-        <Text style={[styles.clearAllLabel, { color: colors.error ?? "#ef4444" }]}>
+        <Text
+          style={[styles.clearAllLabel, { color: colors.error ?? "#ef4444" }]}
+        >
           Clear all ({totalListCount})
         </Text>
       </TouchableOpacity>
@@ -298,7 +316,11 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
               <MaterialCommunityIcons
                 name={isPlanner ? "map-marker" : "star"}
                 size={20}
-                color={isPlanner ? colors.primary : colors.accentCyan ?? colors.primary}
+                color={
+                  isPlanner
+                    ? colors.primary
+                    : (colors.accentCyan ?? colors.primary)
+                }
               />
               <View style={styles.itemText}>
                 <Text
@@ -308,7 +330,10 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
                   {name}
                 </Text>
                 <Text
-                  style={[styles.itemCoords, { color: colors.muted, fontFamily: Fonts!.mono }]}
+                  style={[
+                    styles.itemCoords,
+                    { color: colors.muted, fontFamily: Fonts!.mono },
+                  ]}
                 >
                   {lat.toFixed(5)}, {lon.toFixed(5)}
                 </Text>
@@ -320,20 +345,33 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
               />
             </TouchableOpacity>
             <View style={styles.previewToggleWrap}>
-              <Text style={[styles.previewLabel, { color: colors.muted }]} numberOfLines={1}>
+              <Text
+                style={[styles.previewLabel, { color: colors.muted }]}
+                numberOfLines={1}
+              >
                 Preview
               </Text>
               <Switch
                 value={previewId === (item as any).id}
                 onValueChange={(on) => handlePreviewToggle(item as any, on)}
-                trackColor={{ false: colors.border, true: (colors.primary ?? "#3b82f6") + "99" }}
-                thumbColor={previewId === (item as any).id ? colors.primary ?? "#3b82f6" : colors.muted}
+                trackColor={{
+                  false: colors.border,
+                  true: (colors.primary ?? "#3b82f6") + "99",
+                }}
+                thumbColor={
+                  previewId === (item as any).id
+                    ? (colors.primary ?? "#3b82f6")
+                    : colors.muted
+                }
               />
             </View>
             {!isPlanner && (
               <>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: (colors.primary ?? "#3b82f6") + "22" }]}
+                  style={[
+                    styles.actionBtn,
+                    { backgroundColor: (colors.primary ?? "#3b82f6") + "22" },
+                  ]}
                   onPress={() => handleExportGPX(item as Favorite)}
                 >
                   <MaterialCommunityIcons
@@ -343,7 +381,10 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
                   />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: (colors.error ?? "#ef4444") + "22" }]}
+                  style={[
+                    styles.actionBtn,
+                    { backgroundColor: (colors.error ?? "#ef4444") + "22" },
+                  ]}
                   onPress={() => handleRemove(item as Favorite)}
                 >
                   <MaterialCommunityIcons

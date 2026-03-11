@@ -1,17 +1,36 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Platform,
+} from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
-import { Platform } from "react-native";
+
 import { useColors } from "@/hooks/use-colors";
 import { SectionLabel } from "@/components/minimal";
 import { useRouteParametersStore } from "@/stores/routeParametersStore";
 
 const PREFER_OPTIONS = [
-  { key: "allowPrivateAccess", label: "Allow private access", icon: "home-off-outline" },
-  { key: "goodsDelivery", label: "Goods delivery", icon: "truck-delivery-outline" },
+  {
+    key: "allowPrivateAccess",
+    label: "Allow private access",
+    icon: "home-off-outline",
+  },
+  {
+    key: "goodsDelivery",
+    label: "Goods delivery",
+    icon: "truck-delivery-outline",
+  },
   { key: "fuelEfficientWay", label: "Fuel-efficient way", icon: "fuel" },
-  { key: "considerTemporaryLimitations", label: "Consider temporary limitations", icon: "walk" },
+  {
+    key: "considerTemporaryLimitations",
+    label: "Consider temporary limitations",
+    icon: "walk",
+  },
 ];
 
 const styles = StyleSheet.create({
@@ -51,7 +70,10 @@ export function PreferencesSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <View style={styles.container}>
-      <SectionLabel color={colors.primary} style={{ marginTop: 0, marginBottom: 12 }}>
+      <SectionLabel
+        color={colors.primary}
+        style={{ marginTop: 0, marginBottom: 12 }}
+      >
         Route preferences
       </SectionLabel>
       {PREFER_OPTIONS.map(({ key, label, icon }) => {
@@ -75,7 +97,9 @@ export function PreferencesSheet({ onClose }: { onClose: () => void }) {
                 size={22}
                 color={colors.muted}
               />
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "500" }}>
+              <Text
+                style={{ color: colors.text, fontSize: 16, fontWeight: "500" }}
+              >
                 {label}
               </Text>
             </View>

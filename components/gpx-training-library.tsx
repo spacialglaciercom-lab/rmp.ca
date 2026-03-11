@@ -3,7 +3,11 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import { useColors } from "@/hooks/use-colors";
-import { useRouting, generateLogEntry, parseGpxTrackPoints } from "@/lib/routing-context";
+import {
+  useRouting,
+  generateLogEntry,
+  parseGpxTrackPoints,
+} from "@/lib/routing-context";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -17,7 +21,7 @@ export function GpxTrainingLibrary() {
   const [loadFilename, setLoadFilename] = useState<string | null>(null);
   const getContent = trpc.gpxTraining.getContent.useQuery(
     { filename: loadFilename! },
-    { enabled: !!loadFilename }
+    { enabled: !!loadFilename },
   );
 
   useEffect(() => {
@@ -34,12 +38,15 @@ export function GpxTrainingLibrary() {
     if (content) {
       const points = parseGpxTrackPoints(content);
       dispatch({ type: "SET_GPX_DATA", payload: content });
-      dispatch({ type: "SET_PREVIEW_ROUTE", payload: points.length > 0 ? points : null });
+      dispatch({
+        type: "SET_PREVIEW_ROUTE",
+        payload: points.length > 0 ? points : null,
+      });
       dispatch({
         type: "ADD_LOG_ENTRY",
         payload: generateLogEntry(
           `Loaded "${loadFilename}" (${points.length} points). View on Map tab.`,
-          "success"
+          "success",
         ),
       });
     }
@@ -59,7 +66,8 @@ export function GpxTrainingLibrary() {
         Training library
       </Text>
       <Text className="text-sm text-muted mb-3">
-        Load a GPX from your training folder (GPX_TRAINING_PATH) to preview and export
+        Load a GPX from your training folder (GPX_TRAINING_PATH) to preview and
+        export
       </Text>
       {loading && (
         <View className="flex-row items-center py-2">

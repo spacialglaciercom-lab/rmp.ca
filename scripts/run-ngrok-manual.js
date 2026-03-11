@@ -17,7 +17,9 @@ if (fs.existsSync(envPath)) {
     if (!line || line.trim().startsWith("#")) return;
     const match = line.match(/^([^=]+)=(.*)$/);
     if (match && !process.env[match[1].trim()]) {
-      process.env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, "");
+      process.env[match[1].trim()] = match[2]
+        .trim()
+        .replace(/^["']|["']$/g, "");
     }
   });
 }
@@ -26,7 +28,9 @@ const METRO_PORT = parseInt(process.env.METRO_PORT || "8081", 10);
 
 async function main() {
   if (!process.env.NGROK_AUTHTOKEN) {
-    console.error("Missing NGROK_AUTHTOKEN in .env. Add it from https://dashboard.ngrok.com/get-started/your-authtoken");
+    console.error(
+      "Missing NGROK_AUTHTOKEN in .env. Add it from https://dashboard.ngrok.com/get-started/your-authtoken",
+    );
     process.exit(1);
   }
 
@@ -50,7 +54,10 @@ async function main() {
   }
 
   process.on("SIGINT", () => {
-    ngrok.kill().then(() => process.exit(0)).catch(() => process.exit(0));
+    ngrok
+      .kill()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(0));
   });
 }
 

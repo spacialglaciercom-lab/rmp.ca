@@ -88,4 +88,6 @@ declare class MoonshineVoiceNativeModule extends NativeModule<MoonshineVoiceModu
   clearIntents(): Promise<void>;
 }
 
-export default requireNativeModule<MoonshineVoiceNativeModule>("MoonshineVoice");
+export default requireNativeModule<MoonshineVoiceNativeModule>(
+  "MoonshineVoice",
+);

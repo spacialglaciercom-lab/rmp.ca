@@ -25,12 +25,17 @@ export interface CustomMarker {
 interface MarkersStore {
   customMarkers: CustomMarker[];
 
-  addMarker: (marker: Omit<CustomMarker, "id" | "createdAt" | "location">) => void;
+  addMarker: (
+    marker: Omit<CustomMarker, "id" | "createdAt" | "location">,
+  ) => void;
   renameMarker: (id: string, newName: string) => void;
   setMarkerLocation: (id: string, location: string) => void;
   removeMarker: (id: string) => void;
   clearAllCustomMarkers: () => void;
-  addMediaNote: (markerId: string, note: Omit<MediaNote, "id" | "createdAt">) => void;
+  addMediaNote: (
+    markerId: string,
+    note: Omit<MediaNote, "id" | "createdAt">,
+  ) => void;
   removeMediaNote: (markerId: string, noteId: string) => void;
 }
 
@@ -91,7 +96,7 @@ export const useMarkersStore = create<MarkersStore>()(
                     },
                   ],
                 }
-              : m
+              : m,
           ),
         })),
 
@@ -99,14 +104,19 @@ export const useMarkersStore = create<MarkersStore>()(
         set((state) => ({
           customMarkers: state.customMarkers.map((m) =>
             m.id === markerId
-              ? { ...m, mediaNotes: (m.mediaNotes ?? []).filter((n) => n.id !== noteId) }
-              : m
+              ? {
+                  ...m,
+                  mediaNotes: (m.mediaNotes ?? []).filter(
+                    (n) => n.id !== noteId,
+                  ),
+                }
+              : m,
           ),
         })),
     }),
     {
       name: "trashroute-map-markers",
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    },
+  ),
 );

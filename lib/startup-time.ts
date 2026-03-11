@@ -12,7 +12,10 @@ import { startStartupTrace, stopStartupTrace } from "./performance-monitoring";
 // Start Firebase Perf startup trace as early as possible (no-op on web/Expo Go)
 startStartupTrace();
 
-const startTime = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+const startTime =
+  typeof performance !== "undefined" && performance.now
+    ? performance.now()
+    : Date.now();
 
 let completed = false;
 
@@ -20,7 +23,10 @@ let completed = false;
 export function recordStartupComplete(): void {
   if (completed) return;
   completed = true;
-  const durationMs = (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()) - startTime;
+  const durationMs =
+    (typeof performance !== "undefined" && performance.now
+      ? performance.now()
+      : Date.now()) - startTime;
 
   if (__DEV__) {
     console.log(`[startup] Time to ready: ${durationMs.toFixed(0)} ms`);
@@ -29,7 +35,10 @@ export function recordStartupComplete(): void {
   if (Platform.OS !== "web" && Constants.appOwnership !== "expo") {
     try {
       const crashlytics = require("@react-native-firebase/crashlytics").default;
-      crashlytics().setAttribute("last_startup_ms", String(Math.round(durationMs)));
+      crashlytics().setAttribute(
+        "last_startup_ms",
+        String(Math.round(durationMs)),
+      );
     } catch {
       // Crashlytics not available; ignore
     }
@@ -39,5 +48,9 @@ export function recordStartupComplete(): void {
 
 /** Time (ms) since module load; useful for custom metrics. */
 export function getStartupDurationMs(): number {
-  return (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()) - startTime;
+  return (
+    (typeof performance !== "undefined" && performance.now
+      ? performance.now()
+      : Date.now()) - startTime
+  );
 }

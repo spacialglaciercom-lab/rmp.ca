@@ -36,7 +36,8 @@ export class OptimizedTileCache<T = ArrayBuffer> {
   }
 
   add(id: string, data: T, size?: number): void {
-    const byteSize = size ?? (data instanceof ArrayBuffer ? data.byteLength : 1);
+    const byteSize =
+      size ?? (data instanceof ArrayBuffer ? data.byteLength : 1);
     while (this.cache.size >= this.maxSize && this.cache.size > 0) {
       const firstKey = this.cache.keys().next().value as string;
       if (firstKey === undefined) break;
@@ -44,7 +45,11 @@ export class OptimizedTileCache<T = ArrayBuffer> {
       this.cache.delete(firstKey);
       if (old?.size) this.currentSize -= old.size;
     }
-    const entry: CachedTile<T> = { data, lastAccessed: Date.now(), size: byteSize };
+    const entry: CachedTile<T> = {
+      data,
+      lastAccessed: Date.now(),
+      size: byteSize,
+    };
     this.cache.set(id, entry);
     this.currentSize += byteSize;
   }

@@ -14,14 +14,17 @@ const DEFAULT: MapOrientation = "north";
 export async function getStoredMapOrientation(): Promise<MapOrientation> {
   try {
     const value = await AsyncStorage.getItem(STORAGE_KEY);
-    if (value === "north" || value === "course" || value === "compass") return value;
+    if (value === "north" || value === "course" || value === "compass")
+      return value;
   } catch {
     // ignore
   }
   return DEFAULT;
 }
 
-export async function setStoredMapOrientation(value: MapOrientation): Promise<void> {
+export async function setStoredMapOrientation(
+  value: MapOrientation,
+): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, value);
   } catch {
@@ -29,10 +32,18 @@ export async function setStoredMapOrientation(value: MapOrientation): Promise<vo
   }
 }
 
-type MapOrientationContextValue = [MapOrientation, (value: MapOrientation) => Promise<void>];
-const MapOrientationContext = React.createContext<MapOrientationContextValue | null>(null);
+type MapOrientationContextValue = [
+  MapOrientation,
+  (value: MapOrientation) => Promise<void>,
+];
+const MapOrientationContext =
+  React.createContext<MapOrientationContextValue | null>(null);
 
-export function MapOrientationProvider({ children }: { children: React.ReactNode }) {
+export function MapOrientationProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [orientation, setOrientationState] = useState<MapOrientation>(DEFAULT);
 
   useEffect(() => {
@@ -51,7 +62,10 @@ export function MapOrientationProvider({ children }: { children: React.ReactNode
   );
 }
 
-export function useMapOrientation(): [MapOrientation, (value: MapOrientation) => Promise<void>] {
+export function useMapOrientation(): [
+  MapOrientation,
+  (value: MapOrientation) => Promise<void>,
+] {
   const ctx = useContext(MapOrientationContext);
   if (ctx) return ctx;
 

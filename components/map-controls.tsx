@@ -54,10 +54,26 @@ export function MapControls({
             borderBottomColor: colors.border,
           }}
         >
-          <Text style={{ color: colors.foreground, fontSize: 18, fontWeight: "bold" }}>+</Text>
+          <Text
+            style={{
+              color: colors.foreground,
+              fontSize: 18,
+              fontWeight: "bold",
+            }}
+          >
+            +
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onZoomOut} style={{ padding: 8 }}>
-          <Text style={{ color: colors.foreground, fontSize: 18, fontWeight: "bold" }}>−</Text>
+          <Text
+            style={{
+              color: colors.foreground,
+              fontSize: 18,
+              fontWeight: "bold",
+            }}
+          >
+            −
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -72,7 +88,13 @@ export function MapControls({
             alignItems: "center",
           }}
         >
-          <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>
+          <Text
+            style={{
+              color: colors.background,
+              fontSize: 14,
+              fontWeight: "600",
+            }}
+          >
             Fit
           </Text>
         </TouchableOpacity>

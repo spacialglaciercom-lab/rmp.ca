@@ -19,7 +19,8 @@ export function readFileAsText(file: File | Blob): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve((reader.result as string) ?? "");
-      reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+      reader.onerror = () =>
+        reject(reader.error ?? new Error("Failed to read file"));
       reader.readAsText(b, "UTF-8");
     });
   }
@@ -36,10 +37,14 @@ export function readFileAsText(file: File | Blob): Promise<string> {
     return fetch(url)
       .then((res) => {
         // Only use response.blob() — do not call response.text() here (can throw "text is not a function" in some envs)
-        if (typeof (res as { blob?: () => Promise<Blob> }).blob !== "function") {
+        if (
+          typeof (res as { blob?: () => Promise<Blob> }).blob !== "function"
+        ) {
           return Promise.reject(new Error("Response has no blob()"));
         }
-        return (res as { blob: () => Promise<Blob> }).blob().then(readBlobWithFileReader);
+        return (res as { blob: () => Promise<Blob> })
+          .blob()
+          .then(readBlobWithFileReader);
       })
       .finally(() => {
         try {

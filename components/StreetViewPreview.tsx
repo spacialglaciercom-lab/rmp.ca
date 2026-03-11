@@ -4,7 +4,13 @@
  * Native only (requires react-native-webview).
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   View,
   Modal,
@@ -38,14 +44,16 @@ function bearing(
   const lat1 = toRad(from.lat);
   const lat2 = toRad(to.lat);
   const y = Math.sin(dLon) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
 /** Shortest-arc lerp between two headings in degrees. */
 function lerpHeading(a: number, b: number, t: number): number {
   let diff = ((b - a + 540) % 360) - 180;
-  return ((a + diff * t) % 360 + 360) % 360;
+  return (((a + diff * t) % 360) + 360) % 360;
 }
 
 /** Linear interpolation between two points. */
@@ -122,7 +130,13 @@ export function StreetViewPreview({
 
   // Find interpolated position along cumulative distance curve
   const getPositionAtDist = useCallback(
-    (d: number): { pos: { lat: number; lon: number }; heading: number; segIdx: number } => {
+    (
+      d: number,
+    ): {
+      pos: { lat: number; lon: number };
+      heading: number;
+      segIdx: number;
+    } => {
       const clampedD = Math.max(0, Math.min(d, totalDistance));
       // Binary search for segment
       let lo = 0;
@@ -135,7 +149,11 @@ export function StreetViewPreview({
       const segLen = cumDist[lo + 1] - cumDist[lo];
       const t = segLen > 0 ? (clampedD - cumDist[lo]) / segLen : 0;
       const segIdx = lo;
-      const pos = lerpPoint(points[segIdx], points[Math.min(segIdx + 1, points.length - 1)], t);
+      const pos = lerpPoint(
+        points[segIdx],
+        points[Math.min(segIdx + 1, points.length - 1)],
+        t,
+      );
       const head = bearing(
         points[segIdx],
         points[Math.min(segIdx + 1, points.length - 1)],
@@ -156,8 +174,12 @@ export function StreetViewPreview({
   }, [isVisible]);
 
   // Keep refs in sync
-  useEffect(() => { speedRef.current = speed; }, [speed]);
-  useEffect(() => { playingRef.current = playing; }, [playing]);
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
 
   // Animation loop
   useEffect(() => {
@@ -205,49 +227,52 @@ export function StreetViewPreview({
   }, [svReady, playing, totalDistance, getPositionAtDist]);
 
   // Handle messages from WebView
-  const onMessage = useCallback((e: { nativeEvent: { data: string } }) => {
-    try {
-      const msg = JSON.parse(e.nativeEvent.data);
-      switch (msg.type) {
-        case "ready":
-          setSvReady(true);
-          setLoading(false);
-          // Set initial position
-          if (points.length > 0) {
-            const h = points.length > 1 ? bearing(points[0], points[1]) : 0;
-            setCurrentHeading(h);
-            webViewRef.current?.injectJavaScript(
-              `window.updatePosition(${points[0].lat},${points[0].lon},${h});true;`,
-            );
-          }
-          break;
-        case "street_name":
-          if (msg.name) setStreetName(msg.name);
-          break;
-        case "status":
-          setHasImagery(msg.hasImagery ?? true);
-          // Skip forward if no coverage
-          if (!msg.hasImagery && playingRef.current) {
-            let skipDist = distRef.current;
-            let found = false;
-            for (let i = 0; i < MAX_SKIP_M / COVERAGE_SKIP_M; i++) {
-              skipDist += COVERAGE_SKIP_M;
-              if (skipDist >= totalDistance) break;
-              const { pos } = getPositionAtDist(skipDist);
+  const onMessage = useCallback(
+    (e: { nativeEvent: { data: string } }) => {
+      try {
+        const msg = JSON.parse(e.nativeEvent.data);
+        switch (msg.type) {
+          case "ready":
+            setSvReady(true);
+            setLoading(false);
+            // Set initial position
+            if (points.length > 0) {
+              const h = points.length > 1 ? bearing(points[0], points[1]) : 0;
+              setCurrentHeading(h);
               webViewRef.current?.injectJavaScript(
-                `window.updatePosition(${pos.lat},${pos.lon},${currentHeading});true;`,
+                `window.updatePosition(${points[0].lat},${points[0].lon},${h});true;`,
               );
-              found = true;
-              distRef.current = skipDist;
-              setDistanceTraveled(skipDist);
-              break;
             }
-            if (!found) setHasImagery(false);
-          }
-          break;
-      }
-    } catch {}
-  }, [points, totalDistance, getPositionAtDist, currentHeading]);
+            break;
+          case "street_name":
+            if (msg.name) setStreetName(msg.name);
+            break;
+          case "status":
+            setHasImagery(msg.hasImagery ?? true);
+            // Skip forward if no coverage
+            if (!msg.hasImagery && playingRef.current) {
+              let skipDist = distRef.current;
+              let found = false;
+              for (let i = 0; i < MAX_SKIP_M / COVERAGE_SKIP_M; i++) {
+                skipDist += COVERAGE_SKIP_M;
+                if (skipDist >= totalDistance) break;
+                const { pos } = getPositionAtDist(skipDist);
+                webViewRef.current?.injectJavaScript(
+                  `window.updatePosition(${pos.lat},${pos.lon},${currentHeading});true;`,
+                );
+                found = true;
+                distRef.current = skipDist;
+                setDistanceTraveled(skipDist);
+                break;
+              }
+              if (!found) setHasImagery(false);
+            }
+            break;
+        }
+      } catch {}
+    },
+    [points, totalDistance, getPositionAtDist, currentHeading],
+  );
 
   // Scrubber change
   const handleScrub = useCallback(
@@ -269,7 +294,10 @@ export function StreetViewPreview({
   const handleStep = useCallback(
     (direction: 1 | -1) => {
       setPlaying(false);
-      const d = Math.max(0, Math.min(distRef.current + direction * MANUAL_STEP_M, totalDistance));
+      const d = Math.max(
+        0,
+        Math.min(distRef.current + direction * MANUAL_STEP_M, totalDistance),
+      );
       distRef.current = d;
       setDistanceTraveled(d);
       const { pos, heading: h } = getPositionAtDist(d);
@@ -303,7 +331,10 @@ export function StreetViewPreview({
   // Mini-map region
   const miniRegion = useMemo(() => {
     if (points.length === 0) return undefined;
-    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    let minLat = Infinity,
+      maxLat = -Infinity,
+      minLon = Infinity,
+      maxLon = -Infinity;
     for (const p of points) {
       if (p.lat < minLat) minLat = p.lat;
       if (p.lat > maxLat) maxLat = p.lat;
@@ -357,12 +388,18 @@ export function StreetViewPreview({
               </>
             ) : (
               <>
-                <MaterialCommunityIcons name="google-street-view" size={48} color={colors.muted} />
+                <MaterialCommunityIcons
+                  name="google-street-view"
+                  size={48}
+                  color={colors.muted}
+                />
                 <Text style={[styles.loadingText, { color: colors.muted }]}>
                   No Google Maps API key configured
                 </Text>
                 <Text style={[styles.hintText, { color: colors.muted }]}>
-                  Set your key in Settings → Maps & Resources → Navigation (Google Maps API key), or set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY when building.
+                  Set your key in Settings → Maps & Resources → Navigation
+                  (Google Maps API key), or set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+                  when building.
                 </Text>
               </>
             )}
@@ -373,7 +410,9 @@ export function StreetViewPreview({
         {loading && htmlSource && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.loadingOverlayText}>Initializing Street View...</Text>
+            <Text style={styles.loadingOverlayText}>
+              Initializing Street View...
+            </Text>
           </View>
         )}
 
@@ -434,7 +473,12 @@ export function StreetViewPreview({
                 }}
                 anchor={{ x: 0.5, y: 0.5 }}
               >
-                <View style={[styles.miniMapDot, { backgroundColor: colors.error ?? "#ef4444" }]} />
+                <View
+                  style={[
+                    styles.miniMapDot,
+                    { backgroundColor: colors.error ?? "#ef4444" },
+                  ]}
+                />
               </Marker>
             </MapView>
           </View>
@@ -449,8 +493,17 @@ export function StreetViewPreview({
               disabled={distanceTraveled <= 0}
               activeOpacity={0.7}
             >
-              <View style={[styles.arrowInner, distanceTraveled <= 0 && { opacity: 0.3 }]}>
-                <MaterialCommunityIcons name="chevron-down" size={32} color="#fff" />
+              <View
+                style={[
+                  styles.arrowInner,
+                  distanceTraveled <= 0 && { opacity: 0.3 },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="chevron-down"
+                  size={32}
+                  color="#fff"
+                />
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -459,8 +512,17 @@ export function StreetViewPreview({
               disabled={distanceTraveled >= totalDistance}
               activeOpacity={0.7}
             >
-              <View style={[styles.arrowInner, distanceTraveled >= totalDistance && { opacity: 0.3 }]}>
-                <MaterialCommunityIcons name="chevron-up" size={32} color="#fff" />
+              <View
+                style={[
+                  styles.arrowInner,
+                  distanceTraveled >= totalDistance && { opacity: 0.3 },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="chevron-up"
+                  size={32}
+                  color="#fff"
+                />
               </View>
             </TouchableOpacity>
           </View>
@@ -468,10 +530,14 @@ export function StreetViewPreview({
 
         {/* Bottom controls - only show for routes with multiple points */}
         {svReady && !isSinglePoint && (
-          <View style={[styles.controls, { paddingBottom: insets.bottom + 12 }]}>
+          <View
+            style={[styles.controls, { paddingBottom: insets.bottom + 12 }]}
+          >
             {/* Scrubber */}
             <View style={styles.scrubberRow}>
-              <Text style={styles.distLabel}>{formatDist(distanceTraveled)}</Text>
+              <Text style={styles.distLabel}>
+                {formatDist(distanceTraveled)}
+              </Text>
               <Slider
                 style={styles.slider}
                 minimumValue={0}
@@ -520,8 +586,12 @@ export function StreetViewPreview({
                       style={[
                         styles.speedChip,
                         {
-                          borderColor: active ? colors.primary : "rgba(255,255,255,0.4)",
-                          backgroundColor: active ? colors.primary : "transparent",
+                          borderColor: active
+                            ? colors.primary
+                            : "rgba(255,255,255,0.4)",
+                          backgroundColor: active
+                            ? colors.primary
+                            : "transparent",
                         },
                       ]}
                       onPress={() => setSpeed(s)}

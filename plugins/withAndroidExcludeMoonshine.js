@@ -9,7 +9,9 @@
 const path = require("path");
 const fs = require("fs");
 const { createRequire } = require("module");
-const requireFromRoot = createRequire(path.join(__dirname, "..", "package.json"));
+const requireFromRoot = createRequire(
+  path.join(__dirname, "..", "package.json"),
+);
 const { withDangerousMod } = requireFromRoot("expo/config-plugins");
 
 const EXCLUDE_LINE = "expoAutolinking.exclude = ['moonshine-voice']";
@@ -36,7 +38,7 @@ function withAndroidExcludeMoonshine(config) {
       if (contents.includes("expoAutolinking.useExpoModules()")) {
         contents = contents.replace(
           "expoAutolinking.useExpoModules()",
-          `${EXCLUDE_LINE}\nexpoAutolinking.useExpoModules()`
+          `${EXCLUDE_LINE}\nexpoAutolinking.useExpoModules()`,
         );
       } else if (contents.includes(PLAIN_CALL)) {
         contents = contents.replace(PLAIN_CALL, LEGACY_CALL);

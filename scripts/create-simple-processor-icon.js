@@ -3,8 +3,8 @@
  * Creates a processor-style app icon without external dependencies
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 // Simple SVG generator for processor icon
 function generateProcessorSVG() {
@@ -143,8 +143,8 @@ function generateProcessorSVG() {
 }
 
 function saveSVG(svgContent, filename) {
-  const outputPath = path.join(__dirname, '../assets/images', filename);
-  
+  const outputPath = path.join(__dirname, "../assets/images", filename);
+
   try {
     fs.writeFileSync(outputPath, svgContent);
     console.log(`✅ Saved processor icon SVG: ${filename}`);
@@ -158,121 +158,127 @@ function saveSVG(svgContent, filename) {
 
 function generateIconSizes() {
   const sizes = [
-    { size: 1024, name: 'processor-icon-main.svg' },
-    { size: 512, name: 'processor-icon-512.svg' },
-    { size: 256, name: 'processor-icon-256.svg' },
-    { size: 128, name: 'processor-icon-128.svg' }
+    { size: 1024, name: "processor-icon-main.svg" },
+    { size: 512, name: "processor-icon-512.svg" },
+    { size: 256, name: "processor-icon-256.svg" },
+    { size: 128, name: "processor-icon-128.svg" },
   ];
-  
-  console.log('🚀 Generating processor-style app icon SVG files...');
-  
+
+  console.log("🚀 Generating processor-style app icon SVG files...");
+
   const svgContent = generateProcessorSVG();
   const generatedFiles = [];
-  
+
   // Save main SVG
-  const mainPath = saveSVG(svgContent, 'processor-icon.svg');
+  const mainPath = saveSVG(svgContent, "processor-icon.svg");
   if (mainPath) generatedFiles.push(mainPath);
-  
+
   // Create size-specific versions (same SVG, different canvas size)
   sizes.forEach(({ size, name }) => {
-    const sizedSVG = svgContent.replace('width="1024" height="1024"', `width="${size}" height="${size}"`);
+    const sizedSVG = svgContent.replace(
+      'width="1024" height="1024"',
+      `width="${size}" height="${size}"`,
+    );
     const outputPath = saveSVG(sizedSVG, name);
     if (outputPath) generatedFiles.push(outputPath);
   });
-  
+
   return generatedFiles;
 }
 
 function createIOSIconConfiguration() {
   const config = {
-    "images": [
+    images: [
       {
-        "idiom": "iphone",
-        "scale": "2x",
-        "size": "20x20",
-        "filename": "processor-icon-iphone-notification-2x.png"
+        idiom: "iphone",
+        scale: "2x",
+        size: "20x20",
+        filename: "processor-icon-iphone-notification-2x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "3x",
-        "size": "20x20",
-        "filename": "processor-icon-iphone-notification-3x.png"
+        idiom: "iphone",
+        scale: "3x",
+        size: "20x20",
+        filename: "processor-icon-iphone-notification-3x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "2x",
-        "size": "29x29",
-        "filename": "processor-icon-iphone-settings-2x.png"
+        idiom: "iphone",
+        scale: "2x",
+        size: "29x29",
+        filename: "processor-icon-iphone-settings-2x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "3x",
-        "size": "29x29",
-        "filename": "processor-icon-iphone-settings-3x.png"
+        idiom: "iphone",
+        scale: "3x",
+        size: "29x29",
+        filename: "processor-icon-iphone-settings-3x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "2x",
-        "size": "40x40",
-        "filename": "processor-icon-iphone-spotlight-2x.png"
+        idiom: "iphone",
+        scale: "2x",
+        size: "40x40",
+        filename: "processor-icon-iphone-spotlight-2x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "3x",
-        "size": "40x40",
-        "filename": "processor-icon-iphone-spotlight-3x.png"
+        idiom: "iphone",
+        scale: "3x",
+        size: "40x40",
+        filename: "processor-icon-iphone-spotlight-3x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "2x",
-        "size": "60x60",
-        "filename": "processor-icon-iphone-app-2x.png"
+        idiom: "iphone",
+        scale: "2x",
+        size: "60x60",
+        filename: "processor-icon-iphone-app-2x.png",
       },
       {
-        "idiom": "iphone",
-        "scale": "3x",
-        "size": "60x60",
-        "filename": "processor-icon-iphone-app-3x.png"
+        idiom: "iphone",
+        scale: "3x",
+        size: "60x60",
+        filename: "processor-icon-iphone-app-3x.png",
       },
       {
-        "idiom": "ipad",
-        "scale": "1x",
-        "size": "76x76",
-        "filename": "processor-icon-ipad-app-1x.png"
+        idiom: "ipad",
+        scale: "1x",
+        size: "76x76",
+        filename: "processor-icon-ipad-app-1x.png",
       },
       {
-        "idiom": "ipad",
-        "scale": "2x",
-        "size": "76x76",
-        "filename": "processor-icon-ipad-app-2x.png"
+        idiom: "ipad",
+        scale: "2x",
+        size: "76x76",
+        filename: "processor-icon-ipad-app-2x.png",
       },
       {
-        "idiom": "ipad",
-        "scale": "2x",
-        "size": "83.5x83.5",
-        "filename": "processor-icon-ipad-pro-app-2x.png"
+        idiom: "ipad",
+        scale: "2x",
+        size: "83.5x83.5",
+        filename: "processor-icon-ipad-pro-app-2x.png",
       },
       {
-        "idiom": "ios-marketing",
-        "scale": "1x",
-        "size": "1024x1024",
-        "filename": "processor-icon-app-store-1x.png"
-      }
+        idiom: "ios-marketing",
+        scale: "1x",
+        size: "1024x1024",
+        filename: "processor-icon-app-store-1x.png",
+      },
     ],
-    "info": {
-      "author": "xcode",
-      "version": 1
-    }
+    info: {
+      author: "xcode",
+      version: 1,
+    },
   };
-  
-  const configPath = path.join(__dirname, '../assets/images/processor-icons/ios/AppIcon.appiconset/Contents.json');
-  
+
+  const configPath = path.join(
+    __dirname,
+    "../assets/images/processor-icons/ios/AppIcon.appiconset/Contents.json",
+  );
+
   // Create directory if it doesn't exist
   const dir = path.dirname(configPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  
+
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
   console.log(`✅ Created iOS AppIcon.appiconset configuration`);
   console.log(`📁 Location: ${configPath}`);
@@ -283,7 +289,9 @@ function createImplementationGuide() {
 # Processor Icon Implementation
 
 ## Files Generated:
-${generateIconSizes().map(file => `- ${path.basename(file)}`).join('\n')}
+${generateIconSizes()
+  .map((file) => `- ${path.basename(file)}`)
+  .join("\n")}
 
 ## Next Steps:
 
@@ -346,7 +354,10 @@ ${generateIconSizes().map(file => `- ${path.basename(file)}`).join('\n')}
 The processor-style icon will complete your app's aesthetic transformation! 🚀
 `;
 
-  const guidePath = path.join(__dirname, '../assets/images/PROCESSOR_ICON_IMPLEMENTATION.md');
+  const guidePath = path.join(
+    __dirname,
+    "../assets/images/PROCESSOR_ICON_IMPLEMENTATION.md",
+  );
   fs.writeFileSync(guidePath, guide.trim());
   console.log(`✅ Created implementation guide`);
   console.log(`📁 Location: ${guidePath}`);
@@ -354,20 +365,22 @@ The processor-style icon will complete your app's aesthetic transformation! 🚀
 
 // Main execution
 function main() {
-  console.log('🎯 Starting processor icon generation...');
-  
+  console.log("🎯 Starting processor icon generation...");
+
   // Generate SVG files
   const generatedFiles = generateIconSizes();
-  
+
   // Create iOS configuration
   createIOSIconConfiguration();
-  
+
   // Create implementation guide
   createImplementationGuide();
-  
-  console.log('\n🎉 Processor icon generation complete!');
-  console.log('\n💡 Next: Convert SVG files to PNG using the implementation guide');
-  console.log('\n🔗 Quick conversion: https://cloudconvert.com/svg-to-png');
+
+  console.log("\n🎉 Processor icon generation complete!");
+  console.log(
+    "\n💡 Next: Convert SVG files to PNG using the implementation guide",
+  );
+  console.log("\n🔗 Quick conversion: https://cloudconvert.com/svg-to-png");
 }
 
 // Run if called directly
@@ -379,5 +392,5 @@ module.exports = {
   generateProcessorSVG,
   generateIconSizes,
   createIOSIconConfiguration,
-  createImplementationGuide
+  createImplementationGuide,
 };

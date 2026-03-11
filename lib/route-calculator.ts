@@ -8,19 +8,19 @@ export function haversineDistance(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const R = 6371; // Earth's radius in kilometers
   const dLat = toRadians(lat2 - lat1);
   const dLon = toRadians(lon2 - lon1);
-  
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRadians(lat1)) *
       Math.cos(toRadians(lat2)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -36,7 +36,7 @@ function calculateBearing(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const dLon = toRadians(lon2 - lon1);
   const y = Math.sin(dLon) * Math.cos(toRadians(lat2));
@@ -56,16 +56,16 @@ function toDegrees(radians: number): number {
  */
 function determineTurnType(
   previousBearing: number,
-  currentBearing: number
+  currentBearing: number,
 ): "right" | "left" | "uturn" | "straight" {
   let angle = currentBearing - previousBearing;
-  
+
   // Normalize angle to -180 to 180
   while (angle > 180) angle -= 360;
   while (angle < -180) angle += 360;
-  
+
   const absAngle = Math.abs(angle);
-  
+
   if (absAngle > 150) return "uturn";
   if (absAngle < 30) return "straight";
   if (angle > 0) return "right";
@@ -98,7 +98,7 @@ export interface RouteStatisticsOptions {
  */
 export function calculateRouteStatistics(
   points: CollectionPoint[],
-  options?: RouteStatisticsOptions
+  options?: RouteStatisticsOptions,
 ): RouteStatistics {
   if (points.length === 0) {
     return {
@@ -146,13 +146,13 @@ export function calculateRouteStatistics(
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = points[i];
     const p2 = points[i + 1];
-    
+
     // Calculate distance
     const distance = haversineDistance(
       p1.latitude,
       p1.longitude,
       p2.latitude,
-      p2.longitude
+      p2.longitude,
     );
     totalDistance += distance;
 
@@ -161,7 +161,7 @@ export function calculateRouteStatistics(
       p1.latitude,
       p1.longitude,
       p2.latitude,
-      p2.longitude
+      p2.longitude,
     );
 
     if (previousBearing !== null) {
@@ -201,24 +201,29 @@ export function calculateRouteStatistics(
   if (totalDistanceKmRounded > 0 && estimatedTime > 0) {
     const impliedSpeedKmh = (totalDistanceKmRounded / estimatedTime) * 60;
     if (impliedSpeedKmh < MIN_AVG_SPEED_KMH) {
-      estimatedTime = Math.round((totalDistanceKmRounded / DRIVE_SPEED_KMH) * 60);
+      estimatedTime = Math.round(
+        (totalDistanceKmRounded / DRIVE_SPEED_KMH) * 60,
+      );
     }
   }
 
   // Total traversals = number of segments (for display; not used for time)
-  const totalTraversals = options?.optimizerStats?.total_traversals ?? points.length - 1;
+  const totalTraversals =
+    options?.optimizerStats?.total_traversals ?? points.length - 1;
 
   // Segments routed = total segments (in real CPP, some might be excluded)
   const segmentsRouted = totalTraversals;
   const segmentsExcluded = 0; // In simplified version, no exclusions
 
   // Use optimizer turns if available (more accurate for graph-based routes)
-  const finalTurns: TurnStatistics = options?.optimizerStats ? {
-    rightTurns: options.optimizerStats.right_turns ?? 0,
-    leftTurns: options.optimizerStats.left_turns ?? 0,
-    uTurns: options.optimizerStats.u_turns ?? 0,
-    straightAhead: options.optimizerStats.straight ?? 0,
-  } : turns;
+  const finalTurns: TurnStatistics = options?.optimizerStats
+    ? {
+        rightTurns: options.optimizerStats.right_turns ?? 0,
+        leftTurns: options.optimizerStats.left_turns ?? 0,
+        uTurns: options.optimizerStats.u_turns ?? 0,
+        straightAhead: options.optimizerStats.straight ?? 0,
+      }
+    : turns;
 
   return {
     totalDistance: totalDistanceKmRounded,
@@ -241,7 +246,7 @@ export function calculateRouteStatistics(
  */
 export function optimizeRouteOrder(
   points: CollectionPoint[],
-  startPoint?: { latitude: number; longitude: number }
+  startPoint?: { latitude: number; longitude: number },
 ): CollectionPoint[] {
   if (points.length <= 1) return points;
 
@@ -266,7 +271,7 @@ export function optimizeRouteOrder(
       current.latitude,
       current.longitude,
       unvisited[0].latitude,
-      unvisited[0].longitude
+      unvisited[0].longitude,
     );
 
     for (let i = 1; i < unvisited.length; i++) {
@@ -274,7 +279,7 @@ export function optimizeRouteOrder(
         current.latitude,
         current.longitude,
         unvisited[i].latitude,
-        unvisited[i].longitude
+        unvisited[i].longitude,
       );
 
       if (distance < nearestDistance) {
@@ -307,13 +312,13 @@ export function optimizeRouteOrder(
             route[i - 1].latitude,
             route[i - 1].longitude,
             route[i].latitude,
-            route[i].longitude
+            route[i].longitude,
           ) +
           haversineDistance(
             route[j].latitude,
             route[j].longitude,
             route[j + 1].latitude,
-            route[j + 1].longitude
+            route[j + 1].longitude,
           );
 
         // Calculate distance after reversing segment between i and j
@@ -322,13 +327,13 @@ export function optimizeRouteOrder(
             route[i - 1].latitude,
             route[i - 1].longitude,
             route[j].latitude,
-            route[j].longitude
+            route[j].longitude,
           ) +
           haversineDistance(
             route[i].latitude,
             route[i].longitude,
             route[j + 1].latitude,
-            route[j + 1].longitude
+            route[j + 1].longitude,
           );
 
         // If reversing improves the route, do it
@@ -361,7 +366,7 @@ export function formatDistance(km: number): string {
 export function formatTime(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  
+
   if (hours === 0) {
     return `${mins}m`;
   }
