@@ -411,8 +411,7 @@ export function buildOvertureOptimizeRequest(params: {
     start_lat: params.start_lat,
     start_lon: params.start_lon,
     oneway_mode: params.overrides?.oneway_mode ?? c?.onewayMode ?? "A",
-    service_both_sides:
-      params.overrides?.service_both_sides ?? c?.serviceBothSides ?? false,
+    service_both_sides: false, // backend always one pass; offline v2 always both sides
     turn_penalties:
       params.overrides?.turn_penalties ??
       (turnPenalties

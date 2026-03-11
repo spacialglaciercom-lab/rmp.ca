@@ -105,8 +105,6 @@ export function OvertureExtractorContent({
   const colors = useColors();
   const primaryBlue = colors.primary ?? "#3b82f6";
   const { state: routingState, dispatch: routingDispatch } = useRouting();
-  const serviceBothSides =
-    routingState?.configuration?.serviceBothSides ?? false;
 
   const [selectedRoadClasses, setSelectedRoadClasses] = useState<string[]>([
     "residential",
@@ -441,13 +439,11 @@ export function OvertureExtractorContent({
 
     onOptimizeRoute(loadedGeoJSON, {
       roadClasses: effectiveRoadClasses,
-      serviceBothSides,
     });
     setShowResults(true);
   }, [
     loadedGeoJSON,
     effectiveRoadClasses,
-    serviceBothSides,
     onOptimizeRoute,
     checkBackend,
   ]);
@@ -685,83 +681,6 @@ export function OvertureExtractorContent({
               </TouchableOpacity>
             );
           })}
-        </View>
-      </View>
-
-      {/* Route passes: one pass vs two pass (both sides) */}
-      <View style={[styles.section, { marginBottom: 12 }]}>
-        <Text style={[styles.sectionTitle, { color: colors.muted }]}>
-          Route passes
-        </Text>
-        <Text
-          style={[styles.infoText, { color: colors.text, marginBottom: 8 }]}
-        >
-          One pass: each street once per direction. Two pass: both sides (left
-          and right curb).
-        </Text>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <TouchableOpacity
-            onPress={() => {
-              hapticImpact();
-              routingDispatch({
-                type: "SET_SERVICE_BOTH_SIDES",
-                payload: false,
-              });
-            }}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              borderWidth: 2,
-              borderColor: !serviceBothSides ? primaryBlue : colors.border,
-              backgroundColor: !serviceBothSides
-                ? primaryBlue + "18"
-                : "transparent",
-            }}
-          >
-            <Text
-              style={{
-                color: !serviceBothSides ? primaryBlue : colors.muted,
-                fontWeight: "600",
-                textAlign: "center",
-                fontSize: 14,
-              }}
-            >
-              One pass
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              hapticImpact();
-              routingDispatch({
-                type: "SET_SERVICE_BOTH_SIDES",
-                payload: true,
-              });
-            }}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              borderWidth: 2,
-              borderColor: serviceBothSides ? primaryBlue : colors.border,
-              backgroundColor: serviceBothSides
-                ? primaryBlue + "18"
-                : "transparent",
-            }}
-          >
-            <Text
-              style={{
-                color: serviceBothSides ? primaryBlue : colors.muted,
-                fontWeight: "600",
-                textAlign: "center",
-                fontSize: 14,
-              }}
-            >
-              Two pass (both sides)
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 

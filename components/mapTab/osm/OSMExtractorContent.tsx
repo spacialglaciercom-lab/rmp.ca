@@ -88,8 +88,6 @@ export function OSMExtractorContent({
   const safePoints = points ?? [];
   const [featureStep, setFeatureStep] = useState<FeatureStep>(1);
   const { state: routingState, dispatch: routingDispatch } = useRouting();
-  const serviceBothSides =
-    routingState?.configuration?.serviceBothSides ?? false;
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [numPoints, setNumPoints] = useState(5);
   const [selectedCategories, setSelectedCategories] = useState<
@@ -498,80 +496,6 @@ export function OSMExtractorContent({
         </View>
       </View>
 
-      {onOptimizeRoute && (
-        <>
-          <Text
-            style={[styles.infoText, { color: colors.muted, marginBottom: 8 }]}
-          >
-            Route passes: One pass or Two pass (both sides of street). Then use
-            Optimize Route below.
-          </Text>
-          <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
-            <TouchableOpacity
-              onPress={() => {
-                hapticImpact();
-                routingDispatch({
-                  type: "SET_SERVICE_BOTH_SIDES",
-                  payload: false,
-                });
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                borderWidth: 2,
-                borderColor: !serviceBothSides ? primaryBlue : colors.border,
-                backgroundColor: !serviceBothSides
-                  ? primaryBlue + "18"
-                  : "transparent",
-              }}
-            >
-              <Text
-                style={{
-                  color: !serviceBothSides ? primaryBlue : colors.muted,
-                  fontWeight: "600",
-                  textAlign: "center",
-                  fontSize: 14,
-                }}
-              >
-                One pass
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                hapticImpact();
-                routingDispatch({
-                  type: "SET_SERVICE_BOTH_SIDES",
-                  payload: true,
-                });
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                borderWidth: 2,
-                borderColor: serviceBothSides ? primaryBlue : colors.border,
-                backgroundColor: serviceBothSides
-                  ? primaryBlue + "18"
-                  : "transparent",
-              }}
-            >
-              <Text
-                style={{
-                  color: serviceBothSides ? primaryBlue : colors.muted,
-                  fontWeight: "600",
-                  textAlign: "center",
-                  fontSize: 14,
-                }}
-              >
-                Two pass (both sides)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
       <TouchableOpacity
         style={[
           styles.extractBtn,
