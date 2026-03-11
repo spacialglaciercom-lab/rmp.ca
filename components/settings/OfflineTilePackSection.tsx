@@ -23,7 +23,10 @@ import {
   downloadOfflineRegion,
   type OfflineProgress,
 } from "@/lib/offline-map-download";
-import { MAPLIBRE_STYLE_OSM, MAPLIBRE_STYLE_OSM_DARK } from "@/components/maplibre/constants";
+import {
+  MAPLIBRE_STYLE_OSM,
+  MAPLIBRE_STYLE_OSM_DARK,
+} from "@/components/maplibre/constants";
 
 /** Montreal bounds: [[NE_LNG, NE_LAT], [SW_LNG, SW_LAT]] */
 const MONTREAL_BOUNDS: [[number, number], [number, number]] = [
@@ -87,10 +90,10 @@ export const OfflineTilePackSection: React.FC = () => {
         async () => {
           await deleteOfflinePack(name);
           await refreshPacks();
-        }
+        },
       );
     },
-    [refreshPacks]
+    [refreshPacks],
   );
 
   const handleRefreshPack = useCallback(
@@ -101,15 +104,21 @@ export const OfflineTilePackSection: React.FC = () => {
       setRefreshingPack(name);
       try {
         await invalidatePack(name);
-        Alert.alert("Done", `Outdated tiles for "${name}" will be refreshed when you use the map.`);
+        Alert.alert(
+          "Done",
+          `Outdated tiles for "${name}" will be refreshed when you use the map.`,
+        );
         await refreshPacks();
       } catch (e) {
-        Alert.alert("Error", e instanceof Error ? e.message : "Refresh failed.");
+        Alert.alert(
+          "Error",
+          e instanceof Error ? e.message : "Refresh failed.",
+        );
       } finally {
         setRefreshingPack(null);
       }
     },
-    [refreshPacks]
+    [refreshPacks],
   );
 
   const handleRefreshAmbientCache = useCallback(async () => {
@@ -118,7 +127,10 @@ export const OfflineTilePackSection: React.FC = () => {
     setRefreshingTiles(true);
     try {
       await invalidateAmbientCache();
-      Alert.alert("Done", "Outdated tiles will be refreshed when you use the map.");
+      Alert.alert(
+        "Done",
+        "Outdated tiles will be refreshed when you use the map.",
+      );
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Refresh failed.");
     } finally {
@@ -140,17 +152,20 @@ export const OfflineTilePackSection: React.FC = () => {
       MAX_ZOOM,
       (p: OfflineProgress) => setProgress(p.percentage),
       () => {
-        Alert.alert("Success", "Offline map ready. You can use the map without connectivity.");
+        Alert.alert(
+          "Success",
+          "Offline map ready. You can use the map without connectivity.",
+        );
         setIsDownloading(false);
         refreshPacks();
       },
       (err) => {
         Alert.alert(
           "Error",
-          err instanceof Error ? err.message : "Download failed. Try again."
+          err instanceof Error ? err.message : "Download failed. Try again.",
         );
         setIsDownloading(false);
-      }
+      },
     );
   }, [styleURL, refreshPacks]);
 
@@ -159,18 +174,38 @@ export const OfflineTilePackSection: React.FC = () => {
   return (
     <View style={{ paddingVertical: 4 }}>
       <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 12 }}>
-        Download map tiles for offline viewing (MapLibre). Montreal region, zooms 10–16. Uses the same base style as the map tab, so with Overture and "Map tiles on top" on, base and overlay tiles come from this pack. For full offline with Overture roads, also download the region in Offline Map Download (R2).
+        Download map tiles for offline viewing (MapLibre). Montreal region,
+        zooms 10–16. Uses the same base style as the map tab, so with Overture
+        and &quot;Map tiles on top&quot; on, base and overlay tiles come from
+        this pack. For full offline with Overture roads, also download the
+        region in Offline Map Download (R2).
       </Text>
 
       {/* List of downloaded packs */}
       {loading ? (
-        <View style={{ marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View
+          style={{
+            marginBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={{ fontSize: 13, color: colors.muted }}>Loading packs…</Text>
+          <Text style={{ fontSize: 13, color: colors.muted }}>
+            Loading packs…
+          </Text>
         </View>
       ) : packs.length > 0 ? (
         <View style={{ marginBottom: 16 }}>
-          <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted, marginBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              color: colors.muted,
+              marginBottom: 8,
+            }}
+          >
             Downloaded packs
           </Text>
           {packs.map((pack, index) => {
@@ -192,10 +227,20 @@ export const OfflineTilePackSection: React.FC = () => {
                   borderColor: colors.border,
                 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: "500", color: colors.foreground, flex: 1 }} numberOfLines={1}>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "500",
+                    color: colors.foreground,
+                    flex: 1,
+                  }}
+                  numberOfLines={1}
+                >
                   {name}
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <TouchableOpacity
                     onPress={() => handleRefreshPack(pack)}
                     disabled={isRefreshing}
@@ -209,7 +254,15 @@ export const OfflineTilePackSection: React.FC = () => {
                     {isRefreshing ? (
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
-                      <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>Refresh tiles</Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: colors.primary,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Refresh tiles
+                      </Text>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -221,7 +274,15 @@ export const OfflineTilePackSection: React.FC = () => {
                       backgroundColor: colors.error + "30",
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: colors.error, fontWeight: "600" }}>Delete</Text>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: colors.error,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Delete
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -251,7 +312,9 @@ export const OfflineTilePackSection: React.FC = () => {
         {refreshingTiles ? (
           <ActivityIndicator size="small" color={colors.primary} />
         ) : null}
-        <Text style={{ fontSize: 14, color: colors.foreground, fontWeight: "500" }}>
+        <Text
+          style={{ fontSize: 14, color: colors.foreground, fontWeight: "500" }}
+        >
           {refreshingTiles ? "Refreshing…" : "Refresh outdated tiles"}
         </Text>
       </TouchableOpacity>
@@ -265,8 +328,12 @@ export const OfflineTilePackSection: React.FC = () => {
               marginBottom: 6,
             }}
           >
-            <Text style={{ fontSize: 12, color: colors.muted }}>Downloading…</Text>
-            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.primary }}>
+            <Text style={{ fontSize: 12, color: colors.muted }}>
+              Downloading…
+            </Text>
+            <Text
+              style={{ fontSize: 12, fontWeight: "600", color: colors.primary }}
+            >
               {Math.min(progress, 100)}%
             </Text>
           </View>

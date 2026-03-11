@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Modal, Pressable, Linking } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  Modal,
+  Pressable,
+  Linking,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
@@ -54,7 +64,7 @@ export default function SettingsContent() {
       "Clear All Cache",
       "This will remove ALL local data: current route, history, favorites, imported OSM/GPX, recovery state, weather cache, map preferences, saved tracks, and cached files. This cannot be undone.",
       doClear,
-      "Clear all"
+      "Clear all",
     );
   };
 
@@ -159,7 +169,10 @@ export default function SettingsContent() {
           value: "Enabled",
           onPress: () => {
             hapticImpact();
-            Alert.alert("Coming Soon", "Notification settings will be available in a future update");
+            Alert.alert(
+              "Coming Soon",
+              "Notification settings will be available in a future update",
+            );
           },
         },
         {
@@ -169,7 +182,8 @@ export default function SettingsContent() {
             hapticImpact();
             router.push("/(tabs)/map");
           },
-          description: "Configure map source (Dark/Standard) in Map tab sidebar",
+          description:
+            "Configure map source (Dark/Standard) in Map tab sidebar",
         },
         {
           label: "",
@@ -274,7 +288,7 @@ export default function SettingsContent() {
             hapticImpact();
             Alert.alert(
               "Algorithm Info",
-              "Using CPP → MC-CARP hybrid (2025 ref) with capacity constraints, service times, and turn penalties. Solved as Capacitated Arc Routing with Lagrangian relaxation.\n\nBeta: Turn-aware CPP with learned penalties (Q1 '26)"
+              "Using CPP → MC-CARP hybrid (2025 ref) with capacity constraints, service times, and turn penalties. Solved as Capacitated Arc Routing with Lagrangian relaxation.\n\nBeta: Turn-aware CPP with learned penalties (Q1 '26)",
             );
           },
         },
@@ -285,7 +299,7 @@ export default function SettingsContent() {
             hapticImpact();
             Alert.alert(
               "RouteMasterPro",
-              "A mobile application for optimizing trash collection routes with advanced CPP/MC-CARP algorithms, real-time tracking, and schedule management."
+              "A mobile application for optimizing trash collection routes with advanced CPP/MC-CARP algorithms, real-time tracking, and schedule management.",
             );
           },
         },
@@ -295,15 +309,34 @@ export default function SettingsContent() {
 
   return (
     <ScreenContainer style={{ backgroundColor: theme.bg }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-        <Text style={{ fontSize: 28, fontWeight: "400", letterSpacing: -0.02, color: theme.text, marginTop: 20, marginBottom: 24 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: "400",
+            letterSpacing: -0.02,
+            color: theme.text,
+            marginTop: 20,
+            marginBottom: 24,
+          }}
+        >
           Settings
         </Text>
 
         {settingsSections.map((section, sectionIndex) => (
           <View key={sectionIndex} style={{ marginBottom: 24 }}>
             <SectionLabel>{section.title}</SectionLabel>
-            <MinimalCard style={{ paddingVertical: 0, paddingHorizontal: 20, overflow: "hidden" }}>
+            <MinimalCard
+              style={{
+                paddingVertical: 0,
+                paddingHorizontal: 20,
+                overflow: "hidden",
+              }}
+            >
               {section.items.map((item, itemIndex) => (
                 <View key={itemIndex}>
                   {"isToggle" in item && item.isToggle ? (
@@ -316,9 +349,25 @@ export default function SettingsContent() {
                       }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "500", color: theme.text }}>{item.label}</Text>
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            fontWeight: "500",
+                            color: theme.text,
+                          }}
+                        >
+                          {item.label}
+                        </Text>
                         {"description" in item && item.description && (
-                          <Text style={{ fontSize: 13, color: theme.textSecondary, marginTop: 2 }}>{item.description}</Text>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: theme.textSecondary,
+                              marginTop: 2,
+                            }}
+                          >
+                            {item.description}
+                          </Text>
                         )}
                       </View>
                       <TouchableOpacity
@@ -326,7 +375,9 @@ export default function SettingsContent() {
                           width: 44,
                           height: 26,
                           borderRadius: 13,
-                          backgroundColor: item.toggleValue ? theme.accent : theme.border,
+                          backgroundColor: item.toggleValue
+                            ? theme.accent
+                            : theme.border,
                           justifyContent: "center",
                         }}
                         onPress={item.onToggle}
@@ -354,13 +405,20 @@ export default function SettingsContent() {
                     </View>
                   ) : (
                     <TouchableOpacity
-                      onPress={"onPress" in item && item.onPress ? item.onPress : () => {}}
+                      onPress={
+                        "onPress" in item && item.onPress
+                          ? item.onPress
+                          : () => {}
+                      }
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
                         justifyContent: "space-between",
                         paddingVertical: 14,
-                        backgroundColor: "highlight" in item && item.highlight ? theme.accentSoft : "transparent",
+                        backgroundColor:
+                          "highlight" in item && item.highlight
+                            ? theme.accentSoft
+                            : "transparent",
                       }}
                       activeOpacity={0.7}
                     >
@@ -369,23 +427,40 @@ export default function SettingsContent() {
                           style={{
                             fontSize: 15,
                             fontWeight: "500",
-                            color: "destructive" in item && item.destructive ? colors.warning : theme.text,
+                            color:
+                              "destructive" in item && item.destructive
+                                ? colors.warning
+                                : theme.text,
                           }}
                         >
                           {item.label}
                         </Text>
                         {"description" in item && item.description && (
-                          <Text style={{ fontSize: 12, color: theme.textTertiary, marginTop: 4 }}>{item.description}</Text>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: theme.textTertiary,
+                              marginTop: 4,
+                            }}
+                          >
+                            {item.description}
+                          </Text>
                         )}
                       </View>
                       {item.value ? (
-                        <Text style={{ fontSize: 14, color: theme.textTertiary }}>{item.value}</Text>
+                        <Text
+                          style={{ fontSize: 14, color: theme.textTertiary }}
+                        >
+                          {item.value}
+                        </Text>
                       ) : null}
                     </TouchableOpacity>
                   )}
 
                   {itemIndex < section.items.length - 1 && (
-                    <View style={{ height: 1, backgroundColor: theme.borderLight }} />
+                    <View
+                      style={{ height: 1, backgroundColor: theme.borderLight }}
+                    />
                   )}
                 </View>
               ))}
@@ -394,11 +469,25 @@ export default function SettingsContent() {
         ))}
 
         <View style={{ alignItems: "center", paddingVertical: 24 }}>
-          <Text style={{ fontSize: 12, color: theme.textTertiary, textAlign: "center", letterSpacing: 0.08 }}>
+          <Text
+            style={{
+              fontSize: 12,
+              color: theme.textTertiary,
+              textAlign: "center",
+              letterSpacing: 0.08,
+            }}
+          >
             Route OS
           </Text>
-          <Text style={{ fontSize: 11, color: theme.textTertiary, textAlign: "center", marginTop: 4 }}>
-            CPP → MC-CARP Hybrid · Beta: Turn-aware CPP (Q1 '26)
+          <Text
+            style={{
+              fontSize: 11,
+              color: theme.textTertiary,
+              textAlign: "center",
+              marginTop: 4,
+            }}
+          >
+            CPP → MC-CARP Hybrid · Beta: Turn-aware CPP (Q1 &apos;26)
           </Text>
           <TouchableOpacity
             onPress={() => {
@@ -407,7 +496,9 @@ export default function SettingsContent() {
             }}
             style={{ marginTop: 16 }}
           >
-            <Text style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}>
+            <Text
+              style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}
+            >
               Send Product Feedback
             </Text>
           </TouchableOpacity>
@@ -418,7 +509,9 @@ export default function SettingsContent() {
             }}
             style={{ marginTop: 12 }}
           >
-            <Text style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}>
+            <Text
+              style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}
+            >
               Privacy Policy
             </Text>
           </TouchableOpacity>

@@ -41,7 +41,10 @@ function InputBarWrapper({
   onSubmit?: () => void;
 }) {
   if (Platform.OS === "web") {
-    const flatStyle = StyleSheet.flatten([styles.inputBar, style]) as React.CSSProperties;
+    const flatStyle = StyleSheet.flatten([
+      styles.inputBar,
+      style,
+    ]) as React.CSSProperties;
     return (
       <form
         onSubmit={(e) => {
@@ -70,7 +73,8 @@ let _webRecognitionResult: string | null = null;
 function startWebSpeechRecognition(): boolean {
   if (Platform.OS !== "web") return false;
   const SpeechRecognition =
-    (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+    (globalThis as any).SpeechRecognition ||
+    (globalThis as any).webkitSpeechRecognition;
   if (!SpeechRecognition) return false;
 
   _webRecognitionResult = null;
@@ -157,8 +161,16 @@ function AIChatBubbleInner() {
     if (status === "recording") {
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.15, duration: 400, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1.0, duration: 400, useNativeDriver: true }),
+          Animated.timing(pulseAnim, {
+            toValue: 1.15,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1.0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
         ]),
       );
       pulse.start();
@@ -182,81 +194,99 @@ function AIChatBubbleInner() {
     };
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
 
-    const userMsg: Message = { role: "user", content: text.trim() };
-    setMessages((prev) => [...prev, userMsg]);
-    setInputText("");
-    setStatus("processing");
-    setError(null);
+      const userMsg: Message = { role: "user", content: text.trim() };
+      setMessages((prev) => [...prev, userMsg]);
+      setInputText("");
+      setStatus("processing");
+      setError(null);
 
-    try {
-      const { getApiBaseUrl } = await import("@/shared/oauth");
-      const { getOpenRouterApiKey } = await import("@/lib/openrouter-api-key");
-      const base = getApiBaseUrl();
-      const clientGatewayApiKey = await getOpenRouterApiKey();
-      log.debug("AIChatBubble request", { hasGatewayKey: !!clientGatewayApiKey });
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45_000);
-      const res = await fetch(`${base}/api/voice/chat`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text.trim(),
-          history: messages.slice(-10),
-          ...(clientGatewayApiKey ? { clientGatewayApiKey } : {}),
-        }),
-      });
-      clearTimeout(timeoutId);
-
-      const resText = await res.text();
-      let data: { ok?: boolean; reply?: string; error?: string };
       try {
-        data = resText ? (JSON.parse(resText) as { ok?: boolean; reply?: string; error?: string }) : {};
-      } catch {
-        data = {};
-      }
-      if (!res.ok || !data?.ok) {
-        const msg =
-          res.status === 404
-            ? "Voice API not found (404). Redeploy your backend with the latest server code so it includes POST /api/voice/transcribe and /api/voice/chat."
-            : typeof data?.error === "string"
-              ? data.error
-              : `Server error ${res.status}`;
-        throw new Error(msg);
-      }
-      const reply = typeof data.reply === "string" ? data.reply : "Sorry, I couldn't process that.";
+        const { getApiBaseUrl } = await import("@/shared/oauth");
+        const { getOpenRouterApiKey } =
+          await import("@/lib/openrouter-api-key");
+        const base = getApiBaseUrl();
+        const clientGatewayApiKey = await getOpenRouterApiKey();
+        log.debug("AIChatBubble request", {
+          hasGatewayKey: !!clientGatewayApiKey,
+        });
 
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45_000);
+        const res = await fetch(`${base}/api/voice/chat`, {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text.trim(),
+            history: messages.slice(-10),
+            ...(clientGatewayApiKey ? { clientGatewayApiKey } : {}),
+          }),
+        });
+        clearTimeout(timeoutId);
 
-      // TTS response
-      setStatus("speaking");
-      try {
-        const { speakText } = await import("@/services/elevenLabsTtsService");
-        await speakText(reply);
-      } catch {
-        // Fallback to expo-speech
+        const resText = await res.text();
+        let data: { ok?: boolean; reply?: string; error?: string };
         try {
-          const Speech = await import("expo-speech");
-          await Speech.speak(reply, { rate: 1.0, volume: 1.0 });
-        } catch {}
+          data = resText
+            ? (JSON.parse(resText) as {
+                ok?: boolean;
+                reply?: string;
+                error?: string;
+              })
+            : {};
+        } catch {
+          data = {};
+        }
+        if (!res.ok || !data?.ok) {
+          const msg =
+            res.status === 404
+              ? "Voice API not found (404). Redeploy your backend with the latest server code so it includes POST /api/voice/transcribe and /api/voice/chat."
+              : typeof data?.error === "string"
+                ? data.error
+                : `Server error ${res.status}`;
+          throw new Error(msg);
+        }
+        const reply =
+          typeof data.reply === "string"
+            ? data.reply
+            : "Sorry, I couldn't process that.";
+
+        setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+
+        // TTS response
+        setStatus("speaking");
+        try {
+          const { speakText } = await import("@/services/elevenLabsTtsService");
+          await speakText(reply);
+        } catch {
+          // Fallback to expo-speech
+          try {
+            const Speech = await import("expo-speech");
+            await Speech.speak(reply, { rate: 1.0, volume: 1.0 });
+          } catch {}
+        }
+        setStatus("idle");
+      } catch (err) {
+        log.error(
+          "sendMessage failed",
+          err instanceof Error ? err : new Error(String(err)),
+        );
+        const message =
+          err instanceof Error && err.name === "AbortError"
+            ? "Request timed out. Check your connection or try again."
+            : err instanceof Error
+              ? err.message
+              : "Failed to send message";
+        setError(message);
+        setStatus("idle");
       }
-      setStatus("idle");
-    } catch (err) {
-      log.error("sendMessage failed", err instanceof Error ? err : new Error(String(err)));
-      const message =
-        err instanceof Error && err.name === "AbortError"
-          ? "Request timed out. Check your connection or try again."
-          : err instanceof Error
-            ? err.message
-            : "Failed to send message";
-      setError(message);
-      setStatus("idle");
-    }
-  }, [messages]);
+    },
+    [messages],
+  );
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -302,8 +332,12 @@ function AIChatBubbleInner() {
           (globalThis as any).__aiChatRecording = recording;
           setStatus("recording");
         } catch (err) {
-          log.warn("startRecording failed", err instanceof Error ? err : new Error(String(err)));
-          const msg = err instanceof Error ? err.message : "Could not start recording";
+          log.warn(
+            "startRecording failed",
+            err instanceof Error ? err : new Error(String(err)),
+          );
+          const msg =
+            err instanceof Error ? err.message : "Could not start recording";
           if (msg.includes("background") && msg.includes("audio session")) {
             setError("Bring the app to the foreground to use the microphone.");
           } else {
@@ -363,13 +397,22 @@ function AIChatBubbleInner() {
             method: "POST",
             signal: controller.signal,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ audioBase64: base64, mimeType: "audio/m4a" }),
+            body: JSON.stringify({
+              audioBase64: base64,
+              mimeType: "audio/m4a",
+            }),
           });
           clearTimeout(timeoutId);
           const text = await res.text();
           let data: { ok?: boolean; text?: string; error?: string };
           try {
-            data = text ? (JSON.parse(text) as { ok?: boolean; text?: string; error?: string }) : {};
+            data = text
+              ? (JSON.parse(text) as {
+                  ok?: boolean;
+                  text?: string;
+                  error?: string;
+                })
+              : {};
           } catch {
             data = {};
           }
@@ -380,15 +423,25 @@ function AIChatBubbleInner() {
               serverError =
                 "Voice API not found (404). Redeploy your backend with the latest server code so it includes POST /api/voice/transcribe and /api/voice/chat.";
             } else {
-              const rawError = typeof data?.error === "string" ? data.error : `Server error ${res.status}`;
-              if (rawError.toLowerCase().includes("transcription") && rawError.toLowerCase().includes("not configured")) {
+              const rawError =
+                typeof data?.error === "string"
+                  ? data.error
+                  : `Server error ${res.status}`;
+              if (
+                rawError.toLowerCase().includes("transcription") &&
+                rawError.toLowerCase().includes("not configured")
+              ) {
                 serverError =
                   "Voice transcription isn’t set up on your backend. On the server (or in Railway), set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY (Whisper API), or MOONSHINE_SIDECAR_URL and MOONSHINE_STT_ENABLED=true.";
               } else {
                 serverError = rawError;
               }
             }
-            log.warn("voice/transcribe request error", { status: res.status, error: serverError, baseUrl });
+            log.warn("voice/transcribe request error", {
+              status: res.status,
+              error: serverError,
+              baseUrl,
+            });
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
@@ -403,7 +456,8 @@ function AIChatBubbleInner() {
 
         if (!transcribedText && !serverError) {
           try {
-            const { transcribeWithElevenLabs } = await import("@/services/elevenLabsTtsService");
+            const { transcribeWithElevenLabs } =
+              await import("@/services/elevenLabsTtsService");
             const result = await transcribeWithElevenLabs(base64, "audio/m4a");
             if (result?.text) transcribedText = result.text;
           } catch {}
@@ -417,7 +471,10 @@ function AIChatBubbleInner() {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Recording failed";
-        log.error("stopRecording failed", err instanceof Error ? err : new Error(String(err)));
+        log.error(
+          "stopRecording failed",
+          err instanceof Error ? err : new Error(String(err)),
+        );
         setError(message);
         setStatus("idle");
       }
@@ -466,8 +523,14 @@ function AIChatBubbleInner() {
   }, [inputText, status, sendMessage]);
 
   // Button colors
-  const buttonBg = status === "recording" ? "#EF4444" : status === "processing" ? colors.primary : colors.accentCyan ?? "#06B6D4";
-  const buttonIcon = status === "recording" ? "●" : status === "processing" ? null : "✦";
+  const buttonBg =
+    status === "recording"
+      ? "#EF4444"
+      : status === "processing"
+        ? colors.primary
+        : (colors.accentCyan ?? "#06B6D4");
+  const buttonIcon =
+    status === "recording" ? "●" : status === "processing" ? null : "✦";
 
   // Animated dimensions
   const bubbleWidth = expandAnim.interpolate({
@@ -503,9 +566,13 @@ function AIChatBubbleInner() {
         <View style={styles.expandedContent}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>AI Chat</Text>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+              AI Chat
+            </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-              <Text style={[styles.closeBtnText, { color: colors.muted }]}>✕</Text>
+              <Text style={[styles.closeBtnText, { color: colors.muted }]}>
+                ✕
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -527,10 +594,18 @@ function AIChatBubbleInner() {
                     styles.bubble,
                     msg.role === "user"
                       ? [styles.userBubble, { backgroundColor: colors.primary }]
-                      : [styles.assistantBubble, { backgroundColor: colors.surface }],
+                      : [
+                          styles.assistantBubble,
+                          { backgroundColor: colors.surface },
+                        ],
                   ])}
                 >
-                  <Text style={{ color: msg.role === "user" ? "#fff" : colors.foreground, fontSize: 14 }}>
+                  <Text
+                    style={{
+                      color: msg.role === "user" ? "#fff" : colors.foreground,
+                      fontSize: 14,
+                    }}
+                  >
                     {msg.content}
                   </Text>
                 </View>
@@ -540,14 +615,17 @@ function AIChatBubbleInner() {
 
           {/* Error */}
           {error && (
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {error}
+            </Text>
           )}
 
           {/* Input bar — on web wrap in form so Enter doesn't trigger full page reload */}
           <InputBarWrapper
             style={[styles.inputBar, { borderTopColor: colors.border }]}
             onSubmit={() => {
-              if (inputText.trim() && status !== "processing") sendMessage(inputText);
+              if (inputText.trim() && status !== "processing")
+                sendMessage(inputText);
             }}
           >
             {/* Mic button */}
@@ -561,7 +639,9 @@ function AIChatBubbleInner() {
                 {status === "processing" ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.micIcon}>{status === "recording" ? "●" : "🎙"}</Text>
+                  <Text style={styles.micIcon}>
+                    {status === "recording" ? "●" : "🎙"}
+                  </Text>
                 )}
               </TouchableOpacity>
             </Animated.View>
@@ -569,7 +649,11 @@ function AIChatBubbleInner() {
             <TextInput
               style={[
                 styles.textInput,
-                { backgroundColor: colors.surface, color: colors.foreground, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                },
               ]}
               placeholder="Type..."
               placeholderTextColor={colors.muted}
@@ -581,7 +665,14 @@ function AIChatBubbleInner() {
             />
 
             <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: inputText.trim() ? colors.primary : colors.muted + "40" }]}
+              style={[
+                styles.sendBtn,
+                {
+                  backgroundColor: inputText.trim()
+                    ? colors.primary
+                    : colors.muted + "40",
+                },
+              ]}
               onPress={handleSend}
               disabled={!inputText.trim() || status === "processing"}
             >
@@ -609,7 +700,7 @@ function AIChatBubbleInner() {
       )}
     </Animated.View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -728,7 +819,7 @@ const styles = StyleSheet.create({
 
 // Wrapper component that handles the feature flag check
 // This prevents the inner component from re-rendering when other beta features change
-export const AIChatBubble: React.FC = React.memo(() => {
+export const AIChatBubble: React.FC = React.memo(function AIChatBubble() {
   const { features } = useBetaFeatures();
   const isEnabled = features.enabled && features.voiceCoPilot;
 

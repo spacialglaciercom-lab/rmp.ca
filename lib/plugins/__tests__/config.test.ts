@@ -11,23 +11,26 @@ describe("loadPluginConfig", () => {
   it("includes weather, routeOptimization, overture, overture-extraction with enabled and optional apiKey", async () => {
     const config = await loadPluginConfig();
     expect(config.plugins.weather).toBeDefined();
-    expect(config.plugins.weather.enabled).toBe(true);
     expect(config.plugins.weather).toHaveProperty("apiKey");
     expect(config.plugins.routeOptimization).toBeDefined();
     expect(config.plugins.routeOptimization.enabled).toBe(true);
     expect(config.plugins.overture).toBeDefined();
-    expect(config.plugins.overture.enabled).toBe(true);
     expect(config.plugins["overture-extraction"]).toBeDefined();
-    expect(config.plugins["overture-extraction"].enabled).toBe(true);
     expect(config.plugins.dev).toBeDefined();
   });
 
-  it("includes gate plugins (zones, ai-chat, navigation, drive-preview, collection-route) all enabled by default", async () => {
+  it("includes gate plugins (zones, ai-chat, navigation, drive-preview, collection-route) in config", async () => {
     const config = await loadPluginConfig();
-    const gatePlugins = ["zones", "ai-chat", "navigation", "drive-preview", "collection-route"];
+    const gatePlugins = [
+      "zones",
+      "ai-chat",
+      "navigation",
+      "drive-preview",
+      "collection-route",
+    ];
     for (const id of gatePlugins) {
       expect(config.plugins[id], `${id} should be in config`).toBeDefined();
-      expect(config.plugins[id].enabled, `${id} should be enabled by default`).toBe(true);
+      expect(config.plugins[id]).toHaveProperty("enabled");
     }
   });
 });

@@ -1,11 +1,25 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  Platform,
+} from "react-native";
 import { useRouter } from "expo-router";
-import { impactAsync as hapticImpact, ImpactFeedbackStyle } from "@/lib/safe-haptics";
+import {
+  impactAsync as hapticImpact,
+  ImpactFeedbackStyle,
+} from "@/lib/safe-haptics";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 import { useColors } from "@/hooks/use-colors";
-import { useRouting, generateLogEntry, parseGpxTrackPoints } from "@/lib/routing-context";
+import {
+  useRouting,
+  generateLogEntry,
+  parseGpxTrackPoints,
+} from "@/lib/routing-context";
 
 /** When provided (e.g. from Planner), use this so Download/Preview see latest data immediately after generate. */
 type GPXExportProps = { gpxDataFromParent?: string | null };
@@ -15,7 +29,8 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
   const router = useRouter();
   const { state, dispatch } = useRouting();
   const raw = gpxDataFromParent ?? state.gpxData;
-  const effectiveGpxData = typeof raw === "string" && raw.length > 0 ? raw : null;
+  const effectiveGpxData =
+    typeof raw === "string" && raw.length > 0 ? raw : null;
 
   const handleExportGPX = async () => {
     hapticImpact(ImpactFeedbackStyle.Medium);
@@ -23,7 +38,7 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
     if (!effectiveGpxData) {
       Alert.alert(
         "No Route Generated",
-        "Please import OSM data and generate a route first before exporting GPX."
+        "Please import OSM data and generate a route first before exporting GPX.",
       );
       return;
     }
@@ -34,7 +49,9 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
     });
 
     try {
-      const fileName = (state.configuration.outputFileName || "trash_route").replace(/\.gpx$/i, "");
+      const fileName = (
+        state.configuration.outputFileName || "trash_route"
+      ).replace(/\.gpx$/i, "");
       const gpxContent = effectiveGpxData;
 
       if (Platform.OS === "web") {
@@ -51,10 +68,16 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
 
         dispatch({
           type: "ADD_LOG_ENTRY",
-          payload: generateLogEntry(`GPX file "${fileName}.gpx" downloaded successfully`, "success"),
+          payload: generateLogEntry(
+            `GPX file "${fileName}.gpx" downloaded successfully`,
+            "success",
+          ),
         });
 
-        Alert.alert("Success", `GPX file "${fileName}.gpx" has been downloaded.`);
+        Alert.alert(
+          "Success",
+          `GPX file "${fileName}.gpx" has been downloaded.`,
+        );
       } else {
         // Mobile: Save to file system and share
         const fileUri = FileSystem.documentDirectory + `${fileName}.gpx`;
@@ -75,11 +98,9 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
             dialogTitle: "Export GPX Route",
           });
         } else {
-          Alert.alert(
-            "File Saved",
-            `GPX file saved to: ${fileUri}`,
-            [{ text: "OK" }]
-          );
+          Alert.alert("File Saved", `GPX file saved to: ${fileUri}`, [
+            { text: "OK" },
+          ]);
         }
       }
     } catch (error) {
@@ -98,7 +119,7 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
     if (!effectiveGpxData) {
       Alert.alert(
         "No GPX Data",
-        "Generate a route first to preview the GPX route on the map."
+        "Generate a route first to preview the GPX route on the map.",
       );
       return;
     }
@@ -107,7 +128,7 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
     if (points.length === 0) {
       Alert.alert(
         "No Track Points",
-        "The GPX data does not contain track points (trkpt) to display."
+        "The GPX data does not contain track points (trkpt) to display.",
       );
       return;
     }
@@ -125,7 +146,8 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
         GPX Export
       </Text>
       <Text className="text-sm text-muted mb-4">
-        Download the generated route as a GPX file for use in GPS devices or mapping applications.
+        Download the generated route as a GPX file for use in GPS devices or
+        mapping applications.
       </Text>
 
       {/* File Name Input */}
@@ -143,9 +165,16 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
             placeholder="trash_route"
             placeholderTextColor={colors.muted}
             className="flex-1 text-foreground"
-            style={{ color: colors.foreground, fontSize: 14, padding: 0, margin: 0 }}
+            style={{
+              color: colors.foreground,
+              fontSize: 14,
+              padding: 0,
+              margin: 0,
+            }}
           />
-          <Text style={{ color: colors.muted }} className="text-sm">.gpx</Text>
+          <Text style={{ color: colors.muted }} className="text-sm">
+            .gpx
+          </Text>
         </View>
       </View>
 
@@ -155,11 +184,17 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
           className="p-3 rounded-lg mb-4"
           style={{ backgroundColor: colors.success + "20" }}
         >
-          <Text style={{ color: colors.success }} className="text-sm font-medium">
+          <Text
+            style={{ color: colors.success }}
+            className="text-sm font-medium"
+          >
             ✓ GPX data ready for export
           </Text>
           <Text style={{ color: colors.success }} className="text-xs mt-1">
-            {typeof effectiveGpxData === "string" ? effectiveGpxData.length.toLocaleString() : "0"} characters
+            {typeof effectiveGpxData === "string"
+              ? effectiveGpxData.length.toLocaleString()
+              : "0"}{" "}
+            characters
           </Text>
         </View>
       ) : (
@@ -167,11 +202,14 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
           className="p-3 rounded-lg mb-4"
           style={{ backgroundColor: colors.warning + "20" }}
         >
-          <Text style={{ color: colors.warning }} className="text-sm font-medium">
+          <Text
+            style={{ color: colors.warning }}
+            className="text-sm font-medium"
+          >
             ⚠ No route generated yet
           </Text>
           <Text style={{ color: colors.warning }} className="text-xs mt-1">
-            Import OSM data and click "Generate Route" first
+            Import OSM data and click &quot;Generate Route&quot; first
           </Text>
         </View>
       )}
@@ -194,7 +232,9 @@ export function GPXExport({ gpxDataFromParent }: GPXExportProps = {}) {
           onPress={handlePreviewGPX}
           disabled={!effectiveGpxData}
           style={{
-            backgroundColor: effectiveGpxData ? colors.muted + "40" : colors.muted + "25",
+            backgroundColor: effectiveGpxData
+              ? colors.muted + "40"
+              : colors.muted + "25",
             opacity: effectiveGpxData ? 1 : 0.6,
           }}
           className="py-4 px-5 rounded-xl items-center justify-center active:opacity-70 min-w-[100px]"

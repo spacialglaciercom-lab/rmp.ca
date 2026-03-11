@@ -1,4 +1,4 @@
-import React, { Suspense, lazy,
+import React, {
   useState,
   useEffect,
   useCallback,
@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  FlatList,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -21,12 +23,14 @@ import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useColors } from "@/hooks/use-colors";
-import type { Route, CollectionPoint } from "@/types";
-import { storage } from "@/lib/storage";
-import { useRouting } from "@/lib/routing-context";
-import { isMockRoute, isMockCollectionPoints } from "@/lib/is-mock-route";
+import type { CollectionPoint } from "@/types";
+import {
+  useRouting,
+  generateGPXString,
+  generateMultiTrackGPXString,
+} from "@/lib/routing-context";
 import { parseGPXForNavigation } from "@/lib/gpxNavParser";
-import { generateGPXString, generateMultiTrackGPXString } from "@/lib/routing-context";
+
 import {
   matchGPXToRoads,
   routeBetweenPoints,
@@ -43,7 +47,11 @@ import NavigationView, {
   type OffRoutePayload,
 } from "@/components/NavigationView";
 import CollectionNavigator from "@/components/CollectionNavigator";
-import { navigateExternally, openGoogleMapsViewer, openOsmAndViewer } from "@/lib/externalNavigation";
+import {
+  navigateExternally,
+  openGoogleMapsViewer,
+  openOsmAndViewer,
+} from "@/lib/externalNavigation";
 import type { NormalNavDestination } from "@/types/navigation";
 import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
 import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingControls";
@@ -57,7 +65,6 @@ import { ZonesScreen } from "@/components/mapTab/places/ZonesScreen";
 import { MapsAndResourcesScreen } from "@/components/mapTab/resources/MapsAndResourcesScreen";
 import { ConfigureScreenSheet } from "@/components/mapTab/resources/ConfigureScreenSheet";
 import { RouteParametersSheet } from "@/components/mapTab/resources/RouteParametersSheet";
-import { MapStyleSheet } from "@/components/mapTab/resources/MapStyleSheet";
 import { MapMarkersScreen } from "@/components/mapTab/markers/MapMarkersScreen";
 import { PlaceInfoSheet } from "@/components/mapTab/PlaceInfoSheet";
 import { MapillaryViewer } from "@/components/MapillaryViewer";
@@ -76,28 +83,21 @@ import {
   getRouteOptionsForRouting,
   useRouteParametersStore,
 } from "@/stores/routeParametersStore";
-import { enrichRoute } from "@/services/InstructionManager";
 import { getDownloadedRegions } from "@/lib/offline-map-download";
 import { useMapOrientation } from "@/lib/map-orientation-preference";
 import { PowerSavingIndicator } from "@/components/PowerSavingIndicator/PowerSavingIndicator";
 import { useOSMMapPress } from "@/hooks/useOSMMapPress";
 import { useTrackRecorder } from "@/hooks/useTrackRecorder";
-import {
-  trackStorage,
-  type SavedTrack,
-} from "@/lib/track-storage";
+import { trackStorage, type SavedTrack } from "@/lib/track-storage";
 import { useRecordingSettingsStore } from "@/stores/recordingSettingsStore";
 import { RecOptionsModal } from "@/components/RecOptionsModal";
 import { confirmDestructive } from "@/lib/confirmDestructive";
 import { Fonts, glassStyle } from "@/lib/_core/theme";
-import { FlatList, Animated } from "react-native";
 
 // --- Optimized store selectors ---
 import { useMapStateStore, useMapActions } from "@/stores/mapStateStore";
 import { sanitizeLatLonArray, sanitizeByVehicle } from "@/lib/coord-utils";
 import { projectOntoLine } from "@/lib/turfProjection";
-
-const ExtractContent = lazy(() => import("@/components/extract-content"));
 
 /** Max pins to show for a route; avoids treating every track node as a marker. */
 const MAX_ROUTE_MARKERS = 50;
@@ -123,7 +123,6 @@ export default function MapContent() {
   // Each selector subscribes to only the specific field(s) it needs,
   // preventing unnecessary re-renders when unrelated state changes.
   // ---------------------------------------------------------------------------
-  const route = useMapStateStore((s) => s.route);
   const collectionPoints = useMapStateStore((s) => s.collectionPoints);
   const routePoints = useMapStateStore((s) => s.routePoints);
   const navigationMode = useMapStateStore((s) => s.navigationMode);
@@ -160,14 +159,24 @@ export default function MapContent() {
   const mapRef = useRef<RouteMapRef>(null);
   const myPlacesWasVisibleRef = useRef(false);
   const [mapOrientation] = useMapOrientation();
-  const collectionNavReset = useCollectionNavigationStore((s) => s.resetNavigation);
+  const collectionNavReset = useCollectionNavigationStore(
+    (s) => s.resetNavigation,
+  );
 
   // ---------------------------------------------------------------------------
   // GPS Recording (moved from Record tab)
   // ---------------------------------------------------------------------------
-  const { state: recorder, start: recStart, pause: recPause, resume: recResume, stop: recStop, discard: recDiscard } =
-    useTrackRecorder();
-  const showRecOnMapWhenRecording = useRecordingSettingsStore((s) => s.showRecOnMapWhenRecording);
+  const {
+    state: recorder,
+    start: recStart,
+    pause: recPause,
+    resume: recResume,
+    stop: recStop,
+    discard: recDiscard,
+  } = useTrackRecorder();
+  const showRecOnMapWhenRecording = useRecordingSettingsStore(
+    (s) => s.showRecOnMapWhenRecording,
+  );
   const [savedTracks, setSavedTracks] = useState<SavedTrack[]>([]);
   const [savingTrack, setSavingTrack] = useState(false);
   const [recOptionsVisible, setRecOptionsVisible] = useState(false);
@@ -188,8 +197,16 @@ export default function MapContent() {
     if (isRecording) {
       const flash = Animated.loop(
         Animated.sequence([
-          Animated.timing(recFlashAnim, { toValue: 0.3, duration: 500, useNativeDriver: true }),
-          Animated.timing(recFlashAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+          Animated.timing(recFlashAnim, {
+            toValue: 0.3,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(recFlashAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
         ]),
       );
       flash.start();
@@ -210,7 +227,10 @@ export default function MapContent() {
   const handleRecStop = useCallback(async () => {
     const finalState = await recStop();
     if (finalState.points.length < 2) {
-      Alert.alert("Too Few Points", "Need at least 2 GPS points to save a track.");
+      Alert.alert(
+        "Too Few Points",
+        "Need at least 2 GPS points to save a track.",
+      );
       return;
     }
     const defaultName = `Track ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
@@ -218,27 +238,48 @@ export default function MapContent() {
       const name = window.prompt("Track name:", defaultName);
       if (!name) return;
       setSavingTrack(true);
-      await trackStorage.saveTrack(name, finalState.points, finalState.totalDistanceMeters, finalState.elapsedMs);
+      await trackStorage.saveTrack(
+        name,
+        finalState.points,
+        finalState.totalDistanceMeters,
+        finalState.elapsedMs,
+      );
       setSavedTracks(await trackStorage.loadTracks());
       setSavingTrack(false);
     } else {
-      Alert.prompt("Save Track", "Enter a name for this track:", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save",
-          onPress: async (name?: string) => {
-            setSavingTrack(true);
-            await trackStorage.saveTrack(name || defaultName, finalState.points, finalState.totalDistanceMeters, finalState.elapsedMs);
-            setSavedTracks(await trackStorage.loadTracks());
-            setSavingTrack(false);
+      Alert.prompt(
+        "Save Track",
+        "Enter a name for this track:",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Save",
+            onPress: async (name?: string) => {
+              setSavingTrack(true);
+              await trackStorage.saveTrack(
+                name || defaultName,
+                finalState.points,
+                finalState.totalDistanceMeters,
+                finalState.elapsedMs,
+              );
+              setSavedTracks(await trackStorage.loadTracks());
+              setSavingTrack(false);
+            },
           },
-        },
-      ], "plain-text", defaultName);
+        ],
+        "plain-text",
+        defaultName,
+      );
     }
   }, [recStop]);
 
   const handleRecDiscard = useCallback(() => {
-    confirmDestructive("Discard Track?", "The recorded track will be lost.", () => recDiscard(), "Discard");
+    confirmDestructive(
+      "Discard Track?",
+      "The recorded track will be lost.",
+      () => recDiscard(),
+      "Discard",
+    );
   }, [recDiscard]);
 
   const handleTrackExport = useCallback(async (track: SavedTrack) => {
@@ -257,7 +298,10 @@ export default function MapContent() {
         const filename = `${track.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.gpx`;
         const path = `${FileSystem.documentDirectory}${filename}`;
         await FileSystem.writeAsStringAsync(path, track.gpxData);
-        await Sharing.shareAsync(path, { mimeType: "application/gpx+xml", dialogTitle: "Export GPX Track" });
+        await Sharing.shareAsync(path, {
+          mimeType: "application/gpx+xml",
+          dialogTitle: "Export GPX Track",
+        });
       } catch (err) {
         console.error("Export failed:", err);
         Alert.alert("Export Failed", "Could not export the track.");
@@ -272,14 +316,16 @@ export default function MapContent() {
     });
   }, []);
 
-  const handleTrackPreview = useCallback((track: SavedTrack) => {
-    dispatch({
-      type: "SET_PREVIEW_ROUTE",
-      payload: track.points.map((p) => ({ lat: p.lat, lon: p.lon })),
-    });
-  }, [dispatch]);
+  const handleTrackPreview = useCallback(
+    (track: SavedTrack) => {
+      dispatch({
+        type: "SET_PREVIEW_ROUTE",
+        payload: track.points.map((p) => ({ lat: p.lat, lon: p.lon })),
+      });
+    },
+    [dispatch],
+  );
 
-  const toggleOverlay = useMapLayerStore((s) => s.toggleOverlay);
   const showTraffic = useMapDisplayStore((s) => s.showTraffic);
   const toggleTraffic = useMapDisplayStore((s) => s.toggleTraffic);
   const showOverture = useMapDisplayStore((s) => s.showOverture);
@@ -305,9 +351,7 @@ export default function MapContent() {
   const recordingPanelVisible = useMapSidebarStore(
     (s) => s.recordingPanelVisible,
   );
-  const closeRecordingPanel = useMapSidebarStore(
-    (s) => s.closeRecordingPanel,
-  );
+  const closeRecordingPanel = useMapSidebarStore((s) => s.closeRecordingPanel);
   const displayedZoneId = useZonesStore((s) => s.displayedZoneId);
   const savedZones = useZonesStore((s) => s.savedZones);
   const mapsResourcesVisible = useMapSidebarStore(
@@ -340,14 +384,25 @@ export default function MapContent() {
   const closeOSMExtractor = useMapSidebarStore((s) => s.closeOSMExtractor);
   const isPinned = useMapSidebarStore((s) => s.isPinned);
   const deviceType = useDeviceType();
-  const aiChatEnabled = usePluginStore((s) => s.isPluginEnabled("ai-chat", true));
-  const drivePreviewEnabled = usePluginStore((s) => s.isPluginEnabled("drive-preview", true));
-  const collectionRouteEnabled = usePluginStore((s) => s.isPluginEnabled("collection-route", true));
-  const navigationEnabled = usePluginStore((s) => s.isPluginEnabled("navigation", true));
-  const overturePluginEnabled = usePluginStore((s) => s.isPluginEnabled("overture", true));
+  const aiChatEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("ai-chat", true),
+  );
+  const drivePreviewEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("drive-preview", true),
+  );
+  const collectionRouteEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("collection-route", true),
+  );
+  const navigationEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("navigation", true),
+  );
+  const overturePluginEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("overture", true),
+  );
 
   const previewPoints = state?.previewRoutePoints ?? null;
-  const previewRoutePointsByVehicle = state?.previewRoutePointsByVehicle ?? null;
+  const previewRoutePointsByVehicle =
+    state?.previewRoutePointsByVehicle ?? null;
 
   useEffect(() => {
     useRouteParametersStore.getState().hydrate();
@@ -383,7 +438,9 @@ export default function MapContent() {
       const pts = previewRoutePointsByVehicle[0];
       return pts?.length
         ? pts.map((p, i) =>
-            i === 0 && !(p as { label?: string }).label ? { ...p, label: "S" } : p,
+            i === 0 && !(p as { label?: string }).label
+              ? { ...p, label: "S" }
+              : p,
           )
         : routePoints;
     }
@@ -400,7 +457,8 @@ export default function MapContent() {
 
   const isPreviewMode =
     (!!previewPoints && previewPoints.length > 0) ||
-    (!!previewRoutePointsByVehicle && previewRoutePointsByVehicle.some((r) => r.length > 0));
+    (!!previewRoutePointsByVehicle &&
+      previewRoutePointsByVehicle.some((r) => r.length > 0));
 
   const geojsonOverlay: GeoJSONFeatureCollection | null = useMemo(() => {
     const source = cachedMatchedRoute ?? matchedRoute;
@@ -410,21 +468,36 @@ export default function MapContent() {
 
   const { zonesPreviewPolygon, zonesPreviewPolygons } = useMemo(() => {
     if (!displayedZoneId || !savedZones.length)
-      return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
+      return {
+        zonesPreviewPolygon: undefined,
+        zonesPreviewPolygons: undefined,
+      };
     const result = savedZones.find((z) => z.id === displayedZoneId);
-    if (!result) return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
-    const hasZonePolygons = result.zones?.some((z) => z.zone_polygon?.length >= 3);
+    if (!result)
+      return {
+        zonesPreviewPolygon: undefined,
+        zonesPreviewPolygons: undefined,
+      };
+    const hasZonePolygons = result.zones?.some(
+      (z) => z.zone_polygon?.length >= 3,
+    );
     if (hasZonePolygons && result.zones) {
       const polygons = result.zones
         .filter((z) => z.zone_polygon && z.zone_polygon.length >= 3)
         .map((z) =>
-          (z.zone_polygon!).map(([lon, lat]) => ({ latitude: lat, longitude: lon }))
+          z.zone_polygon!.map(([lon, lat]) => ({
+            latitude: lat,
+            longitude: lon,
+          })),
         );
       return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: polygons };
     }
     if (result.polygon?.length >= 3)
       return {
-        zonesPreviewPolygon: result.polygon.map(([lat, lon]) => ({ latitude: lat, longitude: lon })),
+        zonesPreviewPolygon: result.polygon.map(([lat, lon]) => ({
+          latitude: lat,
+          longitude: lon,
+        })),
         zonesPreviewPolygons: undefined,
       };
     return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
@@ -433,14 +506,19 @@ export default function MapContent() {
   const gpsAndMatch = useMemo(() => {
     const userPosition =
       isRecActive && recorder.currentPosition
-        ? { latitude: recorder.currentPosition.lat, longitude: recorder.currentPosition.lon }
+        ? {
+            latitude: recorder.currentPosition.lat,
+            longitude: recorder.currentPosition.lon,
+          }
         : null;
     const routePointsForMap = isRecActive
       ? recorder.points.map((p) => ({ lat: p.lat, lon: p.lon }))
       : sanitizeLatLonArray(
-          previewRoutePointsByVehicle && previewRoutePointsByVehicle.length === 1
+          previewRoutePointsByVehicle &&
+            previewRoutePointsByVehicle.length === 1
             ? previewRoutePointsByVehicle[0]
-            : previewRoutePointsByVehicle && previewRoutePointsByVehicle.length > 1
+            : previewRoutePointsByVehicle &&
+                previewRoutePointsByVehicle.length > 1
               ? undefined
               : displayRoutePoints,
         );
@@ -475,14 +553,20 @@ export default function MapContent() {
     myPlacesWasVisibleRef.current = false;
     const pointCount = previewPoints?.length ?? 0;
     const hasMultiVehicleTrack =
-      (previewRoutePointsByVehicle?.some((r) => (r?.length ?? 0) >= 2) ?? false);
-    const t = setTimeout(() => {
-      if (pointCount >= 2 || hasMultiVehicleTrack) {
-        mapRef.current?.fitToRoute?.();
-      } else if (pointCount === 1 && previewPoints?.[0]) {
-        mapRef.current?.centerOnPoint?.(previewPoints[0].lat, previewPoints[0].lon);
-      }
-    }, Platform.OS === "web" ? 200 : 150);
+      previewRoutePointsByVehicle?.some((r) => (r?.length ?? 0) >= 2) ?? false;
+    const t = setTimeout(
+      () => {
+        if (pointCount >= 2 || hasMultiVehicleTrack) {
+          mapRef.current?.fitToRoute?.();
+        } else if (pointCount === 1 && previewPoints?.[0]) {
+          mapRef.current?.centerOnPoint?.(
+            previewPoints[0].lat,
+            previewPoints[0].lon,
+          );
+        }
+      },
+      Platform.OS === "web" ? 200 : 150,
+    );
     return () => clearTimeout(t);
   }, [myPlacesPanelVisible, previewPoints, previewRoutePointsByVehicle]);
 
@@ -583,7 +667,12 @@ export default function MapContent() {
       return;
     }
     actions.setCachedMatchedRoute(null);
-  }, [previewPoints?.length, previewRoutePointsByVehicle?.length, routePoints.length, actions]);
+  }, [
+    previewPoints?.length,
+    previewRoutePointsByVehicle?.length,
+    routePoints.length,
+    actions,
+  ]);
 
   const handlePointPress = useCallback(
     (point: CollectionPoint) => {
@@ -610,7 +699,7 @@ export default function MapContent() {
       actions.setNavigationMode(true);
       return;
     }
-    let points: Array<{ lat: number; lon: number }> = [];
+    let points: { lat: number; lon: number }[] = [];
     if ((previewPoints?.length ?? 0) >= 2) {
       points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
     } else if (state?.gpxData) {
@@ -638,7 +727,10 @@ export default function MapContent() {
         );
       }
       if (!matched) {
-        const asRoutePoints = points.map((p) => ({ latitude: p.lat, longitude: p.lon }));
+        const asRoutePoints = points.map((p) => ({
+          latitude: p.lat,
+          longitude: p.lon,
+        }));
         const hierholzerResult = buildMatchedRouteFromHierholzer(asRoutePoints);
         matched = hierholzerResult;
       }
@@ -700,7 +792,7 @@ export default function MapContent() {
     !!state?.gpxData;
 
   const handleFixToRoads = useCallback(async () => {
-    let points: Array<{ lat: number; lon: number }> = [];
+    let points: { lat: number; lon: number }[] = [];
     if ((previewPoints?.length ?? 0) >= 2) {
       points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
     } else if ((displayRoutePoints?.length ?? 0) >= 2) {
@@ -728,7 +820,10 @@ export default function MapContent() {
         );
       }
       if (!matched) {
-        const asRoutePoints = points.map((p) => ({ latitude: p.lat, longitude: p.lon }));
+        const asRoutePoints = points.map((p) => ({
+          latitude: p.lat,
+          longitude: p.lon,
+        }));
         matched = buildMatchedRouteFromHierholzer(asRoutePoints);
       }
       actions.setCachedMatchedRoute(matched);
@@ -768,14 +863,29 @@ export default function MapContent() {
         .map((p) => ({ lat: p.lat, lon: p.lon }));
       const points = [payload.location, ...remaining];
       if (points.length < 2) {
-        console.log("[Recalculate] Skip: need at least 2 points, got", points.length);
+        console.log(
+          "[Recalculate] Skip: need at least 2 points, got",
+          points.length,
+        );
         return;
       }
-      console.log("[Recalculate] Starting: fromIdx=" + fromIdx + ", points=" + points.length);
+      console.log(
+        "[Recalculate] Starting: fromIdx=" +
+          fromIdx +
+          ", points=" +
+          points.length,
+      );
       actions.setNavLoading(true);
       try {
         const routingConfig = await getRoutingConfigAsync();
-        console.log("[Recalculate] Config: provider=" + routingConfig.provider + ", baseUrl=" + !!routingConfig.baseUrl + ", hasKey=" + !!routingConfig.googleApiKey);
+        console.log(
+          "[Recalculate] Config: provider=" +
+            routingConfig.provider +
+            ", baseUrl=" +
+            !!routingConfig.baseUrl +
+            ", hasKey=" +
+            !!routingConfig.googleApiKey,
+        );
         // Recalculate = new driving route from current position through remaining path (follows roads, no straight line).
         const maxWaypoints = 25;
         const waypoints =
@@ -783,9 +893,11 @@ export default function MapContent() {
             ? points
             : (() => {
                 const step = (points.length - 1) / (maxWaypoints - 1);
-                const out: Array<{ lat: number; lon: number }> = [];
+                const out: { lat: number; lon: number }[] = [];
                 for (let i = 0; i < maxWaypoints; i++) {
-                  out.push(points[Math.min(Math.round(i * step), points.length - 1)]);
+                  out.push(
+                    points[Math.min(Math.round(i * step), points.length - 1)],
+                  );
                 }
                 return out;
               })();
@@ -798,10 +910,21 @@ export default function MapContent() {
           );
         }
         if (newMatch) {
-          console.log("[Recalculate] OK: route pts=" + newMatch.matchedGeometry.length + ", dist=" + (newMatch.totalDistance | 0) + "m");
+          console.log(
+            "[Recalculate] OK: route pts=" +
+              newMatch.matchedGeometry.length +
+              ", dist=" +
+              (newMatch.totalDistance | 0) +
+              "m",
+          );
         } else {
-          console.log("[Recalculate] Fallback: using Hierholzer-based offline route");
-          const asRoutePoints = points.map((p) => ({ latitude: p.lat, longitude: p.lon }));
+          console.log(
+            "[Recalculate] Fallback: using Hierholzer-based offline route",
+          );
+          const asRoutePoints = points.map((p) => ({
+            latitude: p.lat,
+            longitude: p.lon,
+          }));
           newMatch = buildMatchedRouteFromHierholzer(asRoutePoints);
         }
         actions.setMatchedRoute(newMatch);
@@ -858,7 +981,10 @@ export default function MapContent() {
         // Try last known position first (instant if available)
         const lastKnown = await Loc.getLastKnownPositionAsync?.();
         if (lastKnown) {
-          return { lat: lastKnown.coords.latitude, lon: lastKnown.coords.longitude };
+          return {
+            lat: lastKnown.coords.latitude,
+            lon: lastKnown.coords.longitude,
+          };
         }
         // Fall back to current position with timeout
         const getPos = (
@@ -933,7 +1059,7 @@ export default function MapContent() {
   // right-arm awareness, colored polylines, GPS auto-advance.
   // ---------------------------------------------------------------------------
   const startCollectionNavigation = useCallback(() => {
-    let points: Array<{ lat: number; lon: number }> = [];
+    let points: { lat: number; lon: number }[] = [];
     if ((previewPoints?.length ?? 0) >= 2) {
       points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
     } else if ((displayRoutePoints?.length ?? 0) >= 2) {
@@ -954,10 +1080,14 @@ export default function MapContent() {
   // For point-to-point trips: depot to route start, last stop to depot, etc.
   // ---------------------------------------------------------------------------
   const startExternalNavigation = useCallback(async () => {
-    const dest = tapDestination || (selectedPoint ? {
-      lat: selectedPoint.latitude,
-      lon: selectedPoint.longitude,
-    } : null);
+    const dest =
+      tapDestination ||
+      (selectedPoint
+        ? {
+            lat: selectedPoint.latitude,
+            lon: selectedPoint.longitude,
+          }
+        : null);
 
     if (!dest) {
       Alert.alert(
@@ -1014,7 +1144,10 @@ export default function MapContent() {
         Alert.alert("No route", "No vehicle route with at least 2 points.");
         return;
       }
-      const gpxStr = generateMultiTrackGPXString("trashroute_vrp_export", routes);
+      const gpxStr = generateMultiTrackGPXString(
+        "trashroute_vrp_export",
+        routes,
+      );
       if (Platform.OS === "web") {
         const blob = new Blob([gpxStr], { type: "application/gpx+xml" });
         const url = URL.createObjectURL(blob);
@@ -1043,7 +1176,7 @@ export default function MapContent() {
       }
       return;
     }
-    let points: Array<{ lat: number; lon: number }> = [];
+    let points: { lat: number; lon: number }[] = [];
     if (displayRoutePoints?.length) {
       points = displayRoutePoints.map((p) => ({
         lat: "lat" in p ? p.lat : (p as { latitude: number }).latitude,
@@ -1097,25 +1230,33 @@ export default function MapContent() {
   const handleOpenInGoogle = useCallback(async () => {
     // Calculate center and waypoints from route data
     let center: { lat: number; lon: number } | undefined;
-    let waypoints: Array<{ lat: number; lon: number }> | undefined;
+    let waypoints: { lat: number; lon: number }[] | undefined;
 
     // Use displayRoutePoints which includes the actual route being shown
     if (displayRoutePoints && displayRoutePoints.length > 0) {
       // Center on route start, include route points as waypoints (sample them if too many)
-      center = { lat: displayRoutePoints[0].lat, lon: displayRoutePoints[0].lon };
+      center = {
+        lat: displayRoutePoints[0].lat,
+        lon: displayRoutePoints[0].lon,
+      };
 
       // Sample waypoints if route is very long (Google Maps deep links have limits)
       if (displayRoutePoints.length > 20) {
         const step = Math.floor(displayRoutePoints.length / 15); // ~15 waypoints max
         waypoints = displayRoutePoints
-          .filter((_, i) => i % step === 0 || i === displayRoutePoints.length - 1)
+          .filter(
+            (_, i) => i % step === 0 || i === displayRoutePoints.length - 1,
+          )
           .map((p) => ({ lat: p.lat, lon: p.lon }));
       } else {
         waypoints = displayRoutePoints.map((p) => ({ lat: p.lat, lon: p.lon }));
       }
     } else if (collectionPoints && collectionPoints.length > 0) {
       // Center on first collection point, use collection points as waypoints
-      center = { lat: collectionPoints[0].latitude, lon: collectionPoints[0].longitude };
+      center = {
+        lat: collectionPoints[0].latitude,
+        lon: collectionPoints[0].longitude,
+      };
 
       if (collectionPoints.length > 15) {
         const step = Math.floor(collectionPoints.length / 15);
@@ -1123,20 +1264,28 @@ export default function MapContent() {
           .filter((_, i) => i % step === 0 || i === collectionPoints.length - 1)
           .map((p) => ({ lat: p.latitude, lon: p.longitude }));
       } else {
-        waypoints = collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+        waypoints = collectionPoints.map((p) => ({
+          lat: p.latitude,
+          lon: p.longitude,
+        }));
       }
     } else if (tapDestination) {
       // Use tapped location as center
       center = { lat: tapDestination.lat, lon: tapDestination.lon };
     }
 
-    console.log("[OpenInGoogle] Center:", center, "Waypoints count:", waypoints?.length);
+    console.log(
+      "[OpenInGoogle] Center:",
+      center,
+      "Waypoints count:",
+      waypoints?.length,
+    );
     await openGoogleMapsViewer({ center, waypoints });
   }, [displayRoutePoints, collectionPoints, tapDestination]);
 
   const handleOpenInOsmAnd = useCallback(async () => {
     let center: { lat: number; lon: number } | undefined;
-    let waypoints: Array<{ lat: number; lon: number }> | undefined;
+    let waypoints: { lat: number; lon: number }[] | undefined;
     let gpxString: string | undefined;
 
     const byVehicle = state?.previewRoutePointsByVehicle;
@@ -1152,17 +1301,27 @@ export default function MapContent() {
           gpxString = generateMultiTrackGPXString("trashroute_osmand", routes);
           const first = routes[0].points;
           center = first[0];
-          waypoints = first.length > 20
-            ? first.filter((_, i) => i % Math.ceil(first.length / 15) === 0 || i === first.length - 1)
-            : first;
+          waypoints =
+            first.length > 20
+              ? first.filter(
+                  (_, i) =>
+                    i % Math.ceil(first.length / 15) === 0 ||
+                    i === first.length - 1,
+                )
+              : first;
         }
       } else if (byVehicle[0].length >= 2) {
         const points = byVehicle[0].map((p) => ({ lat: p.lat, lon: p.lon }));
         gpxString = generateGPXString("trashroute_osmand", points);
         center = points[0];
-        waypoints = points.length > 20
-          ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
-          : points;
+        waypoints =
+          points.length > 20
+            ? points.filter(
+                (_, i) =>
+                  i % Math.ceil(points.length / 15) === 0 ||
+                  i === points.length - 1,
+              )
+            : points;
       }
     } else if (displayRoutePoints && displayRoutePoints.length >= 2) {
       const points = displayRoutePoints.map((p) => ({
@@ -1171,22 +1330,40 @@ export default function MapContent() {
       }));
       gpxString = generateGPXString("trashroute_osmand", points);
       center = points[0];
-      waypoints = points.length > 20
-        ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
-        : points;
+      waypoints =
+        points.length > 20
+          ? points.filter(
+              (_, i) =>
+                i % Math.ceil(points.length / 15) === 0 ||
+                i === points.length - 1,
+            )
+          : points;
     } else if (collectionPoints && collectionPoints.length >= 2) {
-      const points = collectionPoints.map((p) => ({ lat: p.latitude, lon: p.longitude }));
+      const points = collectionPoints.map((p) => ({
+        lat: p.latitude,
+        lon: p.longitude,
+      }));
       gpxString = generateGPXString("trashroute_osmand", points);
       center = points[0];
-      waypoints = points.length > 15
-        ? points.filter((_, i) => i % Math.ceil(points.length / 15) === 0 || i === points.length - 1)
-        : points;
+      waypoints =
+        points.length > 15
+          ? points.filter(
+              (_, i) =>
+                i % Math.ceil(points.length / 15) === 0 ||
+                i === points.length - 1,
+            )
+          : points;
     } else if (tapDestination) {
       center = { lat: tapDestination.lat, lon: tapDestination.lon };
     }
 
     await openOsmAndViewer({ center, waypoints, gpxString });
-  }, [displayRoutePoints, collectionPoints, tapDestination, state?.previewRoutePointsByVehicle]);
+  }, [
+    displayRoutePoints,
+    collectionPoints,
+    tapDestination,
+    state?.previewRoutePointsByVehicle,
+  ]);
 
   const handleStreetView = useCallback(() => {
     const coords = tapDestination
@@ -1293,9 +1470,11 @@ export default function MapContent() {
           isRecActive
             ? recorder.points.map((p) => ({ lat: p.lat, lon: p.lon }))
             : sanitizeLatLonArray(
-                previewRoutePointsByVehicle && previewRoutePointsByVehicle.length === 1
+                previewRoutePointsByVehicle &&
+                  previewRoutePointsByVehicle.length === 1
                   ? previewRoutePointsByVehicle[0]
-                  : previewRoutePointsByVehicle && previewRoutePointsByVehicle.length > 1
+                  : previewRoutePointsByVehicle &&
+                      previewRoutePointsByVehicle.length > 1
                     ? undefined
                     : displayRoutePoints,
               )
@@ -1315,7 +1494,9 @@ export default function MapContent() {
         onLoad={handleMapLoad}
         onError={handleMapError}
         hasOfflineRegions={hasOfflineRegions}
-        userBearing={isRecActive ? (recorder.currentHeading ?? userBearing) : userBearing}
+        userBearing={
+          isRecActive ? (recorder.currentHeading ?? userBearing) : userBearing
+        }
         showAerial={showAerial}
         showTraffic={showTraffic}
         showOverture={showOverture && overturePluginEnabled}
@@ -1475,7 +1656,11 @@ export default function MapContent() {
         onStreetView={handleStreetView}
         onContributeImages={handleContributeImages}
         onStartNavigation={navigationEnabled ? startNavigation : undefined}
-        onStartCollectionRoute={collectionRouteEnabled && canStartNavigation ? startCollectionNavigation : undefined}
+        onStartCollectionRoute={
+          collectionRouteEnabled && canStartNavigation
+            ? startCollectionNavigation
+            : undefined
+        }
         onNavigateExternal={startExternalNavigation}
         onFixToRoads={handleFixToRoads}
         onClearRoute={canStartNavigation ? handleClearRouteMarkers : undefined}
@@ -1511,7 +1696,9 @@ export default function MapContent() {
           lat={tapDestination.lat}
           lon={tapDestination.lon}
           onDirectionsHere={handleDirectionsHere}
-          onSaveToFavorites={(name, lat, lon) => addFavorite({ name, lat, lon })}
+          onSaveToFavorites={(name, lat, lon) =>
+            addFavorite({ name, lat, lon })
+          }
           onClear={() => {
             actions.setTapDestination(null);
             setPlaceInfoSheetVisible(false);
@@ -1522,10 +1709,7 @@ export default function MapContent() {
         visible={myPlacesPanelVisible}
         onClose={closeMyPlacesPanel}
       />
-      <ZonesScreen
-        visible={zonesPanelVisible}
-        onClose={closeZonesPanel}
-      />
+      <ZonesScreen visible={zonesPanelVisible} onClose={closeZonesPanel} />
       <RecordingScreen
         visible={recordingPanelVisible}
         onClose={closeRecordingPanel}
@@ -1562,15 +1746,17 @@ export default function MapContent() {
         }}
       />
 
-      {drivePreviewEnabled && Platform.OS !== "web" && displayRoutePoints && displayRoutePoints.length >= 2 && (
-        <StreetViewPreview
-          points={displayRoutePoints.map((p) => ({ lat: p.lat, lon: p.lon }))}
-          isVisible={drivePreviewVisible}
-          onClose={() => setDrivePreviewVisible(false)}
-          trackName="Route Preview"
-        />
-      )}
-
+      {drivePreviewEnabled &&
+        Platform.OS !== "web" &&
+        displayRoutePoints &&
+        displayRoutePoints.length >= 2 && (
+          <StreetViewPreview
+            points={displayRoutePoints.map((p) => ({ lat: p.lat, lon: p.lon }))}
+            isVisible={drivePreviewVisible}
+            onClose={() => setDrivePreviewVisible(false)}
+            trackName="Route Preview"
+          />
+        )}
     </View>
   );
 }
@@ -1600,7 +1786,9 @@ function RecordingOverlay({
   onTrackExport,
   onTrackDelete,
 }: {
-  recorder: ReturnType<typeof import("@/hooks/useTrackRecorder").useTrackRecorder>["state"];
+  recorder: ReturnType<
+    typeof import("@/hooks/useTrackRecorder").useTrackRecorder
+  >["state"];
   isRecording: boolean;
   isPaused: boolean;
   isRecActive: boolean;
@@ -1639,7 +1827,9 @@ function RecordingOverlay({
           activeOpacity={0.8}
         >
           {isRecording ? (
-            <Animated.View style={[recStyles.recDot, { opacity: recFlashAnim }]}>
+            <Animated.View
+              style={[recStyles.recDot, { opacity: recFlashAnim }]}
+            >
               <View style={recStyles.recDotInner} />
             </Animated.View>
           ) : (
@@ -1650,7 +1840,12 @@ function RecordingOverlay({
           <Text style={[recStyles.recBadgeText, { color: colors.text }]}>
             {isRecording ? "REC" : "PAUSED"}
           </Text>
-          <Text style={[recStyles.recTime, { color: colors.muted, fontFamily: Fonts?.mono }]}>
+          <Text
+            style={[
+              recStyles.recTime,
+              { color: colors.muted, fontFamily: Fonts?.mono },
+            ]}
+          >
             {formatRecElapsed(recorder.elapsedMs)}
           </Text>
         </TouchableOpacity>
@@ -1662,28 +1857,61 @@ function RecordingOverlay({
           style={[
             recStyles.recBar,
             glassStyle,
-            { backgroundColor: colors.surface + "f0", borderColor: colors.border },
+            {
+              backgroundColor: colors.surface + "f0",
+              borderColor: colors.border,
+            },
           ]}
         >
           {/* Stats row */}
           <View style={recStyles.recStatsRow}>
-            <RecStat icon="clock-outline" value={formatRecElapsed(recorder.elapsedMs)} label="Time" colors={colors} />
-            <RecStat icon="map-marker-distance" value={formatRecDistance(recorder.totalDistanceMeters)} label="Dist" colors={colors} />
-            <RecStat icon="map-marker-multiple" value={String(recorder.points.length)} label="Pts" colors={colors} />
-            {recorder.currentPosition?.speed != null && recorder.currentPosition.speed > 0 && (
-              <RecStat icon="speedometer" value={`${(recorder.currentPosition.speed * 3.6).toFixed(0)}`} label="km/h" colors={colors} />
-            )}
+            <RecStat
+              icon="clock-outline"
+              value={formatRecElapsed(recorder.elapsedMs)}
+              label="Time"
+              colors={colors}
+            />
+            <RecStat
+              icon="map-marker-distance"
+              value={formatRecDistance(recorder.totalDistanceMeters)}
+              label="Dist"
+              colors={colors}
+            />
+            <RecStat
+              icon="map-marker-multiple"
+              value={String(recorder.points.length)}
+              label="Pts"
+              colors={colors}
+            />
+            {recorder.currentPosition?.speed != null &&
+              recorder.currentPosition.speed > 0 && (
+                <RecStat
+                  icon="speedometer"
+                  value={`${(recorder.currentPosition.speed * 3.6).toFixed(0)}`}
+                  label="km/h"
+                  colors={colors}
+                />
+              )}
           </View>
 
           {/* Controls row */}
           <View style={recStyles.recControlsRow}>
             {isRecording && (
               <>
-                <TouchableOpacity style={[recStyles.recBtn, { backgroundColor: "#ff9800" }]} onPress={onPause}>
+                <TouchableOpacity
+                  style={[recStyles.recBtn, { backgroundColor: "#ff9800" }]}
+                  onPress={onPause}
+                >
                   <MaterialCommunityIcons name="pause" size={18} color="#fff" />
                   <Text style={recStyles.recBtnText}>Pause</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[recStyles.recBtn, { backgroundColor: colors.primary }]} onPress={onStop}>
+                <TouchableOpacity
+                  style={[
+                    recStyles.recBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={onStop}
+                >
                   <MaterialCommunityIcons name="stop" size={18} color="#fff" />
                   <Text style={recStyles.recBtnText}>Stop</Text>
                 </TouchableOpacity>
@@ -1691,16 +1919,35 @@ function RecordingOverlay({
             )}
             {isPaused && (
               <>
-                <TouchableOpacity style={[recStyles.recBtn, { backgroundColor: "#22c55e" }]} onPress={onResume}>
+                <TouchableOpacity
+                  style={[recStyles.recBtn, { backgroundColor: "#22c55e" }]}
+                  onPress={onResume}
+                >
                   <MaterialCommunityIcons name="play" size={18} color="#fff" />
                   <Text style={recStyles.recBtnText}>Resume</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[recStyles.recBtn, { backgroundColor: colors.primary }]} onPress={onStop}>
+                <TouchableOpacity
+                  style={[
+                    recStyles.recBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={onStop}
+                >
                   <MaterialCommunityIcons name="stop" size={18} color="#fff" />
                   <Text style={recStyles.recBtnText}>Stop</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[recStyles.recBtn, { backgroundColor: colors.muted + "88" }]} onPress={onDiscard}>
-                  <MaterialCommunityIcons name="delete-outline" size={18} color="#fff" />
+                <TouchableOpacity
+                  style={[
+                    recStyles.recBtn,
+                    { backgroundColor: colors.muted + "88" },
+                  ]}
+                  onPress={onDiscard}
+                >
+                  <MaterialCommunityIcons
+                    name="delete-outline"
+                    size={18}
+                    color="#fff"
+                  />
                   <Text style={recStyles.recBtnText}>Discard</Text>
                 </TouchableOpacity>
               </>
@@ -1709,7 +1956,11 @@ function RecordingOverlay({
           {savingTrack && (
             <View style={recStyles.savingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={{ color: colors.muted, marginLeft: 6, fontSize: 12 }}>Saving...</Text>
+              <Text
+                style={{ color: colors.muted, marginLeft: 6, fontSize: 12 }}
+              >
+                Saving...
+              </Text>
             </View>
           )}
         </View>
@@ -1728,8 +1979,15 @@ function RecordingOverlay({
             },
           ]}
         >
-          <TouchableOpacity style={recStyles.savedHeader} onPress={onToggleSavedTracks}>
-            <MaterialCommunityIcons name="history" size={16} color={colors.muted} />
+          <TouchableOpacity
+            style={recStyles.savedHeader}
+            onPress={onToggleSavedTracks}
+          >
+            <MaterialCommunityIcons
+              name="history"
+              size={16}
+              color={colors.muted}
+            />
             <Text style={[recStyles.savedHeaderText, { color: colors.text }]}>
               Saved Tracks ({savedTracks.length})
             </Text>
@@ -1745,21 +2003,55 @@ function RecordingOverlay({
               keyExtractor={(item) => item.id}
               style={{ maxHeight: 200 }}
               renderItem={({ item }) => (
-                <View style={[recStyles.savedItem, { borderBottomColor: colors.border }]}>
+                <View
+                  style={[
+                    recStyles.savedItem,
+                    { borderBottomColor: colors.border },
+                  ]}
+                >
                   <View style={{ flex: 1 }}>
-                    <Text style={[recStyles.savedName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-                    <Text style={[recStyles.savedMeta, { color: colors.muted }]}>
-                      {formatRecDistance(item.totalDistanceMeters)} · {formatRecElapsed(item.elapsedMs)} · {item.pointCount} pts
+                    <Text
+                      style={[recStyles.savedName, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={[recStyles.savedMeta, { color: colors.muted }]}
+                    >
+                      {formatRecDistance(item.totalDistanceMeters)} ·{" "}
+                      {formatRecElapsed(item.elapsedMs)} · {item.pointCount} pts
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => onTrackPreview(item)} style={recStyles.savedAction}>
-                    <MaterialCommunityIcons name="eye-outline" size={16} color={colors.primary} />
+                  <TouchableOpacity
+                    onPress={() => onTrackPreview(item)}
+                    style={recStyles.savedAction}
+                  >
+                    <MaterialCommunityIcons
+                      name="eye-outline"
+                      size={16}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => onTrackExport(item)} style={recStyles.savedAction}>
-                    <MaterialCommunityIcons name="export-variant" size={16} color={colors.primary} />
+                  <TouchableOpacity
+                    onPress={() => onTrackExport(item)}
+                    style={recStyles.savedAction}
+                  >
+                    <MaterialCommunityIcons
+                      name="export-variant"
+                      size={16}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => onTrackDelete(item)} style={recStyles.savedAction}>
-                    <MaterialCommunityIcons name="delete-outline" size={16} color={colors.error ?? "#ef4444"} />
+                  <TouchableOpacity
+                    onPress={() => onTrackDelete(item)}
+                    style={recStyles.savedAction}
+                  >
+                    <MaterialCommunityIcons
+                      name="delete-outline"
+                      size={16}
+                      color={colors.error ?? "#ef4444"}
+                    />
                   </TouchableOpacity>
                 </View>
               )}
@@ -1771,15 +2063,35 @@ function RecordingOverlay({
   );
 }
 
-function RecStat({ icon, value, label, colors }: {
-  icon: string; value: string; label: string;
+function RecStat({
+  icon,
+  value,
+  label,
+  colors,
+}: {
+  icon: string;
+  value: string;
+  label: string;
   colors: ReturnType<typeof import("@/hooks/use-colors").useColors>;
 }) {
   return (
     <View style={recStyles.recStatItem}>
-      <MaterialCommunityIcons name={icon as any} size={14} color={colors.muted} />
-      <Text style={[recStyles.recStatValue, { color: colors.text, fontFamily: Fonts?.mono }]}>{value}</Text>
-      <Text style={[recStyles.recStatLabel, { color: colors.muted }]}>{label}</Text>
+      <MaterialCommunityIcons
+        name={icon as any}
+        size={14}
+        color={colors.muted}
+      />
+      <Text
+        style={[
+          recStyles.recStatValue,
+          { color: colors.text, fontFamily: Fonts?.mono },
+        ]}
+      >
+        {value}
+      </Text>
+      <Text style={[recStyles.recStatLabel, { color: colors.muted }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -1789,7 +2101,8 @@ function formatRecElapsed(ms: number): string {
   const h = Math.floor(totalSecs / 3600);
   const m = Math.floor((totalSecs % 3600) / 60);
   const s = totalSecs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 

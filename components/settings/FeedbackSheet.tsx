@@ -23,7 +23,10 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { useColors } from "@/hooks/use-colors";
 import { useDeviceType } from "@/hooks/useDeviceType";
-import { submitIssueReport, submitSuggestion } from "@/services/feedbackService";
+import {
+  submitIssueReport,
+  submitSuggestion,
+} from "@/services/feedbackService";
 import * as FileSystem from "expo-file-system";
 
 const PANEL_WIDTH_IPAD = 420;
@@ -49,12 +52,16 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const deviceType = useDeviceType();
-  
+
   const [view, setView] = useState<FeedbackView>("menu");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [issueDescription, setIssueDescription] = useState("");
   const [suggestionDescription, setSuggestionDescription] = useState("");
-  const [uploadedFile, setUploadedFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{
+    uri: string;
+    name: string;
+    mimeType: string;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const resetState = useCallback(() => {
@@ -123,7 +130,9 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
     setSubmitting(true);
 
     try {
-      const categoryLabel = ISSUE_CATEGORIES.find((c) => c.id === selectedCategory)?.label ?? selectedCategory;
+      const categoryLabel =
+        ISSUE_CATEGORIES.find((c) => c.id === selectedCategory)?.label ??
+        selectedCategory;
       const success = await submitIssueReport({
         category: categoryLabel,
         description: issueDescription.trim(),
@@ -133,7 +142,7 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
         Alert.alert(
           "Thank You!",
           "Your issue has been reported. We'll look into it as soon as possible.",
-          [{ text: "OK", onPress: handleClose }]
+          [{ text: "OK", onPress: handleClose }],
         );
       } else {
         Alert.alert("Error", "Failed to submit feedback. Please try again.");
@@ -156,18 +165,24 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
 
     try {
       let screenshotBase64: string | undefined;
-      let attachment: { name: string; base64: string; mimeType: string } | undefined;
+      let attachment:
+        | { name: string; base64: string; mimeType: string }
+        | undefined;
 
       if (uploadedFile && Platform.OS !== "web") {
         try {
           const base64 = await FileSystem.readAsStringAsync(uploadedFile.uri, {
-            encoding: FileSystem.EncodingType.Base64,
+            encoding: "base64",
           });
           const isImage = (uploadedFile.mimeType ?? "").startsWith("image/");
           if (isImage) {
             screenshotBase64 = base64;
           } else {
-            attachment = { name: uploadedFile.name, base64, mimeType: uploadedFile.mimeType };
+            attachment = {
+              name: uploadedFile.name,
+              base64,
+              mimeType: uploadedFile.mimeType,
+            };
           }
         } catch (e) {
           console.warn("Failed to read uploaded file:", e);
@@ -184,7 +199,7 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
         Alert.alert(
           "Thank You!",
           "Your suggestion has been submitted. We appreciate your feedback!",
-          [{ text: "OK", onPress: handleClose }]
+          [{ text: "OK", onPress: handleClose }],
         );
       } else {
         Alert.alert("Error", "Failed to submit feedback. Please try again.");
@@ -231,14 +246,29 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
       </Text>
 
       <TouchableOpacity
-        style={[styles.menuOption, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+        style={[
+          styles.menuOption,
+          {
+            backgroundColor: colors.surfaceAlt ?? colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
         onPress={() => {
           if (Platform.OS !== "web") hapticImpact();
           setView("report-issue");
         }}
       >
-        <View style={[styles.menuIconContainer, { backgroundColor: "#EF4444" + "20" }]}>
-          <MaterialCommunityIcons name="bug-outline" size={24} color="#EF4444" />
+        <View
+          style={[
+            styles.menuIconContainer,
+            { backgroundColor: "#EF4444" + "20" },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="bug-outline"
+            size={24}
+            color="#EF4444"
+          />
         </View>
         <View style={styles.menuOptionText}>
           <Text style={[styles.menuOptionTitle, { color: colors.text }]}>
@@ -248,18 +278,37 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
             Something not working as expected?
           </Text>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={24}
+          color={colors.muted}
+        />
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.menuOption, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}
+        style={[
+          styles.menuOption,
+          {
+            backgroundColor: colors.surfaceAlt ?? colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
         onPress={() => {
           if (Platform.OS !== "web") hapticImpact();
           setView("suggest-idea");
         }}
       >
-        <View style={[styles.menuIconContainer, { backgroundColor: colors.primary + "20" }]}>
-          <MaterialCommunityIcons name="lightbulb-outline" size={24} color={colors.primary} />
+        <View
+          style={[
+            styles.menuIconContainer,
+            { backgroundColor: colors.primary + "20" },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="lightbulb-outline"
+            size={24}
+            color={colors.primary}
+          />
         </View>
         <View style={styles.menuOptionText}>
           <Text style={[styles.menuOptionTitle, { color: colors.text }]}>
@@ -269,13 +318,20 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
             Have a feature request or improvement?
           </Text>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={24}
+          color={colors.muted}
+        />
       </TouchableOpacity>
     </View>
   );
 
   const renderReportIssue = () => (
-    <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.formContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={[styles.formTitle, { color: colors.text }]}>
         Report an Issue
       </Text>
@@ -290,8 +346,12 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
             style={[
               styles.categoryOption,
               {
-                backgroundColor: selectedCategory === cat.id ? colors.primary + "20" : colors.surfaceAlt ?? colors.surface,
-                borderColor: selectedCategory === cat.id ? colors.primary : colors.border,
+                backgroundColor:
+                  selectedCategory === cat.id
+                    ? colors.primary + "20"
+                    : (colors.surfaceAlt ?? colors.surface),
+                borderColor:
+                  selectedCategory === cat.id ? colors.primary : colors.border,
               },
             ]}
             onPress={() => {
@@ -300,9 +360,15 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
             }}
           >
             <MaterialCommunityIcons
-              name={selectedCategory === cat.id ? "radiobox-marked" : "radiobox-blank"}
+              name={
+                selectedCategory === cat.id
+                  ? "radiobox-marked"
+                  : "radiobox-blank"
+              }
               size={20}
-              color={selectedCategory === cat.id ? colors.primary : colors.muted}
+              color={
+                selectedCategory === cat.id ? colors.primary : colors.muted
+              }
             />
             <Text style={[styles.categoryLabel, { color: colors.text }]}>
               {cat.label}
@@ -350,7 +416,10 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
   );
 
   const renderSuggestIdea = () => (
-    <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.formContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={[styles.formTitle, { color: colors.text }]}>
         Suggest an Idea
       </Text>
@@ -380,30 +449,56 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
       />
 
       <Text style={[styles.warningText, { color: colors.muted }]}>
-        Please don't include sensitive information
+        Please don&apos;t include sensitive information
       </Text>
 
       <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 20 }]}>
         Upload an image or file to help us better understand your idea
       </Text>
-      
+
       {uploadedFile ? (
         <View style={styles.screenshotPreview}>
           {(uploadedFile.mimeType ?? "").startsWith("image/") ? (
-            <Image source={{ uri: uploadedFile.uri }} style={styles.screenshotImage} resizeMode="cover" />
+            <Image
+              source={{ uri: uploadedFile.uri }}
+              style={styles.screenshotImage}
+              resizeMode="cover"
+            />
           ) : (
-            <View style={[styles.filePreview, { backgroundColor: colors.surfaceAlt ?? colors.surface, borderColor: colors.border }]}>
-              <MaterialCommunityIcons name="file-document-outline" size={40} color={colors.muted} />
-              <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={2}>
+            <View
+              style={[
+                styles.filePreview,
+                {
+                  backgroundColor: colors.surfaceAlt ?? colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="file-document-outline"
+                size={40}
+                color={colors.muted}
+              />
+              <Text
+                style={[styles.fileName, { color: colors.text }]}
+                numberOfLines={2}
+              >
                 {uploadedFile.name}
               </Text>
             </View>
           )}
           <TouchableOpacity
-            style={[styles.removeScreenshot, { backgroundColor: colors.surface }]}
+            style={[
+              styles.removeScreenshot,
+              { backgroundColor: colors.surface },
+            ]}
             onPress={() => setUploadedFile(null)}
           >
-            <MaterialCommunityIcons name="close" size={18} color={colors.text} />
+            <MaterialCommunityIcons
+              name="close"
+              size={18}
+              color={colors.text}
+            />
           </TouchableOpacity>
         </View>
       ) : (
@@ -411,15 +506,24 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
           style={[styles.screenshotButton, { borderColor: colors.border }]}
           onPress={handleUpload}
         >
-          <MaterialCommunityIcons name="upload-outline" size={24} color={colors.primary} />
-          <Text style={[styles.screenshotButtonText, { color: colors.primary }]}>
+          <MaterialCommunityIcons
+            name="upload-outline"
+            size={24}
+            color={colors.primary}
+          />
+          <Text
+            style={[styles.screenshotButtonText, { color: colors.primary }]}
+          >
             Upload
           </Text>
         </TouchableOpacity>
       )}
 
       <TouchableOpacity
-        style={[styles.submitButton, { backgroundColor: colors.primary, marginTop: 24 }]}
+        style={[
+          styles.submitButton,
+          { backgroundColor: colors.primary, marginTop: 24 },
+        ]}
         onPress={handleSubmitSuggestion}
         disabled={submitting}
       >
@@ -459,7 +563,11 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
                 style={styles.backButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+                <MaterialCommunityIcons
+                  name="arrow-left"
+                  size={24}
+                  color={colors.text}
+                />
               </TouchableOpacity>
             )}
             <Text style={[styles.headerTitle, { color: colors.text, flex: 1 }]}>
@@ -470,7 +578,11 @@ export function FeedbackSheet({ visible, onClose }: FeedbackSheetProps) {
               style={styles.closeBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialCommunityIcons name="close" size={24} color={colors.muted} />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={colors.muted}
+              />
             </TouchableOpacity>
           </View>
 

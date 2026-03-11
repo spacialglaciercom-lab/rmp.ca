@@ -14,7 +14,11 @@ import {
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { useColors } from "@/hooks/use-colors";
 
-type LeapStatus = { linked: boolean; modelLoaded: boolean; loadError?: string | null } | null;
+type LeapStatus = {
+  linked: boolean;
+  modelLoaded: boolean;
+  loadError?: string | null;
+} | null;
 
 export const BetaFeaturesSection: React.FC = () => {
   const colors = useColors();
@@ -46,7 +50,7 @@ export const BetaFeaturesSection: React.FC = () => {
         [
           { text: "Cancel", style: "cancel" },
           { text: "Enable", style: "destructive", onPress: enableBeta },
-        ]
+        ],
       );
     }
   };
@@ -59,20 +63,37 @@ export const BetaFeaturesSection: React.FC = () => {
     }
   };
 
-  const switchTrack = { false: colors.border, true: colors.accentCyan ?? colors.primary };
-  const thumbColor = Platform.OS === "android" ? (features.enabled ? colors.accentCyan : colors.muted) : undefined;
+  const switchTrack = {
+    false: colors.border,
+    true: colors.accentCyan ?? colors.primary,
+  };
+  const thumbColor =
+    Platform.OS === "android"
+      ? features.enabled
+        ? colors.accentCyan
+        : colors.muted
+      : undefined;
 
   const refreshLeapStatus = useCallback(async () => {
     if (Platform.OS === "web") {
-      setLeapStatus({ linked: false, modelLoaded: false, loadError: "web platform" });
+      setLeapStatus({
+        linked: false,
+        modelLoaded: false,
+        loadError: "web platform",
+      });
       return;
     }
     try {
+      // eslint-disable-next-line import/no-unresolved -- optional dynamic import (leap-extract module)
       const { getLeapStatus } = await import("@/modules/leap-extract/src");
       const status = await getLeapStatus();
       setLeapStatus(status);
     } catch {
-      setLeapStatus({ linked: false, modelLoaded: false, loadError: "status check failed" });
+      setLeapStatus({
+        linked: false,
+        modelLoaded: false,
+        loadError: "status check failed",
+      });
     }
   }, []);
 
@@ -81,16 +102,18 @@ export const BetaFeaturesSection: React.FC = () => {
       Alert.alert("Leap SDK", "N/A on web. Use an iOS dev build to verify.");
       return;
     }
-    setVerifyingLeap(true);
     try {
-      const { getLeapStatus, extractAsync } = await import("@/modules/leap-extract/src");
+      /* eslint-disable import/no-unresolved -- optional dynamic import (leap-extract module) */
+      const { getLeapStatus, extractAsync } =
+        await import("@/modules/leap-extract/src");
+      /* eslint-enable import/no-unresolved */
       const status = await getLeapStatus();
       setLeapStatus(status);
 
       if (!status.linked) {
         Alert.alert(
           "Leap SDK verification",
-          `Leap SDK is not linked.\n\n${status.loadError ? `Error: ${status.loadError}\n\n` : ""}Use a development or production build that includes the leap-extract native module (Expo Go does not include it).`
+          `Leap SDK is not linked.\n\n${status.loadError ? `Error: ${status.loadError}\n\n` : ""}Use a development or production build that includes the leap-extract native module (Expo Go does not include it).`,
         );
         return;
       }
@@ -106,36 +129,52 @@ export const BetaFeaturesSection: React.FC = () => {
               text: "Load Model",
               onPress: async () => {
                 try {
-                  const { preloadModel, getLeapStatus: recheck } = await import("@/modules/leap-extract/src");
+                  /* eslint-disable import/no-unresolved -- optional dynamic import (leap-extract module) */
+                  const { preloadModel, getLeapStatus: recheck } =
+                    await import("@/modules/leap-extract/src");
+                  /* eslint-enable import/no-unresolved */
                   const result = await preloadModel();
                   const updated = await recheck();
                   setLeapStatus(updated);
                   if (updated.modelLoaded) {
                     Alert.alert("Leap SDK", "Model loaded successfully!");
                   } else {
-                    Alert.alert("Leap SDK", `Model load returned "${result}"${updated.loadError ? `\n\nError: ${updated.loadError}` : ""}`);
+                    Alert.alert(
+                      "Leap SDK",
+                      `Model load returned "${result}"${updated.loadError ? `\n\nError: ${updated.loadError}` : ""}`,
+                    );
                   }
                 } catch (loadErr) {
-                  const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+                  const msg =
+                    loadErr instanceof Error
+                      ? loadErr.message
+                      : String(loadErr);
                   Alert.alert("Leap SDK", `Model load failed:\n${msg}`);
                 }
               },
             },
-          ]
+          ],
         );
         return;
       }
 
       try {
-        const result = await extractAsync("Leap SDK verify test", { schemaHint: null });
-        const parsed = typeof result === "string" ? result : JSON.stringify(result);
+        const result = await extractAsync("Leap SDK verify test", {
+          schemaHint: null,
+        });
+        const parsed =
+          typeof result === "string" ? result : JSON.stringify(result);
         Alert.alert(
           "Leap SDK verified",
-          `Linked ✓\nModel loaded ✓\nExtract test succeeded.\n\nSample output length: ${parsed.length} chars`
+          `Linked ✓\nModel loaded ✓\nExtract test succeeded.\n\nSample output length: ${parsed.length} chars`,
         );
       } catch (extractErr) {
-        const msg = extractErr instanceof Error ? extractErr.message : String(extractErr);
-        Alert.alert("Leap SDK verification", `Linked and model loaded, but extract test failed:\n${msg}`);
+        const msg =
+          extractErr instanceof Error ? extractErr.message : String(extractErr);
+        Alert.alert(
+          "Leap SDK verification",
+          `Linked and model loaded, but extract test failed:\n${msg}`,
+        );
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -163,11 +202,15 @@ export const BetaFeaturesSection: React.FC = () => {
             },
           ]}
         >
-          <Text style={[styles.warningText, { color: colors.warning ?? "#ff6b4a" }]}>
+          <Text
+            style={[styles.warningText, { color: colors.warning ?? "#ff6b4a" }]}
+          >
             ⚡ EXPERIMENTAL MODE ACTIVE
           </Text>
           {isExperimentalRoute && (
-            <Text style={[styles.subWarning, { color: colors.muted }]}>Turn-aware routing enabled</Text>
+            <Text style={[styles.subWarning, { color: colors.muted }]}>
+              Turn-aware routing enabled
+            </Text>
           )}
         </View>
       )}
@@ -180,9 +223,12 @@ export const BetaFeaturesSection: React.FC = () => {
         accessibilityLabel="Enable Beta Features"
       >
         <View style={[styles.labelContainer, { pointerEvents: "none" }]}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Enable Beta Features</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>
+            Enable Beta Features
+          </Text>
           <Text style={[styles.description, { color: colors.muted }]}>
-            Weather-optimized routing, Leap AI (iOS), turn-aware & learned penalties
+            Weather-optimized routing, Leap AI (iOS), turn-aware & learned
+            penalties
           </Text>
         </View>
         <View>
@@ -199,9 +245,20 @@ export const BetaFeaturesSection: React.FC = () => {
       </Pressable>
 
       {features.enabled && (
-        <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
+        <View
+          style={[
+            styles.row,
+            styles.indented,
+            {
+              borderBottomColor: colors.border,
+              backgroundColor: colors.surface + "80",
+            },
+          ]}
+        >
           <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Turn-aware CPP</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>
+              Turn-aware CPP
+            </Text>
             <Text style={[styles.description, { color: colors.muted }]}>
               CPP variant with explicit turn modeling
             </Text>
@@ -210,32 +267,67 @@ export const BetaFeaturesSection: React.FC = () => {
             value={features.turnAwareCpp}
             onValueChange={toggleTurnAware}
             trackColor={switchTrack}
-            thumbColor={Platform.OS === "android" ? (features.turnAwareCpp ? colors.accentCyan : colors.muted) : undefined}
+            thumbColor={
+              Platform.OS === "android"
+                ? features.turnAwareCpp
+                  ? colors.accentCyan
+                  : colors.muted
+                : undefined
+            }
           />
         </View>
       )}
 
       {features.enabled && (
-        <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
+        <View
+          style={[
+            styles.row,
+            styles.indented,
+            {
+              borderBottomColor: colors.border,
+              backgroundColor: colors.surface + "80",
+            },
+          ]}
+        >
           <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Learned Penalties</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>
+              Learned Penalties
+            </Text>
             <Text style={[styles.description, { color: colors.muted }]}>
-              Bias routes using on-device model (narrow/time-restricted edges). iOS only.
+              Bias routes using on-device model (narrow/time-restricted edges).
+              iOS only.
             </Text>
           </View>
           <Switch
             value={features.learnedPenalties}
             onValueChange={toggleLearnedPenalties}
             trackColor={switchTrack}
-            thumbColor={Platform.OS === "android" ? (features.learnedPenalties ? colors.accentCyan : colors.muted) : undefined}
+            thumbColor={
+              Platform.OS === "android"
+                ? features.learnedPenalties
+                  ? colors.accentCyan
+                  : colors.muted
+                : undefined
+            }
           />
         </View>
       )}
 
       {features.enabled && (
-        <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
+        <View
+          style={[
+            styles.row,
+            styles.indented,
+            {
+              borderBottomColor: colors.border,
+              backgroundColor: colors.surface + "80",
+            },
+          ]}
+        >
           <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>AI Chat</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>
+              AI Chat
+            </Text>
             <Text style={[styles.description, { color: colors.muted }]}>
               Floating chat bubble on map. Tap to type, hold to talk.
             </Text>
@@ -244,35 +336,74 @@ export const BetaFeaturesSection: React.FC = () => {
             value={features.voiceCoPilot}
             onValueChange={toggleVoiceCoPilot}
             trackColor={switchTrack}
-            thumbColor={Platform.OS === "android" ? (features.voiceCoPilot ? colors.accentCyan : colors.muted) : undefined}
+            thumbColor={
+              Platform.OS === "android"
+                ? features.voiceCoPilot
+                  ? colors.accentCyan
+                  : colors.muted
+                : undefined
+            }
           />
         </View>
       )}
 
       {features.enabled && (
-        <View style={[styles.row, styles.indented, { borderBottomColor: colors.border, backgroundColor: colors.surface + "80" }]}>
+        <View
+          style={[
+            styles.row,
+            styles.indented,
+            {
+              borderBottomColor: colors.border,
+              backgroundColor: colors.surface + "80",
+            },
+          ]}
+        >
           <View style={styles.labelContainer}>
-            <Text style={[styles.label, { color: colors.foreground }]}>RouteMaster Constraints</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>
+              RouteMaster Constraints
+            </Text>
             <Text style={[styles.description, { color: colors.muted }]}>
-              Parse natural language into route constraints using Gemini AI (Firebase).
+              Parse natural language into route constraints using Gemini AI
+              (Firebase).
             </Text>
           </View>
           <Switch
             value={features.routeMasterConstraints}
             onValueChange={toggleRouteMasterConstraints}
             trackColor={switchTrack}
-            thumbColor={Platform.OS === "android" ? (features.routeMasterConstraints ? colors.accentCyan : colors.muted) : undefined}
+            thumbColor={
+              Platform.OS === "android"
+                ? features.routeMasterConstraints
+                  ? colors.accentCyan
+                  : colors.muted
+                : undefined
+            }
           />
         </View>
       )}
 
       {features.turnAwareCpp && (
-        <View style={[styles.penaltyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.penaltyTitle, { color: colors.foreground }]}>Current Static Penalties</Text>
-          <Text style={[styles.penaltyItem, { color: colors.muted }]}>Straight: 2s</Text>
-          <Text style={[styles.penaltyItem, { color: colors.muted }]}>Right: 8s</Text>
-          <Text style={[styles.penaltyItem, { color: colors.muted }]}>Left: 45s</Text>
-          <Text style={[styles.penaltyItem, { color: colors.muted }]}>U-Turn: 120s</Text>
+        <View
+          style={[
+            styles.penaltyCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.penaltyTitle, { color: colors.foreground }]}>
+            Current Static Penalties
+          </Text>
+          <Text style={[styles.penaltyItem, { color: colors.muted }]}>
+            Straight: 2s
+          </Text>
+          <Text style={[styles.penaltyItem, { color: colors.muted }]}>
+            Right: 8s
+          </Text>
+          <Text style={[styles.penaltyItem, { color: colors.muted }]}>
+            Left: 45s
+          </Text>
+          <Text style={[styles.penaltyItem, { color: colors.muted }]}>
+            U-Turn: 120s
+          </Text>
         </View>
       )}
     </ScrollView>

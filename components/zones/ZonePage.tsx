@@ -24,7 +24,11 @@ import { useRouter } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 import { useColors } from "@/hooks/use-colors";
-import { useZonesStore, type SavedZoneResult, type SourcePointSnapshot } from "@/stores/zonesStore";
+import {
+  useZonesStore,
+  type SavedZoneResult,
+  type SourcePointSnapshot,
+} from "@/stores/zonesStore";
 import { useWastePointsStore } from "@/stores/wastePointsStore";
 import { useDeviceType, useIsCompact } from "@/hooks/useDeviceType";
 import { RouteMap } from "@/components/route-map";
@@ -32,20 +36,33 @@ import type { ZoneOutput } from "@/services/overtureOptimizerService";
 import { partitionZonesFromPoints } from "@/services/overtureOptimizerService";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { Fonts } from "@/lib/_core/theme";
-import { WastePointFormModal, type WastePointFormValues } from "@/components/zones/WastePointFormModal";
+import {
+  WastePointFormModal,
+  type WastePointFormValues,
+} from "@/components/zones/WastePointFormModal";
 import { WasteImportModal } from "@/components/zones/WasteImportModal";
 import { DeliveryZonePartitionSheet } from "@/components/zones/DeliveryZonePartitionSheet";
 import { BottomSheet } from "@/components/shared/BottomSheet";
 
 export type ZonesPageMode = "delivery" | "waste";
 
-const ZONE_COLORS = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#eab308", "#ef4444"];
+const ZONE_COLORS = [
+  "#f97316",
+  "#3b82f6",
+  "#22c55e",
+  "#a855f7",
+  "#eab308",
+  "#ef4444",
+];
 const SIDEBAR_WIDTH = 320;
 const SIDEBAR_MIN_WIDTH = 280;
 
 /** Build [lat, lon][] polygon (closed ring) from zone polygons (bbox of all points). */
-function polygonFromZoneOutputs(zones: ZoneOutput[]): Array<[number, number]> {
-  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+function polygonFromZoneOutputs(zones: ZoneOutput[]): [number, number][] {
+  let minLat = Infinity,
+    maxLat = -Infinity,
+    minLon = Infinity,
+    maxLon = -Infinity;
   for (const z of zones) {
     if (!z.zone_polygon?.length) continue;
     for (const [lon, lat] of z.zone_polygon) {
@@ -65,10 +82,15 @@ function polygonFromZoneOutputs(zones: ZoneOutput[]): Array<[number, number]> {
   ];
 }
 
-function computeBoundsFromZones(result: SavedZoneResult): { minLat: number; minLon: number; maxLat: number; maxLon: number } | null {
+function computeBoundsFromZones(
+  result: SavedZoneResult,
+): { minLat: number; minLon: number; maxLat: number; maxLon: number } | null {
   const hasPolygons = result.zones?.some((z) => z.zone_polygon?.length >= 3);
   if (hasPolygons && result.zones) {
-    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    let minLat = Infinity,
+      maxLat = -Infinity,
+      minLon = Infinity,
+      maxLon = -Infinity;
     for (const z of result.zones) {
       const poly = z.zone_polygon;
       if (!poly || poly.length < 3) continue;
@@ -94,13 +116,20 @@ function computeBoundsFromZones(result: SavedZoneResult): { minLat: number; minL
   return null;
 }
 
-function zoneToPolygonLatLon(z: ZoneOutput): Array<{ latitude: number; longitude: number }> | null {
+function zoneToPolygonLatLon(
+  z: ZoneOutput,
+): { latitude: number; longitude: number }[] | null {
   if (!z.zone_polygon || z.zone_polygon.length < 3) return null;
-  return z.zone_polygon.map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
+  return z.zone_polygon.map(([lon, lat]) => ({
+    latitude: lat,
+    longitude: lon,
+  }));
 }
 
 function zoneResultToGeoJSON(item: SavedZoneResult): string {
-  const coords = item.polygon.map(([lat, lon]) => [lon, lat] as [number, number]);
+  const coords = item.polygon.map(
+    ([lat, lon]) => [lon, lat] as [number, number],
+  );
   const ring = coords.length >= 3 ? [...coords, coords[0]] : [];
   const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
   const feature = {
@@ -115,7 +144,11 @@ function zoneResultToGeoJSON(item: SavedZoneResult): string {
     },
     geometry: { type: "Polygon" as const, coordinates: [ring] },
   };
-  return JSON.stringify({ type: "FeatureCollection" as const, features: [feature] }, null, 2);
+  return JSON.stringify(
+    { type: "FeatureCollection" as const, features: [feature] },
+    null,
+    2,
+  );
 }
 
 function escapeKml(s: string): string {
@@ -128,7 +161,14 @@ function escapeKml(s: string): string {
 
 function zoneResultAndWasteToKML(
   item: SavedZoneResult | null,
-  wastePoints: Array<{ lat: number; lon: number; type: string; capacityLiters?: number; condition?: string; address?: string }>
+  wastePoints: {
+    lat: number;
+    lon: number;
+    type: string;
+    capacityLiters?: number;
+    condition?: string;
+    address?: string;
+  }[],
 ): string {
   const parts: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -141,25 +181,36 @@ function zoneResultAndWasteToKML(
       "<Placemark>",
       `<name>${escapeKml(p.type)} ${i + 1}</name>`,
       "<description>",
-      escapeKml([p.address, p.capacityLiters != null ? `${p.capacityLiters} L` : "", p.condition ?? ""].filter(Boolean).join(" · ") || ""),
+      escapeKml(
+        [
+          p.address,
+          p.capacityLiters != null ? `${p.capacityLiters} L` : "",
+          p.condition ?? "",
+        ]
+          .filter(Boolean)
+          .join(" · ") || "",
+      ),
       "</description>",
       "<Point><coordinates>",
       `${p.lon},${p.lat},0`,
       "</coordinates></Point>",
-      "</Placemark>"
+      "</Placemark>",
     );
   });
   if (item?.zones) {
     item.zones.forEach((z, idx) => {
       if (!z.zone_polygon || z.zone_polygon.length < 3) return;
-      const ring = [...z.zone_polygon.map(([lon, lat]) => `${lon},${lat},0`), `${z.zone_polygon[0][0]},${z.zone_polygon[0][1]},0`];
+      const ring = [
+        ...z.zone_polygon.map(([lon, lat]) => `${lon},${lat},0`),
+        `${z.zone_polygon[0][0]},${z.zone_polygon[0][1]},0`,
+      ];
       parts.push(
         "<Placemark>",
         `<name>Zone ${idx + 1}</name>`,
         "<Polygon><outerBoundaryIs><LinearRing><coordinates>",
         ring.join(" "),
         "</coordinates></LinearRing></outerBoundaryIs></Polygon>",
-        "</Placemark>"
+        "</Placemark>",
       );
     });
   }
@@ -183,15 +234,25 @@ function ZoneAccordionItem({
   sourcePoints?: SourcePointSnapshot[] | null;
 }) {
   const color = ZONE_COLORS[index % ZONE_COLORS.length];
-  const nodePreview = zone.node_ids.length <= 8
-    ? zone.node_ids.join(", ")
-    : `${zone.node_ids.slice(0, 5).join(", ")} … +${zone.node_ids.length - 5} more`;
-  const totalCapacity = sourcePoints && sourcePoints.length > 0
-    ? zone.node_ids.reduce((sum, i) => sum + (sourcePoints[i]?.weight ?? 0), 0)
-    : null;
+  const nodePreview =
+    zone.node_ids.length <= 8
+      ? zone.node_ids.join(", ")
+      : `${zone.node_ids.slice(0, 5).join(", ")} … +${zone.node_ids.length - 5} more`;
+  const totalCapacity =
+    sourcePoints && sourcePoints.length > 0
+      ? zone.node_ids.reduce(
+          (sum, i) => sum + (sourcePoints[i]?.weight ?? 0),
+          0,
+        )
+      : null;
 
   return (
-    <View style={[styles.zoneItem, { borderLeftColor: color, borderBottomColor: colors.border }]}>
+    <View
+      style={[
+        styles.zoneItem,
+        { borderLeftColor: color, borderBottomColor: colors.border },
+      ]}
+    >
       <Pressable
         onPress={() => {
           hapticImpact();
@@ -203,11 +264,17 @@ function ZoneAccordionItem({
         ]}
       >
         <View style={[styles.zoneSwatch, { backgroundColor: color }]} />
-        <Text style={[styles.zoneItemTitle, { color: colors.text }]}>Zone {zone.zone_id + 1}</Text>
+        <Text style={[styles.zoneItemTitle, { color: colors.text }]}>
+          Zone {zone.zone_id + 1}
+        </Text>
         <Text style={[styles.zoneItemTime, { color: colors.muted }]}>
           {zone.estimated_time.toFixed(1)} min
-          {zone.estimated_distance != null ? ` · ${(zone.estimated_distance / 1000).toFixed(2)} km` : ""}
-          {totalCapacity != null && totalCapacity > 0 ? ` · ${Math.round(totalCapacity)}L` : ""}
+          {zone.estimated_distance != null
+            ? ` · ${(zone.estimated_distance / 1000).toFixed(2)} km`
+            : ""}
+          {totalCapacity != null && totalCapacity > 0
+            ? ` · ${Math.round(totalCapacity)}L`
+            : ""}
         </Text>
         <MaterialCommunityIcons
           name={expanded ? "chevron-up" : "chevron-down"}
@@ -216,12 +283,19 @@ function ZoneAccordionItem({
         />
       </Pressable>
       {expanded && (
-        <View style={[styles.zoneItemBody, { backgroundColor: colors.surface }]}>
+        <View
+          style={[styles.zoneItemBody, { backgroundColor: colors.surface }]}
+        >
           <Text style={[styles.zoneItemMeta, { color: colors.muted }]}>
             Nodes: {zone.node_ids.length}
-            {totalCapacity != null && totalCapacity > 0 ? ` · Total capacity: ${Math.round(totalCapacity)}L` : ""}
+            {totalCapacity != null && totalCapacity > 0
+              ? ` · Total capacity: ${Math.round(totalCapacity)}L`
+              : ""}
           </Text>
-          <Text style={[styles.zoneItemNodes, { color: colors.text }]} numberOfLines={4}>
+          <Text
+            style={[styles.zoneItemNodes, { color: colors.text }]}
+            numberOfLines={4}
+          >
             {nodePreview}
           </Text>
         </View>
@@ -251,27 +325,39 @@ export function ZonePage() {
 
   const [pageMode, setPageMode] = useState<ZonesPageMode>("delivery");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [expandedZoneIds, setExpandedZoneIds] = useState<Set<number>>(new Set([0]));
+  const [expandedZoneIds, setExpandedZoneIds] = useState<Set<number>>(
+    new Set([0]),
+  );
   const [wasteTruckCount, setWasteTruckCount] = useState("2");
-  const [wasteBalanceMetric, setWasteBalanceMetric] = useState<"count" | "weight" | "distance">("weight");
+  const [wasteBalanceMetric, setWasteBalanceMetric] = useState<
+    "count" | "weight" | "distance"
+  >("weight");
   const [wasteKnnNeighbors, setWasteKnnNeighbors] = useState(5);
   const [wastePartitionLoading, setWastePartitionLoading] = useState(false);
   const [wasteZoneName, setWasteZoneName] = useState("");
   const [addWasteModalVisible, setAddWasteModalVisible] = useState(false);
   const [importWasteModalVisible, setImportWasteModalVisible] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<"mapping" | "zones">("mapping");
-  const [editingWastePoint, setEditingWastePoint] = useState<import("@/types").WastePoint | null>(null);
+  const [editingWastePoint, setEditingWastePoint] = useState<
+    import("@/types").WastePoint | null
+  >(null);
   const [pickWasteLocationMode, setPickWasteLocationMode] = useState(false);
-  const [pendingWasteCoords, setPendingWasteCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [pendingWasteCoords, setPendingWasteCoords] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
   const [exportModalVisible, setExportModalVisible] = useState(false);
-  const [selectedWastePointId, setSelectedWastePointId] = useState<string | null>(null);
+  const [selectedWastePointId, setSelectedWastePointId] = useState<
+    string | null
+  >(null);
   const [deliverySheetVisible, setDeliverySheetVisible] = useState(false);
 
   /** Selected result to view: prefer displayedZoneId, else first saved (user can change via sidebar). */
-  const selectedId = displayedZoneId ?? (savedZones.length > 0 ? savedZones[0].id : null);
+  const selectedId =
+    displayedZoneId ?? (savedZones.length > 0 ? savedZones[0].id : null);
   const selectedResult = useMemo(
     () => savedZones.find((z) => z.id === selectedId) ?? savedZones[0] ?? null,
-    [savedZones, selectedId]
+    [savedZones, selectedId],
   );
 
   const selectResult = useCallback(
@@ -279,7 +365,7 @@ export function ZonePage() {
       hapticImpact();
       setDisplayedZoneId(id);
     },
-    [setDisplayedZoneId]
+    [setDisplayedZoneId],
   );
 
   const zonesPreviewPolygons = useMemo(() => {
@@ -292,12 +378,15 @@ export function ZonePage() {
 
   const initialBounds = useMemo(
     () => (selectedResult ? computeBoundsFromZones(selectedResult) : null),
-    [selectedResult]
+    [selectedResult],
   );
 
   const wasteBounds = useMemo(() => {
     if (wastePoints.length === 0) return null;
-    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    let minLat = Infinity,
+      maxLat = -Infinity,
+      minLon = Infinity,
+      maxLon = -Infinity;
     for (const p of wastePoints) {
       minLat = Math.min(minLat, p.lat);
       maxLat = Math.max(maxLat, p.lat);
@@ -342,7 +431,7 @@ export function ZonePage() {
   const handleDeliveryPartitionSuccess = useCallback(
     (
       zones: import("@/services/overtureOptimizerService").ZoneOutput[],
-      polygon: Array<[number, number]>,
+      polygon: [number, number][],
       name: string,
       truck_count: number,
       balance_metric: "time" | "distance",
@@ -359,7 +448,7 @@ export function ZonePage() {
     if (wastePoints.length < truckCount) {
       Alert.alert(
         "Not enough points",
-        `Map at least ${truckCount} bin(s) or dumpster(s), then run Partition.`
+        `Map at least ${truckCount} bin(s) or dumpster(s), then run Partition.`,
       );
       return;
     }
@@ -389,7 +478,8 @@ export function ZonePage() {
         lon: p.lon,
         weight: p.capacityLiters ?? 1,
       }));
-      const name = wasteZoneName.trim() || `Waste zones (${wastePoints.length} points)`;
+      const name =
+        wasteZoneName.trim() || `Waste zones (${wastePoints.length} points)`;
       addSavedZone({
         name,
         polygon,
@@ -400,7 +490,10 @@ export function ZonePage() {
       });
       setDisplayedZoneId(null);
       setSidebarTab("zones");
-      Alert.alert("Zones created", `${zones.length} zones saved. Open the Zones List tab to view.`);
+      Alert.alert(
+        "Zones created",
+        `${zones.length} zones saved. Open the Zones List tab to view.`,
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Partition failed", msg);
@@ -442,7 +535,7 @@ export function ZonePage() {
       const hasNearby = wastePoints.some(
         (p) =>
           Math.abs(p.lat - values.lat) < thresholdDeg &&
-          Math.abs(p.lon - values.lon) < thresholdDeg
+          Math.abs(p.lon - values.lon) < thresholdDeg,
       );
       if (hasNearby) {
         Alert.alert(
@@ -464,7 +557,7 @@ export function ZonePage() {
                 setPendingWasteCoords(null);
               },
             },
-          ]
+          ],
         );
         return;
       }
@@ -478,7 +571,7 @@ export function ZonePage() {
       });
       setPendingWasteCoords(null);
     },
-    [editingWastePoint, wastePoints, addWastePoint, updateWastePoint]
+    [editingWastePoint, wastePoints, addWastePoint, updateWastePoint],
   );
 
   const handleAddWasteModalClose = useCallback(() => {
@@ -488,67 +581,104 @@ export function ZonePage() {
     setPickWasteLocationMode(false);
   }, []);
 
-  const doExport = useCallback(async (format: "geojson" | "json" | "kml" | "csv") => {
-    const baseName = (selectedResult?.name || "zones").replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
+  const doExport = useCallback(
+    async (format: "geojson" | "json" | "kml" | "csv") => {
+      const baseName = (selectedResult?.name || "zones")
+        .replace(/[^a-zA-Z0-9-_]/g, "_")
+        .slice(0, 40);
 
-    const downloadFile = (content: string, filename: string, mimeType: string) => {
-      if (Platform.OS === "web") {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    };
-
-    const shareOrDownload = async (content: string, filename: string, mimeType: string) => {
-      if (Platform.OS === "web") {
-        downloadFile(content, filename, mimeType);
-        return;
-      }
-      try {
-        const path = `${FileSystem.cacheDirectory}${filename}`;
-        await FileSystem.writeAsStringAsync(path, content, { encoding: FileSystem.EncodingType.UTF8 });
-        const Sharing = await import("expo-sharing");
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(path, { mimeType, dialogTitle: `Share ${format.toUpperCase()}` });
+      const downloadFile = (
+        content: string,
+        filename: string,
+        mimeType: string,
+      ) => {
+        if (Platform.OS === "web") {
+          const blob = new Blob([content], { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
         }
+      };
+
+      const shareOrDownload = async (
+        content: string,
+        filename: string,
+        mimeType: string,
+      ) => {
+        if (Platform.OS === "web") {
+          downloadFile(content, filename, mimeType);
+          return;
+        }
+        try {
+          const path = `${FileSystem.cacheDirectory}${filename}`;
+          await FileSystem.writeAsStringAsync(path, content, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          const Sharing = await import("expo-sharing");
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(path, {
+              mimeType,
+              dialogTitle: `Share ${format.toUpperCase()}`,
+            });
+          }
+        } catch (e) {
+          Alert.alert("Export failed", (e as Error).message);
+        }
+      };
+
+      try {
+        switch (format) {
+          case "geojson":
+            if (!selectedResult) return;
+            await shareOrDownload(
+              zoneResultToGeoJSON(selectedResult),
+              `${baseName}.geojson`,
+              "application/geo+json",
+            );
+            break;
+          case "json":
+            if (!selectedResult) return;
+            await shareOrDownload(
+              JSON.stringify(selectedResult, null, 2),
+              `${baseName}.json`,
+              "application/json",
+            );
+            break;
+          case "kml":
+            await shareOrDownload(
+              zoneResultAndWasteToKML(selectedResult ?? null, wastePoints),
+              `${baseName}.kml`,
+              "application/vnd.google-earth.kml+xml",
+            );
+            break;
+          case "csv": {
+            // Export waste points as CSV
+            const header = "lat,lon,type,capacity,condition,address";
+            const rows = wastePoints.map((p) =>
+              [
+                p.lat,
+                p.lon,
+                p.type,
+                p.capacityLiters ?? "",
+                p.condition ?? "",
+                `"${(p.address ?? "").replace(/"/g, '""')}"`,
+              ].join(","),
+            );
+            const csv = [header, ...rows].join("\n");
+            await shareOrDownload(csv, `${baseName}_points.csv`, "text/csv");
+            break;
+          }
+        }
+        setExportModalVisible(false);
       } catch (e) {
         Alert.alert("Export failed", (e as Error).message);
       }
-    };
-
-    try {
-      switch (format) {
-        case "geojson":
-          if (!selectedResult) return;
-          await shareOrDownload(zoneResultToGeoJSON(selectedResult), `${baseName}.geojson`, "application/geo+json");
-          break;
-        case "json":
-          if (!selectedResult) return;
-          await shareOrDownload(JSON.stringify(selectedResult, null, 2), `${baseName}.json`, "application/json");
-          break;
-        case "kml":
-          await shareOrDownload(zoneResultAndWasteToKML(selectedResult ?? null, wastePoints), `${baseName}.kml`, "application/vnd.google-earth.kml+xml");
-          break;
-        case "csv": {
-          // Export waste points as CSV
-          const header = "lat,lon,type,capacity,condition,address";
-          const rows = wastePoints.map((p) =>
-            [p.lat, p.lon, p.type, p.capacityLiters ?? "", p.condition ?? "", `"${(p.address ?? "").replace(/"/g, '""')}"`].join(",")
-          );
-          const csv = [header, ...rows].join("\n");
-          await shareOrDownload(csv, `${baseName}_points.csv`, "text/csv");
-          break;
-        }
-      }
-      setExportModalVisible(false);
-    } catch (e) {
-      Alert.alert("Export failed", (e as Error).message);
-    }
-  }, [selectedResult, wastePoints]);
+    },
+    [selectedResult, wastePoints],
+  );
 
   const handleExport = useCallback(() => {
     hapticImpact();
@@ -558,9 +688,11 @@ export function ZonePage() {
       return;
     }
     // On native, use Alert with buttons
-    const buttons: Array<{ text: string; style?: "cancel" | "default" | "destructive"; onPress?: () => void }> = [
-      { text: "Cancel", style: "cancel" },
-    ];
+    const buttons: {
+      text: string;
+      style?: "cancel" | "default" | "destructive";
+      onPress?: () => void;
+    }[] = [{ text: "Cancel", style: "cancel" }];
     if (selectedResult) {
       buttons.push({ text: "GeoJSON", onPress: () => doExport("geojson") });
       buttons.push({ text: "JSON", onPress: () => doExport("json") });
@@ -577,9 +709,10 @@ export function ZonePage() {
   const totalTime = selectedResult
     ? selectedResult.zones.reduce((s, z) => s + z.estimated_time, 0)
     : 0;
-  const avgTime = selectedResult && selectedResult.zones.length > 0
-    ? totalTime / selectedResult.zones.length
-    : 0;
+  const avgTime =
+    selectedResult && selectedResult.zones.length > 0
+      ? totalTime / selectedResult.zones.length
+      : 0;
   const times = selectedResult?.zones.map((z) => z.estimated_time) ?? [];
   const maxTime = times.length ? Math.max(...times) : 0;
   const minTime = times.length ? Math.min(...times) : 0;
@@ -607,27 +740,53 @@ export function ZonePage() {
         ]}
       >
         <View style={styles.toolbarLeft}>
-          <Text style={[styles.toolbarTitle, { color: colors.text }]}>Zones</Text>
-          <View style={[styles.modeToggle, { borderColor: colors.border, backgroundColor: colors.background }]}>
+          <Text style={[styles.toolbarTitle, { color: colors.text }]}>
+            Zones
+          </Text>
+          <View
+            style={[
+              styles.modeToggle,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
+          >
             <TouchableOpacity
-              onPress={() => { hapticImpact(); setPageMode("delivery"); }}
+              onPress={() => {
+                hapticImpact();
+                setPageMode("delivery");
+              }}
               style={[
                 styles.modeToggleBtn,
                 pageMode === "delivery" && { backgroundColor: colors.primary },
               ]}
             >
-              <Text style={[styles.modeToggleLabel, { color: pageMode === "delivery" ? "#fff" : colors.muted }]}>
+              <Text
+                style={[
+                  styles.modeToggleLabel,
+                  { color: pageMode === "delivery" ? "#fff" : colors.muted },
+                ]}
+              >
                 Delivery
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => { hapticImpact(); setPageMode("waste"); }}
+              onPress={() => {
+                hapticImpact();
+                setPageMode("waste");
+              }}
               style={[
                 styles.modeToggleBtn,
                 pageMode === "waste" && { backgroundColor: colors.primary },
               ]}
             >
-              <Text style={[styles.modeToggleLabel, { color: pageMode === "waste" ? "#fff" : colors.muted }]}>
+              <Text
+                style={[
+                  styles.modeToggleLabel,
+                  { color: pageMode === "waste" ? "#fff" : colors.muted },
+                ]}
+              >
                 Waste
               </Text>
             </TouchableOpacity>
@@ -638,7 +797,11 @@ export function ZonePage() {
               style={[styles.toolbarButton, { borderColor: colors.border }]}
             >
               <MaterialCommunityIcons
-                name={sidebarCollapsed ? "chevron-double-right" : "chevron-double-left"}
+                name={
+                  sidebarCollapsed
+                    ? "chevron-double-right"
+                    : "chevron-double-left"
+                }
                 size={20}
                 color={colors.muted}
               />
@@ -649,30 +812,64 @@ export function ZonePage() {
           {pageMode === "waste" ? (
             <>
               <TouchableOpacity
-                onPress={() => { hapticImpact(); setAddWasteModalVisible(true); }}
+                onPress={() => {
+                  hapticImpact();
+                  setAddWasteModalVisible(true);
+                }}
                 style={[styles.toolbarButton, { borderColor: colors.border }]}
               >
-                <MaterialCommunityIcons name="plus" size={18} color={colors.primary} />
-                <Text style={[styles.toolbarButtonLabel, { color: colors.primary }]}>Add</Text>
+                <MaterialCommunityIcons
+                  name="plus"
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text
+                  style={[styles.toolbarButtonLabel, { color: colors.primary }]}
+                >
+                  Add
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => { hapticImpact(); setImportWasteModalVisible(true); }}
+                onPress={() => {
+                  hapticImpact();
+                  setImportWasteModalVisible(true);
+                }}
                 style={[styles.toolbarButton, { borderColor: colors.border }]}
               >
-                <MaterialCommunityIcons name="upload" size={18} color={colors.muted} />
-                <Text style={[styles.toolbarButtonLabel, { color: colors.muted }]}>Import</Text>
+                <MaterialCommunityIcons
+                  name="upload"
+                  size={18}
+                  color={colors.muted}
+                />
+                <Text
+                  style={[styles.toolbarButtonLabel, { color: colors.muted }]}
+                >
+                  Import
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleWastePartition}
                 disabled={wastePartitionLoading || wastePoints.length < 2}
-                style={[styles.toolbarButton, { borderColor: colors.border, opacity: wastePoints.length < 2 ? 0.5 : 1 }]}
+                style={[
+                  styles.toolbarButton,
+                  {
+                    borderColor: colors.border,
+                    opacity: wastePoints.length < 2 ? 0.5 : 1,
+                  },
+                ]}
               >
                 {wastePartitionLoading ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <MaterialCommunityIcons name="vector-polygon" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons
+                    name="vector-polygon"
+                    size={18}
+                    color={colors.primary}
+                  />
                 )}
-                <Text style={[styles.toolbarButtonLabel, { color: colors.primary }]}>
+                <Text
+                  style={[styles.toolbarButtonLabel, { color: colors.primary }]}
+                >
                   {wastePartitionLoading ? "Partitioning…" : "Partition"}
                 </Text>
               </TouchableOpacity>
@@ -681,8 +878,16 @@ export function ZonePage() {
                   onPress={handleExport}
                   style={[styles.toolbarButton, { borderColor: colors.border }]}
                 >
-                  <MaterialCommunityIcons name="export" size={18} color={colors.muted} />
-                  <Text style={[styles.toolbarButtonLabel, { color: colors.muted }]}>Export</Text>
+                  <MaterialCommunityIcons
+                    name="export"
+                    size={18}
+                    color={colors.muted}
+                  />
+                  <Text
+                    style={[styles.toolbarButtonLabel, { color: colors.muted }]}
+                  >
+                    Export
+                  </Text>
                 </TouchableOpacity>
               )}
             </>
@@ -692,15 +897,31 @@ export function ZonePage() {
                 onPress={handleExport}
                 style={[styles.toolbarButton, { borderColor: colors.border }]}
               >
-                <MaterialCommunityIcons name="export" size={18} color={colors.muted} />
-                <Text style={[styles.toolbarButtonLabel, { color: colors.muted }]}>Export</Text>
+                <MaterialCommunityIcons
+                  name="export"
+                  size={18}
+                  color={colors.muted}
+                />
+                <Text
+                  style={[styles.toolbarButtonLabel, { color: colors.muted }]}
+                >
+                  Export
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleShowOnMap}
                 style={[styles.toolbarButton, { borderColor: colors.border }]}
               >
-                <MaterialCommunityIcons name="map-marker" size={18} color={colors.primary} />
-                <Text style={[styles.toolbarButtonLabel, { color: colors.primary }]}>Show on Map</Text>
+                <MaterialCommunityIcons
+                  name="map-marker"
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text
+                  style={[styles.toolbarButtonLabel, { color: colors.primary }]}
+                >
+                  Show on Map
+                </Text>
               </TouchableOpacity>
             </>
           ) : null}
@@ -723,20 +944,56 @@ export function ZonePage() {
               },
             ]}
           >
-            <View style={[styles.sidebarTabs, { borderBottomColor: colors.border }]}>
+            <View
+              style={[styles.sidebarTabs, { borderBottomColor: colors.border }]}
+            >
               <Pressable
-                onPress={() => { hapticImpact(); setSidebarTab("mapping"); }}
-                style={[styles.sidebarTab, sidebarTab === "mapping" && { borderBottomColor: colors.primary }]}
+                onPress={() => {
+                  hapticImpact();
+                  setSidebarTab("mapping");
+                }}
+                style={[
+                  styles.sidebarTab,
+                  sidebarTab === "mapping" && {
+                    borderBottomColor: colors.primary,
+                  },
+                ]}
               >
-                <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "mapping" ? colors.primary : colors.muted }]}>
+                <Text
+                  style={[
+                    styles.sidebarTabLabel,
+                    {
+                      color:
+                        sidebarTab === "mapping"
+                          ? colors.primary
+                          : colors.muted,
+                    },
+                  ]}
+                >
                   Map contents
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => { hapticImpact(); setSidebarTab("zones"); }}
-                style={[styles.sidebarTab, sidebarTab === "zones" && { borderBottomColor: colors.primary }]}
+                onPress={() => {
+                  hapticImpact();
+                  setSidebarTab("zones");
+                }}
+                style={[
+                  styles.sidebarTab,
+                  sidebarTab === "zones" && {
+                    borderBottomColor: colors.primary,
+                  },
+                ]}
               >
-                <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "zones" ? colors.primary : colors.muted }]}>
+                <Text
+                  style={[
+                    styles.sidebarTabLabel,
+                    {
+                      color:
+                        sidebarTab === "zones" ? colors.primary : colors.muted,
+                    },
+                  ]}
+                >
                   Zones List
                 </Text>
               </Pressable>
@@ -748,68 +1005,182 @@ export function ZonePage() {
             >
               {sidebarTab === "mapping" ? (
                 <>
-                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>
-                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters
+                  <Text
+                    style={[
+                      styles.sidebarSectionTitle,
+                      { color: colors.muted },
+                    ]}
+                  >
+                    {wastePoints.filter((p) => p.type === "bin").length} bins,{" "}
+                    {wastePoints.filter((p) => p.type === "dumpster").length}{" "}
+                    dumpsters
                   </Text>
-                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 8 }]}>
+                  <Text
+                    style={[
+                      styles.sidebarSectionTitle,
+                      { color: colors.muted, marginTop: 8 },
+                    ]}
+                  >
                     Partition settings
                   </Text>
-                  <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Text style={[styles.statsRow, { color: colors.text }]}>Trucks (zones)</Text>
+                  <View
+                    style={[
+                      styles.statsCard,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.statsRow, { color: colors.text }]}>
+                      Trucks (zones)
+                    </Text>
                     <TextInput
                       value={wasteTruckCount}
                       onChangeText={setWasteTruckCount}
                       keyboardType="number-pad"
-                      style={[styles.wasteInput, { borderColor: colors.border, color: colors.text }]}
+                      style={[
+                        styles.wasteInput,
+                        { borderColor: colors.border, color: colors.text },
+                      ]}
                       placeholder="2"
                       placeholderTextColor={colors.muted}
                     />
-                    <Text style={[styles.statsRow, { color: colors.text, marginTop: 8 }]}>Balance by</Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                    <Text
+                      style={[
+                        styles.statsRow,
+                        { color: colors.text, marginTop: 8 },
+                      ]}
+                    >
+                      Balance by
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 6,
+                        marginTop: 4,
+                      }}
+                    >
                       {(["count", "weight", "distance"] as const).map((m) => (
                         <TouchableOpacity
                           key={m}
                           onPress={() => setWasteBalanceMetric(m)}
-                          style={[styles.presetChip, { backgroundColor: wasteBalanceMetric === m ? colors.primary : colors.background, borderColor: colors.border }]}
+                          style={[
+                            styles.presetChip,
+                            {
+                              backgroundColor:
+                                wasteBalanceMetric === m
+                                  ? colors.primary
+                                  : colors.background,
+                              borderColor: colors.border,
+                            },
+                          ]}
                         >
-                          <Text style={{ color: wasteBalanceMetric === m ? "#fff" : colors.text, fontSize: 12 }}>
-                            {m === "count" ? "Count" : m === "weight" ? "Volume" : "Distance"}
+                          <Text
+                            style={{
+                              color:
+                                wasteBalanceMetric === m ? "#fff" : colors.text,
+                              fontSize: 12,
+                            }}
+                          >
+                            {m === "count"
+                              ? "Count"
+                              : m === "weight"
+                                ? "Volume"
+                                : "Distance"}
                           </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
-                    <Text style={[styles.statsRow, { color: colors.muted, marginTop: 8 }]}>KNN neighbors: {wasteKnnNeighbors}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-                      <Text style={{ color: colors.muted, fontSize: 12 }}>1</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.statsRow,
+                        { color: colors.muted, marginTop: 8 },
+                      ]}
+                    >
+                      KNN neighbors: {wasteKnnNeighbors}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginTop: 4,
+                      }}
+                    >
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>
+                        1
+                      </Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={{ flex: 1 }}
+                      >
                         <View style={{ flexDirection: "row", gap: 4 }}>
                           {[1, 3, 5, 8, 10, 15, 20].map((k) => (
                             <TouchableOpacity
                               key={k}
                               onPress={() => setWasteKnnNeighbors(k)}
-                              style={[styles.presetChip, { backgroundColor: wasteKnnNeighbors === k ? colors.primary : colors.background, borderColor: colors.border }]}
+                              style={[
+                                styles.presetChip,
+                                {
+                                  backgroundColor:
+                                    wasteKnnNeighbors === k
+                                      ? colors.primary
+                                      : colors.background,
+                                  borderColor: colors.border,
+                                },
+                              ]}
                             >
-                              <Text style={{ color: wasteKnnNeighbors === k ? "#fff" : colors.text, fontSize: 12 }}>{k}</Text>
+                              <Text
+                                style={{
+                                  color:
+                                    wasteKnnNeighbors === k
+                                      ? "#fff"
+                                      : colors.text,
+                                  fontSize: 12,
+                                }}
+                              >
+                                {k}
+                              </Text>
                             </TouchableOpacity>
                           ))}
                         </View>
                       </ScrollView>
-                      <Text style={{ color: colors.muted, fontSize: 12 }}>20</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>
+                        20
+                      </Text>
                     </View>
                     <TextInput
                       value={wasteZoneName}
                       onChangeText={setWasteZoneName}
-                      style={[styles.wasteInput, { borderColor: colors.border, color: colors.text, marginTop: 8 }]}
+                      style={[
+                        styles.wasteInput,
+                        {
+                          borderColor: colors.border,
+                          color: colors.text,
+                          marginTop: 8,
+                        },
+                      ]}
                       placeholder="Zone name (optional)"
                       placeholderTextColor={colors.muted}
                     />
                   </View>
-                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>
+                  <Text
+                    style={[
+                      styles.sidebarSectionTitle,
+                      { color: colors.muted, marginTop: 16 },
+                    ]}
+                  >
                     Map contents
                   </Text>
                   {wastePoints.length === 0 ? (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                      No bins or dumpsters yet. Use Add or Import in the toolbar.
+                    <Text
+                      style={[styles.emptySidebarText, { color: colors.muted }]}
+                    >
+                      No bins or dumpsters yet. Use Add or Import in the
+                      toolbar.
                     </Text>
                   ) : (
                     wastePoints.slice(0, 50).map((p, idx) => {
@@ -818,10 +1189,19 @@ export function ZonePage() {
                       return (
                         <Pressable
                           key={p.id}
-                          onPress={() => { hapticImpact(); setSelectedWastePointId(isSelected ? null : p.id); }}
+                          onPress={() => {
+                            hapticImpact();
+                            setSelectedWastePointId(isSelected ? null : p.id);
+                          }}
                           style={[
                             styles.resultRow,
-                            { borderColor: colors.border, marginBottom: 6, backgroundColor: isSelected ? colors.primary + "20" : "transparent" },
+                            {
+                              borderColor: colors.border,
+                              marginBottom: 6,
+                              backgroundColor: isSelected
+                                ? colors.primary + "20"
+                                : "transparent",
+                            },
                           ]}
                         >
                           <MaterialCommunityIcons
@@ -830,37 +1210,79 @@ export function ZonePage() {
                             color={p.type === "bin" ? "#22c55e" : "#3b82f6"}
                           />
                           <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                            <Text
+                              style={[
+                                styles.resultRowName,
+                                {
+                                  color: isSelected
+                                    ? colors.primary
+                                    : colors.text,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
                               {label}
                             </Text>
-                            <Text style={[styles.resultRowMeta, { color: colors.muted }]} numberOfLines={1}>
-                              {p.address || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
+                            <Text
+                              style={[
+                                styles.resultRowMeta,
+                                { color: colors.muted },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {p.address ||
+                                `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
                             </Text>
                           </View>
                           <TouchableOpacity
-                            onPress={() => { hapticImpact(); setEditingWastePoint(p); setAddWasteModalVisible(true); }}
+                            onPress={() => {
+                              hapticImpact();
+                              setEditingWastePoint(p);
+                              setAddWasteModalVisible(true);
+                            }}
                             style={{ padding: 6 }}
                           >
-                            <MaterialCommunityIcons name="pencil" size={18} color={colors.muted} />
+                            <MaterialCommunityIcons
+                              name="pencil"
+                              size={18}
+                              color={colors.muted}
+                            />
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => {
                               hapticImpact();
-                              Alert.alert("Remove point", "Remove this bin/dumpster from the map?", [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Remove", style: "destructive", onPress: () => removeWastePoint(p.id) },
-                              ]);
+                              Alert.alert(
+                                "Remove point",
+                                "Remove this bin/dumpster from the map?",
+                                [
+                                  { text: "Cancel", style: "cancel" },
+                                  {
+                                    text: "Remove",
+                                    style: "destructive",
+                                    onPress: () => removeWastePoint(p.id),
+                                  },
+                                ],
+                              );
                             }}
                             style={{ padding: 6 }}
                           >
-                            <MaterialCommunityIcons name="delete-outline" size={18} color={colors.muted} />
+                            <MaterialCommunityIcons
+                              name="delete-outline"
+                              size={18}
+                              color={colors.muted}
+                            />
                           </TouchableOpacity>
                         </Pressable>
                       );
                     })
                   )}
                   {wastePoints.length > 50 && (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted, marginTop: 8 }]}>
+                    <Text
+                      style={[
+                        styles.emptySidebarText,
+                        { color: colors.muted, marginTop: 8 },
+                      ]}
+                    >
                       … and {wastePoints.length - 50} more
                     </Text>
                   )}
@@ -869,66 +1291,221 @@ export function ZonePage() {
                 <>
                   {savedZones.length > 0 ? (
                     <>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>Saved results</Text>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          { color: colors.muted },
+                        ]}
+                      >
+                        Saved results
+                      </Text>
                       {savedZones.map((item) => {
                         const isSelected = item.id === selectedId;
                         return (
                           <Pressable
                             key={item.id}
                             onPress={() => selectResult(item.id)}
-                            style={[styles.resultRow, { backgroundColor: isSelected ? colors.primary + "20" : "transparent", borderColor: colors.border }]}
+                            style={[
+                              styles.resultRow,
+                              {
+                                backgroundColor: isSelected
+                                  ? colors.primary + "20"
+                                  : "transparent",
+                                borderColor: colors.border,
+                              },
+                            ]}
                           >
-                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                            <Text
+                              style={[
+                                styles.resultRowName,
+                                {
+                                  color: isSelected
+                                    ? colors.primary
+                                    : colors.text,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
                               {item.name || "Unnamed"}
                             </Text>
-                            <Text style={[styles.resultRowMeta, { color: colors.muted }]}>{item.zones.length} zones</Text>
+                            <Text
+                              style={[
+                                styles.resultRowMeta,
+                                { color: colors.muted },
+                              ]}
+                            >
+                              {item.zones.length} zones
+                            </Text>
                           </Pressable>
                         );
                       })}
                       {selectedResult && (
                         <>
-                          <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>{selectedResult.name || "Unnamed zones"}</Text>
-                          <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <Text style={[styles.statsRow, { color: colors.text }]}>Zones: <Text style={{ fontWeight: "600" }}>{selectedResult.zones.length}</Text></Text>
-                            <Text style={[styles.statsRow, { color: colors.text }]}>Total time: <Text style={{ fontWeight: "600" }}>{totalTime.toFixed(1)} min</Text></Text>
-                            {selectedResult.sourcePoints && selectedResult.sourcePoints.length > 0 && (
-                              <Text style={[styles.statsRow, { color: colors.muted }]}>
-                                Points: {selectedResult.sourcePoints.length} (capacity per zone in list)
+                          <Text
+                            style={[
+                              styles.sidebarSectionTitle,
+                              { color: colors.muted, marginTop: 16 },
+                            ]}
+                          >
+                            {selectedResult.name || "Unnamed zones"}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statsCard,
+                              {
+                                backgroundColor: colors.background,
+                                borderColor: colors.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[styles.statsRow, { color: colors.text }]}
+                            >
+                              Zones:{" "}
+                              <Text style={{ fontWeight: "600" }}>
+                                {selectedResult.zones.length}
                               </Text>
-                            )}
-                          </View>
-                          <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>Zone list</Text>
-                          {selectedResult.zones.sort((a, b) => b.estimated_time - a.estimated_time).map((zone, idx) => (
-                            <View key={zone.zone_id} style={[styles.zoneItem, { borderLeftColor: ZONE_COLORS[idx % ZONE_COLORS.length], borderBottomColor: colors.border }]}>
-                              <Pressable
-                                onPress={() => toggleZoneExpanded(zone.zone_id)}
-                                style={[styles.zoneItemHeader, { backgroundColor: colors.background }]}
-                              >
-                                <View style={[styles.zoneSwatch, { backgroundColor: ZONE_COLORS[idx % ZONE_COLORS.length] }]} />
-                                <Text style={[styles.zoneItemTitle, { color: colors.text }]}>Zone {zone.zone_id}</Text>
-                                <Text style={[styles.zoneItemTime, { color: colors.muted }]}>{zone.estimated_time.toFixed(1)} min</Text>
-                                <MaterialCommunityIcons name={expandedZoneIds.has(zone.zone_id) ? "chevron-up" : "chevron-down"} size={20} color={colors.muted} />
-                              </Pressable>
-                              {expandedZoneIds.has(zone.zone_id) && (
-                                <View style={[styles.zoneItemBody, { backgroundColor: colors.background }]}>
-                                  <Text style={[styles.zoneItemMeta, { color: colors.muted }]}>Points: {zone.point_ids?.length ?? 0}</Text>
-                                  {zone.zone_polygon && zone.zone_polygon.length >= 3 && (
-                                    <Text style={[styles.zoneItemNodes, { color: colors.muted }]} numberOfLines={4}>
-                                      {zone.zone_polygon.slice(0, 8).map(([lon, lat]) => `${lat.toFixed(4)}, ${lon.toFixed(4)}`).join("; ")}
-                                      {zone.zone_polygon.length > 8 ? "…" : ""}
-                                    </Text>
-                                  )}
-                                </View>
+                            </Text>
+                            <Text
+                              style={[styles.statsRow, { color: colors.text }]}
+                            >
+                              Total time:{" "}
+                              <Text style={{ fontWeight: "600" }}>
+                                {totalTime.toFixed(1)} min
+                              </Text>
+                            </Text>
+                            {selectedResult.sourcePoints &&
+                              selectedResult.sourcePoints.length > 0 && (
+                                <Text
+                                  style={[
+                                    styles.statsRow,
+                                    { color: colors.muted },
+                                  ]}
+                                >
+                                  Points: {selectedResult.sourcePoints.length}{" "}
+                                  (capacity per zone in list)
+                                </Text>
                               )}
-                            </View>
-                          ))}
+                          </View>
+                          <Text
+                            style={[
+                              styles.sidebarSectionTitle,
+                              { color: colors.muted, marginTop: 16 },
+                            ]}
+                          >
+                            Zone list
+                          </Text>
+                          {selectedResult.zones
+                            .sort((a, b) => b.estimated_time - a.estimated_time)
+                            .map((zone, idx) => (
+                              <View
+                                key={zone.zone_id}
+                                style={[
+                                  styles.zoneItem,
+                                  {
+                                    borderLeftColor:
+                                      ZONE_COLORS[idx % ZONE_COLORS.length],
+                                    borderBottomColor: colors.border,
+                                  },
+                                ]}
+                              >
+                                <Pressable
+                                  onPress={() =>
+                                    toggleZoneExpanded(zone.zone_id)
+                                  }
+                                  style={[
+                                    styles.zoneItemHeader,
+                                    { backgroundColor: colors.background },
+                                  ]}
+                                >
+                                  <View
+                                    style={[
+                                      styles.zoneSwatch,
+                                      {
+                                        backgroundColor:
+                                          ZONE_COLORS[idx % ZONE_COLORS.length],
+                                      },
+                                    ]}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.zoneItemTitle,
+                                      { color: colors.text },
+                                    ]}
+                                  >
+                                    Zone {zone.zone_id}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.zoneItemTime,
+                                      { color: colors.muted },
+                                    ]}
+                                  >
+                                    {zone.estimated_time.toFixed(1)} min
+                                  </Text>
+                                  <MaterialCommunityIcons
+                                    name={
+                                      expandedZoneIds.has(zone.zone_id)
+                                        ? "chevron-up"
+                                        : "chevron-down"
+                                    }
+                                    size={20}
+                                    color={colors.muted}
+                                  />
+                                </Pressable>
+                                {expandedZoneIds.has(zone.zone_id) && (
+                                  <View
+                                    style={[
+                                      styles.zoneItemBody,
+                                      { backgroundColor: colors.background },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.zoneItemMeta,
+                                        { color: colors.muted },
+                                      ]}
+                                    >
+                                      Points: {zone.point_ids?.length ?? 0}
+                                    </Text>
+                                    {zone.zone_polygon &&
+                                      zone.zone_polygon.length >= 3 && (
+                                        <Text
+                                          style={[
+                                            styles.zoneItemNodes,
+                                            { color: colors.muted },
+                                          ]}
+                                          numberOfLines={4}
+                                        >
+                                          {zone.zone_polygon
+                                            .slice(0, 8)
+                                            .map(
+                                              ([lon, lat]) =>
+                                                `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+                                            )
+                                            .join("; ")}
+                                          {zone.zone_polygon.length > 8
+                                            ? "…"
+                                            : ""}
+                                        </Text>
+                                      )}
+                                  </View>
+                                )}
+                              </View>
+                            ))}
                         </>
                       )}
                     </>
                   ) : (
                     <View style={styles.emptySidebar}>
-                      <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                        No saved zone results. Map bins/dumpsters, then run Partition.
+                      <Text
+                        style={[
+                          styles.emptySidebarText,
+                          { color: colors.muted },
+                        ]}
+                      >
+                        No saved zone results. Map bins/dumpsters, then run
+                        Partition.
                       </Text>
                     </View>
                   )}
@@ -950,23 +1527,51 @@ export function ZonePage() {
                   selectedResult && initialBounds
                     ? initialBounds
                     : wasteBounds
-                      ? { minLat: wasteBounds.minLat, maxLat: wasteBounds.maxLat, minLon: wasteBounds.minLon, maxLon: wasteBounds.maxLon }
+                      ? {
+                          minLat: wasteBounds.minLat,
+                          maxLat: wasteBounds.maxLat,
+                          minLon: wasteBounds.minLon,
+                          maxLon: wasteBounds.maxLon,
+                        }
                       : undefined
                 }
                 wastePoints={wastePoints}
-                onMapPress={pageMode === "waste" ? handleMapPressForWastePick : undefined}
+                onMapPress={
+                  pageMode === "waste" ? handleMapPressForWastePick : undefined
+                }
                 onLoad={() => {}}
               />
-              {wastePoints.length === 0 && !(Platform.OS === "web" && pageMode === "waste") && (
-                <View style={[styles.mapEmptyHint, { backgroundColor: colors.surface + "E6", pointerEvents: "none" }]}>
-                  <MaterialCommunityIcons name="delete-outline" size={32} color={colors.muted} />
-                  <Text style={[styles.mapPlaceholderText, { color: colors.text, fontSize: 14, marginTop: 6 }]}>
-                    No bins or dumpsters mapped. Use Add or Import in the toolbar.
-                  </Text>
-                </View>
-              )}
+              {wastePoints.length === 0 &&
+                !(Platform.OS === "web" && pageMode === "waste") && (
+                  <View
+                    style={[
+                      styles.mapEmptyHint,
+                      {
+                        backgroundColor: colors.surface + "E6",
+                        pointerEvents: "none",
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="delete-outline"
+                      size={32}
+                      color={colors.muted}
+                    />
+                    <Text
+                      style={[
+                        styles.mapPlaceholderText,
+                        { color: colors.text, fontSize: 14, marginTop: 6 },
+                      ]}
+                    >
+                      No bins or dumpsters mapped. Use Add or Import in the
+                      toolbar.
+                    </Text>
+                  </View>
+                )}
             </>
-          ) : selectedResult && zonesPreviewPolygons && zonesPreviewPolygons.length > 0 ? (
+          ) : selectedResult &&
+            zonesPreviewPolygons &&
+            zonesPreviewPolygons.length > 0 ? (
             <RouteMap
               collectionPoints={[]}
               height={mapHeight}
@@ -976,8 +1581,17 @@ export function ZonePage() {
               onLoad={() => {}}
             />
           ) : (
-            <View style={[styles.mapPlaceholder, { backgroundColor: colors.surface }]}>
-              <MaterialCommunityIcons name="vector-polygon" size={48} color={colors.muted} />
+            <View
+              style={[
+                styles.mapPlaceholder,
+                { backgroundColor: colors.surface },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="vector-polygon"
+                size={48}
+                color={colors.muted}
+              />
               <Text style={[styles.mapPlaceholderText, { color: colors.text }]}>
                 {savedZones.length === 0
                   ? "No zone results yet"
@@ -985,13 +1599,23 @@ export function ZonePage() {
               </Text>
               {savedZones.length === 0 ? (
                 <TouchableOpacity
-                  onPress={() => { hapticImpact(); setDeliverySheetVisible(true); }}
-                  style={[styles.placeholderBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => {
+                    hapticImpact();
+                    setDeliverySheetVisible(true);
+                  }}
+                  style={[
+                    styles.placeholderBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
                 >
-                  <Text style={styles.placeholderBtnText}>＋ Create zone partition</Text>
+                  <Text style={styles.placeholderBtnText}>
+                    ＋ Create zone partition
+                  </Text>
                 </TouchableOpacity>
               ) : (
-                <Text style={[styles.mapPlaceholderHint, { color: colors.muted }]}>
+                <Text
+                  style={[styles.mapPlaceholderHint, { color: colors.muted }]}
+                >
                   Pick a saved partition to view zones on the map.
                 </Text>
               )}
@@ -1018,11 +1642,16 @@ export function ZonePage() {
               contentContainerStyle={styles.sidebarContent}
               showsVerticalScrollIndicator
             >
-              {(
+              {
                 <>
                   {savedZones.length > 1 && (
                     <>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          { color: colors.muted },
+                        ]}
+                      >
                         Saved results
                       </Text>
                       {savedZones.map((item) => {
@@ -1034,7 +1663,9 @@ export function ZonePage() {
                             style={[
                               styles.resultRow,
                               {
-                                backgroundColor: isSelected ? colors.primary + "20" : "transparent",
+                                backgroundColor: isSelected
+                                  ? colors.primary + "20"
+                                  : "transparent",
                                 borderColor: colors.border,
                               },
                             ]}
@@ -1042,13 +1673,22 @@ export function ZonePage() {
                             <Text
                               style={[
                                 styles.resultRowName,
-                                { color: isSelected ? colors.primary : colors.text },
+                                {
+                                  color: isSelected
+                                    ? colors.primary
+                                    : colors.text,
+                                },
                               ]}
                               numberOfLines={1}
                             >
                               {item.name || "Unnamed"}
                             </Text>
-                            <Text style={[styles.resultRowMeta, { color: colors.muted }]}>
+                            <Text
+                              style={[
+                                styles.resultRowMeta,
+                                { color: colors.muted },
+                              ]}
+                            >
                               {item.zones.length} zones
                             </Text>
                           </Pressable>
@@ -1058,29 +1698,67 @@ export function ZonePage() {
                   )}
                   {selectedResult ? (
                     <>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: savedZones.length > 1 ? 16 : 0 }]}>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          {
+                            color: colors.muted,
+                            marginTop: savedZones.length > 1 ? 16 : 0,
+                          },
+                        ]}
+                      >
                         {selectedResult.name || "Unnamed zones"}
                       </Text>
-                      <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.statsCard,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
                         <Text style={[styles.statsRow, { color: colors.text }]}>
-                          Zones: <Text style={{ fontWeight: "600" }}>{selectedResult.zones.length}</Text>
+                          Zones:{" "}
+                          <Text style={{ fontWeight: "600" }}>
+                            {selectedResult.zones.length}
+                          </Text>
                         </Text>
                         <Text style={[styles.statsRow, { color: colors.text }]}>
-                          Total time: <Text style={{ fontWeight: "600" }}>{totalTime.toFixed(1)} min</Text>
+                          Total time:{" "}
+                          <Text style={{ fontWeight: "600" }}>
+                            {totalTime.toFixed(1)} min
+                          </Text>
                         </Text>
                         <Text style={[styles.statsRow, { color: colors.text }]}>
-                          Avg per zone: <Text style={{ fontWeight: "600" }}>{avgTime.toFixed(1)} min</Text>
+                          Avg per zone:{" "}
+                          <Text style={{ fontWeight: "600" }}>
+                            {avgTime.toFixed(1)} min
+                          </Text>
                         </Text>
                         {imbalanceRatio > 0 && (
-                          <Text style={[styles.statsRow, { color: colors.muted }]}>
+                          <Text
+                            style={[styles.statsRow, { color: colors.muted }]}
+                          >
                             Imbalance (max/min): {imbalanceRatio.toFixed(2)}×
                           </Text>
                         )}
-                        <Text style={[styles.statsRow, { color: colors.muted, fontSize: 11, marginTop: 6 }]}>
-                          Balanced by workload (time/distance), not map area—sizes may look unequal.
+                        <Text
+                          style={[
+                            styles.statsRow,
+                            { color: colors.muted, fontSize: 11, marginTop: 6 },
+                          ]}
+                        >
+                          Balanced by workload (time/distance), not map
+                          area—sizes may look unequal.
                         </Text>
                       </View>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          { color: colors.muted, marginTop: 16 },
+                        ]}
+                      >
                         Zone list
                       </Text>
                       {selectedResult.zones
@@ -1099,13 +1777,19 @@ export function ZonePage() {
                     </>
                   ) : (
                     <View style={styles.emptySidebar}>
-                      <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                        No saved zone results. Run partition from the Extract tab (Partition → send to Zones).
+                      <Text
+                        style={[
+                          styles.emptySidebarText,
+                          { color: colors.muted },
+                        ]}
+                      >
+                        No saved zone results. Run partition from the Extract
+                        tab (Partition → send to Zones).
                       </Text>
                     </View>
                   )}
                 </>
-              )}
+              }
             </ScrollView>
           </View>
         )}
@@ -1120,20 +1804,61 @@ export function ZonePage() {
         >
           <View style={{ flex: 1, minHeight: 200 }}>
             {pageMode === "waste" && (
-              <View style={[styles.sidebarTabs, { borderBottomColor: colors.border }]}>
+              <View
+                style={[
+                  styles.sidebarTabs,
+                  { borderBottomColor: colors.border },
+                ]}
+              >
                 <Pressable
-                  onPress={() => { hapticImpact(); setSidebarTab("mapping"); }}
-                  style={[styles.sidebarTab, sidebarTab === "mapping" && { borderBottomColor: colors.primary }]}
+                  onPress={() => {
+                    hapticImpact();
+                    setSidebarTab("mapping");
+                  }}
+                  style={[
+                    styles.sidebarTab,
+                    sidebarTab === "mapping" && {
+                      borderBottomColor: colors.primary,
+                    },
+                  ]}
                 >
-                  <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "mapping" ? colors.primary : colors.muted }]}>
+                  <Text
+                    style={[
+                      styles.sidebarTabLabel,
+                      {
+                        color:
+                          sidebarTab === "mapping"
+                            ? colors.primary
+                            : colors.muted,
+                      },
+                    ]}
+                  >
                     Map contents
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => { hapticImpact(); setSidebarTab("zones"); }}
-                  style={[styles.sidebarTab, sidebarTab === "zones" && { borderBottomColor: colors.primary }]}
+                  onPress={() => {
+                    hapticImpact();
+                    setSidebarTab("zones");
+                  }}
+                  style={[
+                    styles.sidebarTab,
+                    sidebarTab === "zones" && {
+                      borderBottomColor: colors.primary,
+                    },
+                  ]}
                 >
-                  <Text style={[styles.sidebarTabLabel, { color: sidebarTab === "zones" ? colors.primary : colors.muted }]}>
+                  <Text
+                    style={[
+                      styles.sidebarTabLabel,
+                      {
+                        color:
+                          sidebarTab === "zones"
+                            ? colors.primary
+                            : colors.muted,
+                      },
+                    ]}
+                  >
                     Zones List
                   </Text>
                 </Pressable>
@@ -1146,108 +1871,270 @@ export function ZonePage() {
             >
               {pageMode === "waste" && sidebarTab === "mapping" ? (
                 <>
-                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>
-                    {wastePoints.filter((p) => p.type === "bin").length} bins, {wastePoints.filter((p) => p.type === "dumpster").length} dumpsters
+                  <Text
+                    style={[
+                      styles.sidebarSectionTitle,
+                      { color: colors.muted },
+                    ]}
+                  >
+                    {wastePoints.filter((p) => p.type === "bin").length} bins,{" "}
+                    {wastePoints.filter((p) => p.type === "dumpster").length}{" "}
+                    dumpsters
                   </Text>
-                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 8 }]}>
+                  <Text
+                    style={[
+                      styles.sidebarSectionTitle,
+                      { color: colors.muted, marginTop: 8 },
+                    ]}
+                  >
                     Partition settings
                   </Text>
-                  <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Text style={[styles.statsRow, { color: colors.text }]}>Trucks (zones)</Text>
+                  <View
+                    style={[
+                      styles.statsCard,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.statsRow, { color: colors.text }]}>
+                      Trucks (zones)
+                    </Text>
                     <TextInput
                       value={wasteTruckCount}
                       onChangeText={setWasteTruckCount}
                       keyboardType="number-pad"
-                      style={[styles.wasteInput, { borderColor: colors.border, color: colors.text }]}
+                      style={[
+                        styles.wasteInput,
+                        { borderColor: colors.border, color: colors.text },
+                      ]}
                       placeholder="2"
                       placeholderTextColor={colors.muted}
                     />
-                    <Text style={[styles.statsRow, { color: colors.text, marginTop: 8 }]}>Balance by</Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                    <Text
+                      style={[
+                        styles.statsRow,
+                        { color: colors.text, marginTop: 8 },
+                      ]}
+                    >
+                      Balance by
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 6,
+                        marginTop: 4,
+                      }}
+                    >
                       {(["count", "weight", "distance"] as const).map((m) => (
                         <TouchableOpacity
                           key={m}
                           onPress={() => setWasteBalanceMetric(m)}
-                          style={[styles.presetChip, { backgroundColor: wasteBalanceMetric === m ? colors.primary : colors.background, borderColor: colors.border }]}
+                          style={[
+                            styles.presetChip,
+                            {
+                              backgroundColor:
+                                wasteBalanceMetric === m
+                                  ? colors.primary
+                                  : colors.background,
+                              borderColor: colors.border,
+                            },
+                          ]}
                         >
-                          <Text style={{ color: wasteBalanceMetric === m ? "#fff" : colors.text, fontSize: 12 }}>
-                            {m === "count" ? "Count" : m === "weight" ? "Volume" : "Distance"}
+                          <Text
+                            style={{
+                              color:
+                                wasteBalanceMetric === m ? "#fff" : colors.text,
+                              fontSize: 12,
+                            }}
+                          >
+                            {m === "count"
+                              ? "Count"
+                              : m === "weight"
+                                ? "Volume"
+                                : "Distance"}
                           </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
-                    <Text style={[styles.statsRow, { color: colors.muted, marginTop: 8 }]}>KNN neighbors: {wasteKnnNeighbors}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-                      <Text style={{ color: colors.muted, fontSize: 12 }}>1</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.statsRow,
+                        { color: colors.muted, marginTop: 8 },
+                      ]}
+                    >
+                      KNN neighbors: {wasteKnnNeighbors}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginTop: 4,
+                      }}
+                    >
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>
+                        1
+                      </Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={{ flex: 1 }}
+                      >
                         <View style={{ flexDirection: "row", gap: 4 }}>
                           {[1, 3, 5, 8, 10, 15, 20].map((k) => (
                             <TouchableOpacity
                               key={k}
                               onPress={() => setWasteKnnNeighbors(k)}
-                              style={[styles.presetChip, { backgroundColor: wasteKnnNeighbors === k ? colors.primary : colors.background, borderColor: colors.border }]}
+                              style={[
+                                styles.presetChip,
+                                {
+                                  backgroundColor:
+                                    wasteKnnNeighbors === k
+                                      ? colors.primary
+                                      : colors.background,
+                                  borderColor: colors.border,
+                                },
+                              ]}
                             >
-                              <Text style={{ color: wasteKnnNeighbors === k ? "#fff" : colors.text, fontSize: 12 }}>{k}</Text>
+                              <Text
+                                style={{
+                                  color:
+                                    wasteKnnNeighbors === k
+                                      ? "#fff"
+                                      : colors.text,
+                                  fontSize: 12,
+                                }}
+                              >
+                                {k}
+                              </Text>
                             </TouchableOpacity>
                           ))}
                         </View>
                       </ScrollView>
-                      <Text style={{ color: colors.muted, fontSize: 12 }}>20</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>
+                        20
+                      </Text>
                     </View>
                     <TextInput
                       value={wasteZoneName}
                       onChangeText={setWasteZoneName}
-                      style={[styles.wasteInput, { borderColor: colors.border, color: colors.text, marginTop: 8 }]}
+                      style={[
+                        styles.wasteInput,
+                        {
+                          borderColor: colors.border,
+                          color: colors.text,
+                          marginTop: 8,
+                        },
+                      ]}
                       placeholder="Zone name (optional)"
                       placeholderTextColor={colors.muted}
                     />
                   </View>
-                  <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>
+                  <Text
+                    style={[
+                      styles.sidebarSectionTitle,
+                      { color: colors.muted, marginTop: 16 },
+                    ]}
+                  >
                     Mapped points
                   </Text>
                   {wastePoints.length === 0 ? (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                      No bins or dumpsters yet. Tap Add in the toolbar or Import CSV/GeoJSON.
+                    <Text
+                      style={[styles.emptySidebarText, { color: colors.muted }]}
+                    >
+                      No bins or dumpsters yet. Tap Add in the toolbar or Import
+                      CSV/GeoJSON.
                     </Text>
                   ) : (
                     wastePoints.slice(0, 50).map((p) => (
-                      <View key={p.id} style={[styles.resultRow, { borderColor: colors.border, marginBottom: 6 }]}>
+                      <View
+                        key={p.id}
+                        style={[
+                          styles.resultRow,
+                          { borderColor: colors.border, marginBottom: 6 },
+                        ]}
+                      >
                         <MaterialCommunityIcons
-                          name={p.type === "bin" ? "delete-outline" : "dump-truck"}
+                          name={
+                            p.type === "bin" ? "delete-outline" : "dump-truck"
+                          }
                           size={18}
                           color={p.type === "bin" ? "#22c55e" : "#3b82f6"}
                         />
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[styles.resultRowName, { color: colors.text }]} numberOfLines={1}>
-                            {p.address || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
+                          <Text
+                            style={[
+                              styles.resultRowName,
+                              { color: colors.text },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {p.address ||
+                              `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}
                           </Text>
-                          <Text style={[styles.resultRowMeta, { color: colors.muted }]}>
-                            {p.capacityLiters != null ? `${p.capacityLiters}L` : ""} {p.condition ?? ""}
+                          <Text
+                            style={[
+                              styles.resultRowMeta,
+                              { color: colors.muted },
+                            ]}
+                          >
+                            {p.capacityLiters != null
+                              ? `${p.capacityLiters}L`
+                              : ""}{" "}
+                            {p.condition ?? ""}
                           </Text>
                         </View>
                         <TouchableOpacity
-                          onPress={() => { hapticImpact(); setEditingWastePoint(p); setAddWasteModalVisible(true); }}
+                          onPress={() => {
+                            hapticImpact();
+                            setEditingWastePoint(p);
+                            setAddWasteModalVisible(true);
+                          }}
                           style={{ padding: 6 }}
                         >
-                          <MaterialCommunityIcons name="pencil" size={18} color={colors.muted} />
+                          <MaterialCommunityIcons
+                            name="pencil"
+                            size={18}
+                            color={colors.muted}
+                          />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => {
                             hapticImpact();
-                            Alert.alert("Remove point", "Remove this bin/dumpster from the map?", [
-                              { text: "Cancel", style: "cancel" },
-                              { text: "Remove", style: "destructive", onPress: () => removeWastePoint(p.id) },
-                            ]);
+                            Alert.alert(
+                              "Remove point",
+                              "Remove this bin/dumpster from the map?",
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Remove",
+                                  style: "destructive",
+                                  onPress: () => removeWastePoint(p.id),
+                                },
+                              ],
+                            );
                           }}
                           style={{ padding: 6 }}
                         >
-                          <MaterialCommunityIcons name="delete-outline" size={18} color={colors.muted} />
+                          <MaterialCommunityIcons
+                            name="delete-outline"
+                            size={18}
+                            color={colors.muted}
+                          />
                         </TouchableOpacity>
                       </View>
                     ))
                   )}
                   {wastePoints.length > 50 && (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted, marginTop: 8 }]}>
+                    <Text
+                      style={[
+                        styles.emptySidebarText,
+                        { color: colors.muted, marginTop: 8 },
+                      ]}
+                    >
                       … and {wastePoints.length - 50} more
                     </Text>
                   )}
@@ -1256,52 +2143,134 @@ export function ZonePage() {
                 <>
                   {savedZones.length > 0 ? (
                     <>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>Saved results</Text>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          { color: colors.muted },
+                        ]}
+                      >
+                        Saved results
+                      </Text>
                       {savedZones.map((item) => {
                         const isSelected = item.id === selectedId;
                         return (
                           <Pressable
                             key={item.id}
                             onPress={() => selectResult(item.id)}
-                            style={[styles.resultRow, { backgroundColor: isSelected ? colors.primary + "20" : "transparent", borderColor: colors.border }]}
+                            style={[
+                              styles.resultRow,
+                              {
+                                backgroundColor: isSelected
+                                  ? colors.primary + "20"
+                                  : "transparent",
+                                borderColor: colors.border,
+                              },
+                            ]}
                           >
-                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                            <Text
+                              style={[
+                                styles.resultRowName,
+                                {
+                                  color: isSelected
+                                    ? colors.primary
+                                    : colors.text,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
                               {item.name || "Unnamed"}
                             </Text>
-                            <Text style={[styles.resultRowMeta, { color: colors.muted }]}>{item.zones.length} zones</Text>
+                            <Text
+                              style={[
+                                styles.resultRowMeta,
+                                { color: colors.muted },
+                              ]}
+                            >
+                              {item.zones.length} zones
+                            </Text>
                           </Pressable>
                         );
                       })}
                       {selectedResult && (
                         <>
-                          <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>{selectedResult.name || "Unnamed zones"}</Text>
-                          <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <Text style={[styles.statsRow, { color: colors.text }]}>Zones: <Text style={{ fontWeight: "600" }}>{selectedResult.zones.length}</Text></Text>
-                            <Text style={[styles.statsRow, { color: colors.text }]}>Total time: <Text style={{ fontWeight: "600" }}>{totalTime.toFixed(1)} min</Text></Text>
-                            {selectedResult.sourcePoints && selectedResult.sourcePoints.length > 0 && (
-                              <Text style={[styles.statsRow, { color: colors.muted }]}>
-                                Points: {selectedResult.sourcePoints.length} (capacity per zone in list)
+                          <Text
+                            style={[
+                              styles.sidebarSectionTitle,
+                              { color: colors.muted, marginTop: 16 },
+                            ]}
+                          >
+                            {selectedResult.name || "Unnamed zones"}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statsCard,
+                              {
+                                backgroundColor: colors.background,
+                                borderColor: colors.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[styles.statsRow, { color: colors.text }]}
+                            >
+                              Zones:{" "}
+                              <Text style={{ fontWeight: "600" }}>
+                                {selectedResult.zones.length}
                               </Text>
-                            )}
+                            </Text>
+                            <Text
+                              style={[styles.statsRow, { color: colors.text }]}
+                            >
+                              Total time:{" "}
+                              <Text style={{ fontWeight: "600" }}>
+                                {totalTime.toFixed(1)} min
+                              </Text>
+                            </Text>
+                            {selectedResult.sourcePoints &&
+                              selectedResult.sourcePoints.length > 0 && (
+                                <Text
+                                  style={[
+                                    styles.statsRow,
+                                    { color: colors.muted },
+                                  ]}
+                                >
+                                  Points: {selectedResult.sourcePoints.length}{" "}
+                                  (capacity per zone in list)
+                                </Text>
+                              )}
                           </View>
-                          <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>Zone list</Text>
-                          {selectedResult.zones.sort((a, b) => b.estimated_time - a.estimated_time).map((zone) => (
-                            <ZoneAccordionItem
-                              key={zone.zone_id}
-                              zone={zone}
-                              index={zone.zone_id}
-                              colors={colors}
-                              expanded={expandedZoneIds.has(zone.zone_id)}
-                              onToggle={() => toggleZoneExpanded(zone.zone_id)}
-                              sourcePoints={selectedResult.sourcePoints}
-                            />
-                          ))}
+                          <Text
+                            style={[
+                              styles.sidebarSectionTitle,
+                              { color: colors.muted, marginTop: 16 },
+                            ]}
+                          >
+                            Zone list
+                          </Text>
+                          {selectedResult.zones
+                            .sort((a, b) => b.estimated_time - a.estimated_time)
+                            .map((zone) => (
+                              <ZoneAccordionItem
+                                key={zone.zone_id}
+                                zone={zone}
+                                index={zone.zone_id}
+                                colors={colors}
+                                expanded={expandedZoneIds.has(zone.zone_id)}
+                                onToggle={() =>
+                                  toggleZoneExpanded(zone.zone_id)
+                                }
+                                sourcePoints={selectedResult.sourcePoints}
+                              />
+                            ))}
                         </>
                       )}
                     </>
                   ) : (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted }]}>
-                      No zone results yet. Map bins/dumpsters, then tap Partition.
+                    <Text
+                      style={[styles.emptySidebarText, { color: colors.muted }]}
+                    >
+                      No zone results yet. Map bins/dumpsters, then tap
+                      Partition.
                     </Text>
                   )}
                 </>
@@ -1309,26 +2278,66 @@ export function ZonePage() {
               {pageMode === "delivery" && (
                 <>
                   <TouchableOpacity
-                    onPress={() => { hapticImpact(); setDeliverySheetVisible(true); }}
-                    style={[styles.newPartitionBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      hapticImpact();
+                      setDeliverySheetVisible(true);
+                    }}
+                    style={[
+                      styles.newPartitionBtn,
+                      { backgroundColor: colors.primary },
+                    ]}
                   >
-                    <Text style={styles.newPartitionBtnText}>＋ New partition</Text>
+                    <Text style={styles.newPartitionBtnText}>
+                      ＋ New partition
+                    </Text>
                   </TouchableOpacity>
                   {savedZones.length > 1 && (
                     <>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted }]}>Saved results</Text>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          { color: colors.muted },
+                        ]}
+                      >
+                        Saved results
+                      </Text>
                       {savedZones.map((item) => {
                         const isSelected = item.id === selectedId;
                         return (
                           <Pressable
                             key={item.id}
                             onPress={() => selectResult(item.id)}
-                            style={[styles.resultRow, { backgroundColor: isSelected ? colors.primary + "20" : "transparent", borderColor: colors.border }]}
+                            style={[
+                              styles.resultRow,
+                              {
+                                backgroundColor: isSelected
+                                  ? colors.primary + "20"
+                                  : "transparent",
+                                borderColor: colors.border,
+                              },
+                            ]}
                           >
-                            <Text style={[styles.resultRowName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
+                            <Text
+                              style={[
+                                styles.resultRowName,
+                                {
+                                  color: isSelected
+                                    ? colors.primary
+                                    : colors.text,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
                               {item.name || "Unnamed"}
                             </Text>
-                            <Text style={[styles.resultRowMeta, { color: colors.muted }]}>{item.zones.length} zones</Text>
+                            <Text
+                              style={[
+                                styles.resultRowMeta,
+                                { color: colors.muted },
+                              ]}
+                            >
+                              {item.zones.length} zones
+                            </Text>
                           </Pressable>
                         );
                       })}
@@ -1336,26 +2345,60 @@ export function ZonePage() {
                   )}
                   {selectedResult ? (
                     <>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: savedZones.length > 1 ? 16 : 0 }]}>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          {
+                            color: colors.muted,
+                            marginTop: savedZones.length > 1 ? 16 : 0,
+                          },
+                        ]}
+                      >
                         {selectedResult.name || "Unnamed zones"}
                       </Text>
-                      <View style={[styles.statsCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.statsCard,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
                         <Text style={[styles.statsRow, { color: colors.text }]}>
-                          Zones: <Text style={{ fontWeight: "600" }}>{selectedResult.zones.length}</Text>
+                          Zones:{" "}
+                          <Text style={{ fontWeight: "600" }}>
+                            {selectedResult.zones.length}
+                          </Text>
                         </Text>
                         <Text style={[styles.statsRow, { color: colors.text }]}>
-                          Total time: <Text style={{ fontWeight: "600" }}>{totalTime.toFixed(1)} min</Text>
+                          Total time:{" "}
+                          <Text style={{ fontWeight: "600" }}>
+                            {totalTime.toFixed(1)} min
+                          </Text>
                         </Text>
                         <Text style={[styles.statsRow, { color: colors.text }]}>
-                          Avg per zone: <Text style={{ fontWeight: "600" }}>{avgTime.toFixed(1)} min</Text>
+                          Avg per zone:{" "}
+                          <Text style={{ fontWeight: "600" }}>
+                            {avgTime.toFixed(1)} min
+                          </Text>
                         </Text>
                         {imbalanceRatio > 0 && (
-                          <Text style={[styles.statsRow, { color: colors.muted }]}>
+                          <Text
+                            style={[styles.statsRow, { color: colors.muted }]}
+                          >
                             Imbalance (max/min): {imbalanceRatio.toFixed(2)}×
                           </Text>
                         )}
                       </View>
-                      <Text style={[styles.sidebarSectionTitle, { color: colors.muted, marginTop: 16 }]}>Zone list</Text>
+                      <Text
+                        style={[
+                          styles.sidebarSectionTitle,
+                          { color: colors.muted, marginTop: 16 },
+                        ]}
+                      >
+                        Zone list
+                      </Text>
                       {selectedResult.zones
                         .sort((a, b) => b.estimated_time - a.estimated_time)
                         .map((zone) => (
@@ -1371,8 +2414,14 @@ export function ZonePage() {
                         ))}
                     </>
                   ) : (
-                    <Text style={[styles.emptySidebarText, { color: colors.muted, marginTop: 8 }]}>
-                      No zone results yet. Tap "＋ New partition" to get started.
+                    <Text
+                      style={[
+                        styles.emptySidebarText,
+                        { color: colors.muted, marginTop: 8 },
+                      ]}
+                    >
+                      No zone results yet. Tap &quot;＋ New partition&quot; to
+                      get started.
                     </Text>
                   )}
                 </>
@@ -1417,7 +2466,8 @@ export function ZonePage() {
               n++;
             }
           });
-          if (n > 0) Alert.alert("Import complete", `${n} point(s) added to the map.`);
+          if (n > 0)
+            Alert.alert("Import complete", `${n} point(s) added to the map.`);
         }}
       />
 
@@ -1429,56 +2479,104 @@ export function ZonePage() {
             onPress={() => setExportModalVisible(false)}
           >
             <Pressable
-              style={[styles.exportModalBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              style={[
+                styles.exportModalBox,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
               onPress={(e) => e.stopPropagation()}
             >
-              <Text style={[styles.exportModalTitle, { color: colors.text }]}>Export</Text>
-              <Text style={[styles.exportModalSubtitle, { color: colors.muted }]}>Choose format</Text>
+              <Text style={[styles.exportModalTitle, { color: colors.text }]}>
+                Export
+              </Text>
+              <Text
+                style={[styles.exportModalSubtitle, { color: colors.muted }]}
+              >
+                Choose format
+              </Text>
 
               <View style={styles.exportModalButtons}>
                 {selectedResult && (
                   <>
                     <TouchableOpacity
-                      style={[styles.exportModalBtn, { backgroundColor: colors.primary }]}
+                      style={[
+                        styles.exportModalBtn,
+                        { backgroundColor: colors.primary },
+                      ]}
                       onPress={() => doExport("geojson")}
                     >
-                      <MaterialCommunityIcons name="code-json" size={20} color="#fff" />
+                      <MaterialCommunityIcons
+                        name="code-json"
+                        size={20}
+                        color="#fff"
+                      />
                       <Text style={styles.exportModalBtnLabel}>GeoJSON</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.exportModalBtn, { backgroundColor: colors.primary }]}
+                      style={[
+                        styles.exportModalBtn,
+                        { backgroundColor: colors.primary },
+                      ]}
                       onPress={() => doExport("json")}
                     >
-                      <MaterialCommunityIcons name="file-document-outline" size={20} color="#fff" />
+                      <MaterialCommunityIcons
+                        name="file-document-outline"
+                        size={20}
+                        color="#fff"
+                      />
                       <Text style={styles.exportModalBtnLabel}>JSON</Text>
                     </TouchableOpacity>
                   </>
                 )}
-                {(pageMode === "waste" && (wastePoints.length > 0 || selectedResult)) && (
+                {pageMode === "waste" &&
+                  (wastePoints.length > 0 || selectedResult) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.exportModalBtn,
+                        { backgroundColor: "#22c55e" },
+                      ]}
+                      onPress={() => doExport("kml")}
+                    >
+                      <MaterialCommunityIcons
+                        name="google-earth"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.exportModalBtnLabel}>KML</Text>
+                    </TouchableOpacity>
+                  )}
+                {pageMode === "waste" && wastePoints.length > 0 && (
                   <TouchableOpacity
-                    style={[styles.exportModalBtn, { backgroundColor: "#22c55e" }]}
-                    onPress={() => doExport("kml")}
-                  >
-                    <MaterialCommunityIcons name="google-earth" size={20} color="#fff" />
-                    <Text style={styles.exportModalBtnLabel}>KML</Text>
-                  </TouchableOpacity>
-                )}
-                {(pageMode === "waste" && wastePoints.length > 0) && (
-                  <TouchableOpacity
-                    style={[styles.exportModalBtn, { backgroundColor: "#f97316" }]}
+                    style={[
+                      styles.exportModalBtn,
+                      { backgroundColor: "#f97316" },
+                    ]}
                     onPress={() => doExport("csv")}
                   >
-                    <MaterialCommunityIcons name="file-delimited-outline" size={20} color="#fff" />
+                    <MaterialCommunityIcons
+                      name="file-delimited-outline"
+                      size={20}
+                      color="#fff"
+                    />
                     <Text style={styles.exportModalBtnLabel}>CSV (points)</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
               <TouchableOpacity
-                style={[styles.exportModalCancel, { borderColor: colors.border }]}
+                style={[
+                  styles.exportModalCancel,
+                  { borderColor: colors.border },
+                ]}
                 onPress={() => setExportModalVisible(false)}
               >
-                <Text style={[styles.exportModalCancelLabel, { color: colors.text }]}>Cancel</Text>
+                <Text
+                  style={[
+                    styles.exportModalCancelLabel,
+                    { color: colors.text },
+                  ]}
+                >
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </Pressable>
           </Pressable>

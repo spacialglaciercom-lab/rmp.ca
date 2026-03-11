@@ -4,8 +4,22 @@
  * when stationary, map follows device compass so you can look around.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Switch, ActivityIndicator } from "react-native";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  Switch,
+  ActivityIndicator,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 import { useColors } from "@/hooks/use-colors";
@@ -21,7 +35,11 @@ import { useRouteParametersStore } from "@/stores/routeParametersStore";
 /** Speed below this (m/s) = stationary → use compass to look around. */
 const STATIONARY_SPEED_THRESHOLD = 0.5;
 
-let ManeuverIcon: React.ComponentType<{ name: string; size: number; color: string }> | null = null;
+let ManeuverIcon: React.ComponentType<{
+  name: string;
+  size: number;
+  color: string;
+}> | null = null;
 try {
   ManeuverIcon = require("@expo/vector-icons/MaterialCommunityIcons").default;
 } catch {
@@ -57,7 +75,7 @@ function getManeuverDescription(type?: string, modifier?: string): string {
   if (type === "arrive") return "Arriving at destination";
   if (type === "depart") return "Starting navigation";
   if (type === "roundabout" || type === "rotary") return "Enter roundabout";
-  
+
   const m = (modifier ?? "").toLowerCase();
   if (m.includes("left")) {
     if (m.includes("sharp")) return "Make a sharp left turn";
@@ -73,7 +91,7 @@ function getManeuverDescription(type?: string, modifier?: string): string {
   if (type === "merge") return "Merge onto road";
   if (type === "fork") return "Keep on the fork";
   if (type === "on ramp") return "Take the ramp";
-  
+
   return "Continue straight";
 }
 
@@ -88,7 +106,7 @@ export interface OffRoutePayload {
 export interface NavigationViewProps {
   matchedRoute: MatchedRoute;
   /** When set, draw this full route for display so segments don't disappear (matched route is downsampled). */
-  fullRoutePoints?: Array<{ lat: number; lon: number }>;
+  fullRoutePoints?: { lat: number; lon: number }[];
   onClose: () => void;
   onOffRoute?: (payload: OffRoutePayload) => void;
   onRecalculate?: (payload: OffRoutePayload) => void;
@@ -109,15 +127,20 @@ export default function NavigationView({
 }: NavigationViewProps) {
   const colors = useColors();
   const showSpeed = useMapDisplayStore((s) => s.showSpeed);
-  const offRouteAlertEnabled = useRouteParametersStore((s) => s.offRouteAlertEnabled);
+  const offRouteAlertEnabled = useRouteParametersStore(
+    (s) => s.offRouteAlertEnabled,
+  );
   const insets = useSafeAreaInsets();
   const [mapTypePreference] = useMapType();
-  const [navState, setNavState] = useState<ReturnType<NavigationEngine["getState"]> | null>(null);
+  const [navState, setNavState] = useState<ReturnType<
+    NavigationEngine["getState"]
+  > | null>(null);
   const [isStarted, setIsStarted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [simulationMode, setSimulationMode] = useState(false);
   const [simSpeed, setSimSpeed] = useState(1);
-  const [offRoutePayload, setOffRoutePayload] = useState<OffRoutePayload | null>(null);
+  const [offRoutePayload, setOffRoutePayload] =
+    useState<OffRoutePayload | null>(null);
   /** Device compass heading (degrees). Used when stationary so user can look around. */
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
   // Only use offline fallback if the WebView fails to load — don't default to it on any platform.
@@ -132,22 +155,38 @@ export default function NavigationView({
   const displayHeading = useMemo(() => {
     const loc = navState?.currentLocation;
     const speed = loc?.speed ?? -1;
-    const bearing = loc?.bearing != null && loc.bearing >= 0 && loc.bearing < 360 ? loc.bearing : null;
-    const compass = deviceHeading != null && deviceHeading >= 0 && deviceHeading < 360 ? deviceHeading : null;
+    const bearing =
+      loc?.bearing != null && loc.bearing >= 0 && loc.bearing < 360
+        ? loc.bearing
+        : null;
+    const compass =
+      deviceHeading != null && deviceHeading >= 0 && deviceHeading < 360
+        ? deviceHeading
+        : null;
     const isStationary = speed < STATIONARY_SPEED_THRESHOLD;
     if (isStationary) return compass ?? bearing ?? 0;
     return bearing ?? compass ?? 0;
-  }, [navState?.currentLocation?.speed, navState?.currentLocation?.bearing, deviceHeading]);
+  }, [
+    navState?.currentLocation?.speed,
+    navState?.currentLocation?.bearing,
+    deviceHeading,
+  ]);
 
-  const injectUserLocation = useCallback((lat: number, lon: number, follow: boolean) => {
-    try {
-      const script = `(function(){ if (typeof window.setUserLocation === 'function') { window.setUserLocation(${lat}, ${lon}, ${follow}); } })(); true;`;
-      webViewRef.current?.injectJavaScript?.(script);
-    } catch (error) {
-      console.error("[NavigationView] Failed to inject user location:", error);
-      setHasError(true);
-    }
-  }, []);
+  const injectUserLocation = useCallback(
+    (lat: number, lon: number, follow: boolean) => {
+      try {
+        const script = `(function(){ if (typeof window.setUserLocation === 'function') { window.setUserLocation(${lat}, ${lon}, ${follow}); } })(); true;`;
+        webViewRef.current?.injectJavaScript?.(script);
+      } catch (error) {
+        console.error(
+          "[NavigationView] Failed to inject user location:",
+          error,
+        );
+        setHasError(true);
+      }
+    },
+    [],
+  );
 
   // Device compass: when navigation is active, watch heading so map can rotate when stationary (look around).
   useEffect(() => {
@@ -188,7 +227,11 @@ export default function NavigationView({
       setNavState(state);
 
       if (state.currentLocation) {
-        injectUserLocation(state.currentLocation.lat, state.currentLocation.lon, true);
+        injectUserLocation(
+          state.currentLocation.lat,
+          state.currentLocation.lon,
+          true,
+        );
       }
     });
 
@@ -196,15 +239,18 @@ export default function NavigationView({
       setNavState((s) => (s ? { ...s, isNavigating: false } : null));
     });
 
-    const unsubOffRoute = engineRef.current.on("offRoute", (payload: OffRoutePayload) => {
-      onOffRoute?.(payload);
-      if (autoRecalculateOnOffRoute && onRecalculate) {
-        onRecalculate(payload);
-        setOffRoutePayload(null);
-      } else {
-        setOffRoutePayload(payload);
-      }
-    });
+    const unsubOffRoute = engineRef.current.on(
+      "offRoute",
+      (payload: OffRoutePayload) => {
+        onOffRoute?.(payload);
+        if (autoRecalculateOnOffRoute && onRecalculate) {
+          onRecalculate(payload);
+          setOffRoutePayload(null);
+        } else {
+          setOffRoutePayload(payload);
+        }
+      },
+    );
 
     return () => {
       unsubUpdate();
@@ -212,7 +258,15 @@ export default function NavigationView({
       unsubOffRoute();
       engineRef.current?.stop();
     };
-  }, [matchedRoute, onOffRoute, onRecalculate, autoRecalculateOnOffRoute, injectUserLocation, simulationMode, offRouteThresholdMeters]);
+  }, [
+    matchedRoute,
+    onOffRoute,
+    onRecalculate,
+    autoRecalculateOnOffRoute,
+    injectUserLocation,
+    simulationMode,
+    offRouteThresholdMeters,
+  ]);
 
   const startNavigation = async () => {
     if (isStarting) return;
@@ -221,11 +275,18 @@ export default function NavigationView({
     console.log("[Navigation] Start button pressed");
     try {
       await engineRef.current?.start();
-      console.log(`[Navigation] Engine started in ${(performance.now() - t0).toFixed(0)}ms`);
+      console.log(
+        `[Navigation] Engine started in ${(performance.now() - t0).toFixed(0)}ms`,
+      );
       setIsStarted(true);
-      console.log(`[Navigation] UI ready in ${(performance.now() - t0).toFixed(0)}ms`);
+      console.log(
+        `[Navigation] UI ready in ${(performance.now() - t0).toFixed(0)}ms`,
+      );
     } catch (e) {
-      console.warn(`[Navigation] Start failed after ${(performance.now() - t0).toFixed(0)}ms:`, e);
+      console.warn(
+        `[Navigation] Start failed after ${(performance.now() - t0).toFixed(0)}ms:`,
+        e,
+      );
     } finally {
       setIsStarting(false);
     }
@@ -257,27 +318,28 @@ export default function NavigationView({
         latitude: p.lat,
         longitude: p.lon,
       })),
-    [matchedRoute.matchedGeometry]
+    [matchedRoute.matchedGeometry],
   );
 
   // Use bright orange for route line visibility on map (theme primary is near-white in dark mode)
   const primary = "#F97316";
 
   const SEGMENT_COLOR_COMPLETED = "#9CA3AF"; // gray
-  const SEGMENT_COLOR_CURRENT   = "#22c55e"; // green
-  const SEGMENT_COLOR_UPCOMING  = "#FFFFFF"; // white
+  const SEGMENT_COLOR_CURRENT = "#22c55e"; // green
+  const SEGMENT_COLOR_UPCOMING = "#FFFFFF"; // white
 
   const currentSegIdx =
-    navState && isStarted && typeof (navState as { segmentIndex?: number }).segmentIndex === "number"
+    navState &&
+    isStarted &&
+    typeof (navState as { segmentIndex?: number }).segmentIndex === "number"
       ? (navState as { segmentIndex: number }).segmentIndex
       : -1;
 
   const segmentPolylines = useMemo(() => {
     if (!isStarted || currentSegIdx < 0 || routeCoords.length < 2) return null;
 
-    const completed = currentSegIdx > 0
-      ? routeCoords.slice(0, currentSegIdx + 1)
-      : null;
+    const completed =
+      currentSegIdx > 0 ? routeCoords.slice(0, currentSegIdx + 1) : null;
 
     const current =
       currentSegIdx < routeCoords.length - 1
@@ -300,7 +362,7 @@ export default function NavigationView({
       mutedColor: colors.muted ?? "#71717a",
       traveledSegmentIndex: currentSegIdx,
     }),
-    [mapTypePreference, routeCoords, primary, colors.muted, currentSegIdx]
+    [mapTypePreference, routeCoords, primary, colors.muted, currentSegIdx],
   );
 
   const injectNavPayload = useCallback(() => {
@@ -332,11 +394,22 @@ export default function NavigationView({
     );
   }, [userLoc?.lat, userLoc?.lon, displayHeading, isStarted]);
 
+  const navHtml = useMemo(() => {
+    if (useFallback || hasError) {
+      console.log("[NavigationView] Using fallback HTML");
+      return getLeafletNavigationMapHTMLLocal();
+    }
+    return getLeafletNavigationMapHTML();
+  }, [useFallback, hasError]);
+
+  const activeBaseLayer = useMapLayerStore((s) => s.activeBaseLayer);
+
   if (!WebView) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Text style={[styles.unavailableText, { color: colors.muted }]}>
-          Live turn-by-turn isn't available here. Close to return to the map.
+          Live turn-by-turn isn&apos;t available here. Close to return to the
+          map.
         </Text>
         <TouchableOpacity
           style={[styles.closeButton, { backgroundColor: primary }]}
@@ -348,15 +421,6 @@ export default function NavigationView({
     );
   }
 
-  const navHtml = useMemo(() => {
-    if (useFallback || hasError) {
-      console.log("[NavigationView] Using fallback HTML");
-      return getLeafletNavigationMapHTMLLocal();
-    }
-    return getLeafletNavigationMapHTML();
-  }, [useFallback, hasError]);
-
-  const activeBaseLayer = useMapLayerStore((s) => s.activeBaseLayer);
   const OSM_STANDARD = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
   const OSM_DARK = "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
   const tileUrl = mapTypePreference === "dark" ? OSM_DARK : OSM_STANDARD;
@@ -374,11 +438,15 @@ export default function NavigationView({
           longitudeDelta: 0.01,
         }}
         mapType={
-          activeBaseLayer === "google-maps" ? "standard" :
-          activeBaseLayer === "google-satellite" ? "satellite" :
-          activeBaseLayer === "google-hybrid" ? "hybrid" :
-          activeBaseLayer === "google-terrain" ? "terrain" :
-          "none"
+          activeBaseLayer === "google-maps"
+            ? "standard"
+            : activeBaseLayer === "google-satellite"
+              ? "satellite"
+              : activeBaseLayer === "google-hybrid"
+                ? "hybrid"
+                : activeBaseLayer === "google-terrain"
+                  ? "terrain"
+                  : "none"
         }
         showsBuildings={activeBaseLayer === "google-hybrid"}
         rotateEnabled
@@ -398,39 +466,42 @@ export default function NavigationView({
             zIndex={-1}
           />
         )}
-        {routeCoords.length >= 2 && (
-          segmentPolylines ? (
+        {routeCoords.length >= 2 &&
+          (segmentPolylines ? (
             <>
-              {segmentPolylines.upcoming && segmentPolylines.upcoming.length >= 2 && (
-                <Polyline
-                  coordinates={segmentPolylines.upcoming}
-                  strokeColor={SEGMENT_COLOR_UPCOMING}
-                  strokeWidth={7}
-                  lineCap="round"
-                  lineJoin="round"
-                  zIndex={1}
-                />
-              )}
-              {segmentPolylines.current && segmentPolylines.current.length >= 2 && (
-                <Polyline
-                  coordinates={segmentPolylines.current}
-                  strokeColor={SEGMENT_COLOR_CURRENT}
-                  strokeWidth={9}
-                  lineCap="round"
-                  lineJoin="round"
-                  zIndex={3}
-                />
-              )}
-              {segmentPolylines.completed && segmentPolylines.completed.length >= 2 && (
-                <Polyline
-                  coordinates={segmentPolylines.completed}
-                  strokeColor={SEGMENT_COLOR_COMPLETED}
-                  strokeWidth={7}
-                  lineCap="round"
-                  lineJoin="round"
-                  zIndex={2}
-                />
-              )}
+              {segmentPolylines.upcoming &&
+                segmentPolylines.upcoming.length >= 2 && (
+                  <Polyline
+                    coordinates={segmentPolylines.upcoming}
+                    strokeColor={SEGMENT_COLOR_UPCOMING}
+                    strokeWidth={7}
+                    lineCap="round"
+                    lineJoin="round"
+                    zIndex={1}
+                  />
+                )}
+              {segmentPolylines.current &&
+                segmentPolylines.current.length >= 2 && (
+                  <Polyline
+                    coordinates={segmentPolylines.current}
+                    strokeColor={SEGMENT_COLOR_CURRENT}
+                    strokeWidth={9}
+                    lineCap="round"
+                    lineJoin="round"
+                    zIndex={3}
+                  />
+                )}
+              {segmentPolylines.completed &&
+                segmentPolylines.completed.length >= 2 && (
+                  <Polyline
+                    coordinates={segmentPolylines.completed}
+                    strokeColor={SEGMENT_COLOR_COMPLETED}
+                    strokeWidth={7}
+                    lineCap="round"
+                    lineJoin="round"
+                    zIndex={2}
+                  />
+                )}
             </>
           ) : (
             <Polyline
@@ -441,8 +512,7 @@ export default function NavigationView({
               lineJoin="round"
               zIndex={1}
             />
-          )
-        )}
+          ))}
         {routeCoords.length >= 1 && (
           <Marker
             coordinate={routeCoords[0]}
@@ -470,20 +540,38 @@ export default function NavigationView({
       {/* Zoom controls */}
       <View style={[styles.zoomControls, { top: insets.top + 12 }]}>
         <TouchableOpacity
-          style={[styles.zoomButton, { backgroundColor: colors.surface + "DD", borderColor: colors.border }]}
+          style={[
+            styles.zoomButton,
+            {
+              backgroundColor: colors.surface + "DD",
+              borderColor: colors.border,
+            },
+          ]}
           onPress={() => {
             zoomRef.current = Math.min(zoomRef.current + 1, 20);
-            mapRef.current?.animateCamera({ zoom: zoomRef.current }, { duration: 200 });
+            mapRef.current?.animateCamera(
+              { zoom: zoomRef.current },
+              { duration: 200 },
+            );
           }}
           activeOpacity={0.7}
         >
           <Text style={[styles.zoomButtonText, { color: colors.text }]}>+</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.zoomButton, { backgroundColor: colors.surface + "DD", borderColor: colors.border }]}
+          style={[
+            styles.zoomButton,
+            {
+              backgroundColor: colors.surface + "DD",
+              borderColor: colors.border,
+            },
+          ]}
           onPress={() => {
             zoomRef.current = Math.max(zoomRef.current - 1, 5);
-            mapRef.current?.animateCamera({ zoom: zoomRef.current }, { duration: 200 });
+            mapRef.current?.animateCamera(
+              { zoom: zoomRef.current },
+              { duration: 200 },
+            );
           }}
           activeOpacity={0.7}
         >
@@ -503,11 +591,24 @@ export default function NavigationView({
           ]}
         >
           {navState.isNavigating && (
-            <View style={[styles.optimizedRouteBadge, { backgroundColor: colors.surface + "E6" }]}>
-              <Text style={[styles.optimizedRouteText, { color: colors.text }]}>Optimized Route</Text>
+            <View
+              style={[
+                styles.optimizedRouteBadge,
+                { backgroundColor: colors.surface + "E6" },
+              ]}
+            >
+              <Text style={[styles.optimizedRouteText, { color: colors.text }]}>
+                Optimized Route
+              </Text>
             </View>
           )}
-          <View style={[styles.maneuverIconBox, !navState.isNavigating && styles.maneuverIconBoxSmall, { backgroundColor: colors.surface + "CC" }]}>
+          <View
+            style={[
+              styles.maneuverIconBox,
+              !navState.isNavigating && styles.maneuverIconBoxSmall,
+              { backgroundColor: colors.surface + "CC" },
+            ]}
+          >
             {!navState.isNavigating ? (
               <View style={styles.arrivalIndicator}>
                 <Text style={styles.arrivedText}>✓</Text>
@@ -516,7 +617,7 @@ export default function NavigationView({
               <ManeuverIcon
                 name={getManeuverIcon(
                   navState.nextManeuverType,
-                  navState.nextManeuverModifier
+                  navState.nextManeuverModifier,
                 )}
                 size={40}
                 color={colors.text}
@@ -527,7 +628,13 @@ export default function NavigationView({
           </View>
           <View style={styles.instructionText}>
             {!navState.isNavigating ? (
-              <Text style={[styles.distanceText, styles.distanceTextArrived, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.distanceText,
+                  styles.distanceTextArrived,
+                  { color: colors.text },
+                ]}
+              >
                 You have arrived at your destination
               </Text>
             ) : (
@@ -535,12 +642,20 @@ export default function NavigationView({
                 <Text style={[styles.distanceText, { color: colors.text }]}>
                   {formatDistance(navState.distanceToNextManeuver)} away
                 </Text>
-                <Text style={[styles.streetText, { color: colors.text }]} numberOfLines={2}>
+                <Text
+                  style={[styles.streetText, { color: colors.text }]}
+                  numberOfLines={2}
+                >
                   {navState.nextStep?.name || "Continue on route"}
                 </Text>
                 {navState.nextManeuverType && (
-                  <Text style={[styles.maneuverDescription, { color: colors.text }]}>
-                    {getManeuverDescription(navState.nextManeuverType, navState.nextManeuverModifier)}
+                  <Text
+                    style={[styles.maneuverDescription, { color: colors.text }]}
+                  >
+                    {getManeuverDescription(
+                      navState.nextManeuverType,
+                      navState.nextManeuverModifier,
+                    )}
                   </Text>
                 )}
               </>
@@ -560,7 +675,9 @@ export default function NavigationView({
             },
           ]}
         >
-          <Text style={styles.offRouteText}>You're off the optimized route</Text>
+          <Text style={styles.offRouteText}>
+            You&apos;re off the optimized route
+          </Text>
           <TouchableOpacity
             style={[styles.recalculateButton, { backgroundColor: primary }]}
             onPress={() => {
@@ -586,24 +703,39 @@ export default function NavigationView({
         {!isStarted ? (
           <View>
             <View style={styles.simulationRow}>
-              <Text style={[styles.simulationText, { color: colors.text }]}>Simulation Mode</Text>
+              <Text style={[styles.simulationText, { color: colors.text }]}>
+                Simulation Mode
+              </Text>
               <Switch
                 value={simulationMode}
                 onValueChange={setSimulationMode}
                 trackColor={{ false: "#767577", true: primary }}
-                thumbColor={Platform.OS === "ios" ? "#fff" : simulationMode ? primary : "#f4f3f4"}
+                thumbColor={
+                  Platform.OS === "ios"
+                    ? "#fff"
+                    : simulationMode
+                      ? primary
+                      : "#f4f3f4"
+                }
               />
             </View>
             {simulationMode && (
               <View style={styles.speedRow}>
-                <Text style={[styles.speedLabel, { color: colors.text }]}>Speed</Text>
+                <Text style={[styles.speedLabel, { color: colors.text }]}>
+                  Speed
+                </Text>
                 <View style={styles.speedChips}>
                   {SIM_SPEED_OPTIONS.map((s) => (
                     <TouchableOpacity
                       key={s}
                       style={[
                         styles.speedChip,
-                        { borderColor: simSpeed === s ? primary : (colors.muted ?? "#71717a") },
+                        {
+                          borderColor:
+                            simSpeed === s
+                              ? primary
+                              : (colors.muted ?? "#71717a"),
+                        },
                         simSpeed === s && { backgroundColor: primary },
                       ]}
                       onPress={() => handleSimSpeedChange(s)}
@@ -622,7 +754,11 @@ export default function NavigationView({
               </View>
             )}
             <TouchableOpacity
-              style={[styles.startButton, { backgroundColor: primary }, isStarting && { opacity: 0.7 }]}
+              style={[
+                styles.startButton,
+                { backgroundColor: primary },
+                isStarting && { opacity: 0.7 },
+              ]}
               onPress={startNavigation}
               disabled={isStarting}
             >
@@ -648,7 +784,9 @@ export default function NavigationView({
                 <Text style={[styles.statValue, { color: primary }]}>
                   {formatDuration(matchedRoute.totalDuration ?? 0)}
                 </Text>
-                <Text style={[styles.statLabel, { color: colors.text }]}>ETA</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>
+                  ETA
+                </Text>
               </View>
               {showSpeed &&
                 navState?.currentLocation?.speed != null &&
@@ -657,7 +795,9 @@ export default function NavigationView({
                     <Text style={[styles.statValue, { color: primary }]}>
                       {(navState.currentLocation.speed * 2.237).toFixed(0)}
                     </Text>
-                    <Text style={[styles.statLabel, { color: colors.text }]}>mph</Text>
+                    <Text style={[styles.statLabel, { color: colors.text }]}>
+                      mph
+                    </Text>
                   </View>
                 )}
             </View>
@@ -668,7 +808,12 @@ export default function NavigationView({
                     key={s}
                     style={[
                       styles.speedChipSmall,
-                      { borderColor: simSpeed === s ? primary : (colors.muted ?? "#71717a") },
+                      {
+                        borderColor:
+                          simSpeed === s
+                            ? primary
+                            : (colors.muted ?? "#71717a"),
+                      },
                       simSpeed === s && { backgroundColor: primary },
                     ]}
                     onPress={() => handleSimSpeedChange(s)}
@@ -687,7 +832,8 @@ export default function NavigationView({
             )}
             <View style={styles.actionButtons}>
               {onRecalculate &&
-                (navState?.segmentIndex ?? 0) < matchedRoute.matchedGeometry.length - 1 && (
+                (navState?.segmentIndex ?? 0) <
+                  matchedRoute.matchedGeometry.length - 1 && (
                   <TouchableOpacity
                     style={[
                       styles.recalculateFromHereButton,

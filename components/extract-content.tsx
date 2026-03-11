@@ -35,7 +35,6 @@ import {
   type ExtractionStage,
   type ExtractionStats,
   type MeasurementMetrics,
-  type ElevationStats,
 } from "@/lib/overtureExtractService";
 import { getElevationForPoints } from "@/services/googleElevationService";
 import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
@@ -591,7 +590,7 @@ export default function ExtractContent() {
       1,
       Math.min(12, parseInt(zoneTruckCount, 10) || 2),
     );
-    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [
+    const polygonLatLon: [number, number][] = ring.map(([lng, lat]) => [
       lat,
       lng,
     ]);
@@ -839,7 +838,7 @@ export default function ExtractContent() {
                 colors={colors}
               />
               <StatBox
-                label="Roads"
+                label="Linestrings"
                 value={
                   previewRoadCount != null ? String(previewRoadCount) : "—"
                 }
@@ -1393,7 +1392,7 @@ function NativeExtractFallback({
       1,
       Math.min(12, parseInt(zoneTruckCount, 10) || 2),
     );
-    const polygonLatLon: Array<[number, number]> = ring.map(([lng, lat]) => [
+    const polygonLatLon: [number, number][] = ring.map(([lng, lat]) => [
       lat,
       lng,
     ]);
@@ -1732,11 +1731,11 @@ function NativeExtractFallback({
           </View>
         )}
 
-        {/* Stats grid - Roads = raw segments, Nodes = intersections, Edges = graph edges */}
+        {/* Stats grid - Linestrings = raw segments, Nodes = intersections, Edges = graph edges */}
         {resultStats && (
           <View style={[styles.statsGrid, { marginTop: 12 }]}>
             <StatBox
-              label="Roads"
+              label="Linestrings"
               value={resultStats.roads > 0 ? String(resultStats.roads) : "—"}
               colors={colors}
             />
@@ -2000,26 +1999,6 @@ function NativeExtractFallback({
       </ScrollView>
     </View>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function getBBox(
-  feat: GeoJSON.Feature<GeoJSON.Polygon>,
-): [number, number, number, number] {
-  const coords = feat.geometry.coordinates[0];
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  for (const [x, y] of coords) {
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
-  }
-  return [minX, minY, maxX, maxY];
 }
 
 // ---------------------------------------------------------------------------

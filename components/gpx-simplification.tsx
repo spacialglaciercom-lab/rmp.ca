@@ -60,9 +60,12 @@ export function GPXSimplification({
 }: GPXSimplificationProps) {
   const colors = useColors();
   const { state, dispatch } = useRouting();
-  const [settings, setSettings] = useState<GPXSimplificationSettings>(defaultSettings);
+  const [settings, setSettings] =
+    useState<GPXSimplificationSettings>(defaultSettings);
 
-  const handlePresetSelect = (presetName: keyof typeof SIMPLIFICATION_PRESETS) => {
+  const handlePresetSelect = (
+    presetName: keyof typeof SIMPLIFICATION_PRESETS,
+  ) => {
     hapticImpact();
 
     const preset = SIMPLIFICATION_PRESETS[presetName];
@@ -94,7 +97,9 @@ export function GPXSimplification({
     const preset = SIMPLIFICATION_PRESETS[settings.presetName];
 
     // Parse reduction percentage
-    const reductionStr = preset.estimatedReduction.split("-")[0].replace("%", "");
+    const reductionStr = preset.estimatedReduction
+      .split("-")[0]
+      .replace("%", "");
     const reductionPercent = parseInt(reductionStr) / 100;
     const savedSize = originalSize * reductionPercent;
 
@@ -116,7 +121,8 @@ export function GPXSimplification({
         GPX Simplification
       </Text>
       <Text className="text-sm text-muted mb-4">
-        Reduce file size by removing redundant points while preserving route accuracy
+        Reduce file size by removing redundant points while preserving route
+        accuracy
       </Text>
 
       {/* Preset Buttons */}
@@ -130,18 +136,30 @@ export function GPXSimplification({
           {Object.entries(SIMPLIFICATION_PRESETS).map(([key, preset]) => (
             <TouchableOpacity
               key={key}
-              onPress={() => handlePresetSelect(key as "none" | "light" | "medium" | "aggressive")}
+              onPress={() =>
+                handlePresetSelect(
+                  key as "none" | "light" | "medium" | "aggressive",
+                )
+              }
               style={{
                 backgroundColor:
-                  settings.presetName === (key as "none" | "light" | "medium" | "aggressive") ? colors.primary : colors.background,
-                borderColor: settings.presetName === (key as "none" | "light" | "medium" | "aggressive") ? colors.primary : colors.border,
+                  settings.presetName ===
+                  (key as "none" | "light" | "medium" | "aggressive")
+                    ? colors.primary
+                    : colors.background,
+                borderColor:
+                  settings.presetName ===
+                  (key as "none" | "light" | "medium" | "aggressive")
+                    ? colors.primary
+                    : colors.border,
                 borderWidth: 1,
               }}
               className="px-4 py-3 rounded-lg min-w-fit active:opacity-70"
             >
               <Text
                 style={{
-                  color: settings.presetName === key ? "#fff" : colors.foreground,
+                  color:
+                    settings.presetName === key ? "#fff" : colors.foreground,
                 }}
                 className="font-medium text-sm"
               >
@@ -176,14 +194,20 @@ export function GPXSimplification({
           className="p-3 rounded-lg mb-4"
           style={{ backgroundColor: colors.success + "15" }}
         >
-          <Text style={{ color: colors.success }} className="text-xs font-medium mb-2">
+          <Text
+            style={{ color: colors.success }}
+            className="text-xs font-medium mb-2"
+          >
             📊 Estimated File Size Savings
           </Text>
           <View className="flex-row justify-between">
             <Text style={{ color: colors.success }} className="text-xs">
               Original: {fileSizeEstimate.original} KB
             </Text>
-            <Text style={{ color: colors.success }} className="text-xs font-bold">
+            <Text
+              style={{ color: colors.success }}
+              className="text-xs font-bold"
+            >
               → {fileSizeEstimate.final} KB
             </Text>
           </View>
@@ -198,12 +222,16 @@ export function GPXSimplification({
         className="p-3 rounded-lg"
         style={{ backgroundColor: colors.warning + "15" }}
       >
-        <Text style={{ color: colors.warning }} className="text-xs font-medium mb-1">
+        <Text
+          style={{ color: colors.warning }}
+          className="text-xs font-medium mb-1"
+        >
           💡 Tip
         </Text>
         <Text style={{ color: colors.warning }} className="text-xs">
-          Use "Light" or "Medium" for most cases. "Aggressive" is best for very large routes
-          with thousands of points.
+          Use &quot;Light&quot; or &quot;Medium&quot; for most cases.
+          &quot;Aggressive&quot; is best for very large routes with thousands of
+          points.
         </Text>
       </View>
     </View>
