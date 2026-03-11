@@ -26,6 +26,34 @@ from .vector_clean import CleanOptions, clean_geojson
 
 router = APIRouter()
 
+# ---------------------------------------------------------------------------
+# Road class defaults
+# ---------------------------------------------------------------------------
+
+# Default allowlist: vehicle-routable residential/local road classes.
+# Applied when the caller does not supply road_classes.
+# Excludes: motorways, highways (trunk/primary), driveways, service roads.
+DEFAULT_ROAD_CLASSES: frozenset[str] = frozenset({
+    "residential",
+    "tertiary",
+    "tertiary_link",
+    "secondary",
+    "secondary_link",
+    "unclassified",
+    "living_street",
+    "road",  # OSM catch-all for unknown paved roads
+})
+
+# Always excluded regardless of road_classes param — non-vehicle infrastructure
+# and Overture-specific transit/rail classes.
+NON_VEHICLE_CLASSES: frozenset[str] = frozenset({
+    "footway", "pedestrian", "steps", "path", "corridor",
+    "cycleway", "bridleway", "elevator", "escalator", "platform", "raceway",
+    # Overture rail / transit
+    "standard_gauge", "narrow_gauge", "light_rail", "subway",
+    "tram", "monorail", "ferry", "aerialway",
+})
+
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -401,10 +429,12 @@ def optimize_route(body: OptimizeRequest):
         cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
         features = cleaned_fc.features
 
-    # Filter by road classes if specified
-    if body.road_classes:
-        allowed = set(body.road_classes)
-        features = [f for f in features if _get_road_class(f) in allowed]
+    # Road class filtering:
+    # 1. If caller supplies road_classes, use that allowlist exactly.
+    # 2. Otherwise apply DEFAULT_ROAD_CLASSES (residential / secondary / tertiary / unclassified).
+    # 3. Always strip NON_VEHICLE_CLASSES (footway, railway, etc.) regardless of (1) or (2).
+    allowed: set[str] = set(body.road_classes) if body.road_classes else set(DEFAULT_ROAD_CLASSES)
+    features = [f for f in features if _get_road_class(f) in allowed and _get_road_class(f) not in NON_VEHICLE_CLASSES]
 
     # Filter to LineString/MultiLineString only
     features = [

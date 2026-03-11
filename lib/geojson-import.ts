@@ -72,6 +72,7 @@ const NON_VEHICLE_CLASSES = new Set([
   "pedestrian",
   "steps",
   "path",
+  "corridor",
   "cycleway",
   "bridleway",
   "elevator",
