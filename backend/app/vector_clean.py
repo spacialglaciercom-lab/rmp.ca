@@ -443,22 +443,13 @@ def _merge_duplicate_nodes(
 
 
 def _dedupe_edges(G: nx.MultiGraph, stats: dict[str, int]) -> None:
-    """Remove duplicate edges: same (u, v) and same geometry hash; keep first.
-
-    Normalises coordinate order before hashing so that a forward segment A→B and
-    its reverse B→A are treated as the same edge.  This is critical for Overture
-    GeoJSON where every bidirectional road is stored as two separate directed
-    LineStrings; without normalisation both survive deduplication and the CPP
-    must traverse each road twice, inflating route distance ~2–4×.
-    """
+    """Remove duplicate edges: same (u, v) and same geometry hash; keep first."""
     seen: dict[tuple[str, str], set[str]] = {}
     to_remove = []
     for u, v, key in list(G.edges(keys=True)):
         data = G.edges[u, v, key]
         coords = data.get("coords", [])
-        # Normalise direction: ensure the hash is the same for A→B and B→A.
-        coords_norm = coords if (not coords or coords[0] <= coords[-1]) else list(reversed(coords))
-        h = hashlib.sha256(str(tuple(tuple(c) for c in coords_norm)).encode()).hexdigest()[:16]
+        h = hashlib.sha256(str(tuple(tuple(c) for c in coords)).encode()).hexdigest()[:16]
         edge_key = (min(u, v), max(u, v))
         if edge_key not in seen:
             seen[edge_key] = set()

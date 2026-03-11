@@ -90,7 +90,9 @@ export function useOvertureOptimizeRoute() {
         );
         dispatch({ type: "SET_GPX_DATA", payload: gpxString });
 
-        setDisplayMode("full");
+        // Switch to Minimal route view to display the optimized route
+        setDisplayMode("minimal");
+
         closeOSMExtractor();
         actions.clearOsmExtraction();
 
