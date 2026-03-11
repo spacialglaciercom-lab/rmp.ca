@@ -37,6 +37,7 @@ yarn.lock
 # local env files
 .env
 .env*.local
+.env.server
 .env.r2
 .env.mapbox
 
