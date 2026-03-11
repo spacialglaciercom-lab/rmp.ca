@@ -85,6 +85,14 @@ const DEFAULT_LAYERS: MapLayer[] = [
     category: "terrain",
   },
   {
+    id: "transport-dark",
+    name: "Transport Dark",
+    url: `https://api.thunderforest.com/transport-dark/{z}/{x}/{y}.png?apikey=${process.env.EXPO_PUBLIC_THUNDERFOREST_API_KEY ?? ""}`,
+    attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
+    type: "base",
+    category: "dark",
+  },
+  {
     id: "traffic",
     name: "Traffic",
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", // Would be replaced with traffic tile service

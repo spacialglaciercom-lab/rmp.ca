@@ -106,6 +106,14 @@ const OSM_MAP_LAYERS: MapLayer[] = [
     icon: "terrain",
     preview: "Topographic map with elevation contours",
   },
+  {
+    id: "transport-dark",
+    name: "Transport Dark",
+    url: `https://api.thunderforest.com/transport-dark/{z}/{x}/{y}.png?apikey=${process.env.EXPO_PUBLIC_THUNDERFOREST_API_KEY ?? ""}`,
+    attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
+    icon: "bus-clock",
+    preview: "Dark transport map with transit routes and stops",
+  },
 ];
 
 // On Android, use Google Maps native types; on iOS/Web, show both Google and OSM options
