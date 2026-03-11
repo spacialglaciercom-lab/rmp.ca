@@ -653,7 +653,7 @@ export default function PlannerContent() {
               ? "Local optimizer (backend unavailable)"
               : null;
       const graphSourceMsg =
-        optimizerSource === "backend"
+        optimizerSource === "backend" || optimizerSource === undefined
           ? "Building directed graph from road GeoJSON"
           : "Building directed graph from OSM extract";
       const logMessages = [
