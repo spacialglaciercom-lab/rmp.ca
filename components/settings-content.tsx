@@ -27,6 +27,7 @@ import { OpenRouterApiKeySection } from "@/components/settings/OpenRouterApiKeyS
 import { PluginsSection } from "@/components/settings/PluginsSection";
 import { OfflineMapDownloadSection } from "@/components/settings/OfflineMapDownloadSection";
 import { OfflineTilePackSection } from "@/components/settings/OfflineTilePackSection";
+import { BboxRegionDownloadSection } from "@/components/settings/BboxRegionDownloadSection";
 import { MinimalCard, SectionLabel } from "@/components/minimal";
 import { MapOrientationSection } from "@/components/settings/MapOrientationSection";
 import { MapWebPluginsSection } from "@/components/settings/MapWebPluginsSection";
@@ -229,6 +230,17 @@ export default function SettingsContent() {
                 label: "",
                 value: "",
                 component: OfflineTilePackSection,
+                isComponent: true,
+              },
+            ],
+          },
+          {
+            title: "Custom region download",
+            items: [
+              {
+                label: "",
+                value: "",
+                component: BboxRegionDownloadSection,
                 isComponent: true,
               },
             ],

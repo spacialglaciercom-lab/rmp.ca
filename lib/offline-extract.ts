@@ -202,7 +202,7 @@ export interface OfflineExtractResult {
   /** Road graph edges — output of the local building_graph stage. */
   graphGeojson: GeoJSONFeatureCollection;
   stats: RoadGraphStats;
-  source: "r2" | "s3" | "osm_pbf";
+  source: "r2" | "s3" | "osm_pbf" | "r2_bbox";
   regionId: string;
   regionName: string;
 }
@@ -613,7 +613,50 @@ export async function extractFromOSMPBF(
 }
 
 /**
- * Run offline extraction using downloaded data (R2, S3, or OSM PBF).
+ * Extract road GeoJSON from a custom bbox region (downloaded via bbox-region-download).
+ * Reads individual .pbf tile files saved on disk, decodes MVT, filters by polygon.
+ */
+export async function extractFromBboxRegion(
+  region: DownloadedRegion,
+  polygon: Polygon,
+  onProgress?: (p: OfflineExtractProgress) => void,
+): Promise<GeoJSONFeatureCollection> {
+  if (region.source !== "r2_bbox") {
+    throw new Error("Region is not r2_bbox");
+  }
+
+  const { getBboxRegionTile, enumerateBboxTiles } = await import(
+    "@/lib/bbox-region-download"
+  );
+
+  const tiles = enumerateBboxTiles(region.bounds);
+  onProgress?.({ phase: "Reading tiles…", done: 0, total: tiles.length });
+
+  const allFeatures: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < tiles.length; i++) {
+    const { z, x, y } = tiles[i];
+    const buffer = await getBboxRegionTile(region.id, z, x, y);
+    if (buffer && buffer.byteLength > 0) {
+      const feats = decodeMvtToFeatures(buffer, z, x, y, polygon);
+      for (const f of feats) {
+        const key = JSON.stringify(f.geometry.coordinates);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allFeatures.push(f);
+      }
+    }
+    if ((i + 1) % 20 === 0 || i === tiles.length - 1) {
+      onProgress?.({ phase: "Reading tiles…", done: i + 1, total: tiles.length });
+    }
+  }
+
+  return { type: "FeatureCollection", features: allFeatures };
+}
+
+/**
+ * Run offline extraction using downloaded data (R2, S3, OSM PBF, or custom bbox).
  * Tries whichever source the matching region was downloaded from.
  */
 export async function extractFromDownloadedData(
@@ -629,7 +672,7 @@ export async function extractFromDownloadedData(
   }
 
   let geojson: GeoJSONFeatureCollection | null = null;
-  let source: "r2" | "s3" | "osm_pbf";
+  let source: "r2" | "s3" | "osm_pbf" | "r2_bbox";
 
   if (region.source === "r2") {
     onProgress?.({ phase: "Using R2 tiles…" });
@@ -650,6 +693,15 @@ export async function extractFromDownloadedData(
       source = "osm_pbf";
     } catch (e) {
       console.warn("[offline-extract] OSM PBF extraction failed:", e);
+      return null;
+    }
+  } else if (region.source === "r2_bbox") {
+    try {
+      onProgress?.({ phase: "Using bbox tiles…" });
+      geojson = await extractFromBboxRegion(region, polygon, onProgress);
+      source = "r2_bbox";
+    } catch (e) {
+      console.warn("[offline-extract] Bbox region extraction failed:", e);
       return null;
     }
   } else {

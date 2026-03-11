@@ -129,7 +129,7 @@ export interface OfflineCity {
   layers?: OvertureLayerKey[];
 }
 
-export type DownloadSource = "r2" | "s3" | "osm_pbf";
+export type DownloadSource = "r2" | "s3" | "osm_pbf" | "r2_bbox";
 
 export interface DownloadedRegion {
   id: string;
@@ -794,6 +794,23 @@ export async function getDownloadedRegions(): Promise<DownloadedRegion[]> {
     regionsCache = [];
     return [];
   }
+}
+
+/** Add or update a single region in the registry (used by bbox download). */
+export async function saveDownloadedRegion(region: DownloadedRegion): Promise<void> {
+  const existing = await getDownloadedRegions();
+  const filtered = existing.filter((r) => r.id !== region.id);
+  filtered.push(region);
+  regionsCache = filtered;
+  await AsyncStorage.setItem(OFFLINE_MAPS_KEY, JSON.stringify(filtered));
+}
+
+/** Remove a region from the registry only (caller handles file deletion). */
+export async function deleteDownloadedRegionById(regionId: string): Promise<void> {
+  const existing = await getDownloadedRegions();
+  const filtered = existing.filter((r) => r.id !== regionId);
+  regionsCache = filtered;
+  await AsyncStorage.setItem(OFFLINE_MAPS_KEY, JSON.stringify(filtered));
 }
 
 /** Delete a downloaded region and its data files. */
