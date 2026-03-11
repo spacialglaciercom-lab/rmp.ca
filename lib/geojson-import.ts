@@ -63,6 +63,50 @@ export function parseGeoJSON(content: string): GeoJSONFeatureCollection {
 }
 
 /**
+ * Road classes that should be excluded from vehicle routing.
+ * Mirrors NON_VEHICLE_ROAD_CLASSES in lib/route-optimizer-v2/routeOptimizer.ts
+ * plus Overture-specific non-road classes (standard_gauge = railway).
+ */
+const NON_VEHICLE_CLASSES = new Set([
+  "footway",
+  "pedestrian",
+  "steps",
+  "path",
+  "cycleway",
+  "bridleway",
+  "elevator",
+  "escalator",
+  "platform",
+  "raceway",
+  // Overture-specific
+  "standard_gauge", // railway
+  "narrow_gauge",
+  "light_rail",
+  "subway",
+  "tram",
+  "monorail",
+  "ferry",
+  "aerialway",
+]);
+
+function getRoadClass(props: Record<string, unknown> | null | undefined): string {
+  if (!props) return "";
+  const v = props["class"] ?? props["road_class"] ?? props["highway"] ?? props["category"];
+  return typeof v === "string" ? v.toLowerCase().trim() : "";
+}
+
+function filterVehicleRoads(
+  geojson: GeoJSONFeatureCollection,
+): GeoJSONFeatureCollection {
+  const filtered = geojson.features.filter((f) => {
+    const cls = getRoadClass(f.properties as Record<string, unknown>);
+    // Keep if class is empty (unknown — let backend decide) or not in the exclusion set
+    return cls === "" || !NON_VEHICLE_CLASSES.has(cls);
+  });
+  return { ...geojson, features: filtered };
+}
+
+/**
  * Import GeoJSON and optimize route via the backend service.
  * Returns collection points ready for use in the app.
  *
@@ -76,8 +120,10 @@ export async function importGeoJSONRoute(
 ): Promise<GeoJSONImportResult> {
   const { startLat, startLon, turnPenalties } = options;
 
+  const vehicleGeojson = filterVehicleRoads(geojson);
+
   const optResult: OptimizeResponse = await optimizeRoute({
-    geojson,
+    geojson: vehicleGeojson,
     start_lat: startLat,
     start_lon: startLon,
     turn_penalties: {
