@@ -45,10 +45,12 @@ export function getApiBaseUrl(): string {
     return API_BASE_URL.trim().replace(/\/$/, "");
   }
 
-  // Web: same-origin so deployed Vercel app does not hit deleted Railway. Local dev: 19007 → 3000.
+  // Web: same-origin so deployed Vercel app does not hit deleted Railway.
+  // Local dev: Expo/Metro often runs on 8081 or 19007; API/optimizer proxy lives on Node server :3000.
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const { protocol, hostname, port } = window.location;
-    if (port === "19007") {
+    const devPortsUsingBackend3000 = ["19007", "8081", "8080"];
+    if (port && devPortsUsingBackend3000.includes(port)) {
       return `${protocol}//${hostname}:3000`;
     }
     return `${protocol}//${hostname}${port ? `:${port}` : ""}`;

@@ -527,10 +527,14 @@ export default function PlannerContent() {
             : optimizerSource === "local"
               ? "Local optimizer (backend unavailable)"
               : null;
+      const graphSourceMsg =
+        optimizerSource === "backend"
+          ? "Building directed graph from road GeoJSON"
+          : "Building directed graph from OSM extract";
       const logMessages = [
         { msg: "Starting route generation...", type: "info" as const },
         { msg: `Processing ${pointsToUse.length} collection points...`, type: "info" as const },
-        { msg: "Building directed graph from OSM extract", type: "info" as const },
+        { msg: graphSourceMsg, type: "info" as const },
         { msg: "Filtering highway types: residential, unclassified, tertiary, secondary, living_street, secondary_link, tertiary_link, service=alley", type: "info" as const },
         { msg: "Identifying Largest Strongly Connected Component (LSCC)", type: "info" as const },
         ...(optimizerLabel ? [{ msg: `Optimizer: ${optimizerLabel}`, type: "info" as const }] : []),

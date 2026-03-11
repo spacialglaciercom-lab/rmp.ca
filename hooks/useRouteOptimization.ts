@@ -34,12 +34,6 @@ export interface RouteOptimizationOptions {
   serviceBothSides?: boolean;
   /** Called with pipeline step updates so the UI can show granular progress. */
   onProgress?: (step: string, detail?: string) => void;
-  /**
-   * Node IDs (from geojsonToOsmData / computeIntersectionNodes) that the solver
-   * should avoid. Applies a prohibitive penalty to all turns through these
-   * intersections in the turn-expanded graph.
-   */
-  avoidedIntersections?: Set<string>;
 }
 
 export type RouteOptimizationResult =
@@ -201,8 +195,7 @@ export function useRouteOptimization() {
           streetEdges,
           undefined,
           mlEdgePenalties,
-          onProgress,
-          options.avoidedIntersections
+          onProgress
         );
         console.log("[TurnAwareCPP] turnNodes:", turnNodes.length, "turnEdges:", turnEdges.length,
           "turnTypes:", turnEdges.reduce((acc, e) => { acc[e.turnType] = (acc[e.turnType] ?? 0) + 1; return acc; }, {} as Record<string, number>));

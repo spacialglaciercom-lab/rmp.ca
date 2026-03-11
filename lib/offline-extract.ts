@@ -180,7 +180,7 @@ export interface OfflineExtractResult {
 function getRoadClass(props: Record<string, unknown> | undefined): string {
   if (!props) return "";
   const v =
-    props.highway ?? props.class ?? props.road_class ?? props.category;
+    props.class ?? props.road_class ?? props.highway ?? props.category;
   return typeof v === "string" ? v.toLowerCase().trim() : "";
 }
 
@@ -355,9 +355,11 @@ export function filterGeoJSONLocal(params: {
   const features = (params.geojson.features ?? []).filter((f) => {
     const cls = getRoadClass(f.properties);
     if (!allow.has(cls)) return false;
-    if (polygon && f.geometry?.type === "LineString" && f.geometry.coordinates?.[0]) {
-      const [lon, lat] = f.geometry.coordinates[0];
-      if (!booleanPointInPolygon([lon, lat], polygon)) return false;
+    if (polygon && f.geometry?.type === "LineString") {
+      const coords = f.geometry.coordinates as [number, number][];
+      // Keep feature if ANY coordinate falls inside the polygon
+      const anyInside = coords.some((c) => booleanPointInPolygon(c, polygon!));
+      if (!anyInside) return false;
     }
     return true;
   });

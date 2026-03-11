@@ -136,43 +136,6 @@ export function osmDataToGeoJSON(
   return { type: "FeatureCollection", features };
 }
 
-/**
- * Compute intersection nodes from a GeoJSON road network.
- * An intersection is any node that is an endpoint of 2 or more ways
- * (i.e. where roads meet). Returns node IDs consistent with geojsonToOsmData
- * so they can be passed directly to buildTurnExpandedGraph as avoidedIntersections.
- */
-export interface IntersectionNode {
-  nodeId: string;
-  lat: number;
-  lon: number;
-}
-
-export function computeIntersectionNodes(
-  fc: GeoJSONFeatureCollection,
-  opts: GeoJSONConvertOptions = {},
-): IntersectionNode[] {
-  const { nodes, ways } = geojsonToOsmData(fc, opts);
-  const refCount = new Map<string, number>();
-  for (const way of ways) {
-    if (way.nodes.length < 2) continue;
-    const first = way.nodes[0]!;
-    const last = way.nodes[way.nodes.length - 1]!;
-    refCount.set(first, (refCount.get(first) ?? 0) + 1);
-    if (last !== first) {
-      refCount.set(last, (refCount.get(last) ?? 0) + 1);
-    }
-  }
-  const result: IntersectionNode[] = [];
-  refCount.forEach((count, nodeId) => {
-    if (count >= 2) {
-      const n = nodes.get(nodeId);
-      if (n) result.push({ nodeId, lat: n.lat, lon: n.lon });
-    }
-  });
-  return result;
-}
-
 /** Convert RoutePoints to a GeoJSON FeatureCollection for inspection. */
 export function routePointsToGeoJSON(points: RoutePoint[]): GeoJSONFeatureCollection {
   const coords = points.map((p) => [p.longitude, p.latitude]);

@@ -235,11 +235,16 @@ async function request<T>(path: string, body: unknown, timeoutMs = DEFAULT_REQUE
     if (!res.ok) {
       const errorBody = await res.text();
       let detail: unknown = errorBody;
+      let hint: string | undefined;
       try {
-        const parsed = JSON.parse(errorBody);
-        detail = parsed.detail ?? parsed.message ?? errorBody;
+        const parsed = JSON.parse(errorBody) as { detail?: unknown; message?: string; error?: string; hint?: string };
+        detail = parsed.detail ?? parsed.message ?? parsed.error ?? errorBody;
+        hint = parsed.hint;
       } catch {}
-      const message = formatApiErrorDetail(res.status, detail);
+      let message = formatApiErrorDetail(res.status, detail);
+      if (res.status === 503 && hint) {
+        message += ` ${hint}`;
+      }
       throw new Error(message);
     }
 
@@ -510,7 +515,9 @@ export async function healthCheck(): Promise<boolean> {
     const base = getOptimizerBaseUrl();
     // Node proxy exposes optimizer health at /optimizer/health
     const healthPath = Platform.OS === "web" ? "/optimizer/health" : "/health";
-    const res = await fetch(`${base.replace(/\/$/, "")}${healthPath}`);
+    const res = await fetch(`${base.replace(/\/$/, "")}${healthPath}`, {
+      signal: AbortSignal.timeout(5_000),
+    });
     if (!res.ok) return false;
     const data = await res.json();
     return data.status === "ok";

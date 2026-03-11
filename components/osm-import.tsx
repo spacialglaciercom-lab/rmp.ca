@@ -150,7 +150,7 @@ export function OSMImport({ onImportComplete, useOfflineOptimizerV2 = false }: O
       });
     }
 
-  }, [onImportComplete, customStartPoint]);
+  }, [onImportComplete, customStartPoint, useOfflineOptimizerV2]);
 
   const handleFilePick = useCallback(async () => {
     try {

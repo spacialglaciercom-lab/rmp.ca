@@ -44,6 +44,17 @@ const styles = StyleSheet.create({
     pointerEvents: "box-none",
     backgroundColor: "transparent",
   },
+  /** When renderInline, use this instead of full-screen overlay so the map above stays clickable. */
+  overlayInlineBottomOnly: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "45%",
+    maxHeight: 420,
+    pointerEvents: "box-none",
+    backgroundColor: "transparent",
+  },
   tapThrough: {
     flex: 1,
     pointerEvents: "none",
@@ -131,8 +142,9 @@ function SheetContent({
           borderBottomColor: colors.border,
         },
       ]}
+      pointerEvents="box-none"
     >
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]} pointerEvents="box-none">
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {title}
         </Text>
@@ -151,7 +163,7 @@ function SheetContent({
           </TouchableOpacity>
         </View>
       </View>
-      {!isCollapsed && <View style={styles.content}>{children}</View>}
+      {!isCollapsed && <View style={styles.content} pointerEvents="box-none">{children}</View>}
     </View>
   );
 }
@@ -197,9 +209,20 @@ function BottomSheetInner({
 
   if (renderInline) {
     return (
-      <View style={[styles.overlayInline, { pointerEvents: "box-none" }]}>
-        <View style={styles.tapThrough} />
-        {sheetNode}
+      <View style={styles.overlayInlineBottomOnly}>
+        <SheetContent
+          title={title}
+          onClose={handleClose}
+          maxHeight="100%"
+          insets={insets}
+          colors={colors}
+          collapsible={collapsible}
+          collapsed={collapsed}
+          onCollapseToggle={onCollapseToggle}
+          collapsedHeight={collapsedHeight}
+        >
+          {children}
+        </SheetContent>
       </View>
     );
   }

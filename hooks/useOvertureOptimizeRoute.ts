@@ -87,15 +87,15 @@ export function useOvertureOptimizeRoute() {
         const gpxString = generateGPXString("overture-optimized-route", gpxPoints);
         dispatch({ type: "SET_GPX_DATA", payload: gpxString });
 
-        // Switch to Minimal route view to display the optimized route
-        setDisplayMode("minimal");
-
+        setDisplayMode("full");
         closeOSMExtractor();
         actions.clearOsmExtraction();
 
         return result;
       } catch (err) {
         console.error("Overture optimize failed:", err);
+        // Clear any previous route so a failed run doesn’t leave a stale/grid on the map
+        dispatch({ type: "SET_PREVIEW_ROUTE", payload: null });
         Alert.alert(
           "Optimization Failed",
           err instanceof Error ? err.message : "Unknown error",

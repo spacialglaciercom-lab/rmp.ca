@@ -21,7 +21,7 @@ interface DisplayModeState {
 export const useDisplayModeStore = create<DisplayModeState>()(
   persist(
     (set) => ({
-      mode: "minimal",
+      mode: "full",
       setMode: (mode) => set({ mode }),
     }),
     {
