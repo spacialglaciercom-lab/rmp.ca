@@ -34,4 +34,8 @@ export const ENV = {
   })(),
   /** Use Moonshine for STT when URL is set. Set to "false" to disable. Defaults to true when MOONSHINE_SIDECAR_URL is set. */
   moonshineSttEnabled: process.env.MOONSHINE_STT_ENABLED !== "false",
+  /** OSM OAuth2 client secret — server-side only, never sent to the client.
+   *  Pair with EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID in .env.
+   *  Register your app at https://www.openstreetmap.org/oauth2/applications */
+  osmOAuthClientSecret: (process.env.OSM_OAUTH_CLIENT_SECRET ?? "").trim(),
 };

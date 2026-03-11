@@ -157,6 +157,7 @@ async function startServer() {
           "POST /overture/optimize (proxy to Python optimizer)",
         optimizerHealth:
           "GET /optimizer/health (proxy to Python optimizer /health)",
+        osmTokenExchange: "POST /api/osm/token-exchange (OSM OAuth2 code→token)",
       },
       timestamp: Date.now(),
     });
@@ -164,6 +165,44 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
+  });
+
+  /** OSM OAuth2 token exchange — keeps client_secret server-side.
+   *  Client sends { code, redirect_uri }; server exchanges with OSM and returns access_token. */
+  app.post("/api/osm/token-exchange", async (req, res) => {
+    const clientSecret = ENV.osmOAuthClientSecret;
+    const clientId = process.env.EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID ?? "";
+    if (!clientSecret || !clientId) {
+      res.status(503).json({ error: "OSM OAuth not configured on server (OSM_OAUTH_CLIENT_SECRET / EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID missing)" });
+      return;
+    }
+    const body = req.body as { code?: string; redirect_uri?: string };
+    if (!body?.code) {
+      res.status(400).json({ error: "code required" });
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        grant_type: "authorization_code",
+        code: body.code,
+        redirect_uri: body.redirect_uri ?? "",
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+      const osmRes = await fetch("https://www.openstreetmap.org/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+      const data = await osmRes.json() as Record<string, unknown>;
+      if (!osmRes.ok) {
+        res.status(502).json({ error: data.error_description ?? data.error ?? "OSM token exchange failed" });
+        return;
+      }
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
   });
 
   /** Public config for the app (e.g. Google Maps key from Railway env). App calls this at the public API URL, not .railway.internal. */

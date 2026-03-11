@@ -33,12 +33,7 @@ export const OSM_CLIENT_ID =
     process.env?.EXPO_PUBLIC_OSM_OAUTH_CLIENT_ID) ||
   "";
 
-function getClientSecret(): string {
-  // SECURITY: OAuth client secrets must NEVER be exposed to the client.
-  // Token exchange MUST be performed server-side only.
-  // For now, return empty string - implement backend proxy for token exchange.
-  return "";
-}
+// Client secret is kept server-side only — token exchange goes through /api/osm/token-exchange.
 
 function getRedirectUri(): string {
   if (Platform.OS === "web") {
@@ -161,7 +156,7 @@ export const OsmAuthService = {
   getRedirectUri,
 
   isConfigured(): boolean {
-    return Boolean(OSM_CLIENT_ID && getClientSecret());
+    return Boolean(OSM_CLIENT_ID);
   },
 
   async getAccessToken(): Promise<string | null> {
