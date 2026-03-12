@@ -1,0 +1,79 @@
+# Kubernetes Deployment for the rmp.ca Python optimizer.
+#
+# The optimizer is fully stateless (no DB, no shared disk) so it scales
+# horizontally with zero application changes.
+#
+# Deploy:
+#   kubectl apply -f k8s/optimizer-deployment.yaml
+#
+# Scale manually:
+#   kubectl scale deployment/optimizer --replicas=6
+#
+# Auto-scale (requires optimizer-hpa.yaml):
+#   kubectl apply -f k8s/optimizer-hpa.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: optimizer
+  labels:
+    app: optimizer
+    component: python-fastapi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: optimizer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never take all pods down at once during a rollout
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: optimizer
+        component: python-fastapi
+    spec:
+      containers:
+        - name: optimizer
+          # Replace with your registry image, e.g.:
+          # image: gcr.io/YOUR_PROJECT/rmpca-optimizer:latest
+          image: rmpca-main-optimizer:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8000"
+          resources:
+            requests:
+              cpu: "500m"      # 0.5 vCPU guaranteed
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"     # burst up to 2 vCPU for heavy CPP solves
+              memory: "2Gi"
+          # Readiness: only send traffic once FastAPI is accepting requests
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          # Liveness: restart if the process hangs
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 4
+          # Allow in-flight optimization requests to finish before pod exits
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+      terminationGracePeriodSeconds: 135   # > longest possible request (120s)

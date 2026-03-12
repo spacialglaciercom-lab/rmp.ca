@@ -1,0 +1,44 @@
+import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import type { Organization, User } from "../../drizzle/schema";
+import { getOrgById } from "../db";
+import { sdk } from "./sdk";
+
+export type TrpcContext = {
+  req: CreateExpressContextOptions["req"];
+  res: CreateExpressContextOptions["res"];
+  user: User | null;
+  /** Populated when the authenticated user belongs to an organization. */
+  org: Organization | null;
+};
+
+export async function createContext(
+  opts: CreateExpressContextOptions,
+): Promise<TrpcContext> {
+  try {
+    let user: User | null = null;
+    let org: Organization | null = null;
+    try {
+      user = await sdk.authenticateRequest(opts.req);
+      if (user?.orgId != null) {
+        org = (await getOrgById(user.orgId)) ?? null;
+      }
+    } catch {
+      // Authentication is optional for public procedures (e.g. voice.transcribe, voice.chat).
+      user = null;
+    }
+    return {
+      req: opts.req,
+      res: opts.res,
+      user,
+      org,
+    };
+  } catch (error) {
+    // Ensure we never throw: public procedures must work without login.
+    return {
+      req: opts.req,
+      res: opts.res,
+      user: null,
+      org: null,
+    };
+  }
+}

@@ -1,0 +1,21 @@
+diff --git a/plugin/build/withMapbox.js b/plugin/build/withMapbox.js
+index c226cec57ca3860e1a637eb3797b0e309dcb96ca..610a2f2d23b64a42fff047e5f900416a68e09a19 100644
+--- a/plugin/build/withMapbox.js
++++ b/plugin/build/withMapbox.js
+@@ -122,12 +122,14 @@ const withCocoaPodsInstallerBlocks = (config, { RNMapboxMapsImpl, RNMapboxMapsVe
+     async (exportedConfig) => {
+         const file = path_1.default.join(exportedConfig.modRequest.platformProjectRoot, 'Podfile');
+         const contents = await fs_1.promises.readFile(file, 'utf8');
+-        await fs_1.promises.writeFile(file, (0, exports.applyCocoaPodsModifications)(contents, {
++        let _podfileContents = (0, exports.applyCocoaPodsModifications)(contents, {
+             RNMapboxMapsImpl,
+             RNMapboxMapsVersion,
+             RNMapboxMapsDownloadToken,
+             RNMapboxMapsUseV11,
+-        }), 'utf-8');
++        });
++        _podfileContents = _podfileContents.replace(/^\s*end\s+@rnmapbox[^\n]*\n?/gm, '');
++        await fs_1.promises.writeFile(file, _podfileContents, 'utf-8');
+         return exportedConfig;
+     },
+ ]);

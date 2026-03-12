@@ -1,0 +1,27 @@
+# Kubernetes ClusterIP Service for the optimizer.
+#
+# kube-proxy load-balances traffic across all healthy optimizer pods
+# automatically — no Nginx needed inside the cluster.
+#
+# The Node.js backend should set:
+#   OPTIMIZER_BACKEND_URL=http://optimizer:8000
+# (standard Kubernetes DNS: <service-name>.<namespace>.svc.cluster.local)
+#
+# Deploy:
+#   kubectl apply -f k8s/optimizer-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: optimizer
+  labels:
+    app: optimizer
+    component: python-fastapi
+spec:
+  type: ClusterIP
+  selector:
+    app: optimizer
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

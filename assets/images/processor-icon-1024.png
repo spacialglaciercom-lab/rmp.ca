@@ -1,0 +1,26 @@
+# Processor Icon Placeholder
+# This is a placeholder file for the processor-style app icon
+# Replace with actual PNG generated from the SVG or created in a graphics editor
+# 
+# For now, copy your existing icon.png and apply processor-style overlay:
+# 1. Dark background with gradient
+# 2. Central processor die with gold border
+# 3. Copper connection grid inside
+# 4. Gold connection pads around perimeter
+# 5. Route arrow in center
+# 6. Small components (resistors/capacitors) scattered around
+#
+# Recommended tools:
+# - Figma (free, web-based)
+# - Adobe Illustrator
+# - Sketch
+# - Canva (for simpler designs)
+#
+# Color palette:
+# - Background: #0a0a0a to #2a2a2a gradient
+# - Copper traces: #B87333
+# - Gold pads: #FFD700
+# - Silver components: #C0C0C0
+# - Route arrow: #00d9ff
+#
+# Size: 1024x1024px with 180px rounded corners
