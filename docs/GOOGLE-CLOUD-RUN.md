@@ -38,7 +38,7 @@ The **Node API** (rmp-ca) does not run the optimizer or extract logic itself. It
 | **Config**     | No `OPTIMIZER_BACKEND_URL`                                                                        | Set `OPTIMIZER_BACKEND_URL` on the Node service to the optimizer URL  |
 | **Scaling**    | Node and optimizer scale together                                                                 | Scale optimizer and Node independently                                |
 | **Image size** | Larger (Node + Python)                                                                            | Smaller per image                                                     |
-| **Extract**    | Still needs a separate extract service + `EXTRACT_WS_UPSTREAM` (no Overture extract in this repo) | Same                                                                  |
+| **Extract**    | Optional: use in-repo extract (`extract/`) or a deployed extract service; set `EXTRACT_WS_UPSTREAM` on Node | Same                                                                  |
 
 **When to use a single container:** You want route optimization (and zones/GeoJSON) with minimal setup and one URL. Use `Dockerfile.all-in-one` and deploy one Cloud Run service.
 

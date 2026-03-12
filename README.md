@@ -65,7 +65,7 @@
     Key variables to set:
     - `EXPO_PUBLIC_API_BASE_URL`: Your Node/Express + tRPC server.
     - `EXPO_PUBLIC_OPTIMIZER_URL`: Optimizer API endpoint.
-    - `EXPO_PUBLIC_OVERTURE_EXTRACT_URL`: Overture extract service (WebSocket).
+    - `EXPO_PUBLIC_OVERTURE_EXTRACT_URL`: Overture extract service (WebSocket). The extract service is **included in this repo** under `extract/`; see `extract/README.md` and `docs/DOCKER.md`.
     - `NGROK_AUTHTOKEN`: Required for mobile tunneling (`pnpm mobile:tunnel`).
 
 4.  **Database Migration (if using MySQL)**

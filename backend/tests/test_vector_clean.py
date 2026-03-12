@@ -2,6 +2,7 @@
 Unit tests for vector_clean pipeline.
 
 Fixtures: self-loop, short edge, duplicate edges, missing attrs, two components.
+Effectiveness test: single dirty GeoJSON with multiple issues → assert cleaning improves data.
 """
 from __future__ import annotations
 
@@ -100,6 +101,44 @@ def geojson_valid_single() -> dict:
     }
 
 
+@pytest.fixture
+def geojson_dirty_mixed() -> dict:
+    """
+    GeoJSON with multiple cleaning targets: self-loop, short edge, duplicate edge,
+    and a second component. Used to evaluate cleaning effectiveness.
+    """
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            # Self-loop (A -> B -> A)
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-73.5, 45.5], [-73.501, 45.501], [-73.5, 45.5]],
+                },
+                "properties": {"highway": "residential"},
+            },
+            # Short edge (~0.02 m)
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-73.0, 45.0], [-73.0000002, 45.0000002]],
+                },
+                "properties": {"highway": "service"},
+            },
+            # Two identical segments (duplicates)
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-73.6, 45.6], [-73.61, 45.61]]}, "properties": {"highway": "primary"}},
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-73.6, 45.6], [-73.61, 45.61]]}, "properties": {"highway": "primary"}},
+            # Valid segment in main component (connects to duplicate segment area via node snap)
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-73.61, 45.61], [-73.62, 45.62]]}, "properties": {"highway": "primary"}},
+            # Isolated second component (far away)
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-74.0, 46.0], [-74.01, 46.01]]}, "properties": {"highway": "secondary"}},
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -181,6 +220,56 @@ def test_clean_skips_non_linestring() -> None:
     opts = CleanOptions()
     fc, stats = clean_geojson(gj, opts)
     assert stats.output_features == 0
+
+
+# ---------------------------------------------------------------------------
+# Effectiveness evaluation
+# ---------------------------------------------------------------------------
+
+
+def test_clean_effectiveness_on_dirty_geojson(geojson_dirty_mixed: dict) -> None:
+    """
+    Evaluate cleaning effectiveness: run full pipeline on dirty GeoJSON and assert
+    that the cleaning step removes expected noise and produces a smaller, valid output.
+    """
+    opts = CleanOptions(
+        remove_selfloops=True,
+        min_length_m=0.1,
+        dedupe_edges=True,
+        remove_isolates=True,
+        max_components=1,
+    )
+    fc, stats = clean_geojson(geojson_dirty_mixed, opts)
+
+    # Input had 6 features
+    assert stats.input_features == 6
+
+    # Effectiveness: at least one of each known problem was addressed
+    assert stats.selfloops_removed >= 1, "cleaning should remove self-loop"
+    assert (stats.short_edges_removed >= 1 or stats.selfloops_removed >= 2), "cleaning should remove short edge (or as self-loop)"
+    assert stats.duplicate_edges_removed >= 1, "cleaning should dedupe edges"
+    assert stats.components_removed >= 1, "cleaning should drop smaller component(s)"
+
+    # Output is strictly smaller than input (noise removed)
+    assert stats.output_features < stats.input_features
+
+    # Output is non-empty and valid: all features are LineStrings with ≥2 coordinates
+    assert len(fc.features) >= 1
+    for f in fc.features:
+        geom = f.geometry
+        assert geom.get("type") == "LineString"
+        coords = geom.get("coordinates", [])
+        assert len(coords) >= 2
+
+    # Sanity: total removals reflected in stats
+    total_removed = (
+        stats.selfloops_removed
+        + stats.short_edges_removed
+        + stats.duplicate_edges_removed
+        + stats.isolates_removed
+        + stats.components_removed
+    )
+    assert total_removed >= 1
 
 
 # ---------------------------------------------------------------------------

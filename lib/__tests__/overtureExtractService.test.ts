@@ -11,6 +11,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Stub it out at the module level before any import of overtureExtractService.
 vi.mock("expo-constants", () => ({ default: { expoConfig: null } }));
 
+// react-native uses syntax Rollup cannot parse (e.g. typeOf). Mock it so the extract
+// service never loads the real module.
+vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
+
+// shared/oauth pulls in expo-linking and react-native; mock it to avoid the Expo chain.
+vi.mock("@/shared/oauth", () => ({ getApiBaseUrl: () => "http://localhost:3000" }));
+
 // __DEV__ is a React Native / Metro global not defined in the Node test environment.
 vi.stubGlobal("__DEV__", false);
 

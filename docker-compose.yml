@@ -1,4 +1,15 @@
 services:
+  extract:
+    build:
+      context: ./extract
+      dockerfile: Dockerfile
+    container_name: rmpca-extract
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+    restart: unless-stopped
+
   optimizer:
     build:
       context: ./backend
@@ -25,9 +36,8 @@ services:
     environment:
       - PORT=3000
       - OPTIMIZER_BACKEND_URL=http://optimizer:8000
-      # Overture extract API: use host port since it may run from a separate compose project.
-      # Set to http://overture-extract-api:4000 if running in the same compose network.
-      - EXTRACT_WS_UPSTREAM=http://host.docker.internal:4000
+      - EXTRACT_WS_UPSTREAM=http://extract:4000
     depends_on:
       - optimizer
+      - extract
     restart: unless-stopped

@@ -1,27 +1,22 @@
 # Docker local dev stack
 
-The full stack (MySQL, backend, optimizer, Overture extract) is run via **Docker Compose** from the **parent folder** of this repo, not from this directory.
+The full stack (backend, optimizer, **Overture extract**) runs via **Docker Compose** from **this repo**. The extract service is included in the rmp.ca repo under `extract/`.
 
 ## Layout
 
-- **Parent folder** (e.g. `C:\Users\Space\OneDrive\Desktop\rmp.ca`): contains `docker-compose.yml`. Run all `docker compose` commands there.
-- **This repo** (`rmp.ca/`): contains `Dockerfile`, `backend/Dockerfile`, `.dockerignore` — used as build context by the compose file.
-
-So the compose file lives one level up so it can reference this app plus sibling projects (e.g. Overture extract) in a single stack.
+- **This repo** (`rmp.ca/`): contains `docker-compose.yml`, `Dockerfile`, `backend/Dockerfile`, and **`extract/`** (Overture extract WebSocket + HTTP API). Run `docker compose` from this directory.
 
 ## Run the stack
 
 1. Start **Docker Desktop**.
-2. In a terminal, go to the **parent** of this repo (the folder that contains both `docker-compose.yml` and the `rmp.ca` folder):
+2. From this repo root:
    ```powershell
-   cd C:\Users\Space\OneDrive\Desktop\rmp.ca
-   ```
-3. Start everything:
-   ```powershell
+   cd c:\Users\Space\OneDrive\Desktop\rmp.ca\rmp.ca
    docker compose up --build
    ```
+3. Services: **backend** (3000), **optimizer** (8000), **extract** (4000).
 
-To rebuild only the backend: `docker compose up --build backend`  
+To rebuild only one: `docker compose up --build backend` or `--build extract`.  
 To stop and remove volumes: `docker compose down -v`
 
 ## Env for the app
@@ -32,4 +27,4 @@ In **this** repo’s `.env`, point at the local stack:
 - `EXPO_PUBLIC_OPTIMIZER_URL=http://localhost:8000`
 - `EXPO_PUBLIC_OVERTURE_EXTRACT_URL=http://localhost:4000`
 
-See `docker-compose.yml` in the parent folder for the full service list and ports.
+The backend's `EXTRACT_WS_UPSTREAM` is set by compose to `http://extract:4000`. See `extract/README.md` for the extract API and how to run it standalone.
