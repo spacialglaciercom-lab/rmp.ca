@@ -153,7 +153,9 @@ The app features an OsmAnd-inspired plugin system. Plugins can be toggled in **S
 
 ## 📜 License
 
-**TODO**: Confirm official license. `package.json` specifies `ISC`, but existing docs mention `Proprietary`.
+This project is licensed under the **[ISC License](LICENSE)**.
+
+See the [LICENSE](LICENSE) file for the full license text.
 
 ---
 
