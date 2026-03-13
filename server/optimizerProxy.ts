@@ -134,6 +134,60 @@ async function proxyToOptimizer(req: Request, res: Response): Promise<void> {
   }
 }
 
+// ── VROOM proxy (vroom-express — separate service) ────────────────────────
+
+const rawVroomUrl = process.env.VROOM_BACKEND_URL ?? "";
+const VROOM_BACKEND_URL = rawVroomUrl
+  ? rawVroomUrl.startsWith("http://") || rawVroomUrl.startsWith("https://")
+    ? rawVroomUrl.replace(/\/$/, "")
+    : `http://${rawVroomUrl.replace(/\/$/, "")}`
+  : "";
+
+async function proxyToVroom(req: Request, res: Response): Promise<void> {
+  if (!VROOM_BACKEND_URL) {
+    res.status(503).json({
+      ok: false,
+      error: "VROOM backend not configured",
+      hint: "Set VROOM_BACKEND_URL environment variable (e.g. http://vroom:3000)",
+    });
+    return;
+  }
+
+  // vroom-express accepts the VROOM JSON at its root POST /
+  const targetUrl = `${VROOM_BACKEND_URL}/`;
+  log.info("Proxying VROOM request", { method: req.method, target: targetUrl });
+
+  try {
+    const upstream = await fetchWithRetry(
+      targetUrl,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+        signal: AbortSignal.timeout(30_000),
+      },
+      1,
+    );
+    const body = await upstream.text();
+    res.status(upstream.status);
+    const ct = upstream.headers.get("content-type");
+    if (ct) res.setHeader("Content-Type", ct);
+    res.send(body);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown proxy error";
+    log.error(
+      "VROOM proxy failed",
+      err instanceof Error ? err : new Error(message),
+    );
+    res.status(502).json({
+      ok: false,
+      error: "VROOM backend unreachable",
+      details: message,
+      target: targetUrl,
+    });
+  }
+}
+
 export function registerOptimizerProxyRoutes(app: Express): void {
   const status = OPTIMIZER_BACKEND_URL
     ? `proxying to ${OPTIMIZER_BACKEND_URL}`
@@ -155,4 +209,11 @@ export function registerOptimizerProxyRoutes(app: Express): void {
       req.originalUrl = origUrl;
     });
   });
+
+  // VROOM solver (separate service — vroom-express)
+  const vroomStatus = VROOM_BACKEND_URL
+    ? `proxying to ${VROOM_BACKEND_URL}`
+    : "not configured (set VROOM_BACKEND_URL)";
+  log.info(`VROOM proxy: ${vroomStatus}`);
+  app.post("/api/vroom/optimize", (req, res) => proxyToVroom(req, res));
 }

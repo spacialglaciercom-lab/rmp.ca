@@ -35,6 +35,11 @@ import { generateRouteId } from "@/lib/utils";
 import type { Route, CollectionPoint } from "@/types";
 import instructionManager from "@/services/InstructionManager";
 import { useDeliveryInstructions } from "@/context/DeliveryInstructionsContext";
+import {
+  solveWithVroom,
+  type VroomJob,
+  type VroomVehicle,
+} from "@/services/vroomService";
 
 type InputMode = "coordinates" | "address";
 
@@ -50,6 +55,7 @@ const ALGORITHM_OPTIONS = [
   { value: "sweep", label: "Sweep (balanced sectors)" },
   { value: "or_opt", label: "Or-Opt (local search)" },
   { value: "two_opt", label: "2-Opt (route untangling)" },
+  { value: "vroom", label: "VROOM (server-optimized, CVRP/VRPTW)" },
 ] as const;
 
 const VALHALLA_MATRIX_URL =
@@ -1112,6 +1118,9 @@ export function VRPPlanner({
   const travelSpeedFactorRef = useRef(
     String(DEFAULT_VRP_CONFIG.travelSpeedFactor),
   );
+  const vroomServiceTimeMinsRef = useRef("0");
+  const vroomShiftStartHourRef = useRef("8");
+  const vroomShiftEndHourRef = useRef("18");
   const [coordinatesKey, setCoordinatesKey] = useState(0);
   const [addressesKey, setAddressesKey] = useState(0);
   const [nominatimKey, setNominatimKey] = useState(0);
@@ -1146,6 +1155,12 @@ export function VRPPlanner({
   const [pickerOpen, setPickerOpen] = useState<
     "objective" | "algorithm" | null
   >(null);
+
+  // VROOM-specific settings (only active when algorithm === "vroom")
+  const [vroomServiceTimeMins, setVroomServiceTimeMins] = useState("0");
+  const [vroomTimeWindowEnabled, setVroomTimeWindowEnabled] = useState(false);
+  const [vroomShiftStartHour, setVroomShiftStartHour] = useState("8");
+  const [vroomShiftEndHour, setVroomShiftEndHour] = useState("18");
 
   const [nominatimQuery, setNominatimQuery] = useState("");
   const [nominatimResults, setNominatimResults] = useState<NominatimResult[]>(
@@ -1747,9 +1762,6 @@ export function VRPPlanner({
         locationsForMatrix = [current, ...locations];
       }
 
-      const matrix = useValhallaApi
-        ? await getValhallaMatrix(locationsForMatrix)
-        : buildHaversineMatrix(locationsForMatrix);
       const vehiclesStr = useUncontrolledInputs
         ? vehiclesRef.current
         : vehicles;
@@ -1765,15 +1777,121 @@ export function VRPPlanner({
       const speedStr = useUncontrolledInputs
         ? travelSpeedFactorRef.current
         : travelSpeedFactor;
+      const numVehicles = Math.max(
+        1,
+        parseInt(vehiclesStr, 10) || DEFAULT_VRP_CONFIG.vehicles,
+      );
+      const vehicleCap = Math.max(
+        1,
+        parseInt(capacityStr, 10) || DEFAULT_VRP_CONFIG.capacity,
+      );
+
+      // ── VROOM server-side solver ──────────────────────────────────────────
+      if (algorithm === "vroom") {
+        const serviceTimeSecs =
+          (parseInt(
+            useUncontrolledInputs
+              ? vroomServiceTimeMinsRef.current
+              : vroomServiceTimeMins,
+            10,
+          ) || 0) * 60;
+        const useWindows = vroomTimeWindowEnabled;
+        const shiftStart =
+          parseInt(
+            useUncontrolledInputs
+              ? vroomShiftStartHourRef.current
+              : vroomShiftStartHour,
+            10,
+          ) || 8;
+        const shiftEnd =
+          parseInt(
+            useUncontrolledInputs
+              ? vroomShiftEndHourRef.current
+              : vroomShiftEndHour,
+            10,
+          ) || 18;
+
+        // Epoch-seconds base for today's midnight (for time windows)
+        const todayMidnight = new Date();
+        todayMidnight.setHours(0, 0, 0, 0);
+        const epochBase = Math.floor(todayMidnight.getTime() / 1000);
+        const windowOpen = epochBase + shiftStart * 3600;
+        const windowClose = epochBase + shiftEnd * 3600;
+
+        const depot = locationsForMatrix[0];
+        const jobs: VroomJob[] = locationsForMatrix.slice(1).map((loc, i) => {
+          const job: VroomJob = {
+            id: i + 1,
+            location: [loc.lon, loc.lat],
+            service: serviceTimeSecs,
+            delivery: [1],
+            description: loc.label,
+          };
+          if (useWindows) {
+            job.time_windows = [[windowOpen, windowClose]];
+          }
+          return job;
+        });
+
+        const vroomVehicles: VroomVehicle[] = Array.from(
+          { length: numVehicles },
+          (_, vi) => {
+            const v: VroomVehicle = {
+              id: vi + 1,
+              start: [depot.lon, depot.lat],
+              end: [depot.lon, depot.lat],
+              capacity: [vehicleCap],
+            };
+            if (useWindows) {
+              v.time_window = [windowOpen, windowClose];
+            }
+            return v;
+          },
+        );
+
+        const vroomRes = await solveWithVroom({ jobs, vehicles: vroomVehicles });
+
+        const routes: VRPStop[][] = vroomRes.routes
+          .map((r) =>
+            r.steps
+              .filter((s) => s.type === "job" && s.id != null)
+              .map((s) => {
+                const j = jobs[s.id! - 1];
+                return j
+                  ? {
+                      lon: j.location[0],
+                      lat: j.location[1],
+                      label: j.description ?? `Stop ${s.id}`,
+                    }
+                  : null;
+              })
+              .filter((s): s is VRPStop => s !== null),
+          )
+          .filter((r) => r.length > 0);
+
+        if (vroomRes.unassigned.length > 0) {
+          Alert.alert(
+            "VROOM",
+            `${vroomRes.unassigned.length} stop(s) could not be assigned (capacity or time window constraints).`,
+          );
+        }
+
+        setResult({
+          stops: routes.flat(),
+          routes: routes.length > 1 ? routes : undefined,
+          totalDistance: (vroomRes.summary.distance / 1000).toFixed(2),
+          totalTime: Math.round(vroomRes.summary.duration / 60),
+        });
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      const matrix = useValhallaApi
+        ? await getValhallaMatrix(locationsForMatrix)
+        : buildHaversineMatrix(locationsForMatrix);
       const config: Partial<VRPConfig> = {
-        vehicles: Math.max(
-          1,
-          parseInt(vehiclesStr, 10) || DEFAULT_VRP_CONFIG.vehicles,
-        ),
-        capacity: Math.max(
-          1,
-          parseInt(capacityStr, 10) || DEFAULT_VRP_CONFIG.capacity,
-        ),
+        vehicles: numVehicles,
+        capacity: vehicleCap,
         maxRouteTimeHours: Math.max(
           1,
           parseInt(maxRouteTimeHoursStr, 10) ||
@@ -1813,6 +1931,9 @@ export function VRPPlanner({
       travelSpeedFactorRef.current = String(
         DEFAULT_VRP_CONFIG.travelSpeedFactor,
       );
+      vroomServiceTimeMinsRef.current = "0";
+      vroomShiftStartHourRef.current = "8";
+      vroomShiftEndHourRef.current = "18";
       setCoordinatesKey((k) => k + 1);
       setAddressesKey((k) => k + 1);
       setNumericInputsKey((k) => k + 1);
@@ -1825,6 +1946,10 @@ export function VRPPlanner({
     setDepotAddress("");
     setStartFromCurrentPosition(false);
     setTravelSpeedFactor(String(DEFAULT_VRP_CONFIG.travelSpeedFactor));
+    setVroomServiceTimeMins("0");
+    setVroomTimeWindowEnabled(false);
+    setVroomShiftStartHour("8");
+    setVroomShiftEndHour("18");
     setResult(null);
   };
 
@@ -2377,8 +2502,162 @@ export function VRPPlanner({
             <Text
               style={[styles.helperText, { color: colors.muted, marginTop: 6 }]}
             >
-              Google OR-Tools metaheuristic strategy
+              {algorithm === "vroom"
+                ? "VROOM: server-side CVRP/VRPTW solver. Requires VROOM_BACKEND_URL."
+                : "Local heuristic solver (no server required)."}
             </Text>
+
+            {/* VROOM-specific options */}
+            {algorithm === "vroom" && (
+              <View style={{ marginTop: 12 }}>
+                <Text
+                  style={[
+                    styles.helperText,
+                    { color: colors.muted, marginBottom: 6 },
+                  ]}
+                >
+                  Service time per stop (min)
+                </Text>
+                <TextInput
+                  key={
+                    useUncontrolledInputs
+                      ? `vroomSvc-${numericInputsKey}`
+                      : undefined
+                  }
+                  style={[
+                    styles.vehicleInput,
+                    styles.travelSpeedInput,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                      color: colors.foreground,
+                    },
+                  ]}
+                  {...(useUncontrolledInputs
+                    ? {
+                        defaultValue: vroomServiceTimeMins,
+                        onChangeText: (t) => {
+                          vroomServiceTimeMinsRef.current = t;
+                        },
+                      }
+                    : {
+                        value: vroomServiceTimeMins,
+                        onChangeText: setVroomServiceTimeMins,
+                      })}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={colors.muted}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.valhallaRow,
+                    { marginTop: 12, marginBottom: 4 },
+                  ]}
+                  onPress={() => {
+                    hapticImpact();
+                    setVroomTimeWindowEnabled((v) => !v);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.checkmark,
+                      {
+                        backgroundColor: vroomTimeWindowEnabled
+                          ? colors.success
+                          : "transparent",
+                        borderWidth: 1,
+                        borderColor: vroomTimeWindowEnabled
+                          ? colors.success
+                          : colors.border,
+                      },
+                    ]}
+                  >
+                    {vroomTimeWindowEnabled && (
+                      <Text style={styles.checkmarkText}>✓</Text>
+                    )}
+                  </View>
+                  <Text
+                    style={[styles.valhallaText, { color: colors.foreground }]}
+                  >
+                    Enable shift time windows
+                  </Text>
+                </TouchableOpacity>
+                {vroomTimeWindowEnabled && (
+                  <View
+                    style={[
+                      styles.vehicleRow,
+                      { marginTop: 8, flexWrap: "wrap" },
+                    ]}
+                  >
+                    <View style={[styles.vehicleInputWrap, inputBorder]}>
+                      <Text
+                        style={[styles.vehicleLabel, { color: colors.muted }]}
+                      >
+                        Shift start (h)
+                      </Text>
+                      <TextInput
+                        key={
+                          useUncontrolledInputs
+                            ? `vroomStart-${numericInputsKey}`
+                            : undefined
+                        }
+                        style={[
+                          styles.vehicleInput,
+                          { color: colors.foreground },
+                        ]}
+                        {...(useUncontrolledInputs
+                          ? {
+                              defaultValue: vroomShiftStartHour,
+                              onChangeText: (t) => {
+                                vroomShiftStartHourRef.current = t;
+                              },
+                            }
+                          : {
+                              value: vroomShiftStartHour,
+                              onChangeText: setVroomShiftStartHour,
+                            })}
+                        keyboardType="number-pad"
+                        placeholder="8"
+                        placeholderTextColor={colors.muted}
+                      />
+                    </View>
+                    <View style={[styles.vehicleInputWrap, inputBorder]}>
+                      <Text
+                        style={[styles.vehicleLabel, { color: colors.muted }]}
+                      >
+                        Shift end (h)
+                      </Text>
+                      <TextInput
+                        key={
+                          useUncontrolledInputs
+                            ? `vroomEnd-${numericInputsKey}`
+                            : undefined
+                        }
+                        style={[
+                          styles.vehicleInput,
+                          { color: colors.foreground },
+                        ]}
+                        {...(useUncontrolledInputs
+                          ? {
+                              defaultValue: vroomShiftEndHour,
+                              onChangeText: (t) => {
+                                vroomShiftEndHourRef.current = t;
+                              },
+                            }
+                          : {
+                              value: vroomShiftEndHour,
+                              onChangeText: setVroomShiftEndHour,
+                            })}
+                        keyboardType="number-pad"
+                        placeholder="18"
+                        placeholderTextColor={colors.muted}
+                      />
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         )}
 

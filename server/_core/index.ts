@@ -137,6 +137,7 @@ async function startServer() {
     "/api/zones/partition-from-geojson",
     "/api/zones/partition-from-points",
     "/overture/optimize",
+    "/api/vroom/optimize",
   ]) {
     app.use(path, optimizerJsonParser);
   }
@@ -196,6 +197,8 @@ async function startServer() {
           "POST /overture/optimize (proxy to Python optimizer)",
         optimizerHealth:
           "GET /optimizer/health (proxy to Python optimizer /health)",
+        vroomOptimize:
+          "POST /api/vroom/optimize (proxy to VROOM VRP solver)",
         osmTokenExchange: "POST /api/osm/token-exchange (OSM OAuth2 code→token)",
       },
       timestamp: Date.now(),
