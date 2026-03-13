@@ -52,7 +52,6 @@ export function buildLeapWeatherInput(
   constraints: Partial<WeatherConstraints> = {},
 ): LeapWeatherInput {
   const weatherConditions: WeatherData[] = [];
-  const keySet = new Set(weatherByPoint.keys());
   for (const p of points) {
     const k = `${p.lat.toFixed(4)}_${p.lon.toFixed(4)}`;
     const w = weatherByPoint.get(k) ?? null;

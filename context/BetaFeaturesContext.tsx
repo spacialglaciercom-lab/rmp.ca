@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { BetaFeatures } from "@/types/turnAware";
 import { createLogger } from "@/lib/logger";
@@ -37,12 +37,9 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
   });
 
   useEffect(() => {
-    loadFeatures();
-  }, []);
-
-  const loadFeatures = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    const loadFeatures = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<BetaFeatures>;
         setFeatures({
@@ -63,10 +60,19 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     }
   };
+  loadFeatures();
+}, []);
 
   const saveFeatures = async (newFeatures: BetaFeatures) => {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newFeatures));
-    setFeatures(newFeatures);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newFeatures));
+      setFeatures(newFeatures);
+    } catch (e) {
+      log.error(
+        "Failed to save beta features",
+        e instanceof Error ? e : new Error(String(e)),
+      );
+    }
   };
 
   const enableBeta = async () => {

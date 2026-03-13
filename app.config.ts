@@ -259,7 +259,7 @@ const config = {
     // Moonshine Voice on-device STT. Adds SPM package (iOS) and JNI libs (Android).
     // Enable for native builds: set EXPO_MOONSHINE=1
     ...(process.env.EXPO_MOONSHINE === "1"
-      ? [["./plugins/withMoonshineSdk.js", { version: "2.0.0" }]]
+      ? [["./plugins/withMoonshineSdk.js", { version: "0.0.49" }]]
       : []),
     // Embed MAPS.ME native map only when OMIM framework is available (set EXPO_MAPME_EMBED=1). Otherwise use openInOfflineMap() from lib/offline-map-url.ts.
     ...(process.env.EXPO_MAPME_EMBED === "1"

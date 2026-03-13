@@ -12,6 +12,7 @@ import {
   isElevenLabsEnabled,
 } from "@/lib/elevenlabs-config";
 import { createLogger } from "@/lib/logger";
+import { useRouteParametersStore } from "@/stores/routeParametersStore";
 
 const log = createLogger("ElevenLabs");
 
@@ -297,6 +298,30 @@ export async function speakWithElevenLabs(text: string): Promise<boolean> {
     });
     _isSpeaking = false;
     return false;
+  }
+}
+
+/**
+ * Unified speak function: tries ElevenLabs first (if enabled), falls back to expo-speech.
+ * Respects voiceAssistanceEnabled setting.
+ */
+export async function speakText(text: string): Promise<void> {
+  const store = useRouteParametersStore.getState();
+  if (!store.voiceAssistanceEnabled) return;
+
+  try {
+    const handled = await speakWithElevenLabs(text);
+    if (!handled) {
+      // Fallback to expo-speech
+      const { getExpoSpeechOptions } = await import("@/lib/expoSpeechVoice");
+      const opts = await getExpoSpeechOptions();
+      const Speech = await import("expo-speech");
+      Speech.speak(text, opts);
+    }
+  } catch (err) {
+    log.error("speakText failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

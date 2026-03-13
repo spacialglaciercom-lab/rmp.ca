@@ -1,0 +1,7 @@
+# Optional: add Python optimizer + nginx. Use with:
+#   docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
+# Default "docker compose up" runs backend + extract + vroom only (no optimizer).
+services:
+  backend:
+    environment:
+      - OPTIMIZER_BACKEND_URL=http://nginx-optimizer:80

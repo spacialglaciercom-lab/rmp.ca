@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
 
 import { useColors } from "@/hooks/use-colors";
 
@@ -59,20 +59,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(0, 217, 255, 0.15)",
-    shadowColor: "#00D9FF",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 8px rgba(0, 217, 255, 0.2)" }
+      : {
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 4,
+        }),
   },
   title: {
     fontSize: 22,
     fontWeight: "800",
     letterSpacing: 1.2,
     color: "#00D9FF",
-    textShadowColor: "rgba(0, 217, 255, 0.5)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    ...(Platform.OS === "web"
+      ? { textShadow: "0px 2px 4px rgba(0, 217, 255, 0.5)" }
+      : {
+          textShadowColor: "rgba(0, 217, 255, 0.5)",
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 4,
+        }),
   },
   statusRow: {
     marginTop: 6,

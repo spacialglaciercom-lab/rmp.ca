@@ -33,7 +33,7 @@ uvicorn app.main:app --reload --port 8000
 
 ## Deploy to Google Run
 
-If you see **404** on `/health` and the Cloud Run log shows a container like **"placeholder-1"**, the service is running a placeholder image, not this FastAPI app. Deploy this backend so `/health` and `/api/zones/partition` work.
+If you see **404** on `/health` and the Cloud Run log shows a container like **"placeholder-1"**, the service is running the default Cloud Run image, not this FastAPI app. Deploy this backend so `/health` and `/api/zones/partition` work.
 
 1. **Build and push** (replace `PROJECT_ID` and `REGION` with your Google Cloud project and region, e.g. `northamerica-northeast1`):
 

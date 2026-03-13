@@ -81,10 +81,8 @@ interface RouteParametersStore extends RouteParametersState {
   setRecalcDistanceMeters: (v: RecalcDistanceValue) => void;
   setRecalcOnReverseDirection: (v: boolean) => void;
   setAvoidRoads: (key: keyof AvoidRoadsState, value: boolean) => void;
-  /** @deprecated No longer needed -- store auto-hydrates via Zustand persist middleware */
-  hydrate: () => Promise<void>;
-  /** @deprecated No longer needed -- store auto-persists via Zustand persist middleware */
-  persist: () => void;
+  /** No-op for API compatibility; persist middleware rehydrates automatically. */
+  hydrate: () => void;
 }
 
 export const useRouteParametersStore = create<RouteParametersStore>()(
@@ -104,10 +102,7 @@ export const useRouteParametersStore = create<RouteParametersStore>()(
       setRecalcOnReverseDirection: (v) => set({ recalcOnReverseDirection: v }),
       setAvoidRoads: (key, value) =>
         set((s) => ({ avoidRoads: { ...s.avoidRoads, [key]: value } })),
-
-      // Backward-compat stubs: no-ops since persist middleware handles hydration/persistence
-      hydrate: async () => {},
-      persist: () => {},
+      hydrate: () => {},
     }),
     {
       name: "trashroute_route_parameters",

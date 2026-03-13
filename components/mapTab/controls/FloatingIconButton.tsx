@@ -24,11 +24,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#2A2A2A",
     borderWidth: 1,
     borderColor: "#444444",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 4px rgba(0,0,0,0.3)" }
+      : {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+          elevation: 4,
+        }),
   },
   icon: {
     color: "#FFFFFF",

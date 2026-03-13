@@ -191,6 +191,10 @@ function parseForecastItem(raw: Record<string, unknown>): HourlyForecastItem {
   };
 }
 
+function redactUrl(url: string): string {
+  return url.replace(/([?&]appid=)[^&]*/gi, "$1[REDACTED]");
+}
+
 async function fetchWithRetry(url: string): Promise<Response> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
@@ -201,7 +205,8 @@ async function fetchWithRetry(url: string): Promise<Response> {
       if (res.status >= 400 && res.status < 500) break; // no retry for client errors
       await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** attempt));
     } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      lastError = new Error(redactUrl(msg));
       await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** attempt));
     }
   }
@@ -267,10 +272,13 @@ export async function getWeatherForRoutePoints(
     if (!uniq.has(k)) uniq.set(k, p);
   }
 
-  for (const [k, p] of uniq) {
+  const keys = [...uniq.keys()];
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    const p = uniq.get(k)!;
     const w = await getCurrentWeather(p.lat, p.lon);
     result.set(k, w);
-    if (uniq.size > 1) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+    if (i < keys.length - 1) await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
   }
   return result;
 }

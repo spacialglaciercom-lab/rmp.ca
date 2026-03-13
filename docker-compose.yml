@@ -1,3 +1,5 @@
+# Default: backend + extract + vroom (no Python optimizer).
+# For route optimization (CPP, zones): docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
 services:
   extract:
     build:
@@ -63,10 +65,10 @@ services:
       - .env.server
     environment:
       - PORT=3000
-      # Route through Nginx so all optimizer replicas are used
-      - OPTIMIZER_BACKEND_URL=http://nginx-optimizer:80
+      # Extract and VROOM are always in the default stack. Optimizer is optional (see docker-compose.optimizer.yml).
       - EXTRACT_WS_UPSTREAM=http://extract:4000
       - VROOM_BACKEND_URL=http://vroom:3000
+      # OPTIMIZER_BACKEND_URL set only when using optimizer profile: docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
     depends_on:
       extract:
         condition: service_started

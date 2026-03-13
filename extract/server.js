@@ -6,7 +6,7 @@
 const http = require("http");
 const { WebSocketServer } = require("ws");
 
-const PORT = Number(process.env.PORT) || 4000;
+const PORT = Number(process.env.PORT) || 9000;
 
 // In-memory store: hash -> GeoJSON FeatureCollection (string)
 const store = new Map();
@@ -81,15 +81,67 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // Progress then complete (minimal implementation)
+    // Progress (matches real webovertureextract flow so client UI is consistent)
     ws.send(JSON.stringify({ stage: "downloading", progress: 0 }));
     ws.send(JSON.stringify({ stage: "clipping", progress: 30 }));
     ws.send(JSON.stringify({ stage: "building_graph", progress: 70 }));
 
+    // Generate mock GeoJSON data within the polygon bounds
+    const features = [];
+    const coords = polygon.coordinates[0];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    // Calculate bounding box
+    for (const [x, y] of coords) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    // Generate random points
+    for (let i = 0; i < 10; i++) {
+      const lat = minY + Math.random() * (maxY - minY);
+      const lon = minX + Math.random() * (maxX - minX);
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [lon, lat]
+        },
+        properties: {
+          id: `node-${i}`,
+          type: "mock_node"
+        }
+      });
+    }
+
+    // Generate random mock road segments
+    for (let i = 0; i < 5; i++) {
+        const startLat = minY + Math.random() * (maxY - minY);
+        const startLon = minX + Math.random() * (maxX - minX);
+        const endLat = minY + Math.random() * (maxY - minY);
+        const endLon = minX + Math.random() * (maxX - minX);
+        features.push({
+            type: "Feature",
+            geometry: {
+                type: "LineString",
+                coordinates: [
+                    [startLon, startLat],
+                    [endLon, endLat]
+                ]
+            },
+            properties: {
+                id: `way-${i}`,
+                class: "residential"
+            }
+        });
+    }
+
     const hash = createHash();
     const geojson = {
       type: "FeatureCollection",
-      features: [],
+      features: features,
     };
     store.set(hash, JSON.stringify(geojson));
 
@@ -97,14 +149,14 @@ wss.on("connection", (ws) => {
       JSON.stringify({
         stage: "complete",
         geojson_url: `/geojson/${hash}`,
-        nodes: 0,
-        edges: 0,
-        segments: 0,
+        nodes: 10,
+        edges: 5,
+        segments: 5,
       })
     );
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Extract service listening on http://localhost:${PORT} (WS /ws/extract, GET /geojson/:hash, GET /download/:hash)`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Extract service listening on http://0.0.0.0:${PORT} (WS /ws/extract, GET /geojson/:hash, GET /download/:hash)`);
 });

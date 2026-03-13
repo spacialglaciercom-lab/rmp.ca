@@ -4,12 +4,21 @@
  */
 import React, { Suspense, lazy, useEffect } from "react";
 import { useRouter } from "expo-router";
+import { View, Text, ActivityIndicator } from "react-native";
 
-import { TabScreenSkeleton } from "@/components/tab-screen-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { usePluginStore } from "@/stores/pluginStore";
 
 const ExtractContent = lazy(() => import("@/components/extract-content"));
+
+function LoadingFallback() {
+    return (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+            <Text>Loading extractor...</Text>
+            <ActivityIndicator size="large" />
+        </View>
+    );
+}
 
 export default function RecordScreen() {
   const router = useRouter();
@@ -31,7 +40,7 @@ export default function RecordScreen() {
     <ErrorBoundary>
       <Suspense
         fallback={
-          <TabScreenSkeleton title="Extract" subtitle="Loading extractor..." />
+          <LoadingFallback />
         }
       >
         <ExtractContent />

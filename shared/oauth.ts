@@ -56,7 +56,7 @@ export function getApiBaseUrl(): string {
     window.location
   ) {
     const { protocol, hostname, port } = window.location;
-    const devPortsUsingBackend3000 = ["19007", "8081", "8080"];
+    const devPortsUsingBackend3000 = ["19007", "19008", "8081", "8080"];
     if (port && devPortsUsingBackend3000.includes(port)) {
       return `${protocol}//${hostname}:3000`;
     }

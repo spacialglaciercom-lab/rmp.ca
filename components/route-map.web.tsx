@@ -563,7 +563,6 @@ function OvertureOverlay({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const protocolRegistered = useRef(false);
   const perfCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -579,11 +578,14 @@ function OvertureOverlay({
       try {
         const maplibregl = require("maplibre-gl");
         const { Protocol } = require("pmtiles");
-        if (!protocolRegistered.current) {
+        
+        // Use global flag to ensure protocol is registered only once per session
+        if (typeof window !== "undefined" && !(window as any).__pmtilesProtocolRegistered) {
           const protocol = new Protocol();
           maplibregl.addProtocol("pmtiles", protocol.tile);
-          protocolRegistered.current = true;
+          (window as any).__pmtilesProtocolRegistered = true;
         }
+
         const style = buildOvertureOverlayStyle({ city });
         mlMap = new maplibregl.Map({
           container: containerRef.current!,
@@ -592,6 +594,7 @@ function OvertureOverlay({
           zoom: leafletMap.getZoom(),
           interactive: false,
           attributionControl: false,
+          failIfMajorPerformanceCaveat: false, // Try to force WebGL even if slow
         });
         mapRef.current = mlMap;
         const sync = () => {

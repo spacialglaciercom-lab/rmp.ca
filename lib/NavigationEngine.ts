@@ -17,31 +17,31 @@ import type { MatchedPoint } from "./routeSnap";
 import type { MatchedRoute, MatchedStep } from "./mapMatching";
 import { PowerSavingManager } from "@/src/powerSaving";
 
-type ListenerEntry = { event: string; callback: (data: any) => void };
+type ListenerEntry = { event: string; callback: (data: unknown) => void };
 
 export class NavigationEngine {
-  route: MatchedRoute;
-  steps: MatchedStep[];
-  currentStepIndex: number;
-  isNavigating: boolean;
-  listeners: Set<ListenerEntry>;
-  offRouteThreshold: number;
-  announceDistances: number[];
-  announced: Set<string>;
-  currentLocation: {
+  readonly route: MatchedRoute;
+  readonly steps: MatchedStep[];
+  private _currentStepIndex: number;
+  private _isNavigating: boolean;
+  private _listeners: Set<ListenerEntry>;
+  private _offRouteThreshold: number;
+  private _announceDistances: number[];
+  private _announced: Set<string>;
+  private _currentLocation: {
     lat: number;
     lon: number;
     bearing?: number;
     speed?: number;
     accuracy?: number;
   } | null;
-  distanceToNextManeuver: number;
-  distanceRemaining: number;
+  private _distanceToNextManeuver: number;
+  private _distanceRemaining: number;
   /** Last segment index from snap (for UI to show completed portion of route). */
-  lastSegmentIndex: number;
-  locationSubscription: { remove: () => void } | null;
-  simulationMode: boolean;
-  simulationInterval: NodeJS.Timeout | null;
+  private _lastSegmentIndex: number;
+  private _locationSubscription: { remove: () => void } | null;
+  readonly simulationMode: boolean;
+  private _simulationInterval: NodeJS.Timeout | null;
   simulationSpeedMultiplier: number;
   /** Avoid repeating the same street name in simulation (e.g. long segment with same name). */
   private lastSpokenStreetName: string;
@@ -54,25 +54,38 @@ export class NavigationEngine {
   /** Last MatchedPoint from routeSnap (for backward-jump prevention). */
   private _previousMatch: MatchedPoint | undefined;
 
+  get currentStepIndex() { return this._currentStepIndex; }
+  get isNavigating() { return this._isNavigating; }
+  get currentLocation() { return this._currentLocation; }
+  get distanceToNextManeuver() { return this._distanceToNextManeuver; }
+  get distanceRemaining() { return this._distanceRemaining; }
+  get lastSegmentIndex() { return this._lastSegmentIndex; }
+  get listeners() { return this._listeners; }
+  get offRouteThreshold() { return this._offRouteThreshold; }
+  get announced() { return this._announced; }
+  get announceDistances() { return this._announceDistances; }
+  get locationSubscription() { return this._locationSubscription; }
+  get simulationInterval() { return this._simulationInterval; }
+
   constructor(
     matchedRoute: MatchedRoute,
     options: { offRouteThreshold?: number; simulationMode?: boolean } = {},
   ) {
     this.route = matchedRoute;
     this.steps = matchedRoute.steps;
-    this.currentStepIndex = 0;
-    this.isNavigating = false;
-    this.listeners = new Set();
-    this.offRouteThreshold = options.offRouteThreshold ?? 50;
-    this.announceDistances = [500, 200, 50];
-    this.announced = new Set();
-    this.currentLocation = null;
-    this.distanceToNextManeuver = Infinity;
-    this.distanceRemaining = matchedRoute.totalDistance;
-    this.lastSegmentIndex = 0;
-    this.locationSubscription = null;
+    this._currentStepIndex = 0;
+    this._isNavigating = false;
+    this._listeners = new Set();
+    this._offRouteThreshold = options.offRouteThreshold ?? 50;
+    this._announceDistances = [500, 200, 50];
+    this._announced = new Set();
+    this._currentLocation = null;
+    this._distanceToNextManeuver = Infinity;
+    this._distanceRemaining = matchedRoute.totalDistance;
+    this._lastSegmentIndex = 0;
+    this._locationSubscription = null;
     this.simulationMode = options.simulationMode ?? false;
-    this.simulationInterval = null;
+    this._simulationInterval = null;
     this.simulationSpeedMultiplier = 1.0;
     this.lastSpokenStreetName = "";
     this.lastSpokenText = "";
@@ -106,13 +119,13 @@ export class NavigationEngine {
       console.log(`[NavEngine] Permission: ${status} (${elapsed()})`);
       if (status !== "granted") throw new Error("Location permission required");
 
-      this.isNavigating = true;
+      this._isNavigating = true;
 
       console.log("[NavEngine] Initializing PowerSavingManager...");
       await PowerSavingManager.init();
       console.log(`[NavEngine] PowerSaving ready (${elapsed()})`);
       const locationOptions = PowerSavingManager.getLocationWatchOptions();
-      this.locationSubscription = await Location.watchPositionAsync(
+      this._locationSubscription = await Location.watchPositionAsync(
         {
           accuracy: locationOptions.accuracy,
           distanceInterval: locationOptions.distanceInterval,
@@ -140,17 +153,17 @@ export class NavigationEngine {
   }
 
   stop(): void {
-    this.isNavigating = false;
-    if (this.simulationInterval) {
-      clearTimeout(this.simulationInterval);
-      this.simulationInterval = null;
+    this._isNavigating = false;
+    if (this._simulationInterval) {
+      clearTimeout(this._simulationInterval);
+      this._simulationInterval = null;
     }
-    if (this.locationSubscription) {
-      this.locationSubscription.remove();
-      this.locationSubscription = null;
+    if (this._locationSubscription) {
+      this._locationSubscription.remove();
+      this._locationSubscription = null;
     }
     this._emit("stopped");
-    this.listeners.clear();
+    this._listeners.clear();
   }
 
   /** Base simulation driving speed in m/s. ~30 km/h for residential streets. */
@@ -161,10 +174,9 @@ export class NavigationEngine {
   /** Update the speed multiplier while running. */
   setSpeedMultiplier(multiplier: number): void {
     this.simulationSpeedMultiplier = multiplier;
-    // If running, restart the simulation loop with the new speed
-    if (this.isNavigating && this.simulationInterval) {
-      clearTimeout(this.simulationInterval);
-      this.simulationInterval = null;
+    if (this._isNavigating && this._simulationInterval) {
+      clearTimeout(this._simulationInterval);
+      this._simulationInterval = null;
       this._scheduleNextSimTick();
     }
   }
@@ -175,10 +187,9 @@ export class NavigationEngine {
   private _simCumDists: number[] = [];
 
   _startSimulation(): void {
-    this.isNavigating = true;
+    this._isNavigating = true;
     this._simDistanceTraveled = 0;
 
-    // Pre-compute cumulative distance array once
     const geometry = this.route.matchedGeometry;
     const cum = [0];
     for (let i = 1; i < geometry.length; i++) {
@@ -204,7 +215,6 @@ export class NavigationEngine {
     const cum = this._simCumDists;
     const totalDist = cum[cum.length - 1] ?? 0;
 
-    // Clamp to route bounds
     if (dist <= 0) {
       const bearing =
         geometry.length > 1
@@ -228,7 +238,6 @@ export class NavigationEngine {
       };
     }
 
-    // Binary search for the segment containing this distance
     let lo = 0;
     let hi = cum.length - 2;
     while (lo < hi) {
@@ -247,7 +256,6 @@ export class NavigationEngine {
     const lon = segStart.lon + (segEnd.lon - segStart.lon) * t;
     const bearing = this._calculateBearing(segStart, segEnd);
 
-    // Slow down for upcoming turns
     let speed = NavigationEngine.SIM_BASE_SPEED;
     if (segIdx < geometry.length - 2) {
       const bearingNext = this._calculateBearing(segEnd, geometry[segIdx + 2]);
@@ -262,11 +270,10 @@ export class NavigationEngine {
 
   /** Schedule the next simulation tick. */
   private _scheduleNextSimTick(): void {
-    if (!this.isNavigating) return;
+    if (!this._isNavigating) return;
     const totalDist = this._simCumDists[this._simCumDists.length - 1] ?? 0;
 
     if (this._simDistanceTraveled >= totalDist) {
-      // Emit final position and stop
       const final = this._positionAtDistance(totalDist);
       this._onLocationUpdate({
         coords: {
@@ -293,16 +300,14 @@ export class NavigationEngine {
       },
     });
 
-    // Advance: distance = speed * time * multiplier
     const tickSec = NavigationEngine.SIM_TICK_MS / 1000;
     this._simDistanceTraveled +=
       pos.speed * tickSec * this.simulationSpeedMultiplier;
 
-    // Schedule next tick
     const tickMs =
       NavigationEngine.SIM_TICK_MS / this.simulationSpeedMultiplier;
     const clampedMs = Math.max(30, Math.min(500, tickMs));
-    this.simulationInterval = setTimeout(() => {
+    this._simulationInterval = setTimeout(() => {
       this._scheduleNextSimTick();
     }, clampedMs) as unknown as NodeJS.Timeout;
   }
@@ -334,7 +339,7 @@ export class NavigationEngine {
       accuracy?: number;
     };
   }): void {
-    this.currentLocation = {
+    this._currentLocation = {
       lat: location.coords.latitude,
       lon: location.coords.longitude,
       bearing: location.coords.heading,
@@ -348,14 +353,14 @@ export class NavigationEngine {
       return;
     }
 
-    const snapped = this._snapToRoute(this.currentLocation);
-    this.lastSegmentIndex = snapped.segmentIndex;
+    const snapped = this._snapToRoute(this._currentLocation);
+    this._lastSegmentIndex = snapped.segmentIndex;
 
-    if (snapped.distanceFromRoute > this.offRouteThreshold) {
+    if (snapped.distanceFromRoute > this._offRouteThreshold) {
       this._emit("offRoute", {
         distance: snapped.distanceFromRoute,
-        location: this.currentLocation,
-        currentStepIndex: this.currentStepIndex,
+        location: this._currentLocation,
+        currentStepIndex: this._currentStepIndex,
         segmentIndex: snapped.segmentIndex,
       });
       this._emit("update", this.getState());
@@ -395,7 +400,7 @@ export class NavigationEngine {
       { lon: location.lon, lat: location.lat },
       this._routeLine!,
       this._previousMatch,
-      this.offRouteThreshold,
+      this._offRouteThreshold,
     );
     this._previousMatch = matched;
 
@@ -415,7 +420,7 @@ export class NavigationEngine {
     snappedLocation: { lat: number; lon: number };
     segmentIndex: number;
   }): void {
-    const currentStep = this.steps[this.currentStepIndex];
+    const currentStep = this.steps[this._currentStepIndex];
     if (!currentStep?.geometry?.coordinates?.length) return;
 
     const coords = currentStep.geometry.coordinates;
@@ -423,19 +428,19 @@ export class NavigationEngine {
     const stepEnd = { lat: stepEndCoord[1], lon: stepEndCoord[0] };
 
     const distToStepEnd = haversineDistance(snapped.snappedLocation, stepEnd);
-    this.distanceToNextManeuver = distToStepEnd;
+    this._distanceToNextManeuver = distToStepEnd;
 
-    if (distToStepEnd < 20 && this.currentStepIndex < this.steps.length - 1) {
-      this.currentStepIndex++;
-      this.announced.clear();
+    if (distToStepEnd < 20 && this._currentStepIndex < this.steps.length - 1) {
+      this._currentStepIndex++;
+      this._announced.clear();
       this._emit("stepChanged", {
-        step: this.steps[this.currentStepIndex],
-        index: this.currentStepIndex,
+        step: this.steps[this._currentStepIndex],
+        index: this._currentStepIndex,
       });
     }
 
-    if (this.currentStepIndex >= this.steps.length - 1 && distToStepEnd < 30) {
-      this.distanceRemaining = 0;
+    if (this._currentStepIndex >= this.steps.length - 1 && distToStepEnd < 30) {
+      this._distanceRemaining = 0;
       this._emit("arrived");
       this.stop();
     }
@@ -453,7 +458,7 @@ export class NavigationEngine {
       snapped.totalRouteLength != null &&
       snapped.totalRouteLength > 0
     ) {
-      this.distanceRemaining = Math.max(
+      this._distanceRemaining = Math.max(
         0,
         snapped.totalRouteLength - snapped.routeProgressMeters,
       );
@@ -479,21 +484,21 @@ export class NavigationEngine {
         routeCoords[routeCoords.length - 1],
       );
     }
-    this.distanceRemaining = Math.max(0, remaining);
+    this._distanceRemaining = Math.max(0, remaining);
   }
 
   _checkAnnouncements(): void {
     const now = Date.now();
-    const minRepeatMs = 8000; // Don't speak the exact same phrase again within 8s (fixes simulation repeat)
-    for (const dist of this.announceDistances) {
-      const key = `${this.currentStepIndex}-${dist}`;
-      if (this.distanceToNextManeuver <= dist && !this.announced.has(key)) {
-        this.announced.add(key);
-        const nextStep = this.steps[this.currentStepIndex + 1];
+    const minRepeatMs = 8000;
+    for (const dist of this._announceDistances) {
+      const key = `${this._currentStepIndex}-${dist}`;
+      if (this._distanceToNextManeuver <= dist && !this._announced.has(key)) {
+        this._announced.add(key);
+        const nextStep = this.steps[this._currentStepIndex + 1];
         if (nextStep) {
           const text = this._buildVoiceInstruction(
             nextStep,
-            this.distanceToNextManeuver,
+            this._distanceToNextManeuver,
           );
           if (
             text === this.lastSpokenText &&
@@ -519,7 +524,6 @@ export class NavigationEngine {
 
     const turnText = this._maneuverToText(maneuver);
     const streetName = step.name ?? "";
-    // Omit street name if same as last spoken (avoids "Saint-Charles" repeated every step in simulation)
     const omitStreet = streetName && streetName === this.lastSpokenStreetName;
 
     if (streetName && !omitStreet) {
@@ -590,34 +594,33 @@ export class NavigationEngine {
     streetName: string;
     isNavigating: boolean;
   } {
-    const currentStep = this.steps[this.currentStepIndex];
-    const nextStep = this.steps[this.currentStepIndex + 1];
+    const currentStep = this.steps[this._currentStepIndex];
+    const nextStep = this.steps[this._currentStepIndex + 1];
 
     return {
-      currentLocation: this.currentLocation,
-      currentStepIndex: this.currentStepIndex,
+      currentLocation: this._currentLocation,
+      currentStepIndex: this._currentStepIndex,
       totalSteps: this.steps.length,
       currentStep,
       nextStep,
-      distanceToNextManeuver: this.distanceToNextManeuver,
-      distanceRemaining: this.distanceRemaining,
-      segmentIndex: this.lastSegmentIndex,
+      distanceToNextManeuver: this._distanceToNextManeuver,
+      distanceRemaining: this._distanceRemaining,
+      segmentIndex: this._lastSegmentIndex,
       nextManeuverType: nextStep?.maneuver?.type,
       nextManeuverModifier: nextStep?.maneuver?.modifier,
       streetName: currentStep?.name ?? "",
-      isNavigating: this.isNavigating,
+      isNavigating: this._isNavigating,
     };
   }
 
-  on(event: string, callback: (data: any) => void): () => void {
+  on(event: string, callback: (data: unknown) => void): () => void {
     const entry: ListenerEntry = { event, callback };
-    this.listeners.add(entry);
-    return () => this.listeners.delete(entry);
+    this._listeners.add(entry);
+    return () => this._listeners.delete(entry);
   }
 
   _emit(event: string, data?: unknown): void {
-    const list = this.listeners;
-    list.forEach((entry: ListenerEntry) => {
+    this._listeners.forEach((entry: ListenerEntry) => {
       if (entry.event === event) entry.callback(data);
     });
   }

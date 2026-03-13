@@ -1,7 +1,9 @@
+import { useCallback } from "react";
 import { Platform } from "react-native";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { recordErrorToCrashlytics } from "@/lib/crashlytics-report";
 import { trackEvent } from "@/lib/analytics";
+import { createLogger } from "@/lib/logger";
 import { getEdgePenaltiesFromLeap } from "@/lib/route-ml-enhancement";
 import {
   buildTurnExpandedGraph,
@@ -81,14 +83,17 @@ const FALLBACK_RESULT: RouteOptimizationResult = {
   message: "Optimization failed. Please try again.",
 };
 
+const log = createLogger("RouteOptimization");
+
 export function useRouteOptimization() {
   const { features, recordCrash } = useBetaFeatures();
 
-  const optimizeRoute = async (
-    nodes: Map<string, Node>,
-    ways: Way[],
-    options: RouteOptimizationOptions = {},
-  ): Promise<RouteOptimizationResult> => {
+  const optimizeRoute = useCallback(
+    async (
+      nodes: Map<string, Node>,
+      ways: Way[],
+      options: RouteOptimizationOptions = {},
+    ): Promise<RouteOptimizationResult> => {
     const {
       customLat,
       customLon,
@@ -225,18 +230,16 @@ export function useRouteOptimization() {
 
         onProgress?.("street-edges", "Converting OSM to street edges...");
         const streetEdges = osmToStreetEdges(nodes, ways);
-        console.log(
-          "[TurnAwareCPP] streetEdges:",
-          streetEdges.length,
-          "sample:",
-          streetEdges.slice(0, 3).map((e) => ({
+        log.debug("streetEdges", {
+          count: streetEdges.length,
+          sample: JSON.stringify(streetEdges.slice(0, 3).map((e) => ({
             id: e.id,
             from: e.from,
             to: e.to,
             coords: e.coordinates.length,
             len: Math.round(e.length),
-          })),
-        );
+          }))),
+        });
         if (streetEdges.length === 0) {
           mlEdgePenalties = (await penaltiesPromise).mlPenalties;
           return runStandard(mlEdgePenalties);
@@ -254,20 +257,10 @@ export function useRouteOptimization() {
             mlEdgePenalties,
             onProgress,
           );
-        console.log(
-          "[TurnAwareCPP] turnNodes:",
-          turnNodes.length,
-          "turnEdges:",
-          turnEdges.length,
-          "turnTypes:",
-          turnEdges.reduce(
-            (acc, e) => {
-              acc[e.turnType] = (acc[e.turnType] ?? 0) + 1;
-              return acc;
-            },
-            {} as Record<string, number>,
-          ),
-        );
+        log.debug("turn graph built", {
+          turnNodes: turnNodes.length,
+          turnEdges: turnEdges.length,
+        });
         if (turnEdges.length === 0) return runStandard(mlEdgePenalties);
 
         // Compute SCCs once and reuse for bridging (avoids double traversal)
@@ -283,34 +276,26 @@ export function useRouteOptimization() {
           cachedSCCs,
           onProgress,
         );
-        console.log(
-          "[TurnAwareCPP] bridged edges:",
-          bridged.length,
-          "(bridges:",
-          bridged.length - preBridgeCount,
-          ")",
-        );
+        log.debug("bridged edges", {
+          total: bridged.length,
+          bridges: bridged.length - preBridgeCount,
+        });
 
         // Balance in/out degrees to make graph Eulerian
         onProgress?.("eulerian", "Balancing graph for Eulerian circuit...");
         const preEulerianCount = bridged.length;
         const eulerianEdges = await makeEulerian(bridged, onProgress);
-        console.log(
-          "[TurnAwareCPP] eulerianEdges:",
-          eulerianEdges.length,
-          "(deadhead:",
-          eulerianEdges.length - preEulerianCount,
-          ")",
-        );
+        log.debug("eulerian edges", {
+          total: eulerianEdges.length,
+          deadhead: eulerianEdges.length - preEulerianCount,
+        });
 
         onProgress?.("circuit", "Solving Eulerian circuit...");
         const { circuit, totalCost, stats } = solveTurnAwareCPP(eulerianEdges);
-        console.log(
-          "[TurnAwareCPP] circuit length:",
-          circuit.length,
-          "totalCost:",
-          Math.round(totalCost),
-        );
+        log.debug("circuit solved", {
+          length: circuit.length,
+          totalCost: Math.round(totalCost),
+        });
 
         // Build edge lookup once for debug stats, distance, and route points
         const edgeLookup = new Map<string, (typeof streetEdges)[0]>();
@@ -350,17 +335,17 @@ export function useRouteOptimization() {
         }
         const distanceFromLength = distanceMeters / 1000;
 
-        console.log("[TurnAwareCPP] circuit edge refs:", {
+        log.debug("circuit edge refs", {
           total: circuit.length,
           validStreetEdge: validRefs,
           bridges: bridgeCount,
           deadheadNonBridge: deadheadRefs,
           missingEdgeId: missingRefs,
-          sampleMissing,
+          sampleMissing: JSON.stringify(sampleMissing),
         });
 
         const routePoints = turnCircuitToRoutePoints(streetEdges, circuit);
-        console.log("[TurnAwareCPP] routePoints:", routePoints.length);
+        log.debug("route points built", { count: routePoints.length });
 
         // Track segment coverage
         const uniqueStreetEdgeIds = new Set<string>();
@@ -419,9 +404,9 @@ export function useRouteOptimization() {
       });
       return result;
     } catch (error) {
-      console.error("[TurnAwareCPP] CAUGHT ERROR:", error);
-      if (features.enabled) await recordCrash();
       const err = error instanceof Error ? error : new Error(String(error));
+      log.error("route optimization failed", err);
+      if (features.enabled) await recordCrash();
       recordErrorToCrashlytics(err, "RouteOptimizationFallback", {
         message: err.message,
       });
@@ -431,7 +416,7 @@ export function useRouteOptimization() {
         return FALLBACK_RESULT;
       }
     }
-  };
+  }, [features, recordCrash]);
 
   return { optimizeRoute, isTurnAware: features.turnAwareCpp };
 }

@@ -12,6 +12,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -43,6 +44,7 @@ import {
   filterGeoJSONLocal,
 } from "@/lib/offline-extract";
 import { getPlugin } from "@/lib/plugins/registry";
+import { ExtractConnectionStatus } from "@/components/extract/ExtractConnectionStatus";
 
 const MIN_POINTS = 3;
 
@@ -192,7 +194,7 @@ export function OvertureExtractorContent({
             : "OSM PBF";
       setGeoJSONInfo({
         featureCount: filtered.feature_count,
-        roadClasses: filtered.road_class_counts,
+        roadClasses: filtered.road_class_counts ?? {},
         valid: filtered.feature_count > 0,
         warnings:
           filtered.feature_count === 0
@@ -248,6 +250,15 @@ export function OvertureExtractorContent({
     setExtractProgress("Connecting...");
 
     const tryOfflineThenAlert = async (error: string) => {
+      // On web, we cannot do offline extraction. Just show the error.
+      if (Platform.OS === "web") {
+        console.error("Extraction error:", error);
+        alert(`Extraction Failed:\n${error}\n\nCheck browser console for details (F12).`);
+        setIsLoading(false);
+        setExtractProgress(null);
+        return;
+      }
+
       setExtractProgress("Trying offline (R2/S3/OSM PBF)…");
       try {
         const ok = await runOfflineExtract(polygon, polygonForFilter);
@@ -316,7 +327,7 @@ export function OvertureExtractorContent({
         }
         setGeoJSONInfo({
           featureCount: filtered.feature_count,
-          roadClasses: filtered.road_class_counts,
+          roadClasses: filtered.road_class_counts ?? {},
           valid: filtered.feature_count > 0,
           warnings:
             filtered.feature_count === 0
@@ -385,7 +396,7 @@ export function OvertureExtractorContent({
           }
           setGeoJSONInfo({
             featureCount: filtered.feature_count,
-            roadClasses: filtered.road_class_counts,
+            roadClasses: filtered.road_class_counts ?? {},
             valid: filtered.feature_count > 0,
             warnings:
               filtered.feature_count === 0
@@ -412,6 +423,7 @@ export function OvertureExtractorContent({
       (error) => {
         tryOfflineThenAlert(error);
       },
+      "roads",
     );
 
     // Allow cancel on unmount or user action if we add a cancel button
@@ -474,6 +486,7 @@ export function OvertureExtractorContent({
 
   return (
     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ExtractConnectionStatus />
       {/* Backend status */}
       <View style={[styles.statusRow, { backgroundColor: colors.surface }]}>
         <View
@@ -587,10 +600,10 @@ export function OvertureExtractorContent({
             <Text style={[styles.validationTitle, { color: colors.text }]}>
               {geoJSONInfo.featureCount} features extracted
             </Text>
-            {Object.entries(geoJSONInfo.roadClasses).length > 0 && (
+            {Object.entries(geoJSONInfo.roadClasses || {}).length > 0 && (
               <View style={styles.classBreakdown}>
-                {Object.entries(geoJSONInfo.roadClasses)
-                  .sort(([, a], [, b]) => b - a)
+                {Object.entries(geoJSONInfo.roadClasses || {})
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
                   .slice(0, 8)
                   .map(([cls, count]) => (
                     <Text
@@ -602,7 +615,7 @@ export function OvertureExtractorContent({
                   ))}
               </View>
             )}
-            {geoJSONInfo.warnings.map((w, i) => (
+            {(geoJSONInfo.warnings ?? []).map((w, i) => (
               <Text
                 key={i}
                 style={[

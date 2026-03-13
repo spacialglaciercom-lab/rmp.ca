@@ -430,8 +430,8 @@ export class CostModelValidator {
 
     // Bias trends
     const biasTrends = {
-      temporal: this.calculateTemporalBias(contexts, errors),
-      magnitude: this.calculateMagnitudeBias(errors),
+      temporal: this.calculateTemporalBias(contexts, dataset.metadata, errors),
+      magnitude: this.calculateMagnitudeBias(predictions, errors),
     };
 
     return {
@@ -721,28 +721,35 @@ export class CostModelValidator {
     return experienceBias;
   }
 
-  // Additional helper methods would go here for:
-  // - calculateDistanceBias
-  // - calculateWeatherConditionBias
-  // - calculateExperienceBiasDetailed
-  // - calculateTimeOfDayBiasDetailed
-  // - calculateTemporalBias
-  // - calculateMagnitudeBias
-  // - analyzeConfidenceCalibration
-  // - calculatePredictionVariance
-  // - calculateStability
-  // - calculateRepeatability
-  // - calculateNoiseSensitivity
-  // - calculateOutlierResistance
-  // - calculateExtrapolationReliability
-
   private calculateDistanceBias(
     contexts: any[],
     predictions: CostPrediction[],
     actuals: any[],
   ): any[] {
-    // Implementation for distance-based bias analysis
-    return [];
+    const buckets: Record<string, { sum: number; count: number }> = {
+      "0-10km": { sum: 0, count: 0 },
+      "10-50km": { sum: 0, count: 0 },
+      "50-200km": { sum: 0, count: 0 },
+      "200km+": { sum: 0, count: 0 },
+    };
+
+    contexts.forEach((ctx, i) => {
+      const dist = ctx.routeStats?.totalDistance || 0;
+      const error = predictions[i].predictedTotalCost - actuals[i].actualCost;
+      let range = "200km+";
+      if (dist < 10) range = "0-10km";
+      else if (dist < 50) range = "10-50km";
+      else if (dist < 200) range = "50-200km";
+
+      buckets[range].sum += error;
+      buckets[range].count++;
+    });
+
+    return Object.keys(buckets).map((range) => ({
+      range,
+      bias: buckets[range].count ? buckets[range].sum / buckets[range].count : 0,
+      count: buckets[range].count,
+    }));
   }
 
   private calculateWeatherConditionBias(
@@ -750,8 +757,21 @@ export class CostModelValidator {
     predictions: CostPrediction[],
     actuals: any[],
   ): any[] {
-    // Implementation for weather condition bias analysis
-    return [];
+    const buckets: Record<string, { sum: number; count: number }> = {};
+
+    contexts.forEach((ctx, i) => {
+      const condition = ctx.weatherData?.condition?.main || "Unknown";
+      const error = predictions[i].predictedTotalCost - actuals[i].actualCost;
+      if (!buckets[condition]) buckets[condition] = { sum: 0, count: 0 };
+      buckets[condition].sum += error;
+      buckets[condition].count++;
+    });
+
+    return Object.keys(buckets).map((condition) => ({
+      condition,
+      bias: buckets[condition].count ? buckets[condition].sum / buckets[condition].count : 0,
+      count: buckets[condition].count,
+    }));
   }
 
   private calculateExperienceBiasDetailed(
@@ -759,8 +779,21 @@ export class CostModelValidator {
     predictions: CostPrediction[],
     actuals: any[],
   ): any[] {
-    // Implementation for detailed experience bias analysis
-    return [];
+    const buckets: Record<string, { sum: number; count: number }> = {};
+
+    contexts.forEach((ctx, i) => {
+      const level = ctx.operationalContext?.driverExperience || "Unknown";
+      const error = predictions[i].predictedTotalCost - actuals[i].actualCost;
+      if (!buckets[level]) buckets[level] = { sum: 0, count: 0 };
+      buckets[level].sum += error;
+      buckets[level].count++;
+    });
+
+    return Object.keys(buckets).map((level) => ({
+      level,
+      bias: buckets[level].count ? buckets[level].sum / buckets[level].count : 0,
+      count: buckets[level].count,
+    }));
   }
 
   private calculateTimeOfDayBiasDetailed(
@@ -768,65 +801,160 @@ export class CostModelValidator {
     predictions: CostPrediction[],
     actuals: any[],
   ): any[] {
-    // Implementation for detailed time-of-day bias analysis
-    return [];
+    const buckets: Record<string, { sum: number; count: number }> = {};
+
+    contexts.forEach((ctx, i) => {
+      const time = ctx.operationalContext?.timeOfDay || "Unknown";
+      const error = predictions[i].predictedTotalCost - actuals[i].actualCost;
+      if (!buckets[time]) buckets[time] = { sum: 0, count: 0 };
+      buckets[time].sum += error;
+      buckets[time].count++;
+    });
+
+    return Object.keys(buckets).map((time) => ({
+      time,
+      bias: buckets[time].count ? buckets[time].sum / buckets[time].count : 0,
+      count: buckets[time].count,
+    }));
   }
 
-  private calculateTemporalBias(contexts: any[], errors: number[]): any[] {
-    // Implementation for temporal bias analysis
-    return [];
+  private calculateTemporalBias(
+    contexts: any[],
+    metadata: any[],
+    errors: number[],
+  ): any[] {
+    const buckets: Record<string, { sum: number; count: number }> = {};
+
+    metadata.forEach((meta, i) => {
+      const date = meta.timestamp ? new Date(meta.timestamp).toISOString().split('T')[0] : "Unknown";
+      const error = errors[i];
+      if (!buckets[date]) buckets[date] = { sum: 0, count: 0 };
+      buckets[date].sum += error;
+      buckets[date].count++;
+    });
+
+    return Object.keys(buckets).map((date) => ({
+      date,
+      bias: buckets[date].count ? buckets[date].sum / buckets[date].count : 0,
+    })).sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  private calculateMagnitudeBias(errors: number[]): any[] {
-    // Implementation for magnitude bias analysis
-    return [];
+  private calculateMagnitudeBias(
+    predictions: CostPrediction[],
+    errors: number[],
+  ): any[] {
+    const buckets: Record<string, { sum: number; count: number }> = {
+      "Low (<$100)": { sum: 0, count: 0 },
+      "Medium ($100-500)": { sum: 0, count: 0 },
+      "High ($500-1000)": { sum: 0, count: 0 },
+      "Very High (>$1000)": { sum: 0, count: 0 },
+    };
+
+    predictions.forEach((pred, i) => {
+      const cost = pred.predictedTotalCost;
+      let range = "Very High (>$1000)";
+      if (cost < 100) range = "Low (<$100)";
+      else if (cost < 500) range = "Medium ($100-500)";
+      else if (cost < 1000) range = "High ($500-1000)";
+
+      buckets[range].sum += errors[i];
+      buckets[range].count++;
+    });
+
+    return Object.keys(buckets).map((range) => ({
+      range,
+      bias: buckets[range].count ? buckets[range].sum / buckets[range].count : 0,
+    }));
   }
 
   private analyzeConfidenceCalibration(
     predictions: CostPrediction[],
     actuals: any[],
   ): any {
-    // Implementation for confidence calibration analysis
+    const bins = CostModelValidator.CONFIDENCE_BINS;
+    const binStats = bins.map(bin => {
+      const [min, max] = bin.split("-").map(parseFloat);
+      return { bin, min, max, correct: 0, total: 0 };
+    });
+
+    predictions.forEach((pred, i) => {
+      const conf = pred.confidenceScore;
+      const binIdx = binStats.findIndex(b => conf >= b.min && conf <= b.max);
+      if (binIdx === -1) return;
+
+      binStats[binIdx].total++;
+      const errorPercent = Math.abs((pred.predictedTotalCost - actuals[i].actualCost) / actuals[i].actualCost);
+      if (errorPercent <= 0.1) {
+        binStats[binIdx].correct++;
+      }
+    });
+
+    const reliabilityDiagram = binStats
+      .filter(b => b.total > 0)
+      .map(b => ({
+        bin: b.bin,
+        predicted: (b.min + b.max) / 2,
+        actual: b.correct / b.total
+      }));
+    
+    // Calibration score (Mean Absolute Error of reliability diagram)
+    let calibrationError = 0;
+    if (reliabilityDiagram.length > 0) {
+        calibrationError = reliabilityDiagram.reduce((sum, item) => sum + Math.abs(item.predicted - item.actual), 0) / reliabilityDiagram.length;
+    }
+    const calibration = 1 - calibrationError;
+
     return {
-      average: 0,
-      calibration: 0,
-      reliabilityDiagram: [],
+      average: predictions.length ? predictions.reduce((sum, p) => sum + p.confidenceScore, 0) / predictions.length : 0,
+      calibration,
+      reliabilityDiagram,
     };
   }
 
   private calculatePredictionVariance(predictions: CostPrediction[]): number {
-    // Implementation for prediction variance calculation
-    return 0;
+    if (predictions.length === 0) return 0;
+    const mean = predictions.reduce((sum, p) => sum + p.predictedTotalCost, 0) / predictions.length;
+    const variance = predictions.reduce((sum, p) => sum + Math.pow(p.predictedTotalCost - mean, 2), 0) / predictions.length;
+    return variance;
   }
 
   private calculateStability(predictions: CostPrediction[]): number {
-    // Implementation for stability calculation
-    return 0;
+    const variance = this.calculatePredictionVariance(predictions);
+    const mean = predictions.reduce((sum, p) => sum + p.predictedTotalCost, 0) / (predictions.length || 1);
+    const cv = mean ? Math.sqrt(variance) / mean : 0;
+    return Math.max(0, 1 - cv);
   }
 
   private calculateRepeatability(predictions: CostPrediction[]): number {
-    // Implementation for repeatability calculation
-    return 0;
+    return 1.0; // Placeholder
   }
 
   private calculateNoiseSensitivity(predictions: CostPrediction[]): number {
-    // Implementation for noise sensitivity calculation
-    return 0;
+    return 0.1; // Placeholder
   }
 
   private calculateOutlierResistance(
     predictions: CostPrediction[],
     actuals: any[],
   ): number {
-    // Implementation for outlier resistance calculation
-    return 0;
+    if (predictions.length < 5) return 1;
+    const errors = predictions.map((p, i) => Math.abs(p.predictedTotalCost - actuals[i].actualCost));
+    const sortedErrors = [...errors].sort((a, b) => a - b);
+    const q1 = sortedErrors[Math.floor(errors.length * 0.25)];
+    const q3 = sortedErrors[Math.floor(errors.length * 0.75)];
+    const iqr = q3 - q1;
+    const upperFence = q3 + 1.5 * iqr;
+    const normalErrors = errors.filter(e => e <= upperFence);
+    const maeNormal = normalErrors.reduce((a, b) => a + b, 0) / (normalErrors.length || 1);
+    const maeAll = errors.reduce((a, b) => a + b, 0) / errors.length;
+    if (maeAll === 0) return 1;
+    return Math.max(0, maeNormal / maeAll);
   }
 
   private calculateExtrapolationReliability(
     predictions: CostPrediction[],
   ): number {
-    // Implementation for extrapolation reliability calculation
-    return 0;
+    return 0.8; // Placeholder
   }
 }
 

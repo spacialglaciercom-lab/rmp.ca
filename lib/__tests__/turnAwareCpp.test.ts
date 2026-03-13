@@ -162,4 +162,26 @@ describe("turnCircuitToStreetRoute", () => {
     const route = turnCircuitToStreetRoute(circuit);
     expect(route).toEqual(["e1", "e2", "e3"]);
   });
+
+  it("should return empty array for empty circuit", () => {
+    const route = turnCircuitToStreetRoute([]);
+    expect(route).toEqual([]);
+  });
+
+  it("should return [from, to] for single turn edge", () => {
+    const circuit: TurnEdge[] = [
+      te(tn("e1", "forward"), tn("e2", "forward")),
+    ];
+    const route = turnCircuitToStreetRoute(circuit);
+    expect(route).toEqual(["e1", "e2"]);
+  });
+
+  it("should include both edge ids when direction changes (backward)", () => {
+    const circuit: TurnEdge[] = [
+      te(tn("e1", "forward"), tn("e2", "forward")),
+      te(tn("e2", "forward"), tn("e1", "backward")),
+    ];
+    const route = turnCircuitToStreetRoute(circuit);
+    expect(route).toEqual(["e1", "e2", "e1"]);
+  });
 });

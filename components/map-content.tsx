@@ -1726,6 +1726,13 @@ export default function MapContent() {
         <RouteParametersSheet
           visible={routeParametersPanelVisible}
           onClose={closeRouteParametersPanel}
+          onSelectOnMap={() => {
+            closeRouteParametersPanel();
+            Alert.alert(
+              "Select on map",
+              "Selecting specific roads on the map is not yet supported. Use \"Avoid by type\" in Route parameters to avoid tolls, motorways, ferries, and more.",
+            );
+          }}
         />
       )}
       <MapMarkersScreen

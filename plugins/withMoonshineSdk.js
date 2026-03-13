@@ -7,7 +7,7 @@
  *
  * Pattern follows plugins/withLeapSdk.js.
  *
- * @see https://github.com/nicholasgasior/moonshine (placeholder — use actual repo)
+ * @see https://github.com/moonshine-ai/moonshine-swift
  */
 
 const path = require("path");
@@ -19,11 +19,10 @@ const requireFromRoot = createRequire(
 const { withXcodeProject } = requireFromRoot("expo/config-plugins");
 
 const DEFAULT_OPTIONS = {
-  // TODO: Replace with public Moonshine SPM repo URL once published
-  repositoryUrl: "https://github.com/nicholasgasior/moonshine.git",
-  version: "2.0.0",
-  repoName: "moonshine",
-  products: ["MoonshineVoice"],
+  repositoryUrl: "https://github.com/moonshine-ai/moonshine-swift.git",
+  version: "0.0.49",
+  repoName: "moonshine-swift",
+  products: ["Moonshine"],
 };
 
 /**

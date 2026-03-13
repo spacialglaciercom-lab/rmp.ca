@@ -1,6 +1,5 @@
-"use client";
-
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Alert, Platform } from "react-native";
 import type { RouteMetadata } from "@/lib/firebase/fetchRoutes";
 import { recordErrorToCrashlytics } from "@/lib/crashlytics-report";
 
@@ -103,8 +102,10 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   // Alert when invalid GPX detected (re-upload required)
   useEffect(() => {
     if (!hasInvalidGpx) return;
-    if (typeof alert !== "undefined") {
-      alert("GPX file error detected, re-upload required.");
+    if (Platform.OS === "web") {
+      window.alert("GPX file error detected, re-upload required.");
+    } else {
+      Alert.alert("GPX Error", "GPX file error detected, re-upload required.");
     }
   }, [hasInvalidGpx]);
 

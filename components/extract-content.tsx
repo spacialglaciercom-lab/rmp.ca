@@ -40,6 +40,7 @@ import { getElevationForPoints } from "@/services/googleElevationService";
 import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
 import { useZonesStore } from "@/stores/zonesStore";
 import { extractFromDownloadedData } from "@/lib/offline-extract";
+import { ExtractConnectionStatus } from "@/components/extract/ExtractConnectionStatus";
 
 // ---------------------------------------------------------------------------
 // Web-only lazy imports (MapLibre GL JS, mapbox-gl-draw, DuckDB WASM)
@@ -81,7 +82,19 @@ async function initDuckDB() {
   try {
     const duckdb = await import("@duckdb/duckdb-wasm");
     const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-    const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+    
+    // Default to MVP bundle immediately to avoid waiting for network if offline
+    let bundle: any = JSDELIVR_BUNDLES.mvp;
+
+    try {
+        const selected = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+        if (selected && selected.mainWorker) {
+            bundle = selected;
+        }
+    } catch (e) {
+        console.warn("[DuckDB] Bundle selection failed, using MVP bundle:", e);
+    }
+
     const worker = new Worker(bundle.mainWorker!);
     const logger = new duckdb.ConsoleLogger();
     const db = new duckdb.AsyncDuckDB(logger, worker);
@@ -421,12 +434,14 @@ export default function ExtractContent() {
         // Fetch GeoJSON from backend and draw on map
         fetch(httpGeoJSONUrl(hash))
           .then((res) => {
-            if (!res.ok) throw new Error(`GeoJSON fetch failed: ${res.status}`);
+            if (!res.ok) throw new Error(`GeoJSON fetch failed: ${res.status} ${res.statusText}`);
             return res.json();
           })
           .then((geojson: GeoJSON.FeatureCollection) => {
+            const count = geojson?.features?.length ?? 0;
+            console.log("[Preview] GeoJSON loaded:", count, "features from", httpGeoJSONUrl(hash));
             const map = mapRef.current;
-            if (map && geojson?.features?.length) {
+            if (map && count > 0) {
               clearPreviewLayer();
               map.addSource("preview-roads", {
                 type: "geojson",
@@ -442,9 +457,13 @@ export default function ExtractContent() {
                   "line-opacity": 0.7,
                 },
               });
+            } else if (count === 0) {
+              console.warn("[Preview] Extract returned 0 features — nothing to draw. Rebuild extract image if using Docker.");
             }
           })
-          .catch((e) => console.error("[Preview] Fetch/draw failed:", e))
+          .catch((e) => {
+            console.error("[Preview] Fetch/draw failed:", e, "URL:", httpGeoJSONUrl(hash));
+          })
           .finally(() => setPreviewLoading(false));
       },
       (err) => {
@@ -470,15 +489,82 @@ export default function ExtractContent() {
 
     const handle = connectAndExtract(
       polygon,
-      (p) => setProgress(p),
+      (p) => {
+        console.log(`[Extract] Progress: ${p.stage} ${p.percent}% - ${p.message}`);
+        setProgress(p);
+      },
       (hash, stats) => {
+        console.log("[Extract] Success!", hash, stats);
         setResultHash(hash);
         setResultStats(stats);
-        setExtracting(false);
+        setPreviewRoadCount(stats.roads);
+        setPreviewPointCount(stats.points ?? stats.nodes ?? 0);
+        const geoUrl = httpGeoJSONUrl(hash);
+        console.log("[Extract] Fetching GeoJSON from", geoUrl);
+        fetch(geoUrl)
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(`GeoJSON fetch failed: ${res.status} ${res.statusText}`);
+            }
+            return res.json();
+          })
+          .then((geojson: GeoJSON.FeatureCollection) => {
+            const count = geojson?.features?.length ?? 0;
+            console.log("[Extract] GeoJSON loaded:", count, "features");
+            if (count === 0) {
+              setProgress({
+                stage: "error",
+                message:
+                  "Extract returned no road data (0 features). If using Docker, rebuild the extract image: docker compose build extract && docker compose up -d.",
+              });
+              return;
+            }
+            // Draw extracted roads on the map
+            const map = mapRef.current;
+            if (map && Platform.OS === "web") {
+              clearPreviewLayer();
+              map.addSource("preview-roads", {
+                type: "geojson",
+                data: geojson,
+              });
+              map.addLayer({
+                id: "preview-roads",
+                type: "line",
+                source: "preview-roads",
+                paint: {
+                  "line-color": "#8b5cf6",
+                  "line-width": 2,
+                  "line-opacity": 0.8,
+                },
+              });
+            }
+            setProgress(null);
+          })
+          .catch((e) => {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error("[Extract] GeoJSON fetch failed:", msg, "URL:", geoUrl);
+            setProgress({
+              stage: "error",
+              message: `Could not load result: ${msg}. Check backend proxy and extract service (see console for URL).`,
+            });
+          })
+          .finally(() => setExtracting(false));
       },
       (err) => {
         // WebSocket failed — try offline data before showing error
-        console.warn("[Extract] WebSocket failed, trying offline data:", err);
+        console.warn("[Extract] WebSocket failed:", err);
+
+        // On web, offline extraction is not supported/mocked. Show error immediately.
+        if (Platform.OS === "web") {
+          console.error("[Extract] Web extraction failed. Check console for WS connection details.");
+          setProgress({
+             stage: "error",
+             message: `Extraction failed: ${err}\n(See browser console for details)`,
+           });
+           setExtracting(false);
+           return;
+        }
+
         setProgress({
           stage: "building_graph",
           message: "Trying offline data…",
@@ -486,6 +572,7 @@ export default function ExtractContent() {
         const polyGeom = polygon.geometry as GeoJSON.Polygon;
         (async () => {
           try {
+            console.log("[Extract] Attempting offline extraction...");
             const result = await extractFromDownloadedData(polyGeom, (p) => {
               const stage = p.phase.toLowerCase().includes("graph")
                 ? "building_graph"
@@ -493,6 +580,7 @@ export default function ExtractContent() {
                     p.phase.toLowerCase().includes("tile")
                   ? "clipping"
                   : "downloading";
+              console.log(`[Extract] Offline progress: ${p.phase}`);
               setProgress({
                 stage,
                 message: p.phase,
@@ -518,21 +606,24 @@ export default function ExtractContent() {
                 percent: 100,
               });
             } else {
+              console.warn("[Extract] Offline extraction returned no result");
               setProgress({
                 stage: "error",
                 message: `${err} — No offline data for this area. Download a region in Settings → Offline Maps.`,
               });
             }
           } catch (e2) {
+            console.error("[Extract] Offline extraction failed:", e2);
             setProgress({ stage: "error", message: String(e2) });
           } finally {
             setExtracting(false);
           }
         })();
       },
+      "roads",
     );
     cancelRef.current = handle;
-  }, [polygon]);
+  }, [polygon, clearPreviewLayer]);
 
   const cancelExtraction = useCallback(() => {
     cancelRef.current?.cancel();
@@ -828,6 +919,7 @@ export default function ExtractContent() {
             style={styles.bottomSheetScroll}
             showsVerticalScrollIndicator={false}
           >
+            <ExtractConnectionStatus />
             {/* Stats grid */}
             <View style={styles.statsGrid}>
               <StatBox
@@ -1311,7 +1403,34 @@ function NativeExtractFallback({
       (hash, stats) => {
         setResultHash(hash);
         setResultStats(stats);
-        setExtracting(false);
+        const geoUrl = httpGeoJSONUrl(hash);
+        fetch(geoUrl)
+          .then((res) => {
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+            return res.json();
+          })
+          .then((geojson: GeoJSON.FeatureCollection) => {
+            const count = geojson?.features?.length ?? 0;
+            if (count === 0) {
+              setProgress({
+                stage: "error",
+                message: "Extract returned no data (0 features). Rebuild extract image if using Docker.",
+              });
+            } else {
+              setProgress({
+                stage: "complete",
+                message: `Extraction complete — ${stats.nodes} nodes, ${stats.edges} edges, ${count} features`,
+                percent: 100,
+              });
+            }
+          })
+          .catch((e) => {
+            setProgress({
+              stage: "error",
+              message: `Could not load result: ${e instanceof Error ? e.message : String(e)}`,
+            });
+          })
+          .finally(() => setExtracting(false));
       },
       (err) => {
         // WebSocket failed — try offline data before showing error
@@ -1633,6 +1752,7 @@ function NativeExtractFallback({
           { backgroundColor: colors.surface, borderTopColor: colors.border },
         ]}
       >
+        <ExtractConnectionStatus />
         <View
           style={{
             flexDirection: "row",

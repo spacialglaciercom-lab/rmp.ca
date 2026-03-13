@@ -70,4 +70,16 @@ describe("plugin registry", () => {
     expect(getPlugin("test-plugin")).toBe(second);
     unloadPlugin("test-plugin");
   });
+
+  it("when initialize throws, plugin is not registered", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const plugin = createMockPlugin({
+      initialize: vi.fn().mockImplementation(() => {
+        throw new Error("init failed");
+      }),
+    });
+    registerPlugin(plugin, mockContext);
+    expect(getPlugin("test-plugin")).toBeUndefined();
+    consoleSpy.mockRestore();
+  });
 });

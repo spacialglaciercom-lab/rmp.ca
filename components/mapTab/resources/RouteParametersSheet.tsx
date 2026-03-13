@@ -11,6 +11,7 @@ import {
   ScrollView,
   Platform,
   FlatList,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -32,6 +33,8 @@ import {
 interface RouteParametersSheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Called when user taps "Select on map" in Avoid roads. Parent can close the sheet and show the map (e.g. with a coming-soon message). */
+  onSelectOnMap?: () => void;
 }
 
 type ViewMode = "main" | "avoid" | "preferences" | "recalc" | "voice";
@@ -118,6 +121,7 @@ const styles = StyleSheet.create({
 export function RouteParametersSheet({
   visible,
   onClose,
+  onSelectOnMap,
 }: RouteParametersSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -149,12 +153,15 @@ export function RouteParametersSheet({
 
   const openMapSelection = useCallback(() => {
     if (Platform.OS !== "web") hapticImpact();
-    // TODO: Implement actual map selection functionality
-    // For now, show a message or open map with selection mode
-    console.log("Open map for road selection");
-    // This would typically open a map view where users can select road segments
-    // to avoid during navigation
-  }, []);
+    if (onSelectOnMap) {
+      onSelectOnMap();
+    } else {
+      Alert.alert(
+        "Select on map",
+        "Selecting specific roads on the map is not yet supported. Use \"Avoid by type\" below to avoid tolls, motorways, ferries, and more.",
+      );
+    }
+  }, [onSelectOnMap]);
 
   const openPreferences = useCallback(() => {
     if (Platform.OS !== "web") hapticImpact();

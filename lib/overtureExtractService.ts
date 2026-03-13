@@ -11,10 +11,15 @@ import { Platform } from "react-native";
 import { area as turfArea } from "@turf/area";
 import { length as turfLength } from "@turf/length";
 import { getApiBaseUrl } from "@/shared/oauth";
+import {
+  logExtractDiagnostics,
+  formatExtractConnectionError,
+} from "@/lib/extractDiagnostics";
 
 // ---------------------------------------------------------------------------
 // Extract backend URL. On web with no env set, use same-origin (no Railway).
 // Set EXPO_PUBLIC_OVERTURE_EXTRACT_URL or EXPO_PUBLIC_OVERTURE_WS_BASE for local/custom backend.
+// On web we prefer the API base so the browser hits the Node server, which proxies to the extract service.
 // ---------------------------------------------------------------------------
 const DEFAULT_EXTRACT_BASE = "http://localhost:9000";
 
@@ -36,10 +41,30 @@ const defaultWsBase = defaultHttpBase
   .replace(/^https:\/\//i, "wss://")
   .replace(/^http:\/\//i, "ws://");
 
-const HTTP_BASE = process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE ?? defaultHttpBase;
-const WS_BASE = process.env.EXPO_PUBLIC_OVERTURE_WS_BASE ?? defaultWsBase;
+/** On web, use API base so extract goes through Node proxy (/ws/extract and /geojson/:hash). No direct connection to port 9000. */
+function getExtractHttpBase(): string {
+  if (process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE) return process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE;
+  if (Platform.OS === "web" && typeof window !== "undefined") return getApiBaseUrl();
+  return defaultHttpBase;
+}
+
+function getExtractWsBase(): string {
+  if (process.env.EXPO_PUBLIC_OVERTURE_WS_BASE) return process.env.EXPO_PUBLIC_OVERTURE_WS_BASE;
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const api = getApiBaseUrl();
+    return api.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+  }
+  return defaultWsBase;
+}
+
+const HTTP_BASE = getExtractHttpBase();
+const WS_BASE = getExtractWsBase();
 
 export const WS_EXTRACT_URL = `${WS_BASE}/ws/extract`;
+/** For diagnostics: current extract endpoints (ws + http base). */
+export function getExtractConfig(): { wsUrl: string; httpBase: string } {
+  return { wsUrl: WS_EXTRACT_URL, httpBase: HTTP_BASE };
+}
 export const httpGeoJSONUrl = (hash: string) => `${HTTP_BASE}/geojson/${hash}`;
 export const httpDownloadUrl = (hash: string) =>
   `${HTTP_BASE}/download/${hash}`;
@@ -177,12 +202,17 @@ export function connectAndExtract(
   onProgress: (progress: ExtractionProgress) => void,
   onComplete: (hash: string, stats: ExtractionStats) => void,
   onError: (error: string) => void,
+  theme: string = "roads",
 ): { cancel: () => void } {
   let ws: WebSocket | null = null;
   let cancelled = false;
 
   const connect = () => {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      logExtractDiagnostics();
+    }
     console.log("[WebSocket] WS_EXTRACT_URL:", WS_EXTRACT_URL);
+    console.log("[WebSocket] Theme:", theme);
     console.log("[WebSocket] WebSocket available:", typeof WebSocket);
     console.log(
       "[WebSocket] isDev:",
@@ -205,16 +235,18 @@ export function connectAndExtract(
     ws.onopen = () => {
       console.log("[WebSocket] Connected to", WS_EXTRACT_URL);
       if (cancelled) {
+        console.log("[WebSocket] Connection cancelled immediately after open");
         ws?.close();
         return;
       }
       // Send the polygon for extraction (webovertureextract expects {polygon: geometry})
       const payload = JSON.stringify({
         polygon: polygon.geometry,
+        theme,
       });
       console.log(
         "[WebSocket] Sending:",
-        JSON.stringify({ polygon: polygon.geometry }, null, 2),
+        JSON.stringify({ polygon: polygon.geometry, theme }, null, 2),
       );
       ws!.send(payload);
       onProgress({
@@ -225,7 +257,10 @@ export function connectAndExtract(
     };
 
     ws.onmessage = (event) => {
-      if (cancelled) return;
+      if (cancelled) {
+        console.log("[WebSocket] Ignored message (cancelled):", event.data);
+        return;
+      }
       console.log("[WebSocket] Received:", event.data);
       try {
         const msg = JSON.parse(event.data);
@@ -234,15 +269,16 @@ export function connectAndExtract(
         if (msg.stage === "complete") {
           // Extract hash from geojson_url (format: "/geojson/{hash}")
           const hash = msg.geojson_url ? msg.geojson_url.split("/").pop() : "";
-          // webovertureextract sends:
-          //   segments = raw road count from Overture (before graph building)
-          //   nodes = graph nodes (intersections)
-          //   edges = graph edges (road segments split at intersections)
+          const nodes = msg.nodes ?? 0;
+          const edges = msg.edges ?? 0;
+          const segments = msg.segments ?? 0;
+          console.log("[WebSocket] Extraction complete, hash:", hash, "nodes:", nodes, "edges:", edges, "segments:", segments);
+          // webovertureextract sends: segments = raw road count, nodes = graph nodes, edges = graph edges
           const stats: ExtractionStats = {
-            points: msg.nodes ?? 0,
-            roads: msg.segments ?? 0, // Raw road segments from Overture
-            nodes: msg.nodes ?? 0,
-            edges: msg.edges ?? 0,
+            points: nodes,
+            roads: segments,
+            nodes,
+            edges,
           };
           onProgress({
             stage: "complete",
@@ -253,9 +289,11 @@ export function connectAndExtract(
           });
           onComplete(hash, stats);
         } else if (msg.stage === "error") {
+          console.error("[WebSocket] Extraction error message:", msg.error);
           onError(msg.error ?? "Unknown extraction error");
         } else {
           // Progress messages (downloading, clipping, building_graph)
+          console.log(`[WebSocket] Progress: ${msg.stage} (${msg.progress}%)`);
           onProgress({
             stage: msg.stage ?? "downloading",
             message: getStageMessage(msg.stage),
@@ -269,22 +307,25 @@ export function connectAndExtract(
     };
 
     ws.onerror = (error) => {
-      console.log("[WebSocket] Error:", error);
-      if (!cancelled) {
-        onError(
-          "WebSocket connection error. If you see 502 in the console, the extract backend or its WebSocket proxy may be down or misconfigured.",
+      console.log("[WebSocket] Error event:", error);
+      if (Platform.OS === "web") {
+        console.error(
+          "[WebSocket] Check DevTools → Network → WS. Look for the request to",
+          WS_EXTRACT_URL,
+          "— status 404/502 means backend or extract proxy is down.",
         );
+      }
+      if (!cancelled) {
+        onError(formatExtractConnectionError(WS_EXTRACT_URL));
       }
     };
 
     ws.onclose = (event) => {
-      console.log("[WebSocket] Closed:", event.code, event.reason);
+      console.log(
+        `[WebSocket] Closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`,
+      );
       if (!cancelled && event.code !== 1000) {
-        const hint =
-          event.code === 1006
-            ? " Often caused by 502 Bad Gateway: ensure the backend has the /ws/extract proxy enabled and the upstream extract service is running."
-            : "";
-        onError(`Connection closed unexpectedly (code ${event.code}).${hint}`);
+        onError(formatExtractConnectionError(WS_EXTRACT_URL, event.code));
       }
     };
   };
@@ -466,6 +507,7 @@ export async function extractOverture(
         clearTimeout(timeoutId);
         reject(new Error(error));
       },
+      theme,
     );
 
     const timeoutId = setTimeout(() => {

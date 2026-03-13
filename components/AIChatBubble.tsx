@@ -262,12 +262,8 @@ function AIChatBubbleInner() {
         try {
           const { speakText } = await import("@/services/elevenLabsTtsService");
           await speakText(reply);
-        } catch {
-          // Fallback to expo-speech
-          try {
-            const Speech = await import("expo-speech");
-            await Speech.speak(reply, { rate: 1.0, volume: 1.0 });
-          } catch {}
+        } catch (err) {
+          console.error("TTS failed:", err);
         }
         setStatus("idle");
       } catch (err) {

@@ -206,6 +206,8 @@ This document compares the current `geojson_ops.py` and `vector_clean.py` implem
 
 ## 4. Files to Touch (Checklist)
 
+*(Check off each item when that file has been updated.)*
+
 - [ ] `backend/scripts/osm_to_geojson.py` — CRS + docstring
 - [ ] `backend/app/main.py` (or app creation) — body size limit
 - [ ] `backend/app/vector_clean.py` — warnings, optional merge rules, optional size check, docstrings, optional preset

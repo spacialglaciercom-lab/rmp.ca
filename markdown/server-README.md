@@ -702,7 +702,7 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// Add more tables here as needed (e.g. same pattern as users above).
 ```
 
 `server/db.ts`
@@ -803,7 +803,7 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Add feature queries here as your schema grows (e.g. getTodo, listTodos).
 ```
 
 `server/routers.ts`
@@ -828,12 +828,7 @@ export const appRouter = router({
     }),
   }),
 
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  // Example: add feature routers when needed (e.g. list: protectedProcedure.query(...)).
 });
 
 export type AppRouter = typeof appRouter;
@@ -1151,76 +1146,7 @@ export function useAuth(options?: UseAuthOptions) {
 }
 ```
 
-`tests/auth.logout.test.ts`
-
-```ts
-import { describe, expect, it } from "vitest";
-import { appRouter } from "../server/routers";
-import { COOKIE_NAME } from "../shared/const";
-import type { TrpcContext } from "../server/_core/context";
-
-type CookieCall = {
-  name: string;
-  options: Record<string, unknown>;
-};
-
-type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
-
-function createAuthContext(): {
-  ctx: TrpcContext;
-  clearedCookies: CookieCall[];
-} {
-  const clearedCookies: CookieCall[] = [];
-
-  const user: AuthenticatedUser = {
-    id: 1,
-    openId: "sample-user",
-    email: "sample@example.com",
-    name: "Sample User",
-    loginMethod: "manus",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-
-  const ctx: TrpcContext = {
-    user,
-    req: {
-      protocol: "https",
-      headers: {},
-    } as TrpcContext["req"],
-    res: {
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
-    } as TrpcContext["res"],
-  };
-
-  return { ctx, clearedCookies };
-}
-
-// TODO: Remove `.skip` below once you implement user authentication
-describe.skip("auth.logout", () => {
-  it("clears the session cookie and reports success", async () => {
-    const { ctx, clearedCookies } = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.auth.logout();
-
-    expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({
-      maxAge: -1,
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      path: "/",
-    });
-  });
-});
-```
+See **`server/tests/auth.logout.test.ts`** for a runnable test that clears the session cookie and asserts cookie options. Run with `pnpm test -- server/tests/auth.logout.test.ts`.
 
 ---
 

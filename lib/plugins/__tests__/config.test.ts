@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { loadPluginConfig } from "../config";
 
 describe("loadPluginConfig", () => {
@@ -31,6 +31,29 @@ describe("loadPluginConfig", () => {
     for (const id of gatePlugins) {
       expect(config.plugins[id], `${id} should be in config`).toBeDefined();
       expect(config.plugins[id]).toHaveProperty("enabled");
+    }
+  });
+
+  it("merges per-plugin config (e.g. weather) with default so plugin has apiKey and endpoint", async () => {
+    const config = await loadPluginConfig();
+    expect(config.plugins.weather).toBeDefined();
+    expect(config.plugins.weather).toHaveProperty("apiKey");
+    expect(config.plugins.weather).toHaveProperty("endpoint");
+    expect(config.plugins["overture-extraction"]).toHaveProperty("enabled");
+  });
+
+  it("sets dev.enabled to true when __DEV__ is true", async () => {
+    const originalDev = (globalThis as unknown as { __DEV__?: boolean }).__DEV__;
+    vi.stubGlobal("__DEV__", true);
+    try {
+      const config = await loadPluginConfig();
+      expect(config.plugins.dev.enabled).toBe(true);
+    } finally {
+      if (originalDev === undefined) {
+        vi.unstubAllGlobals();
+      } else {
+        vi.stubGlobal("__DEV__", originalDev);
+      }
     }
   });
 });

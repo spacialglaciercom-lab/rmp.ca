@@ -1490,6 +1490,204 @@ export function VRPPlanner({
           </View>
         </View>
 
+        <Text
+          style={[
+            styles.helperText,
+            { color: colors.muted, marginTop: 10, marginBottom: 6 },
+          ]}
+        >
+          Objective
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.pickerTrigger,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
+          onPress={() => setPickerOpen("objective")}
+        >
+          <Text style={{ color: colors.foreground }}>
+            {OBJECTIVE_OPTIONS.find((o) => o.value === objective)?.label ??
+              objective}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.muted} />
+        </TouchableOpacity>
+        <Text
+          style={[
+            styles.helperText,
+            { color: colors.muted, marginTop: 10, marginBottom: 6 },
+          ]}
+        >
+          Algorithm
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.pickerTrigger,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
+          onPress={() => setPickerOpen("algorithm")}
+        >
+          <Text style={{ color: colors.foreground }} numberOfLines={1}>
+            {ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ??
+              algorithm}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.muted} />
+        </TouchableOpacity>
+        <Text
+          style={[styles.helperText, { color: colors.muted, marginTop: 6, marginBottom: 16 }]}
+        >
+          {algorithm === "vroom"
+            ? "VROOM: server-side CVRP/VRPTW solver. Requires VROOM_BACKEND_URL."
+            : "Local heuristic solver (no server required)."}
+        </Text>
+
+        {/* VROOM-specific options (visible when VROOM is selected) */}
+        {algorithm === "vroom" && (
+          <View style={{ marginTop: 0, marginBottom: 16 }}>
+            <Text
+              style={[
+                styles.helperText,
+                { color: colors.muted, marginBottom: 6 },
+              ]}
+            >
+              Service time per stop (min)
+            </Text>
+            <TextInput
+              key={
+                useUncontrolledInputs
+                  ? `vroomSvc-${numericInputsKey}`
+                  : undefined
+              }
+              style={[
+                styles.vehicleInput,
+                styles.travelSpeedInput,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                },
+              ]}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: vroomServiceTimeMins,
+                    onChangeText: (t) => {
+                      vroomServiceTimeMinsRef.current = t;
+                    },
+                  }
+                : {
+                    value: vroomServiceTimeMins,
+                    onChangeText: setVroomServiceTimeMins,
+                  })}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={colors.muted}
+            />
+            <TouchableOpacity
+              style={[
+                styles.valhallaRow,
+                { marginTop: 12, marginBottom: 4 },
+              ]}
+              onPress={() => {
+                hapticImpact();
+                setVroomTimeWindowEnabled((v) => !v);
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.checkmark,
+                  {
+                    backgroundColor: vroomTimeWindowEnabled
+                      ? colors.success
+                      : "transparent",
+                    borderWidth: 1,
+                    borderColor: vroomTimeWindowEnabled
+                      ? colors.success
+                      : colors.border,
+                  },
+                ]}
+              >
+                {vroomTimeWindowEnabled && (
+                  <Text style={styles.checkmarkText}>✓</Text>
+                )}
+              </View>
+              <Text
+                style={[styles.valhallaText, { color: colors.foreground }]}
+              >
+                Enable shift time windows
+              </Text>
+            </TouchableOpacity>
+            {vroomTimeWindowEnabled && (
+              <View
+                style={[
+                  styles.vehicleRow,
+                  { marginTop: 8, gap: 12 },
+                ]}
+              >
+                <View style={[styles.vehicleInputWrap, inputBorder, { flex: 1 }]}>
+                  <Text style={[styles.vehicleLabel, { color: colors.muted }]}>
+                    Shift Start (H)
+                  </Text>
+                  <TextInput
+                    key={
+                      useUncontrolledInputs
+                        ? `shiftStart-${numericInputsKey}`
+                        : undefined
+                    }
+                    style={[styles.vehicleInput, { color: colors.foreground }]}
+                    {...(useUncontrolledInputs
+                      ? {
+                          defaultValue: vroomShiftStartHour,
+                          onChangeText: (t) => {
+                            vroomShiftStartHourRef.current = t;
+                          },
+                        }
+                      : {
+                          value: vroomShiftStartHour,
+                          onChangeText: setVroomShiftStartHour,
+                        })}
+                    keyboardType="number-pad"
+                    placeholder="8"
+                    placeholderTextColor={colors.muted}
+                  />
+                </View>
+                <View style={[styles.vehicleInputWrap, inputBorder, { flex: 1 }]}>
+                  <Text style={[styles.vehicleLabel, { color: colors.muted }]}>
+                    Shift End (H)
+                  </Text>
+                  <TextInput
+                    key={
+                      useUncontrolledInputs
+                        ? `shiftEnd-${numericInputsKey}`
+                        : undefined
+                    }
+                    style={[styles.vehicleInput, { color: colors.foreground }]}
+                    {...(useUncontrolledInputs
+                      ? {
+                          defaultValue: vroomShiftEndHour,
+                          onChangeText: (t) => {
+                            vroomShiftEndHourRef.current = t;
+                          },
+                        }
+                      : {
+                          value: vroomShiftEndHour,
+                          onChangeText: setVroomShiftEndHour,
+                        })}
+                    keyboardType="number-pad"
+                    placeholder="18"
+                    placeholderTextColor={colors.muted}
+                  />
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Advanced options (collapsible) */}
         <TouchableOpacity
           style={[styles.advancedHeader, { borderBottomColor: colors.border }]}
@@ -1612,213 +1810,6 @@ export function VRPPlanner({
                 Start from current position
               </Text>
             </TouchableOpacity>
-            <Text
-              style={[
-                styles.helperText,
-                { color: colors.muted, marginTop: 10, marginBottom: 6 },
-              ]}
-            >
-              Objective
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.pickerTrigger,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-              onPress={() => setPickerOpen("objective")}
-            >
-              <Text style={{ color: colors.foreground }}>
-                {OBJECTIVE_OPTIONS.find((o) => o.value === objective)?.label ??
-                  objective}
-              </Text>
-              <Ionicons name="chevron-down" size={18} color={colors.muted} />
-            </TouchableOpacity>
-            <Text
-              style={[
-                styles.helperText,
-                { color: colors.muted, marginTop: 10, marginBottom: 6 },
-              ]}
-            >
-              Algorithm
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.pickerTrigger,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-              onPress={() => setPickerOpen("algorithm")}
-            >
-              <Text style={{ color: colors.foreground }} numberOfLines={1}>
-                {ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ??
-                  algorithm}
-              </Text>
-              <Ionicons name="chevron-down" size={18} color={colors.muted} />
-            </TouchableOpacity>
-            <Text
-              style={[styles.helperText, { color: colors.muted, marginTop: 6 }]}
-            >
-              {algorithm === "vroom"
-                ? "VROOM: server-side CVRP/VRPTW solver. Requires VROOM_BACKEND_URL."
-                : "Local heuristic solver (no server required)."}
-            </Text>
-
-            {/* VROOM-specific options */}
-            {algorithm === "vroom" && (
-              <View style={{ marginTop: 12 }}>
-                <Text
-                  style={[
-                    styles.helperText,
-                    { color: colors.muted, marginBottom: 6 },
-                  ]}
-                >
-                  Service time per stop (min)
-                </Text>
-                <TextInput
-                  key={
-                    useUncontrolledInputs
-                      ? `vroomSvc-${numericInputsKey}`
-                      : undefined
-                  }
-                  style={[
-                    styles.vehicleInput,
-                    styles.travelSpeedInput,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                      color: colors.foreground,
-                    },
-                  ]}
-                  {...(useUncontrolledInputs
-                    ? {
-                        defaultValue: vroomServiceTimeMins,
-                        onChangeText: (t) => {
-                          vroomServiceTimeMinsRef.current = t;
-                        },
-                      }
-                    : {
-                        value: vroomServiceTimeMins,
-                        onChangeText: setVroomServiceTimeMins,
-                      })}
-                  keyboardType="number-pad"
-                  placeholder="0"
-                  placeholderTextColor={colors.muted}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.valhallaRow,
-                    { marginTop: 12, marginBottom: 4 },
-                  ]}
-                  onPress={() => {
-                    hapticImpact();
-                    setVroomTimeWindowEnabled((v) => !v);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View
-                    style={[
-                      styles.checkmark,
-                      {
-                        backgroundColor: vroomTimeWindowEnabled
-                          ? colors.success
-                          : "transparent",
-                        borderWidth: 1,
-                        borderColor: vroomTimeWindowEnabled
-                          ? colors.success
-                          : colors.border,
-                      },
-                    ]}
-                  >
-                    {vroomTimeWindowEnabled && (
-                      <Text style={styles.checkmarkText}>✓</Text>
-                    )}
-                  </View>
-                  <Text
-                    style={[styles.valhallaText, { color: colors.foreground }]}
-                  >
-                    Enable shift time windows
-                  </Text>
-                </TouchableOpacity>
-                {vroomTimeWindowEnabled && (
-                  <View
-                    style={[
-                      styles.vehicleRow,
-                      { marginTop: 8, flexWrap: "wrap" },
-                    ]}
-                  >
-                    <View style={[styles.vehicleInputWrap, inputBorder]}>
-                      <Text
-                        style={[styles.vehicleLabel, { color: colors.muted }]}
-                      >
-                        Shift start (h)
-                      </Text>
-                      <TextInput
-                        key={
-                          useUncontrolledInputs
-                            ? `vroomStart-${numericInputsKey}`
-                            : undefined
-                        }
-                        style={[
-                          styles.vehicleInput,
-                          { color: colors.foreground },
-                        ]}
-                        {...(useUncontrolledInputs
-                          ? {
-                              defaultValue: vroomShiftStartHour,
-                              onChangeText: (t) => {
-                                vroomShiftStartHourRef.current = t;
-                              },
-                            }
-                          : {
-                              value: vroomShiftStartHour,
-                              onChangeText: setVroomShiftStartHour,
-                            })}
-                        keyboardType="number-pad"
-                        placeholder="8"
-                        placeholderTextColor={colors.muted}
-                      />
-                    </View>
-                    <View style={[styles.vehicleInputWrap, inputBorder]}>
-                      <Text
-                        style={[styles.vehicleLabel, { color: colors.muted }]}
-                      >
-                        Shift end (h)
-                      </Text>
-                      <TextInput
-                        key={
-                          useUncontrolledInputs
-                            ? `vroomEnd-${numericInputsKey}`
-                            : undefined
-                        }
-                        style={[
-                          styles.vehicleInput,
-                          { color: colors.foreground },
-                        ]}
-                        {...(useUncontrolledInputs
-                          ? {
-                              defaultValue: vroomShiftEndHour,
-                              onChangeText: (t) => {
-                                vroomShiftEndHourRef.current = t;
-                              },
-                            }
-                          : {
-                              value: vroomShiftEndHour,
-                              onChangeText: setVroomShiftEndHour,
-                            })}
-                        keyboardType="number-pad"
-                        placeholder="18"
-                        placeholderTextColor={colors.muted}
-                      />
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
           </View>
         )}
 
