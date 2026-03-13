@@ -92,7 +92,7 @@ const NON_VEHICLE_CLASSES = new Set([
 
 function getRoadClass(props: Record<string, unknown> | null | undefined): string {
   if (!props) return "";
-  const v = props["class"] ?? props["road_class"] ?? props["highway"] ?? props["category"];
+  const v = props["class"] ?? props["road_class"] ?? props["highway"] ?? props["category"] ?? props["fclass"] ?? props["type"];
   return typeof v === "string" ? v.toLowerCase().trim() : "";
 }
 

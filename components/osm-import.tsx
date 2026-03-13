@@ -527,11 +527,10 @@ export function OSMImport({
       }
     } catch (error) {
       hapticNotification(NotificationFeedbackType.Error);
-      Alert.alert(
-        "Import Error",
-        error instanceof Error ? error.message : "Failed to import file",
-      );
-      setProgress({ stage: "error", progress: 0, message: "Import failed" });
+      const msg =
+        error instanceof Error ? error.message : "Failed to import file";
+      Alert.alert("Import Error", msg);
+      setProgress({ stage: "error", progress: 0, message: `Import failed: ${msg}` });
     } finally {
       setIsImporting(false);
     }
