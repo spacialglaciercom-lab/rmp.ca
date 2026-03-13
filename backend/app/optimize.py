@@ -99,9 +99,17 @@ class RouteStats(BaseModel):
     efficiency: float
 
 
+class Instruction(BaseModel):
+    text: str
+    distance_km: float
+    way_id: str | None = None
+    type: str  # "depart", "arrive", "continue", "turn_left", "turn_right", "u_turn"
+
+
 class OptimizeResponse(BaseModel):
     route: list[RoutePoint]
     route_geojson: GeoJSONFeatureCollection
+    instructions: list[Instruction] = []
     total_distance_km: float
     message: str
     stats: RouteStats
@@ -202,6 +210,7 @@ def _build_graph(
             if v not in G:
                 G.add_node(v, lon=_round_coord(end[0]), lat=_round_coord(end[1]))
 
+            props = feat.properties or {}
             G.add_edge(
                 u,
                 v,
@@ -210,6 +219,8 @@ def _build_graph(
                 coords=segment,
                 feature_idx=feat_idx,
                 road_class=_get_road_class(feat),
+                name=props.get("name"),
+                osm_id=props.get("osm_id"),
             )
             edge_idx += 1
             run_start = i
@@ -222,7 +233,10 @@ def _build_graph(
 # ---------------------------------------------------------------------------
 
 
-def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
+def _solve_cpp(
+    G: nx.MultiGraph | nx.MultiDiGraph,
+    turn_penalties: TurnPenalties | None = None,
+) -> list[str]:
     """
     Approximate solution to the Chinese Postman Problem:
     traverse every edge at least once with minimum extra (deadhead) distance.
@@ -232,6 +246,10 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
     3. Find minimum weight perfect matching on odd-degree vertices.
     4. Augment graph with matching edges (duplicating shortest paths).
     5. Find Eulerian circuit on augmented graph.
+
+    When turn_penalties is provided, each edge's effective weight includes a
+    turn-cost surcharge so the Blossom matching prefers deadhead paths with
+    fewer/cheaper turns.
     """
     if G.number_of_edges() == 0:
         return []
@@ -248,7 +266,7 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
         full_route: list[str] = []
         for comp_nodes in sorted(components, key=len, reverse=True):
             sub = G.subgraph(comp_nodes).copy()
-            sub_route = _solve_cpp(sub)
+            sub_route = _solve_cpp(sub, turn_penalties=turn_penalties)
             if sub_route:
                 if full_route:
                     full_route.extend(sub_route)
@@ -278,12 +296,24 @@ def _solve_cpp(G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
 
         for i, u in enumerate(odd_nodes):
             try:
+                # Use plain distance for path finding.
+                # Adding turn penalties to the matching weight below ensures
+                # the Blossom algorithm prefers paths with fewer/cheaper turns.
                 lengths, paths = nx.single_source_dijkstra(G, u, weight="length_km")
                 for j in range(i + 1, len(odd_nodes)):
                     v = odd_nodes[j]
                     if v in lengths:
-                        odd_pairs_dist[(u, v)] = lengths[v]
-                        odd_pairs_path[(u, v)] = paths[v]
+                        dist_km = lengths[v]
+                        path = paths[v]
+                        
+                        # Add turn penalties if provided
+                        penalty_cost = 0.0
+                        if turn_penalties:
+                            penalty_cost = _calculate_path_turn_cost(path, G, turn_penalties)
+                            
+                        # Store total cost (distance + penalties) for matching
+                        odd_pairs_dist[(u, v)] = dist_km + penalty_cost
+                        odd_pairs_path[(u, v)] = path
             except nx.NetworkXError:
                 continue
 
@@ -381,6 +411,69 @@ def _bearing(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     x = math.sin(dlon) * math.cos(lat2_r)
     y = math.cos(lat1_r) * math.sin(lat2_r) - math.sin(lat1_r) * math.cos(lat2_r) * math.cos(dlon)
     return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+
+def _calculate_path_turn_cost(path: list[str], G: nx.MultiGraph, penalties: TurnPenalties | None) -> float:
+    """Calculate total turn penalties for a given sequence of nodes."""
+    if not penalties or len(path) < 3:
+        return 0.0
+
+    cost = 0.0
+    for i in range(1, len(path) - 1):
+        prev_node = path[i - 1]
+        curr_node = path[i]
+        next_node = path[i + 1]
+
+        def get_edge_bearing(u: str, v: str, traverse_to_v: bool) -> float:
+            """Get bearing of the edge segment adjacent to v (if traverse_to_v) or u."""
+            # Find the edge data for u-v. Use shortest if multiple.
+            edge_data = G.get_edge_data(u, v)
+            if not edge_data:
+                return 0.0
+            # Pick edge with min length (Dijkstra preference)
+            best_key = min(edge_data.keys(), key=lambda k: edge_data[k].get("length_km", float("inf")))
+            data = edge_data[best_key]
+            coords = data["coords"]
+            
+            # Identify direction based on node ID matching
+            # u_node is the start of traversal
+            start_coord = coords[0]
+            start_id = _node_id(start_coord[0], start_coord[1])
+            is_forward_in_coords = (start_id == u)
+
+            if traverse_to_v:
+                # We are arriving at v. We need bearing of the END of the segment.
+                if is_forward_in_coords:
+                     # Coords run u -> v. End is last.
+                     p1, p2 = coords[-2], coords[-1]
+                else:
+                     # Coords run v -> u. We traversed u -> v.
+                     # "End" of our traversal is start of coords (v).
+                     p1, p2 = coords[1], coords[0]
+            else:
+                # We are leaving u (curr_node). We need bearing of the START of the segment.
+                if is_forward_in_coords:
+                    # Coords run u -> v. Start is first.
+                    p1, p2 = coords[0], coords[1]
+                else:
+                    # Coords run v -> u. We traverse u -> v.
+                    # "Start" of our traversal is end of coords (u).
+                    p1, p2 = coords[-1], coords[-2]
+
+            return _bearing(p1[0], p1[1], p2[0], p2[1])
+
+        bearing_in = get_edge_bearing(prev_node, curr_node, traverse_to_v=True)
+        bearing_out = get_edge_bearing(curr_node, next_node, traverse_to_v=False)
+        
+        turn_type = _classify_turn(bearing_in, bearing_out)
+        if turn_type == "right":
+            cost += penalties.right_turn
+        elif turn_type == "left":
+            cost += penalties.left_turn
+        elif turn_type == "u_turn":
+            cost += penalties.u_turn
+            
+    return cost
 
 
 def _classify_turn(bearing_in: float, bearing_out: float) -> str:
@@ -501,7 +594,7 @@ def optimize_route(body: OptimizeRequest):
                 start_node = node
 
     # Solve CPP
-    route_nodes = _solve_cpp(G)
+    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties)
 
     if not route_nodes:
         raise HTTPException(status_code=400, detail="Could not compute route — graph may be empty or disconnected")
@@ -518,6 +611,7 @@ def optimize_route(body: OptimizeRequest):
     # Build route points and stats
     route_points: list[RoutePoint] = []
     route_coords: list[list[float]] = []  # for route GeoJSON
+    instructions: list[Instruction] = []
     total_distance_km = 0.0
     deadhead_distance_km = 0.0
     right_turns = left_turns = u_turns = straight = dead_ends = 0
@@ -533,31 +627,74 @@ def optimize_route(body: OptimizeRequest):
         u = route_nodes[i]
         v = route_nodes[i + 1]
 
-        # Retrieve the edge between u and v, picking the first unconsumed one.
+        # Retrieve the edge between u and v
         edge_data = G.get_edge_data(u, v) or G.get_edge_data(v, u)
         chosen_key: int | None = None
         edge_coords: list[list[float]] = []
         is_deadhead = False
         reversed_coords = False
-        is_component_bridge = False  # no graph edge: hop between disconnected components
+        is_component_bridge = False
+        
+        # New: attributes for instructions
+        edge_name: str | None = None
+        edge_osm_id: str | None = None
+        edge_dist_km: float = 0.0
 
         if edge_data:
             for ek, edata in edge_data.items():
                 canon = (min(u, v), max(u, v), ek)
-                if canon not in consumed_edge_keys:
+                if canon not in consumed_edge_keys: # Only use UNCONSUMED
                     chosen_key = ek
                     consumed_edge_keys.add(canon)
                     is_deadhead = bool(edata.get("deadhead"))
                     raw_coords = edata.get("coords") or []
+                    edge_name = edata.get("name")
+                    edge_osm_id = edata.get("osm_id")
+                    edge_dist_km = edata.get("length_km", 0)
+                    
                     if raw_coords:
                         start_nid = _node_id(raw_coords[0][0], raw_coords[0][1])
-                        reversed_coords = start_nid != u
+                        # If the edge in G is stored u->v (or v->u), check if we traverse it backwards relative to geometry
+                        # The node IDs are rounded coordinates.
+                        # raw_coords[0] is start. 
+                        # If 'u' (current start) matches raw_coords[0], we are forward.
+                        reversed_coords = (start_nid != u)
                         edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
                     break
+        
+        # -----------------------------------------------------------
+        # Instruction Generation (Simple)
+        # -----------------------------------------------------------
+        if not is_component_bridge and edge_coords and len(edge_coords) >= 2:
+            start_bearing = _bearing(edge_coords[0][0], edge_coords[0][1], edge_coords[1][0], edge_coords[1][1])
+            end_bearing = _bearing(edge_coords[-2][0], edge_coords[-2][1], edge_coords[-1][0], edge_coords[-1][1])
+
+            # Decide on maneuver based on previous bearing
+            maneuver = "continue"
+            if prev_bearing is not None:
+                turn = _classify_turn(prev_bearing, start_bearing)
+                if turn == "right": maneuver = "turn_right"
+                elif turn == "left": maneuver = "turn_left"
+                elif turn == "u_turn": maneuver = "u_turn"
+            
+            # Text construction
+            maneuver_text = maneuver.replace("_", " ").capitalize()
+            text = f"{maneuver_text}"
+            if edge_name:
+                text += f" onto {edge_name}" if maneuver != "continue" else f" on {edge_name}"
+            
+            # Simple instruction append (can be improved by collapsing 'continue' segments)
+            instructions.append(Instruction(
+                text=text,
+                distance_km=round(edge_dist_km, 4),
+                way_id=edge_osm_id,
+                type=maneuver
+            ))
+
+            prev_bearing = end_bearing
+        # -----------------------------------------------------------
 
         if not edge_coords:
-            # Fallback: straight line between the two endpoint nodes (e.g. between disconnected components).
-            # Treat as deadhead only; do not count as traversal or turn.
             is_component_bridge = True
             u_data = G.nodes[u]
             v_data = G.nodes[v]
@@ -566,8 +703,7 @@ def optimize_route(body: OptimizeRequest):
                 [v_data.get("lon", 0), v_data.get("lat", 0)],
             ]
 
-        # Emit route points for every coordinate in the edge geometry.
-        # Skip the first coordinate on all but the first edge to avoid duplicates.
+        # Emit route points
         start_k = 0 if i == 0 else 1
         for k, c in enumerate(edge_coords):
             if k < start_k:
@@ -649,6 +785,7 @@ def optimize_route(body: OptimizeRequest):
     return OptimizeResponse(
         route=route_points,
         route_geojson=route_geojson,
+        instructions=instructions,
         total_distance_km=round(total_distance_km, 4),
         message=f"Route computed: {total_traversals} traversals, {round(total_distance_km, 2)} km, {round(efficiency, 1)}% efficiency",
         stats=stats,
