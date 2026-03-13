@@ -47,8 +47,33 @@ export class RouteOptimizerSimpleV2 {
 
     this.makeEulerian();
 
-    const startNode = this.findStartNode(customLat, customLon);
-    if (!startNode) {
+    // Run Hierholzer on ALL connected components so disconnected residential
+    // roads (and other small clusters) are never silently dropped.
+    const components = this.getAllComponents();
+
+    // Order: put component containing the custom start (or largest) first
+    components.sort((a, b) => {
+      if (customLat !== undefined && customLon !== undefined) {
+        const distA = this.closestDist(a, customLat, customLon);
+        const distB = this.closestDist(b, customLat, customLon);
+        return distA - distB;
+      }
+      return b.size - a.size;
+    });
+
+    const circuits: string[][] = [];
+    for (const comp of components) {
+      const startNode = this.findStartNodeInComponent(
+        comp,
+        customLat,
+        customLon,
+      );
+      if (!startNode) continue;
+      const circuit = this.hierholzer(startNode);
+      if (circuit.length > 0) circuits.push(circuit);
+    }
+
+    if (circuits.length === 0) {
       return {
         route: [],
         totalDistance: 0,
@@ -56,22 +81,21 @@ export class RouteOptimizerSimpleV2 {
       };
     }
 
-    // v2 always uses two-pass (both sides); one-pass causes loops with this graph, so we ignore serviceBothSides
-    const circuit = this.hierholzer(startNode);
+    const circuit = circuits.flat();
 
-    const routePoints: RoutePoint[] = circuit
+    const routePoints = circuit
       .map((id) => {
         const n = this.nodes.get(id);
         return n ? { latitude: n.lat, longitude: n.lon, nodeId: id } : null;
       })
-      .filter((p): p is RoutePoint => p !== null);
+      .filter((p): p is NonNullable<typeof p> => p !== null);
 
     const stats = this.calculateStats(circuit);
 
     return {
       route: routePoints,
       totalDistance: stats.totalKm,
-      message: `Offline optimizer (v2): ${stats.totalKm.toFixed(2)} km, ${routePoints.length} points. Turns: R${stats.rightTurns} L${stats.leftTurns} U${stats.uTurns} S${stats.straight}`,
+      message: `Offline optimizer (v2): ${stats.totalKm.toFixed(2)} km, ${routePoints.length} points, ${components.length} component(s). Turns: R${stats.rightTurns} L${stats.leftTurns} U${stats.uTurns} S${stats.straight}`,
     };
   }
 
@@ -196,8 +220,13 @@ export class RouteOptimizerSimpleV2 {
     return best;
   }
 
-  private findStartNode(lat?: number, lon?: number): string | null {
-    const component = this.largestComponent();
+  /** Find the best start node within a specific component. */
+  private findStartNodeInComponent(
+    component: Set<string>,
+    lat?: number,
+    lon?: number,
+  ): string | null {
+    if (component.size === 0) return null;
 
     if (lat !== undefined && lon !== undefined) {
       let closest: string | null = null;
@@ -205,7 +234,7 @@ export class RouteOptimizerSimpleV2 {
       for (const id of component) {
         const node = this.nodes.get(id);
         if (!node) continue;
-        const d = this.haversine({ id: "", lat, lon }, node);
+        const d = this.haversine({ lat, lon }, node);
         if (d < minDist) {
           minDist = d;
           closest = id;
@@ -214,6 +243,7 @@ export class RouteOptimizerSimpleV2 {
       return closest;
     }
 
+    // Prefer dead-end (degree 1) nodes as start
     for (const id of component) {
       const edges = this.graph.get(id);
       if (edges && edges.size === 1) return id;
@@ -222,9 +252,26 @@ export class RouteOptimizerSimpleV2 {
     return component.values().next().value || null;
   }
 
-  private largestComponent(): Set<string> {
+  /** Haversine distance from a component's closest node to a point. */
+  private closestDist(
+    component: Set<string>,
+    lat: number,
+    lon: number,
+  ): number {
+    let min = Infinity;
+    for (const id of component) {
+      const node = this.nodes.get(id);
+      if (!node) continue;
+      const d = this.haversine({ lat, lon }, node);
+      if (d < min) min = d;
+    }
+    return min;
+  }
+
+  /** Return all weakly connected components of the graph. */
+  private getAllComponents(): Set<string>[] {
     const visited = new Set<string>();
-    let largest = new Set<string>();
+    const components: Set<string>[] = [];
 
     for (const start of this.graph.keys()) {
       if (visited.has(start)) continue;
@@ -244,10 +291,10 @@ export class RouteOptimizerSimpleV2 {
         }
       }
 
-      if (comp.size > largest.size) largest = comp;
+      components.push(comp);
     }
 
-    return largest;
+    return components;
   }
 
   private calculateStats(circuit: string[]): {

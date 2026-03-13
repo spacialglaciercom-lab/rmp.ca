@@ -31,6 +31,7 @@ import {
   computePolygonMetrics,
   coordsToPolygonFeature,
   httpGeoJSONUrl,
+  httpDownloadUrl,
   type ExtractionProgress,
   type ExtractionStage,
   type ExtractionStats,
@@ -651,9 +652,9 @@ export default function ExtractContent() {
       return;
     }
     if (Platform.OS === "web") {
-      window.open(httpGeoJSONUrl(resultHash), "_blank");
+      window.open(httpDownloadUrl(resultHash), "_blank");
     } else {
-      Linking.openURL(httpGeoJSONUrl(resultHash));
+      Linking.openURL(httpDownloadUrl(resultHash));
     }
   }, [resultHash]);
 
@@ -2107,7 +2108,7 @@ function NativeExtractFallback({
                     ),
                   );
                 } else {
-                  Linking.openURL(httpGeoJSONUrl(resultHash));
+                  Linking.openURL(httpDownloadUrl(resultHash));
                 }
               }}
             >
