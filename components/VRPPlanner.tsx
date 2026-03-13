@@ -67,6 +67,17 @@ interface VRPStop {
   lat: number;
   lon: number;
   label: string;
+  /** Per-stop demand (units/kg). Parsed from 4th column of coordinates input. */
+  demand?: number;
+  /** Estimated arrival time at this stop (Unix epoch seconds). VROOM only. */
+  arrivalTime?: number;
+}
+
+interface VRPRouteStats {
+  /** Total distance for this route in metres. */
+  distance: number;
+  /** Total driving + service duration for this route in seconds. */
+  duration: number;
 }
 
 interface VRPResult {
@@ -76,6 +87,10 @@ interface VRPResult {
   routes?: VRPStop[][];
   totalDistance: string;
   totalTime: number;
+  /** Per-route stats (distance m, duration s). VROOM only. */
+  routeStats?: VRPRouteStats[];
+  /** Stops that could not be assigned (capacity / time-window infeasible). VROOM only. */
+  unassigned?: string[];
 }
 
 interface NominatimResult {
@@ -97,8 +112,10 @@ function parseCoordinates(text: string): VRPStop[] {
       const lat = parseFloat(parts[0]);
       const lon = parseFloat(parts[1]);
       const label = parts[2] ?? `Stop ${locations.length + 1}`;
+      const demandRaw = parts[3] !== undefined ? parseFloat(parts[3]) : NaN;
+      const demand = Number.isFinite(demandRaw) ? demandRaw : undefined;
       if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
-        locations.push({ lat, lon, label });
+        locations.push({ lat, lon, label, demand });
       }
     }
   }
@@ -1729,7 +1746,7 @@ export function VRPPlanner({
       Alert.alert(
         "Error",
         inputMode === "coordinates"
-          ? "Enter at least 2 coordinates (lat,lon or lat,lon,label per line)."
+          ? "Enter at least 2 coordinates (lat,lon or lat,lon,label or lat,lon,label,demand per line)."
           : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds.",
       );
       return;
@@ -1824,7 +1841,8 @@ export function VRPPlanner({
             id: i + 1,
             location: [loc.lon, loc.lat],
             service: serviceTimeSecs,
-            delivery: [1],
+            // Use per-stop demand if provided (parsed from 4th column), else 1 unit
+            delivery: [loc.demand ?? 1],
             description: loc.label,
           };
           if (useWindows) {
@@ -1852,35 +1870,43 @@ export function VRPPlanner({
         const vroomRes = await solveWithVroom({ jobs, vehicles: vroomVehicles });
 
         const routes: VRPStop[][] = vroomRes.routes
-          .map((r) =>
-            r.steps
-              .filter((s) => s.type === "job" && s.id != null)
-              .map((s) => {
-                const j = jobs[s.id! - 1];
-                return j
-                  ? {
-                      lon: j.location[0],
-                      lat: j.location[1],
-                      label: j.description ?? `Stop ${s.id}`,
-                    }
-                  : null;
-              })
-              .filter((s): s is VRPStop => s !== null),
-          )
+          .map((r) => {
+            const stops: VRPStop[] = [];
+            for (const s of r.steps) {
+              if (s.type !== "job" || s.id == null) continue;
+              const j = jobs[s.id - 1];
+              if (!j) continue;
+              stops.push({
+                lon: j.location[0],
+                lat: j.location[1],
+                label: j.description ?? `Stop ${s.id}`,
+                demand: j.delivery?.[0],
+                arrivalTime: s.arrival > 0 ? s.arrival : undefined,
+              });
+            }
+            return stops;
+          })
           .filter((r) => r.length > 0);
 
-        if (vroomRes.unassigned.length > 0) {
-          Alert.alert(
-            "VROOM",
-            `${vroomRes.unassigned.length} stop(s) could not be assigned (capacity or time window constraints).`,
-          );
-        }
+        const routeStats: VRPRouteStats[] = vroomRes.routes.map((r) => ({
+          distance: r.distance,
+          duration: r.duration,
+        }));
+
+        const unassignedLabels = vroomRes.unassigned
+          .map((u) => {
+            const j = jobs.find((jb) => jb.id === u.id);
+            return j?.description ?? `Job #${u.id}`;
+          })
+          .filter(Boolean);
 
         setResult({
           stops: routes.flat(),
           routes: routes.length > 1 ? routes : undefined,
           totalDistance: (vroomRes.summary.distance / 1000).toFixed(2),
           totalTime: Math.round(vroomRes.summary.duration / 60),
+          routeStats,
+          unassigned: unassignedLabels.length > 0 ? unassignedLabels : undefined,
         });
         return;
       }
@@ -2167,7 +2193,7 @@ export function VRPPlanner({
             ]}
             multiline
             numberOfLines={5}
-            placeholder="45.5017,-73.5673, Downtown\n45.5234,-73.5834, West End"
+            placeholder="45.5017,-73.5673, Downtown\n45.5234,-73.5834, West End\n45.5100,-73.6000, Depot, 12"
             placeholderTextColor={colors.muted}
             {...(useUncontrolledInputs
               ? {
@@ -2962,64 +2988,133 @@ export function VRPPlanner({
               ⏱️ {result.totalTime} min
             </Text>
           </View>
-          {result.routes && result.routes.length > 1
-            ? result.routes.map((routeStops, routeIdx) => (
-                <View
-                  key={routeIdx}
-                  style={[
-                    styles.routeBlock,
-                    { borderBottomColor: colors.border },
-                  ]}
+
+          {/* Unassigned stops (VROOM only) */}
+          {result.unassigned && result.unassigned.length > 0 && (
+            <View
+              style={{
+                marginHorizontal: 0,
+                marginTop: 8,
+                marginBottom: 4,
+                padding: 10,
+                borderRadius: 8,
+                backgroundColor: colors.error + "22",
+                borderWidth: 1,
+                borderColor: colors.error + "66",
+              }}
+            >
+              <Text
+                style={[
+                  styles.sectionHeaderSmall,
+                  { color: colors.error, marginBottom: 4 },
+                ]}
+              >
+                ⚠️ {result.unassigned.length} stop
+                {result.unassigned.length > 1 ? "s" : ""} unassigned
+              </Text>
+              <Text
+                style={[
+                  styles.helperText,
+                  { color: colors.muted, marginBottom: 6 },
+                ]}
+              >
+                Could not be served within capacity / time-window constraints.
+              </Text>
+              {result.unassigned.map((label, i) => (
+                <Text
+                  key={i}
+                  style={[styles.stopLabel, { color: colors.error, marginBottom: 2 }]}
                 >
-                  <Text style={[styles.routeLabel, { color: cyan }]}>
-                    Route {routeIdx + 1}
-                  </Text>
-                  {routeStops.map((stop, idx) => (
+                  • {label}
+                </Text>
+              ))}
+            </View>
+          )}
+
+          {result.routes && result.routes.length > 1
+            ? result.routes.map((routeStops, routeIdx) => {
+                const stats = result.routeStats?.[routeIdx];
+                return (
+                  <View
+                    key={routeIdx}
+                    style={[
+                      styles.routeBlock,
+                      { borderBottomColor: colors.border },
+                    ]}
+                  >
                     <View
-                      key={idx}
-                      style={[
-                        styles.stopRow,
-                        { borderBottomColor: colors.border },
-                      ]}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 4,
+                      }}
                     >
+                      <Text style={[styles.routeLabel, { color: cyan }]}>
+                        Route {routeIdx + 1}
+                      </Text>
+                      {stats && (
+                        <Text
+                          style={[styles.helperText, { color: colors.muted }]}
+                        >
+                          {(stats.distance / 1000).toFixed(1)} km ·{" "}
+                          {Math.round(stats.duration / 60)} min
+                        </Text>
+                      )}
+                    </View>
+                    {routeStops.map((stop, idx) => (
                       <View
+                        key={idx}
                         style={[
-                          styles.stopNumber,
-                          {
-                            backgroundColor:
-                              idx === 0 || idx === routeStops.length - 1
-                                ? colors.success
-                                : colors.primary,
-                          },
+                          styles.stopRow,
+                          { borderBottomColor: colors.border },
                         ]}
                       >
-                        <Text style={styles.stopNumberText}>
-                          {idx === 0
-                            ? "S"
-                            : idx === routeStops.length - 1
-                              ? "E"
-                              : idx}
-                        </Text>
-                      </View>
-                      <View style={styles.stopInfo}>
-                        <Text
+                        <View
                           style={[
-                            styles.stopLabel,
-                            { color: colors.foreground },
+                            styles.stopNumber,
+                            {
+                              backgroundColor:
+                                idx === 0 || idx === routeStops.length - 1
+                                  ? colors.success
+                                  : colors.primary,
+                            },
                           ]}
                         >
-                          {stop.label}
-                        </Text>
-                        <Text
-                          style={[styles.stopCoords, { color: colors.muted }]}
-                        >
-                          {stop.lat.toFixed(4)}, {stop.lon.toFixed(4)}
-                        </Text>
+                          <Text style={styles.stopNumberText}>
+                            {idx === 0
+                              ? "S"
+                              : idx === routeStops.length - 1
+                                ? "E"
+                                : idx}
+                          </Text>
+                        </View>
+                        <View style={styles.stopInfo}>
+                          <Text
+                            style={[
+                              styles.stopLabel,
+                              { color: colors.foreground },
+                            ]}
+                          >
+                            {stop.label}
+                            {stop.demand != null && stop.demand !== 1
+                              ? ` (${stop.demand} units)`
+                              : ""}
+                          </Text>
+                          <Text
+                            style={[styles.stopCoords, { color: colors.muted }]}
+                          >
+                            {stop.lat.toFixed(4)}, {stop.lon.toFixed(4)}
+                            {stop.arrivalTime
+                              ? ` · ETA ${new Date(stop.arrivalTime * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                              : ""}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  ))}
-                </View>
-              ))
+                    ))}
+                  </View>
+                );
+              })
             : result.stops.map((stop, idx) => (
                 <View
                   key={idx}
@@ -3049,9 +3144,15 @@ export function VRPPlanner({
                       style={[styles.stopLabel, { color: colors.foreground }]}
                     >
                       {stop.label}
+                      {stop.demand != null && stop.demand !== 1
+                        ? ` (${stop.demand} units)`
+                        : ""}
                     </Text>
                     <Text style={[styles.stopCoords, { color: colors.muted }]}>
                       {stop.lat.toFixed(4)}, {stop.lon.toFixed(4)}
+                      {stop.arrivalTime
+                        ? ` · ETA ${new Date(stop.arrivalTime * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        : ""}
                     </Text>
                   </View>
                 </View>
