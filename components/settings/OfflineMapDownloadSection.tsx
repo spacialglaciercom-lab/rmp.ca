@@ -19,6 +19,7 @@ import { confirmDestructive } from "@/lib/confirmDestructive";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   OFFLINE_CITIES,
+  CURRENT_DATA_VERSIONS,
   getDownloadedRegions,
   downloadCityData,
   downloadCityFromR2,
@@ -409,6 +410,15 @@ export const OfflineMapDownloadSection: React.FC = () => {
                 <Text style={{ fontSize: 11, color: colors.muted }}>
                   {(r.layers ?? []).join(", ")}
                 </Text>
+                <Text style={{ fontSize: 11, color: colors.muted }}>
+                  Downloaded{" "}
+                  {new Date(r.downloadedAt).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                  {r.dataVersion ? ` · data ${r.dataVersion}` : ""}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => handleDelete(r)}
@@ -587,6 +597,14 @@ export const OfflineMapDownloadSection: React.FC = () => {
                 <Text style={{ fontSize: 12, color: colors.muted }}>
                   {city.country}
                 </Text>
+                {(source === "r2" || source === "s3") && (
+                  <Text style={{ fontSize: 11, color: colors.muted }}>
+                    {source === "r2"
+                      ? `tiles ${CURRENT_DATA_VERSIONS.pmtiles}`
+                      : `data ${CURRENT_DATA_VERSIONS.overture}`}
+                    {" · built Mar 13, 2026"}
+                  </Text>
+                )}
               </View>
               {isDownloading ? (
                 <View
