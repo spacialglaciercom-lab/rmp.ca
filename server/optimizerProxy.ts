@@ -134,7 +134,7 @@ async function proxyToOptimizer(req: Request, res: Response): Promise<void> {
   }
 }
 
-// ── VROOM proxy (vroom-express — separate service) ────────────────────────
+// ── VROOM proxy (vroom-docker — separate service) ─────────────────────────
 
 const rawVroomUrl = process.env.VROOM_BACKEND_URL ?? "";
 const VROOM_BACKEND_URL = rawVroomUrl
@@ -142,6 +142,105 @@ const VROOM_BACKEND_URL = rawVroomUrl
     ? rawVroomUrl.replace(/\/$/, "")
     : `http://${rawVroomUrl.replace(/\/$/, "")}`
   : "";
+
+/** Haversine distance in metres between two WGS-84 points. */
+function haversineMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6_371_000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Transform a VROOM request that uses `location`/`start`/`end` coordinates into
+ * one that uses `location_index`/`start_index`/`end_index` + a pre-computed
+ * haversine `matrices.auto` block. This lets VROOM solve without calling any
+ * external routing engine.
+ */
+function injectVroomMatrix(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  // Already has a matrix → pass through unchanged
+  if (body.matrices) return body;
+
+  type Coord = [number, number]; // [lon, lat]
+  const vehicles = (body.vehicles as Record<string, unknown>[]) ?? [];
+  const jobs = (body.jobs as Record<string, unknown>[]) ?? [];
+
+  const locations: Coord[] = [];
+  const locationIndex = new Map<string, number>();
+
+  const addLocation = (coord: Coord): number => {
+    const key = `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+    if (!locationIndex.has(key)) {
+      locationIndex.set(key, locations.length);
+      locations.push(coord);
+    }
+    return locationIndex.get(key)!;
+  };
+
+  // Vehicles (depots) first so index 0 = depot
+  const newVehicles = vehicles.map((v) => {
+    const nv: Record<string, unknown> = { ...v };
+    if (Array.isArray(v.start)) {
+      nv.start_index = addLocation(v.start as Coord);
+      delete nv.start;
+    }
+    if (Array.isArray(v.end)) {
+      nv.end_index = addLocation(v.end as Coord);
+      delete nv.end;
+    }
+    return nv;
+  });
+
+  // Jobs
+  const newJobs = jobs.map((j) => {
+    const nj: Record<string, unknown> = { ...j };
+    if (Array.isArray(j.location)) {
+      nj.location_index = addLocation(j.location as Coord);
+      delete nj.location;
+    }
+    return nj;
+  });
+
+  // Build N×N duration and distance matrices (haversine, 40 km/h avg)
+  const n = locations.length;
+  const AVG_SPEED_MS = 40_000 / 3600; // m/s
+  const durations: number[][] = [];
+  const distances: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    durations[i] = [];
+    distances[i] = [];
+    for (let j = 0; j < n; j++) {
+      const dist = haversineMeters(
+        locations[i][1],
+        locations[i][0],
+        locations[j][1],
+        locations[j][0],
+      );
+      distances[i][j] = Math.round(dist);
+      durations[i][j] = Math.round(dist / AVG_SPEED_MS);
+    }
+  }
+
+  return {
+    ...body,
+    vehicles: newVehicles,
+    jobs: newJobs,
+    matrices: { auto: { durations, distances } },
+  };
+}
 
 async function proxyToVroom(req: Request, res: Response): Promise<void> {
   if (!VROOM_BACKEND_URL) {
@@ -163,7 +262,7 @@ async function proxyToVroom(req: Request, res: Response): Promise<void> {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(injectVroomMatrix(req.body as Record<string, unknown>)),
         signal: AbortSignal.timeout(30_000),
       },
       1,

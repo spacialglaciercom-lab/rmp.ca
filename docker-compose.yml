@@ -11,10 +11,12 @@ services:
     restart: unless-stopped
 
   vroom:
-    image: ghcr.io/vroom-project/vroom-express:v1.1.0
+    image: ghcr.io/vroom-project/vroom-docker:v1.14.0
     container_name: rmpca-vroom
     ports:
       - "3004:3000"
+    environment:
+      - VROOM_ROUTER=osrm
     restart: unless-stopped
 
   optimizer:
