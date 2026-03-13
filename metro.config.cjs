@@ -20,6 +20,28 @@ if (process.platform === "win32") {
   config.watcher.watchman.enabled = false;
 }
 
+// On Linux without watchman, Metro's FallbackWatcher calls fs.watch() on every
+// subdirectory, quickly exhausting the default inotify limit (65536 watchers).
+// Adding node_modules to blockList causes FallbackWatcher to skip those dirs,
+// cutting the number of watchers from ~50k+ down to just the project source.
+// Metro resolves node_modules via its own resolver (not the file watcher),
+// so this doesn't break dependency resolution or hot reload.
+if (process.platform === "linux") {
+  config.resolver = config.resolver || {};
+  const existing = config.resolver.blockList || [];
+  const toArray = (v) =>
+    Array.isArray(v) ? v : v instanceof RegExp ? [v] : [];
+  config.resolver.blockList = [
+    ...toArray(existing),
+    /.*\/node_modules\/.*/,
+    /.*\/\.git\/.*/,
+    /.*\/android\/build\/.*/,
+    /.*\/ios\/build\/.*/,
+    /.*\/dist\/.*/,
+    /.*\/\.expo\/.*/,
+  ];
+}
+
 // Set our custom resolver BEFORE withNativeWind so NativeWind wraps it.
 // Fall through via context.resolveRequest (Metro's default resolver chain).
 const projectRoot = __dirname;
