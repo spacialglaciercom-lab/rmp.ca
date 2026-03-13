@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useMemo } from "react";
 import { View, Text, Platform, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import { buildPMTilesStyle } from "@/lib/pmtiles-source";
+import { getCurrentWeather } from "@/services/weatherService";
 import type { CollectionPoint } from "@/types";
 
 import { registerPMTilesProtocol as registerPMTilesProtocolShared } from "@/lib/maplibre-pmtiles-protocol";
@@ -48,6 +49,8 @@ export const MapLibreMap = React.memo(function MapLibreMap({
     [pmtilesUrl],
   );
 
+  const [skyLayer, setSkyLayer] = React.useState<any>(null);
+
   // Compute initial center/zoom from points
   const initialCamera = useMemo(() => {
     const allLats = [
@@ -82,6 +85,90 @@ export const MapLibreMap = React.memo(function MapLibreMap({
       },
     };
   }, [collectionPoints, routePoints]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    let mounted = true;
+    (async () => {
+      const center = initialCamera.centerCoordinate;
+      if (!center) return;
+
+      try {
+        const weather = await getCurrentWeather(center[1], center[0]);
+        if (!mounted || !weather) return;
+
+        const cond =
+          weather.weatherCondition?.description?.text?.toLowerCase() || "";
+        let paint: any;
+
+        if (
+          cond.includes("rain") ||
+          cond.includes("storm") ||
+          cond.includes("snow")
+        ) {
+          paint = {
+            "sky-type": "gradient",
+            "sky-gradient": [
+              "interpolate",
+              ["linear"],
+              ["sky-radial-progress"],
+              0.8,
+              "#334",
+              1,
+              "#112",
+            ],
+            "sky-gradient-center": [0, 90],
+            "sky-gradient-radius": 90,
+            "sky-opacity": 1,
+          };
+        } else if (cond.includes("cloud") || cond.includes("overcast")) {
+          paint = {
+            "sky-type": "gradient",
+            "sky-gradient": [
+              "interpolate",
+              ["linear"],
+              ["sky-radial-progress"],
+              0.8,
+              "#889",
+              1,
+              "#556",
+            ],
+            "sky-gradient-center": [0, 90],
+            "sky-gradient-radius": 90,
+            "sky-opacity": 1,
+          };
+        } else {
+          // Clear / Sunny
+          paint = {
+            "sky-type": "atmosphere",
+            "sky-atmosphere-sun": [0.0, 90.0],
+            "sky-atmosphere-sun-intensity": 15.0,
+          };
+        }
+
+        setSkyLayer({
+          id: "sky",
+          type: "sky",
+          paint,
+        });
+      } catch (err) {
+        console.warn("Failed to fetch sky weather", err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [initialCamera]);
+
+  const finalStyleJSON = useMemo(() => {
+    if (!skyLayer) return styleJSON;
+    return {
+      ...styleJSON,
+      layers: [...styleJSON.layers, skyLayer],
+    };
+  }, [styleJSON, skyLayer]);
 
   // Build GeoJSON for route polyline overlay
   const routeGeoJSON = useMemo(() => {
@@ -146,7 +233,7 @@ export const MapLibreMap = React.memo(function MapLibreMap({
       <MapLibreGL.MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        styleJSON={JSON.stringify(styleJSON)}
+        styleJSON={JSON.stringify(finalStyleJSON)}
         logoEnabled={false}
         attributionEnabled={false}
       >

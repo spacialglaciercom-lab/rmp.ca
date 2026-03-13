@@ -107,12 +107,20 @@ const OSM_MAP_LAYERS: MapLayer[] = [
     preview: "Topographic map with elevation contours",
   },
   {
-    id: "transport-dark",
-    name: "Transport Dark",
-    url: "https://api.thunderforest.com/transport-dark/{z}/{x}/{y}.png?apikey=bc04ca4d2bdd47b0b465cedfacaabc24",
+    id: "atlas",
+    name: "Atlas",
+    url: "https://api.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=bc04ca4d2bdd47b0b465cedfacaabc24",
     attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
-    icon: "bus-clock",
-    preview: "Dark transport map with transit routes and stops",
+    icon: "map-outline",
+    preview: "The classic Thunderforest map",
+  },
+  {
+    id: "mobile-atlas",
+    name: "Mobile Atlas",
+    url: "https://api.thunderforest.com/mobile-atlas/{z}/{x}/{y}.png?apikey=bc04ca4d2bdd47b0b465cedfacaabc24",
+    attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
+    icon: "cellphone",
+    preview: "High contrast map optimized for mobile screens",
   },
 ];
 
