@@ -9,6 +9,7 @@
     "drive-preview": { "enabled": false },
     "collection-route": { "enabled": false },
     "navigation": { "enabled": false },
+    "vrp-solvers": { "enabled": true },
     "dev": { "enabled": false }
   }
 }

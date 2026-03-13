@@ -12,6 +12,7 @@ import { aiChatPlugin } from "./ai-chat";
 import { drivePreviewPlugin } from "./drive-preview";
 import { collectionRoutePlugin } from "./collection-route";
 import { navigationPlugin } from "./navigation";
+import { vrpSolversPlugin } from "./vrp-solvers";
 import { devPlugin } from "./dev";
 
 const BUILTIN_PLUGINS: Record<string, Plugin> = {
@@ -24,6 +25,7 @@ const BUILTIN_PLUGINS: Record<string, Plugin> = {
   "drive-preview": drivePreviewPlugin,
   "collection-route": collectionRoutePlugin,
   navigation: navigationPlugin,
+  "vrp-solvers": vrpSolversPlugin,
   ...(typeof __DEV__ !== "undefined" && __DEV__ ? { dev: devPlugin } : {}),
 };
 

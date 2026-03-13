@@ -3,6 +3,7 @@ import defaultConfig from "./default-config.json";
 /** Per-plugin config (OsmAnd-style). Loaded from plugins/[id]/config.json when present. */
 import weatherPluginConfig from "./weather/config.json";
 import overtureExtractionPluginConfig from "./overture-extraction/config.json";
+import vrpSolversPluginConfig from "./vrp-solvers/config.json";
 
 export interface PluginEntryConfig {
   enabled: boolean;
@@ -21,6 +22,7 @@ export interface PluginConfig {
 const PLUGIN_CONFIG_MAP: Record<string, PluginEntryConfig> = {
   weather: weatherPluginConfig as PluginEntryConfig,
   "overture-extraction": overtureExtractionPluginConfig as PluginEntryConfig,
+  "vrp-solvers": vrpSolversPluginConfig as PluginEntryConfig,
 };
 
 /**

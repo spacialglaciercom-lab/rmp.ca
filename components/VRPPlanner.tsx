@@ -35,6 +35,7 @@ import { generateRouteId } from "@/lib/utils";
 import type { Route, CollectionPoint } from "@/types";
 import instructionManager from "@/services/InstructionManager";
 import { useDeliveryInstructions } from "@/context/DeliveryInstructionsContext";
+import { usePluginStore } from "@/stores/pluginStore";
 import {
   getSolver,
   ALGORITHM_OPTIONS as VRP_ALGORITHM_OPTIONS,
@@ -304,6 +305,8 @@ export function VRPPlanner({
   const colors = useColors();
   const cyan = colors.accentCyan ?? colors.primary;
   const magenta = colors.accentMagenta ?? "#d946ef";
+
+  const vrpEnabled = usePluginStore((s) => s.isPluginEnabled("vrp-solvers", true));
 
   const [inputMode, setInputMode] = useState<InputMode>("coordinates");
   const [coordinates, setCoordinates] = useState("");
@@ -2495,6 +2498,20 @@ export function VRPPlanner({
       </View>
     );
   }
+  if (!vrpEnabled) {
+    return (
+      <View style={[styles.disabledContainer, { backgroundColor: colors.background }]}>
+        <Ionicons name="cube-outline" size={40} color={colors.muted} />
+        <Text style={[styles.disabledTitle, { color: colors.foreground }]}>
+          VRP Solver Plugin Disabled
+        </Text>
+        <Text style={[styles.disabledDesc, { color: colors.muted }]}>
+          Enable the "VRP Solver" plugin in Settings → Plugins to use route planning.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={nestedInScrollView ? undefined : styles.keyboardAvoid}
@@ -2519,6 +2536,23 @@ export function VRPPlanner({
 }
 
 const styles = StyleSheet.create({
+  disabledContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    gap: 12,
+  },
+  disabledTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  disabledDesc: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
   keyboardAvoid: {
     flex: 1,
   },
