@@ -238,7 +238,7 @@ function injectVroomMatrix(
     ...body,
     vehicles: newVehicles,
     jobs: newJobs,
-    matrices: { auto: { durations, distances } },
+    matrices: { car: { durations, distances } },
   };
 }
 
