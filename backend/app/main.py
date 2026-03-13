@@ -5,10 +5,21 @@ total edge length × complexity factor.
 """
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+
+
+class _SuppressHealthLogs(logging.Filter):
+    """Drop uvicorn access log lines for GET /health (Docker healthcheck spam)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(_SuppressHealthLogs())
 from shapely.geometry import MultiPoint
 from pydantic import BaseModel, Field
 from scipy import sparse
