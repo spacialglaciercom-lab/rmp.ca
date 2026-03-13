@@ -36,10 +36,11 @@ import type { Route, CollectionPoint } from "@/types";
 import instructionManager from "@/services/InstructionManager";
 import { useDeliveryInstructions } from "@/context/DeliveryInstructionsContext";
 import {
-  solveWithVroom,
-  type VroomJob,
-  type VroomVehicle,
-} from "@/services/vroomService";
+  getSolver,
+  ALGORITHM_OPTIONS as VRP_ALGORITHM_OPTIONS,
+  buildHaversineMatrix,
+  getValhallaMatrix,
+} from "@/lib/vrp-solvers";
 
 type InputMode = "coordinates" | "address";
 
@@ -50,16 +51,8 @@ const OBJECTIVE_OPTIONS = [
   { value: "min_vehicles", label: "Minimize vehicles used" },
 ] as const;
 
-const ALGORITHM_OPTIONS = [
-  { value: "clarke_wright", label: "Clarke-Wright Savings" },
-  { value: "sweep", label: "Sweep (balanced sectors)" },
-  { value: "or_opt", label: "Or-Opt (local search)" },
-  { value: "two_opt", label: "2-Opt (route untangling)" },
-  { value: "vroom", label: "VROOM (server-optimized, CVRP/VRPTW)" },
-] as const;
+const ALGORITHM_OPTIONS = VRP_ALGORITHM_OPTIONS;
 
-const VALHALLA_MATRIX_URL =
-  "https://valhalla1.openstreetmap.de/sources_to_targets";
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 const nl = "\n";
 
@@ -178,221 +171,6 @@ async function geocodeAddressesBatch(
   return stops;
 }
 
-async function getValhallaMatrix(
-  locations: VRPStop[],
-): Promise<{ distance: number; time: number }[][]> {
-  const locs = locations.map((l) => ({ lat: l.lat, lon: l.lon }));
-
-  const response = await fetch(VALHALLA_MATRIX_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sources: locs,
-      targets: locs,
-      costing: "auto",
-      directions_options: { units: "kilometers" },
-    }),
-  });
-
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = (await response.json()) as {
-    sources_to_targets?: { distance?: number; time?: number }[][];
-  };
-
-  if (!data.sources_to_targets) throw new Error("Invalid response format");
-
-  const matrix: { distance: number; time: number }[][] = [];
-  for (let i = 0; i < data.sources_to_targets.length; i++) {
-    const row = data.sources_to_targets[i];
-    matrix[i] = [];
-    for (let j = 0; j < row.length; j++) {
-      const cell = row[j];
-      matrix[i][j] = {
-        distance: typeof cell?.distance === "number" ? cell.distance : 0,
-        time: typeof cell?.time === "number" ? cell.time : 0,
-      };
-    }
-  }
-  return matrix;
-}
-
-/** Haversine distance in km (for clustering only) */
-function haversineKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-/** Build distance/time matrix using haversine (no API). Time estimated at ~40 km/h. */
-function buildHaversineMatrix(
-  locations: VRPStop[],
-): { distance: number; time: number }[][] {
-  const n = locations.length;
-  const AVG_SPEED_KMH = 40;
-  const matrix: { distance: number; time: number }[][] = [];
-  for (let i = 0; i < n; i++) {
-    matrix[i] = [];
-    for (let j = 0; j < n; j++) {
-      const dist = haversineKm(
-        locations[i].lat,
-        locations[i].lon,
-        locations[j].lat,
-        locations[j].lon,
-      );
-      const timeSec = (dist / AVG_SPEED_KMH) * 3600;
-      matrix[i][j] = { distance: dist, time: timeSec };
-    }
-  }
-  return matrix;
-}
-
-/**
- * Cluster stops into geographic zones (by grid) so we visit nearby areas together.
- * Returns array of clusters; each cluster is an array of location indices.
- */
-function clusterByZones(locations: VRPStop[], numZones: number): number[][] {
-  const n = locations.length;
-  if (n <= numZones) return locations.map((_, i) => [i]);
-
-  const minLat = Math.min(...locations.map((p) => p.lat));
-  const maxLat = Math.max(...locations.map((p) => p.lat));
-  const minLon = Math.min(...locations.map((p) => p.lon));
-  const maxLon = Math.max(...locations.map((p) => p.lon));
-
-  const rows = Math.ceil(Math.sqrt(numZones));
-  const cols = Math.ceil(numZones / rows);
-  const cellLat = (maxLat - minLat) / rows || 0.001;
-  const cellLon = (maxLon - minLon) / cols || 0.001;
-
-  const grid = new Map<string, number[]>();
-  for (let i = 0; i < n; i++) {
-    const p = locations[i];
-    const ri = Math.min(rows - 1, Math.floor((p.lat - minLat) / cellLat));
-    const ci = Math.min(cols - 1, Math.floor((p.lon - minLon) / cellLon));
-    const key = `${ri},${ci}`;
-    if (!grid.has(key)) grid.set(key, []);
-    grid.get(key)!.push(i);
-  }
-
-  return Array.from(grid.values());
-}
-
-/**
- * Order clusters so we visit the start zone first, then nearby zones (by centroid distance).
- */
-function orderClustersByStart(
-  clusters: number[][],
-  locations: VRPStop[],
-  startIndex: number,
-): number[][] {
-  const start = locations[startIndex];
-  const withCentroid = clusters.map((indices) => {
-    const lat =
-      indices.reduce((s, i) => s + locations[i].lat, 0) / indices.length;
-    const lon =
-      indices.reduce((s, i) => s + locations[i].lon, 0) / indices.length;
-    const dist = haversineKm(start.lat, start.lon, lat, lon);
-    const containsStart = indices.includes(startIndex);
-    return { indices, dist, containsStart };
-  });
-  withCentroid.sort((a, b) => {
-    if (a.containsStart && !b.containsStart) return -1;
-    if (!a.containsStart && b.containsStart) return 1;
-    return a.dist - b.dist;
-  });
-  return withCentroid.map((c) => c.indices);
-}
-
-/**
- * Nearest-neighbor TSP for a subset of indices. Returns ordered indices (including return to start).
- */
-function nearestNeighborRoute(
-  matrix: { distance: number; time: number }[][],
-  indices: number[],
-  startIdxInSubset: number,
-): number[] {
-  if (indices.length <= 1) return [...indices];
-  const route: number[] = [];
-  const remaining = new Set(indices);
-  const startGlobal = indices[startIdxInSubset];
-  route.push(startGlobal);
-  remaining.delete(startGlobal);
-
-  let current = startGlobal;
-  while (remaining.size > 0) {
-    let nearest = -1;
-    let bestDist = Infinity;
-    for (const i of remaining) {
-      const d = matrix[current]?.[i]?.distance ?? Infinity;
-      if (d < bestDist) {
-        bestDist = d;
-        nearest = i;
-      }
-    }
-    if (nearest === -1) break;
-    route.push(nearest);
-    remaining.delete(nearest);
-    current = nearest;
-  }
-  return route;
-}
-
-/**
- * 2-opt improvement: repeatedly reverse segments if it shortens the route.
- * Uses the Valhalla distance matrix to remove backtracks and crossings.
- */
-function twoOptImprove(
-  matrix: { distance: number; time: number }[][],
-  routeIndices: number[],
-): number[] {
-  const n = routeIndices.length;
-  if (n <= 3) return routeIndices;
-
-  let route = [...routeIndices];
-  let improved = true;
-  let iterations = 0;
-  const maxIter = 300;
-
-  while (improved && iterations < maxIter) {
-    improved = false;
-    iterations++;
-    for (let i = 0; i < n - 2; i++) {
-      for (let j = i + 2; j < n; j++) {
-        const a = route[i];
-        const b = route[i + 1];
-        const c = route[j];
-        const d = route[(j + 1) % n];
-        const before =
-          (matrix[a]?.[b]?.distance ?? Infinity) +
-          (matrix[c]?.[d]?.distance ?? Infinity);
-        const after =
-          (matrix[a]?.[c]?.distance ?? Infinity) +
-          (matrix[b]?.[d]?.distance ?? Infinity);
-        if (after < before - 1e-6) {
-          const segment = route.slice(i + 1, j + 1).reverse();
-          route.splice(i + 1, j - i, ...segment);
-          improved = true;
-          break;
-        }
-      }
-      if (improved) break;
-    }
-  }
-  return route;
-}
 
 export interface VRPConfig {
   vehicles: number;
@@ -401,593 +179,9 @@ export interface VRPConfig {
   depotAddress: string;
   travelSpeedFactor: number;
   objective: (typeof OBJECTIVE_OPTIONS)[number]["value"];
-  algorithm: (typeof ALGORITHM_OPTIONS)[number]["value"];
+  algorithm: string;
 }
 
-/**
- * Lightweight Clarke-Wright savings algorithm for VRP with balanced distribution.
- * Depot is index 0. Merges on highest savings first but caps route size so stops
- * are spread evenly across drivers; then force-merges smallest routes if needed.
- */
-function clarkeWrightSavings(
-  matrix: { distance: number; time: number }[][],
-  numVehicles: number,
-): { routes: number[][]; totalDistance: number; totalTime: number } {
-  const n = matrix.length;
-  if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
-
-  const d = (i: number, j: number) => matrix[i]?.[j]?.distance ?? 0;
-  const t = (i: number, j: number) => matrix[i]?.[j]?.time ?? 0;
-
-  // Fair share of intermediate stops per route; allow up to +1 to keep merging possible
-  const maxIntermediateStops = Math.ceil((n - 1) / numVehicles);
-  const cap = maxIntermediateStops + 1;
-
-  const savings: { i: number; j: number; s: number }[] = [];
-  for (let i = 1; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const s = d(0, i) + d(0, j) - d(i, j);
-      savings.push({ i, j, s });
-    }
-  }
-  savings.sort((a, b) => b.s - a.s);
-
-  let routes: number[][] = [];
-  for (let i = 1; i < n; i++) routes.push([0, i, 0]);
-
-  const findRoute = (node: number) => routes.findIndex((r) => r.includes(node));
-  const intermediateCount = (r: number[]) => Math.max(0, r.length - 2);
-
-  for (const { i, j } of savings) {
-    if (routes.length <= numVehicles) break;
-    const ri = findRoute(i);
-    const rj = findRoute(j);
-    if (ri < 0 || rj < 0 || ri === rj) continue;
-
-    const ra = [...routes[ri]];
-    const rb = [...routes[rj]];
-    const endOfA = ra[ra.length - 2];
-    const startOfB = rb[1];
-    const merged =
-      endOfA === i && startOfB === j
-        ? ra.slice(0, -1).concat(rb.slice(1))
-        : endOfA === j && startOfB === i
-          ? ra.slice(0, -1).concat(rb.slice(1))
-          : (() => {
-              const raRev = [...ra].reverse();
-              const rbRev = [...rb].reverse();
-              if (raRev[raRev.length - 2] === i && rbRev[1] === j)
-                return raRev.slice(0, -1).concat(rbRev.slice(1));
-              if (raRev[raRev.length - 2] === j && rbRev[1] === i)
-                return raRev.slice(0, -1).concat(rbRev.slice(1));
-              return null;
-            })();
-    if (!merged) continue;
-    // Only allow merge if no route exceeds balanced cap
-    if (intermediateCount(merged) > cap) continue;
-
-    routes = routes.filter((_, idx) => idx !== ri && idx !== rj);
-    routes.push(merged);
-  }
-
-  // Force-merge until we have exactly numVehicles: merge pair that minimizes added distance
-  while (routes.length > numVehicles) {
-    let bestI = 0;
-    let bestJ = 1;
-    let bestMerged: number[] | null = null;
-    let bestCost = Infinity;
-
-    for (let i = 0; i < routes.length; i++) {
-      for (let j = i + 1; j < routes.length; j++) {
-        const ra = routes[i];
-        const rb = routes[j];
-        const aEnd = ra[ra.length - 2];
-        const aStart = ra[1];
-        const bEnd = rb[rb.length - 2];
-        const bStart = rb[1];
-        const candidates: number[][] = [
-          ra.slice(0, -1).concat(rb.slice(1)), // ...aEnd, bStart...
-          ra.slice(0, -1).concat(rb.slice(1, -1).reverse(), [0]), // ...aEnd, bEnd..bStart, 0
-          [0].concat(ra.slice(1, -1).reverse(), rb.slice(1)), // 0, aStart..aEnd, bStart...
-          [0].concat(rb.slice(1, -1).reverse(), ra.slice(1)), // 0, bStart..bEnd, aStart...
-        ];
-        for (const merged of candidates) {
-          if (merged.length < 3) continue;
-          let cost = 0;
-          for (let k = 0; k < merged.length - 1; k++)
-            cost += d(merged[k], merged[k + 1]);
-          if (cost < bestCost) {
-            bestCost = cost;
-            bestI = i;
-            bestJ = j;
-            bestMerged = merged;
-          }
-        }
-      }
-    }
-
-    if (bestMerged == null) break;
-    routes = routes.filter((_, idx) => idx !== bestI && idx !== bestJ);
-    routes.push(bestMerged);
-  }
-
-  let totalDistance = 0;
-  let totalTime = 0;
-  for (const r of routes) {
-    for (let k = 0; k < r.length - 1; k++) {
-      totalDistance += d(r[k], r[k + 1]);
-      totalTime += t(r[k], r[k + 1]);
-    }
-  }
-
-  return { routes, totalDistance, totalTime };
-}
-
-/**
- * Sweep algorithm: partition stops by angle from depot into even sectors,
- * then order each sector with nearest-neighbor. Even and geographically logical.
- */
-function sweepVRP(
-  matrix: { distance: number; time: number }[][],
-  locations: VRPStop[],
-  numVehicles: number,
-): { routes: number[][]; totalDistance: number; totalTime: number } {
-  const n = matrix.length;
-  if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
-
-  const d = (i: number, j: number) => matrix[i]?.[j]?.distance ?? 0;
-  const t = (i: number, j: number) => matrix[i]?.[j]?.time ?? 0;
-  const depot = locations[0];
-  if (!depot) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
-
-  // Sort stop indices by angle from depot (0 = east, counter-clockwise)
-  const indices = Array.from({ length: n - 1 }, (_, i) => i + 1);
-  indices.sort((a, b) => {
-    const la = locations[a];
-    const lb = locations[b];
-    if (!la || !lb) return 0;
-    const angleA = Math.atan2(la.lat - depot.lat, la.lon - depot.lon);
-    const angleB = Math.atan2(lb.lat - depot.lat, lb.lon - depot.lon);
-    return angleA - angleB;
-  });
-
-  // Partition into numVehicles contiguous segments (even sizes)
-  const perRoute = Math.ceil(indices.length / numVehicles);
-  const routeIndices: number[][] = [];
-  for (let v = 0; v < numVehicles; v++) {
-    const segment = indices.slice(
-      v * perRoute,
-      Math.min((v + 1) * perRoute, indices.length),
-    );
-    if (segment.length === 0) continue;
-    // Nearest-neighbor within segment: start at depot, repeatedly go to nearest unvisited
-    const route: number[] = [0];
-    const remaining = new Set(segment);
-    let current = 0;
-    while (remaining.size > 0) {
-      let best = -1;
-      let bestDist = Infinity;
-      for (const node of remaining) {
-        const dist = d(current, node);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = node;
-        }
-      }
-      if (best < 0) break;
-      remaining.delete(best);
-      route.push(best);
-      current = best;
-    }
-    route.push(0);
-    routeIndices.push(route);
-  }
-
-  let totalDistance = 0;
-  let totalTime = 0;
-  for (const r of routeIndices) {
-    for (let k = 0; k < r.length - 1; k++) {
-      totalDistance += d(r[k], r[k + 1]);
-      totalTime += t(r[k], r[k + 1]);
-    }
-  }
-  return { routes: routeIndices, totalDistance, totalTime };
-}
-
-/**
- * Or-Opt: nearest-neighbor construction then iterative relocation of chains of
- * 1, 2, or 3 consecutive stops to the best position across all routes.
- * Accepts the first improving move each pass and restarts until no improvement.
- */
-function twoOptVRP(
-  matrix: { distance: number; time: number }[][],
-  locations: VRPStop[],
-  numVehicles: number,
-): { routes: number[][]; totalDistance: number; totalTime: number } {
-  const n = matrix.length;
-  if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
-
-  const d = (i: number, j: number) => matrix[i]?.[j]?.distance ?? 0;
-  const t = (i: number, j: number) => matrix[i]?.[j]?.time ?? 0;
-
-  const depot = locations[0]!;
-  const stopIndices = Array.from({ length: n - 1 }, (_, i) => i + 1);
-  stopIndices.sort((a, b) => {
-    const la = locations[a]!;
-    const lb = locations[b]!;
-    return (
-      Math.atan2(la.lat - depot.lat, la.lon - depot.lon) -
-      Math.atan2(lb.lat - depot.lat, lb.lon - depot.lon)
-    );
-  });
-
-  const perRoute = Math.ceil(stopIndices.length / numVehicles);
-  const routes: number[][] = [];
-  for (let v = 0; v < numVehicles; v++) {
-    const segment = stopIndices.slice(v * perRoute, (v + 1) * perRoute);
-    if (segment.length === 0) continue;
-    const route: number[] = [0];
-    const rem = new Set(segment);
-    let cur = 0;
-    while (rem.size > 0) {
-      let best = -1;
-      let bestDist = Infinity;
-      for (const node of rem) {
-        const dist = d(cur, node);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = node;
-        }
-      }
-      if (best < 0) break;
-      rem.delete(best);
-      route.push(best);
-      cur = best;
-    }
-    route.push(0);
-    routes.push(route);
-  }
-
-  for (let ri = 0; ri < routes.length; ri++) {
-    let improved = true;
-    while (improved) {
-      improved = false;
-      const r = routes[ri]!;
-      for (let i = 1; i < r.length - 2; i++) {
-        for (let k = i + 1; k < r.length - 1; k++) {
-          const delta =
-            d(r[i - 1]!, r[k]!) +
-            d(r[i]!, r[k + 1]!) -
-            d(r[i - 1]!, r[i]!) -
-            d(r[k]!, r[k + 1]!);
-          if (delta < -1e-9) {
-            let lo = i;
-            let hi = k;
-            while (lo < hi) {
-              const tmp = r[lo]!;
-              r[lo] = r[hi]!;
-              r[hi] = tmp;
-              lo++;
-              hi--;
-            }
-            improved = true;
-          }
-        }
-      }
-    }
-  }
-
-  const finalRoutes = routes.filter((r) => r.length > 2);
-  if (finalRoutes.length === 0)
-    return { routes: [[0, 0]], totalDistance: 0, totalTime: 0 };
-
-  let totalDistance = 0;
-  let totalTime = 0;
-  for (const r of finalRoutes) {
-    for (let i = 0; i < r.length - 1; i++) {
-      totalDistance += d(r[i]!, r[i + 1]!);
-      totalTime += t(r[i]!, r[i + 1]!);
-    }
-  }
-  return { routes: finalRoutes, totalDistance, totalTime };
-}
-function orOptVRP(
-  matrix: { distance: number; time: number }[][],
-  locations: VRPStop[],
-  numVehicles: number,
-  balanceLoad: boolean = false,
-): { routes: number[][]; totalDistance: number; totalTime: number } {
-  const n = matrix.length;
-  if (n <= 1) return { routes: [[0]], totalDistance: 0, totalTime: 0 };
-
-  const d = (i: number, j: number) => matrix[i]?.[j]?.distance ?? 0;
-  const t = (i: number, j: number) => matrix[i]?.[j]?.time ?? 0;
-
-  // ── Construction: sweep partition + nearest-neighbor tour per vehicle ──
-  const depot = locations[0]!;
-  const stopIndices = Array.from({ length: n - 1 }, (_, i) => i + 1);
-  stopIndices.sort((a, b) => {
-    const la = locations[a]!;
-    const lb = locations[b]!;
-    return (
-      Math.atan2(la.lat - depot.lat, la.lon - depot.lon) -
-      Math.atan2(lb.lat - depot.lat, lb.lon - depot.lon)
-    );
-  });
-
-  const perRoute = Math.ceil(stopIndices.length / numVehicles);
-  const routes: number[][] = [];
-  for (let v = 0; v < numVehicles; v++) {
-    const segment = stopIndices.slice(v * perRoute, (v + 1) * perRoute);
-    if (segment.length === 0) continue;
-    const route: number[] = [0];
-    const rem = new Set(segment);
-    let cur = 0;
-    while (rem.size > 0) {
-      let best = -1;
-      let bestDist = Infinity;
-      for (const node of rem) {
-        const dist = d(cur, node);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = node;
-        }
-      }
-      if (best < 0) break;
-      rem.delete(best);
-      route.push(best);
-      cur = best;
-    }
-    route.push(0);
-    routes.push(route);
-  }
-
-  // Helper: intermediate stop count (exclude depot at start/end)
-  const intermediateCount = (r: number[]) => Math.max(0, r.length - 2);
-
-  // ── Or-Opt improvement ──
-  // Each pass: find the single best relocate move (chain of k=1/2/3 stops from
-  // any route to any gap in any route, forward or reversed). Accept and restart.
-  // When balanceLoad is true, reject inter-route moves that would make load imbalance > 1.
-  let improved = true;
-  const MAX_PASSES = 100;
-  let passes = 0;
-
-  while (improved && passes < MAX_PASSES) {
-    improved = false;
-    passes++;
-
-    outer: for (let ri = 0; ri < routes.length; ri++) {
-      const routeA = routes[ri]!;
-      if (routeA.length < 3) continue;
-
-      for (let k = 1; k <= 3; k++) {
-        for (let pos = 1; pos + k <= routeA.length - 1; pos++) {
-          const chainFirst = routeA[pos]!;
-          const chainLast = routeA[pos + k - 1]!;
-          const prev = routeA[pos - 1]!;
-          const next = routeA[pos + k]!;
-
-          // Savings from removing this chain from routeA
-          const removeGain =
-            d(prev, chainFirst) + d(chainLast, next) - d(prev, next);
-
-          let bestGain = 1e-9;
-          let bestRj = -1;
-          let bestIns = -1;
-          let bestRev = false;
-
-          for (let rj = 0; rj < routes.length; rj++) {
-            const routeB = routes[rj]!;
-            for (let ins = 0; ins < routeB.length - 1; ins++) {
-              // Skip the gap that would re-insert the chain at its current position
-              if (rj === ri && ins >= pos - 1 && ins < pos + k) continue;
-
-              const a = routeB[ins]!;
-              const b = routeB[ins + 1]!;
-
-              // Forward insertion
-              const costFwd = d(a, chainFirst) + d(chainLast, b) - d(a, b);
-              if (removeGain - costFwd > bestGain) {
-                bestGain = removeGain - costFwd;
-                bestRj = rj;
-                bestIns = ins;
-                bestRev = false;
-              }
-
-              // Reversed insertion (only meaningful for k > 1)
-              if (k > 1) {
-                const costRev = d(a, chainLast) + d(chainFirst, b) - d(a, b);
-                if (removeGain - costRev > bestGain) {
-                  bestGain = removeGain - costRev;
-                  bestRj = rj;
-                  bestIns = ins;
-                  bestRev = true;
-                }
-              }
-            }
-          }
-
-          if (bestRj < 0) continue;
-
-          // When balance_load: reject inter-route moves that would make counts differ by more than 1
-          if (balanceLoad && bestRj !== ri) {
-            const routeB = routes[bestRj]!;
-            const newCountA = intermediateCount(routeA) - k;
-            const newCountB = intermediateCount(routeB) + k;
-            const counts = routes.map((r, idx) => {
-              if (idx === ri) return newCountA;
-              if (idx === bestRj) return newCountB;
-              return intermediateCount(r);
-            });
-            const maxC = Math.max(...counts);
-            const minC = Math.min(...counts);
-            if (maxC - minC > 1) continue; // skip this move to keep load balanced
-          }
-
-          improved = true;
-          const chain = routeA.slice(pos, pos + k);
-          const insertChain = bestRev ? [...chain].reverse() : chain;
-
-          if (bestRj === ri) {
-            const r = [...routeA];
-            r.splice(pos, k);
-            const adjIns = bestIns >= pos ? bestIns - k : bestIns;
-            r.splice(adjIns + 1, 0, ...insertChain);
-            routes[ri] = r;
-          } else {
-            const rA = [...routeA];
-            rA.splice(pos, k);
-            routes[ri] = rA;
-            const rB = [...routes[bestRj]!];
-            rB.splice(bestIns + 1, 0, ...insertChain);
-            routes[bestRj] = rB;
-          }
-
-          break outer;
-        }
-      }
-    }
-  }
-
-  const finalRoutes = routes.filter((r) => r.length > 2);
-  if (finalRoutes.length === 0)
-    return { routes: [[0, 0]], totalDistance: 0, totalTime: 0 };
-
-  let totalDistance = 0;
-  let totalTime = 0;
-  for (const r of finalRoutes) {
-    for (let i = 0; i < r.length - 1; i++) {
-      totalDistance += d(r[i]!, r[i + 1]!);
-      totalTime += t(r[i]!, r[i + 1]!);
-    }
-  }
-  return { routes: finalRoutes, totalDistance, totalTime };
-}
-/**
- * Solve VRP: dispatches to the selected algorithm. Depot is always index 0.
- */
-function solveVRP(
-  matrix: { distance: number; time: number }[][],
-  locations: VRPStop[],
-  config?: Partial<VRPConfig>,
-): VRPResult {
-  const n = locations.length;
-  if (n <= 1) {
-    return {
-      stops: locations,
-      totalDistance: "0.00",
-      totalTime: 0,
-    };
-  }
-
-  const numVehicles =
-    config?.vehicles != null && config.vehicles > 0
-      ? Math.min(12, Math.max(1, config.vehicles))
-      : 1;
-
-  if (config?.algorithm === "clarke_wright") {
-    const {
-      routes: routeIndices,
-      totalDistance,
-      totalTime,
-    } = clarkeWrightSavings(matrix, numVehicles);
-    const routes: VRPStop[][] = routeIndices.map((r) =>
-      r.map((i) => locations[i]),
-    );
-    const stops: VRPStop[] = routes.flatMap((r) => r);
-    return {
-      stops,
-      routes: routes.length > 1 ? routes : undefined,
-      totalDistance: totalDistance.toFixed(2),
-      totalTime: Math.round(totalTime / 60),
-    };
-  }
-
-  if (config?.algorithm === "sweep") {
-    const {
-      routes: routeIndices,
-      totalDistance,
-      totalTime,
-    } = sweepVRP(matrix, locations, numVehicles);
-    const routes: VRPStop[][] = routeIndices.map((r) =>
-      r.map((i) => locations[i]),
-    );
-    const stops: VRPStop[] = routes.flatMap((r) => r);
-    return {
-      stops,
-      routes: routes.length > 1 ? routes : undefined,
-      totalDistance: totalDistance.toFixed(2),
-      totalTime: Math.round(totalTime / 60),
-    };
-  }
-
-  if (config?.algorithm === "two_opt") {
-    const {
-      routes: routeIndices,
-      totalDistance,
-      totalTime,
-    } = twoOptVRP(matrix, locations, numVehicles);
-    const routes: VRPStop[][] = routeIndices.map((r) =>
-      r.map((i) => locations[i]!),
-    );
-    const stops: VRPStop[] = routes.flatMap((r) => r);
-    return {
-      stops,
-      routes: routes.length > 1 ? routes : undefined,
-      totalDistance: totalDistance.toFixed(2),
-      totalTime: Math.round(totalTime / 60),
-    };
-  }
-  if (config?.algorithm === "or_opt") {
-    const balanceLoad = config?.objective === "balance_load";
-    const {
-      routes: routeIndices,
-      totalDistance,
-      totalTime,
-    } = orOptVRP(matrix, locations, numVehicles, balanceLoad);
-    const routes: VRPStop[][] = routeIndices.map((r) =>
-      r.map((i) => locations[i]!),
-    );
-    const stops: VRPStop[] = routes.flatMap((r) => r);
-    return {
-      stops,
-      routes: routes.length > 1 ? routes : undefined,
-      totalDistance: totalDistance.toFixed(2),
-      totalTime: Math.round(totalTime / 60),
-    };
-  }
-
-  const numZones = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n))));
-  const clusters = clusterByZones(locations, numZones);
-  const orderedClusters = orderClustersByStart(clusters, locations, 0);
-
-  const routeIndices: number[] = [];
-  for (const cluster of orderedClusters) {
-    const startInCluster = cluster.indexOf(0);
-    const startIdx = startInCluster >= 0 ? startInCluster : 0;
-    const segment = nearestNeighborRoute(matrix, cluster, startIdx);
-    routeIndices.push(...segment);
-  }
-
-  const withReturn = [...routeIndices, 0];
-  const improved = twoOptImprove(matrix, withReturn);
-
-  let totalDist = 0;
-  let totalTime = 0;
-  for (let i = 0; i < improved.length - 1; i++) {
-    const a = improved[i];
-    const b = improved[i + 1];
-    totalDist += matrix[a]?.[b]?.distance ?? 0;
-    totalTime += matrix[a]?.[b]?.time ?? 0;
-  }
-
-  return {
-    stops: improved.map((i) => locations[i]),
-    totalDistance: totalDist.toFixed(2),
-    totalTime: Math.round(totalTime / 60),
-  };
-}
 
 export interface VRPPlannerProps {
   /** When true, render content in a View instead of ScrollView. Use on native when VRPPlanner is inside another ScrollView/FlatList to avoid nested scroll issues. */
@@ -1803,16 +997,13 @@ export function VRPPlanner({
         parseInt(capacityStr, 10) || DEFAULT_VRP_CONFIG.capacity,
       );
 
-      // ── VROOM server-side solver ──────────────────────────────────────────
-      if (algorithm === "vroom") {
-        const serviceTimeSecs =
-          (parseInt(
-            useUncontrolledInputs
-              ? vroomServiceTimeMinsRef.current
-              : vroomServiceTimeMins,
-            10,
-          ) || 0) * 60;
-        const useWindows = vroomTimeWindowEnabled;
+      // ── Unified solver dispatch via plugin registry ───────────────────────
+      const solver = getSolver(algorithm);
+
+      // Build time window params for VROOM
+      let windowOpen: number | undefined;
+      let windowClose: number | undefined;
+      if (algorithm === "vroom" && vroomTimeWindowEnabled) {
         const shiftStart =
           parseInt(
             useUncontrolledInputs
@@ -1827,109 +1018,50 @@ export function VRPPlanner({
               : vroomShiftEndHour,
             10,
           ) || 18;
-
-        // Epoch-seconds base for today's midnight (for time windows)
         const todayMidnight = new Date();
         todayMidnight.setHours(0, 0, 0, 0);
         const epochBase = Math.floor(todayMidnight.getTime() / 1000);
-        const windowOpen = epochBase + shiftStart * 3600;
-        const windowClose = epochBase + shiftEnd * 3600;
-
-        const depot = locationsForMatrix[0];
-        const jobs: VroomJob[] = locationsForMatrix.slice(1).map((loc, i) => {
-          const job: VroomJob = {
-            id: i + 1,
-            location: [loc.lon, loc.lat],
-            service: serviceTimeSecs,
-            // Use per-stop demand if provided (parsed from 4th column), else 1 unit
-            delivery: [loc.demand ?? 1],
-            description: loc.label,
-          };
-          if (useWindows) {
-            job.time_windows = [[windowOpen, windowClose]];
-          }
-          return job;
-        });
-
-        const vroomVehicles: VroomVehicle[] = Array.from(
-          { length: numVehicles },
-          (_, vi) => {
-            const v: VroomVehicle = {
-              id: vi + 1,
-              start: [depot.lon, depot.lat],
-              end: [depot.lon, depot.lat],
-              capacity: [vehicleCap],
-            };
-            if (useWindows) {
-              v.time_window = [windowOpen, windowClose];
-            }
-            return v;
-          },
-        );
-
-        const vroomRes = await solveWithVroom({ jobs, vehicles: vroomVehicles });
-
-        const routes: VRPStop[][] = vroomRes.routes
-          .map((r) => {
-            const stops: VRPStop[] = [];
-            for (const s of r.steps) {
-              if (s.type !== "job" || s.id == null) continue;
-              const j = jobs[s.id - 1];
-              if (!j) continue;
-              stops.push({
-                lon: j.location[0],
-                lat: j.location[1],
-                label: j.description ?? `Stop ${s.id}`,
-                demand: j.delivery?.[0],
-                arrivalTime: s.arrival > 0 ? s.arrival : undefined,
-              });
-            }
-            return stops;
-          })
-          .filter((r) => r.length > 0);
-
-        const routeStats: VRPRouteStats[] = vroomRes.routes.map((r) => ({
-          distance: r.distance,
-          duration: r.duration,
-        }));
-
-        const unassignedLabels = vroomRes.unassigned
-          .map((u) => {
-            const j = jobs.find((jb) => jb.id === u.id);
-            return j?.description ?? `Job #${u.id}`;
-          })
-          .filter(Boolean);
-
-        setResult({
-          stops: routes.flat(),
-          routes: routes.length > 1 ? routes : undefined,
-          totalDistance: (vroomRes.summary.distance / 1000).toFixed(2),
-          totalTime: Math.round(vroomRes.summary.duration / 60),
-          routeStats,
-          unassigned: unassignedLabels.length > 0 ? unassignedLabels : undefined,
-        });
-        return;
+        windowOpen = epochBase + shiftStart * 3600;
+        windowClose = epochBase + shiftEnd * 3600;
       }
-      // ─────────────────────────────────────────────────────────────────────
 
-      const matrix = useValhallaApi
-        ? await getValhallaMatrix(locationsForMatrix)
-        : buildHaversineMatrix(locationsForMatrix);
-      const config: Partial<VRPConfig> = {
-        vehicles: numVehicles,
-        capacity: vehicleCap,
-        maxRouteTimeHours: Math.max(
-          1,
-          parseInt(maxRouteTimeHoursStr, 10) ||
-            DEFAULT_VRP_CONFIG.maxRouteTimeHours,
-        ),
-        depotAddress: depotStr.trim(),
-        travelSpeedFactor: Math.max(0.1, parseFloat(speedStr) || 1),
+      const serviceTimeSecs =
+        algorithm === "vroom"
+          ? (parseInt(
+              useUncontrolledInputs
+                ? vroomServiceTimeMinsRef.current
+                : vroomServiceTimeMins,
+              10,
+            ) || 0) * 60
+          : 0;
+
+      const matrix = solver.requiresMatrix
+        ? useValhallaApi
+          ? await getValhallaMatrix(locationsForMatrix)
+          : buildHaversineMatrix(locationsForMatrix)
+        : undefined;
+
+      const output = await solver.solve({
+        locations: locationsForMatrix,
+        numVehicles,
+        vehicleCapacity: vehicleCap,
         objective,
-        algorithm,
-      };
-      const solution = solveVRP(matrix, locationsForMatrix, config);
-      setResult(solution);
+        matrix,
+        serviceTimeSecs,
+        useTimeWindows: vroomTimeWindowEnabled,
+        windowOpen,
+        windowClose,
+      });
+
+      setResult({
+        stops: output.stops,
+        routes: output.routes,
+        totalDistance: output.totalDistanceKm,
+        totalTime: output.totalTimeMin,
+        routeStats: output.routeStats,
+        unassigned: output.unassigned,
+      });
+      // ─────────────────────────────────────────────────────────────────────
     } catch (error) {
       Alert.alert(
         "Error",
