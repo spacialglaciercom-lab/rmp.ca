@@ -5,9 +5,10 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-const RESEND_API_KEY = "re_gbHYbgot_GZd5U6rZHZ9XH7zL7W6JZjWs";
+// Set EXPO_PUBLIC_RESEND_API_KEY in .env (never commit real key). Prefer server-side proxy in production.
+const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY ?? "";
 const FROM_EMAIL = "RouteMaster Pro <contact@routemasterpro.ca>";
-const FEEDBACK_EMAIL = "droneservivesqc@proton.me";
+const FEEDBACK_EMAIL = process.env.EXPO_PUBLIC_FEEDBACK_EMAIL ?? "droneservivesqc@proton.me";
 
 interface IssueReport {
   category: string;
@@ -42,6 +43,10 @@ function getDeviceInfo(): string {
 
 export async function submitIssueReport(report: IssueReport): Promise<boolean> {
   try {
+    if (!RESEND_API_KEY?.trim()) {
+      console.warn("[FeedbackService] EXPO_PUBLIC_RESEND_API_KEY not set; skipping send");
+      return false;
+    }
     const deviceInfo = report.deviceInfo ?? getDeviceInfo();
 
     const htmlContent = `
@@ -87,6 +92,10 @@ export async function submitSuggestion(
   report: SuggestionReport,
 ): Promise<boolean> {
   try {
+    if (!RESEND_API_KEY?.trim()) {
+      console.warn("[FeedbackService] EXPO_PUBLIC_RESEND_API_KEY not set; skipping send");
+      return false;
+    }
     const deviceInfo = report.deviceInfo ?? getDeviceInfo();
 
     let htmlContent = `

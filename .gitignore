@@ -8,6 +8,14 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+google-services.json
+**/google-services.json
+
+# KMP shared-logic build
+shared-logic/build/
+
+# Local JDK used for Gradle (optional)
+.jdk/
 
 # Native
 .kotlin/
@@ -48,8 +56,14 @@ __pycache__/
 .venv/
 venv/
 
+# Streamlit dashboard persisted API key (do not commit)
+backend/.streamlit/
+
 # PMTiles build artifacts
 .pmtiles-build/
+
+# Served PMTiles (data/pmtiles/ is served at /tiles; keep folder, ignore large files)
+data/pmtiles/*.pmtiles
 
 # Windows reserved name (cannot be added to git on Windows)
 nul
