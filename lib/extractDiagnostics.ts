@@ -5,6 +5,7 @@
  */
 
 import { Platform } from "react-native";
+import { createTimeoutSignal } from "@/lib/abortTimeout";
 import { getExtractConfig } from "@/lib/overtureExtractService";
 import { getApiBaseUrl } from "@/shared/oauth";
 
@@ -88,7 +89,7 @@ export async function testBackendHealth(): Promise<BackendHealthResult> {
   const apiBase = getApiBaseUrl();
   const url = `${apiBase.replace(/\/$/, "")}/api/health`;
   try {
-    const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(5000) });
+    const res = await fetch(url, { method: "GET", signal: createTimeoutSignal(5000) });
     return {
       ok: res.ok,
       status: res.status,

@@ -29,6 +29,7 @@ from app.geojson_ops import (
     geojson_to_partition_graph,
     grade_percent,
 )
+from app.routing_plugins import FuelAwarePlugin
 
 client = TestClient(app)
 
@@ -558,7 +559,7 @@ def test_fuel_multiplier_downhill_formula() -> None:
 # ===========================================================================
 
 
-@patch("app.geojson_ops.sample_elevation_from_dem")
+@patch("app.routing_plugins.sample_elevation_from_dem")
 def test_fuel_aware_partition_graph_two_directed_edges_per_segment(
     mock_sample_dem: object,
 ) -> None:
@@ -581,7 +582,7 @@ def test_fuel_aware_partition_graph_two_directed_edges_per_segment(
     mock_sample_dem.return_value = [0.0, 10.0]
 
     edges, node_count, id_to_coords = geojson_to_fuel_aware_partition_graph(
-        fc, dem_path="dummy.tif"
+        fc, plugins=[FuelAwarePlugin("dummy.tif")]
     )
 
     mock_sample_dem.assert_called_once()
@@ -614,7 +615,7 @@ def test_fuel_aware_partition_graph_two_directed_edges_per_segment(
         assert e["width_penalty"] == 1.0
 
 
-@patch("app.geojson_ops.sample_elevation_from_dem")
+@patch("app.routing_plugins.sample_elevation_from_dem")
 def test_fuel_aware_partition_graph_flat_road_symmetric_weights(
     mock_sample_dem: object,
 ) -> None:
@@ -635,7 +636,7 @@ def test_fuel_aware_partition_graph_flat_road_symmetric_weights(
     mock_sample_dem.return_value = [50.0, 50.0]  # flat
 
     edges, node_count, id_to_coords = geojson_to_fuel_aware_partition_graph(
-        fc, dem_path="dummy.tif"
+        fc, plugins=[FuelAwarePlugin("dummy.tif")]
     )
 
     assert len(edges) == 2
@@ -647,7 +648,7 @@ def test_fuel_aware_partition_graph_flat_road_symmetric_weights(
     assert abs(edge_0_to_1["weight"] - edge_0_to_1["length"]) < 1e-9
 
 
-@patch("app.geojson_ops.sample_elevation_from_dem")
+@patch("app.routing_plugins.sample_elevation_from_dem")
 def test_fuel_aware_partition_graph_none_elevation_treated_as_zero(
     mock_sample_dem: object,
 ) -> None:
@@ -668,7 +669,7 @@ def test_fuel_aware_partition_graph_none_elevation_treated_as_zero(
     mock_sample_dem.return_value = [None, None]
 
     edges, node_count, id_to_coords = geojson_to_fuel_aware_partition_graph(
-        fc, dem_path="dummy.tif"
+        fc, plugins=[FuelAwarePlugin("dummy.tif")]
     )
 
     assert len(edges) == 2
@@ -678,7 +679,7 @@ def test_fuel_aware_partition_graph_none_elevation_treated_as_zero(
     assert abs(edge_0_to_1["weight"] - edge_1_to_0["weight"]) < 1e-9
 
 
-@patch("app.geojson_ops.sample_elevation_from_dem")
+@patch("app.routing_plugins.sample_elevation_from_dem")
 def test_fuel_aware_partition_graph_matches_partition_graph_structure(
     mock_sample_dem: object,
 ) -> None:
@@ -699,7 +700,7 @@ def test_fuel_aware_partition_graph_matches_partition_graph_structure(
     mock_sample_dem.return_value = [0.0, 10.0]
 
     edges_fuel, node_count_fuel, id_to_coords_fuel = geojson_to_fuel_aware_partition_graph(
-        fc, dem_path="dummy.tif"
+        fc, plugins=[FuelAwarePlugin("dummy.tif")]
     )
     edges_base, node_count_base, id_to_coords_base = geojson_to_partition_graph(fc)
 

@@ -10,7 +10,25 @@ import { TabScreenSkeleton } from "@/components/tab-screen-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { usePluginStore } from "@/stores/pluginStore";
 
-const PlannerContent = lazy(() => import("@/components/planner-content"));
+const PlannerContent = lazy(async () => {
+  try {
+    const mod = await import("@/components/planner-content");
+    return mod;
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : String(err);
+    const cause =
+      err instanceof Error && "cause" in err
+        ? (err as Error & { cause?: unknown }).cause
+        : undefined;
+    const causeMessage =
+      cause instanceof Error ? cause.message : cause != null ? String(cause) : "";
+    throw new Error(
+      `Failed to load Planner: ${message}${causeMessage ? ` (${causeMessage})` : ""}`,
+      { cause: err instanceof Error ? err : new Error(String(err)) },
+    );
+  }
+});
 
 export default function PlannerScreen() {
   const router = useRouter();

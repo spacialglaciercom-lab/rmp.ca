@@ -19,6 +19,7 @@
 
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { createTimeoutSignal } from "@/lib/abortTimeout";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 // ---------------------------------------------------------------------------
@@ -247,10 +248,17 @@ async function request<T>(
           detail?: unknown;
           message?: string;
           error?: string;
+          details?: string;
           hint?: string;
+          target?: string;
         };
         detail = parsed.detail ?? parsed.message ?? parsed.error ?? errorBody;
         hint = parsed.hint;
+        // 502 from our optimizer proxy: show backend unreachable reason + target
+        if (res.status === 502 && (parsed.error || parsed.details)) {
+          const parts = [parsed.error, parsed.details, parsed.target].filter(Boolean);
+          detail = parts.join(" — ");
+        }
       } catch {}
       let message = formatApiErrorDetail(res.status, detail);
       if (res.status === 503 && hint) {
@@ -377,6 +385,8 @@ export type OptimizeRouteParams = {
   turn_penalties?: { left_turn?: number; u_turn?: number; right_turn?: number };
   clean_before_optimize?: boolean;
   clean_options?: CleanOptions;
+  /** When true, backend applies UPS-style turn penalty plugin (left/U-turn multipliers). */
+  use_turn_penalty_plugin?: boolean;
 };
 
 /**
@@ -393,6 +403,8 @@ export function buildOvertureOptimizeRequest(params: {
   config?: OvertureOptimizerRoutingConfig | null;
   /** When true, backend runs clean pipeline before optimizing. Omit for Map (Overture GeoJSON); set true for Planner (OSM-derived GeoJSON) to reduce looping. */
   cleanBeforeOptimize?: boolean;
+  /** When true, backend applies UPS-style turn penalty plugin. Usually set from Settings → Plugins "Turn penalty (UPS-style)" toggle. */
+  useTurnPenaltyPlugin?: boolean;
   overrides?: {
     oneway_mode?: string;
     service_both_sides?: boolean;
@@ -422,6 +434,7 @@ export function buildOvertureOptimizeRequest(params: {
           }
         : undefined),
     road_classes: params.overrides?.road_classes,
+    use_turn_penalty_plugin: params.useTurnPenaltyPlugin,
   };
   if (params.cleanBeforeOptimize === true) {
     result.clean_before_optimize = true;
@@ -553,7 +566,7 @@ export async function healthCheck(): Promise<boolean> {
     // Node proxy exposes optimizer health at /optimizer/health
     const healthPath = Platform.OS === "web" ? "/optimizer/health" : "/health";
     const res = await fetch(`${base.replace(/\/$/, "")}${healthPath}`, {
-      signal: AbortSignal.timeout(5_000),
+      signal: createTimeoutSignal(5_000),
     });
     if (!res.ok) return false;
     const data = await res.json();

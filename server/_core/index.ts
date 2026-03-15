@@ -6,6 +6,7 @@ dotenvConfig({ path: ".env" });
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -86,11 +87,17 @@ async function startServer() {
   // WebSocket proxy for /ws/extract (web same-origin; forwards to optimizer backend)
   registerWsExtractProxy(server);
 
-  // Enable CORS for all routes - reflect the request origin to support credentials
+  // CORS: reflect request origin for credentials; in dev also allow when no Origin (e.g. same-origin)
+  const isDev = process.env.NODE_ENV !== "production";
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
       res.header("Access-Control-Allow-Origin", origin);
+    } else if (isDev && req.headers.host) {
+      const host = req.headers.host;
+      if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+        res.header("Access-Control-Allow-Origin", `http://${host}`);
+      }
     }
     res.header(
       "Access-Control-Allow-Methods",
@@ -102,7 +109,6 @@ async function startServer() {
     );
     res.header("Access-Control-Allow-Credentials", "true");
 
-    // Handle preflight requests
     if (req.method === "OPTIONS") {
       res.sendStatus(200);
       return;
@@ -121,17 +127,12 @@ async function startServer() {
   // Per-route tighter limits are also registered here (see rateLimits.ts).
   registerRateLimits(app);
 
-  // Global body parser — intentionally conservative (1 MB).
-  // Routes that legitimately receive large payloads (optimizer, voice) get their
-  // own inline parser with a higher limit registered immediately below.
-  app.use(express.json({ limit: "1mb" }));
-  app.use(express.urlencoded({ limit: "1mb", extended: true }));
-
-  // ── Per-route body size overrides ────────────────────────────────────────
-  // Optimizer: GeoJSON road networks for a city neighbourhood can be several MB
-  const optimizerJsonParser = express.json({ limit: "10mb" });
+  // Large-payload body parsers MUST run before the global 1mb parser so GeoJSON
+  // imports (e.g. Planner) don't hit "request entity too large". Register them first.
+  const optimizerJsonParser = express.json({ limit: "22mb" });
   for (const path of [
     "/api/optimize",
+    "/api/vrp/solve",
     "/api/zones/partition",
     "/api/zones/partition-by-polygon",
     "/api/zones/partition-from-geojson",
@@ -141,23 +142,19 @@ async function startServer() {
   ]) {
     app.use(path, optimizerJsonParser);
   }
-
-  // GeoJSON clean/validate/filter: neighbourhood-level data
-  app.use("/api/geojson", express.json({ limit: "10mb" }));
-
-  // Voice transcribe: audio encoded as base64 (~6 MB audio → ~8 MB base64)
+  app.use("/api/geojson", express.json({ limit: "22mb" }));
   app.use("/api/voice/transcribe", express.json({ limit: "8mb" }));
-
-  // Maps proxy: small JSON (coordinates, place IDs)
   app.use("/api/maps", express.json({ limit: "512kb" }));
-
-  // ElevenLabs TTS: just a text string
   app.use("/api/elevenlabs/tts", express.json({ limit: "64kb" }));
-
-  // Utility endpoints: small payloads only
   app.use("/api/report-error", express.json({ limit: "64kb" }));
   app.use("/api/register-push-token", express.json({ limit: "4kb" }));
-  // ─────────────────────────────────────────────────────────────────────────
+
+  // Global body parser (1 MB) for all other routes. Skip if body already parsed by a path above.
+  app.use((req, res, next) => {
+    if (req.body !== undefined) return next();
+    return express.json({ limit: "1mb" })(req, res, next);
+  });
+  app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
   registerOAuthRoutes(app);
   registerMapsProxyRoutes(app);
@@ -165,6 +162,10 @@ async function startServer() {
   registerElevenLabsProxyRoutes(app);
   registerOptimizerProxyRoutes(app);
   registerExtractHttpProxyRoutes(app);
+
+  // PMTiles: serve files from data/pmtiles so style editors can use e.g. /tiles/planet_....pmtiles
+  const pmtilesDir = path.join(process.cwd(), "data", "pmtiles");
+  app.use("/tiles", express.static(pmtilesDir, { maxAge: "1d" }));
 
   app.get("/", (_req, res) => {
     res.json({
@@ -178,6 +179,7 @@ async function startServer() {
         mapsDirections: "POST /api/maps/directions",
         mapsSnapToRoads: "POST /api/maps/snap-to-roads",
         aiChat: "POST /api/ai/chat",
+        analyzeRoute: "POST /api/analyze-route (auth required, returns { analysis })",
         elevenLabsStatus: "GET /api/elevenlabs/status",
         elevenLabsVoices: "GET /api/elevenlabs/voices",
         elevenLabsTts: "POST /api/elevenlabs/tts",
@@ -404,7 +406,7 @@ async function startServer() {
     res.status(404).json({
       ok: false,
       error: "Not found",
-      hint: "API routes: GET /, GET /api/health, POST /api/trpc/*, etc. Web app runs on port 19007 (npm run dev).",
+      hint: "API routes: GET /, GET /api/health, POST /api/trpc/*, POST /api/vrp/solve (proxy to optimizer), etc. Web app runs on port 19007 (npm run dev). If OR-Tools 404s, point the app at this server (EXPO_PUBLIC_API_BASE_URL) and set OPTIMIZER_BACKEND_URL to the Python backend (e.g. http://localhost:8000).",
     });
   });
 

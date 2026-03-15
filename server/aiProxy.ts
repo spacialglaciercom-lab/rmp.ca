@@ -5,10 +5,12 @@
  * Default model is openai/gpt-4o-mini. No model picker in the app; server uses this default.
  */
 import type { Express, Request, Response } from "express";
-import { streamText } from "ai";
+import { streamText, wrapLanguageModel, generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { ENV } from "./_core/env";
 import { createLogger } from "./logger";
+import { routeLoggerMiddleware } from "./middleware/routeLogger";
+import { sdk } from "./_core/sdk";
 
 const log = createLogger("ai-proxy");
 
@@ -51,6 +53,44 @@ function getGateway(
 
 const GATEWAY_TIMEOUT_MS = 35_000;
 
+/** Route logger: when ROUTE_LOG_UPLOAD_URL is set, wrap models so we capture input/output and optionally extract entities, then POST JSON in the background. */
+function getRouteLoggerMiddleware() {
+  if (!ENV.routeLogUploadUrl) return null;
+  return routeLoggerMiddleware({
+    uploadUrl: ENV.routeLogUploadUrl,
+    analyze: ENV.routeLogAnalyze,
+    extractEntities: ENV.routeLogAnalyze
+      ? async (inputSummary: string, outputText: string) => {
+          const gw = getGateway();
+          if (!gw) return null;
+          try {
+            const { text } = await generateText({
+              model: gw("openai/gpt-4o-mini"),
+              system:
+                "Extract from the conversation: gpxCoordinates (array of coordinate pairs or GPX refs), distanceEstimates (array of strings), routeErrors (array of strings). Return a single JSON object only, no markdown.",
+              prompt: `Input:\n${inputSummary.slice(0, 5000)}\n\nOutput:\n${outputText.slice(0, 15000)}`,
+              maxOutputTokens: 1024,
+            });
+            const cleaned = text.replace(/^```json\s*|\s*```$/g, "").trim();
+            return JSON.parse(cleaned) as Record<string, unknown>;
+          } catch {
+            return null;
+          }
+        }
+      : undefined,
+  });
+}
+
+/** Returns the gateway model, wrapped with route-logger middleware when ROUTE_LOG_UPLOAD_URL is set. */
+function getModelWithOptionalLogging(modelId: string) {
+  const gw = getGateway();
+  if (!gw) return null;
+  const base = gw(modelId);
+  const logger = getRouteLoggerMiddleware();
+  if (!logger) return base;
+  return wrapLanguageModel({ model: base, middleware: logger });
+}
+
 /** Shared sync chat via AI Gateway for voice.chat / CoPilot. Returns reply text or throws. */
 export async function chatWithAiGateway(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
@@ -85,8 +125,10 @@ export async function chatWithAiGateway(
   let result: Awaited<ReturnType<typeof streamText>> | undefined;
   let lastErr: unknown = null;
   for (const model of FALLBACK_MODELS) {
+    const modelWithLogging = getModelWithOptionalLogging(model);
+    if (!modelWithLogging) continue;
     try {
-      result = streamText({ model: gateway(model), ...opts });
+      result = streamText({ model: modelWithLogging, ...opts });
       break;
     } catch (err) {
       lastErr = err;
@@ -136,6 +178,68 @@ export function registerAiProxyRoutes(app: Express) {
       "AI SDK 5 does not support gateway v3 models; deploy must use ai@6 (see package.json). Clear build cache and redeploy.",
     );
   }
+  /** POST /api/analyze-route — Proxy pattern: mobile sends gpxData + Bearer token; server holds gateway key, returns only { analysis }. */
+  const ROUTE_ANALYSIS_SYSTEM =
+    "You are a logistics expert. Analyze the efficiency of this collection route. Be concise and actionable.";
+  app.post("/api/analyze-route", async (req: Request, res: Response) => {
+    try {
+      await sdk.authenticateRequest(req);
+    } catch {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const body = req.body as { gpxData?: unknown };
+    const gpxData =
+      typeof body?.gpxData === "string" ? body.gpxData.trim() : "";
+    if (!gpxData) {
+      res.status(400).json({ error: "gpxData is required" });
+      return;
+    }
+
+    const gateway = getGateway();
+    if (!gateway) {
+      res.status(503).json({
+        error:
+          "AI Gateway not configured. Set AI_GATEWAY_API_KEY or OPENROUTER_API_KEY on the server.",
+      });
+      return;
+    }
+
+    try {
+      const text = await chatWithAiGateway(
+        [{ role: "user", content: `Analyze this GPX data: ${gpxData}` }],
+        ROUTE_ANALYSIS_SYSTEM,
+        { maxOutputTokens: 512, temperature: 0.3 },
+      );
+      res.json({ analysis: text });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const lower = message.toLowerCase();
+      const isRateLimit =
+        lower.includes("429") ||
+        lower.includes("rate") ||
+        lower.includes("limit");
+      const isTimeout =
+        lower.includes("timeout") ||
+        lower.includes("504") ||
+        lower.includes("gateway");
+      const userMessage =
+        isRateLimit || isTimeout
+          ? "Analysis service is busy. Try again in a few minutes."
+          : message.includes("API key") || message.includes("401")
+            ? "AI Gateway is not configured correctly. Contact support."
+            : "Analysis failed. Try again later.";
+      log.error("analyze-route gateway error", {
+        message,
+        userMessage,
+      });
+      res
+        .status(isRateLimit ? 429 : isTimeout ? 504 : 500)
+        .json({ error: userMessage });
+    }
+  });
+
   /** GET so you can verify the route is deployed (e.g. curl http://localhost:3000/api/ai/chat) */
   app.get("/api/ai/chat", (_req: Request, res: Response) => {
     res.json({
@@ -215,8 +319,10 @@ export function registerAiProxyRoutes(app: Express) {
       let result: Awaited<ReturnType<typeof streamText>> | undefined;
       let lastErr: unknown = null;
       for (const tryModel of modelsToTry) {
+        const modelWithLogging = getModelWithOptionalLogging(tryModel);
+        if (!modelWithLogging) continue;
         try {
-          result = streamText({ model: gateway(tryModel), ...opts });
+          result = streamText({ model: modelWithLogging, ...opts });
           if (tryModel !== firstModel) {
             log.debug("using model", { model: tryModel });
           }
@@ -247,17 +353,32 @@ export function registerAiProxyRoutes(app: Express) {
           message: msg,
           cause: cause || undefined,
         });
-        const status =
+        const rawStatus =
           typeof (streamErr as { status?: number })?.status === "number"
             ? (streamErr as { status: number }).status
             : 500;
         const gatewayMessage = msg || cause || "AI Gateway request failed";
-        res.status(status >= 400 && status < 600 ? status : 500).json({
-          error:
-            gatewayMessage.includes("API key") || gatewayMessage.includes("401")
-              ? "Invalid or missing AI Gateway API key. Check AI_GATEWAY_API_KEY or OPENROUTER_API_KEY."
-              : gatewayMessage,
-        });
+        const lowerMsg = gatewayMessage.toLowerCase();
+        const isRateLimit =
+          rawStatus === 429 ||
+          lowerMsg.includes("429") ||
+          lowerMsg.includes("rate") ||
+          lowerMsg.includes("limit");
+        const isTimeout =
+          rawStatus === 504 ||
+          lowerMsg.includes("timeout") ||
+          lowerMsg.includes("504") ||
+          lowerMsg.includes("gateway");
+        const userMessage =
+          gatewayMessage.includes("API key") || gatewayMessage.includes("401")
+            ? "Invalid or missing AI Gateway API key. Check AI_GATEWAY_API_KEY or OPENROUTER_API_KEY."
+            : isRateLimit
+              ? "AI Gateway rate limit. Try again shortly."
+              : isTimeout
+                ? "Analysis service is busy. Try again in a few minutes."
+                : gatewayMessage;
+        const status = isRateLimit ? 429 : isTimeout ? 504 : (rawStatus >= 400 && rawStatus < 600 ? rawStatus : 500);
+        res.status(status).json({ error: userMessage });
         return;
       }
       const reply = (typeof fullText === "string" ? fullText : "").trim();
@@ -273,13 +394,21 @@ export function registerAiProxyRoutes(app: Express) {
       const message = err instanceof Error ? err.message : String(err);
       const cause = err instanceof Error && err.cause ? String(err.cause) : "";
       log.error("chat error", { message, cause: cause || undefined });
+      const lower = message.toLowerCase();
+      const isRateLimit =
+        lower.includes("429") || lower.includes("rate") || lower.includes("limit");
+      const isTimeout =
+        lower.includes("timeout") || lower.includes("504") || lower.includes("gateway");
       const hint =
         message.includes("API key") || message.includes("401")
           ? "Invalid or missing AI_GATEWAY_API_KEY or OPENROUTER_API_KEY."
-          : message.includes("429") || message.includes("rate")
+          : isRateLimit
             ? "AI Gateway rate limit. Try again shortly."
-            : message || "AI proxy request failed";
-      res.status(500).json({ error: hint });
+            : isTimeout
+              ? "Analysis service is busy. Try again in a few minutes."
+              : message || "AI proxy request failed";
+      const status = isRateLimit ? 429 : isTimeout ? 504 : 500;
+      res.status(status).json({ error: hint });
     }
   });
 }

@@ -1,5 +1,7 @@
-# Default: backend + extract + vroom (no Python optimizer).
-# For route optimization (CPP, zones): docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
+# Default: backend + extract (no Python optimizer).
+# For Planner GeoJSON import + optimizer: use BOTH files so backend gets OPTIMIZER_BACKEND_URL:
+#   docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
+# (Without the -f docker-compose.optimizer.yml, the Node backend will return 503 "Optimizer backend not configured".)
 services:
   extract:
     build:
@@ -12,14 +14,7 @@ services:
       - PORT=4000
     restart: unless-stopped
 
-  vroom:
-    image: ghcr.io/vroom-project/vroom-docker:v1.14.0
-    container_name: rmpca-vroom
-    ports:
-      - "3004:3000"
-    environment:
-      - VROOM_ROUTER=osrm
-    restart: unless-stopped
+
 
   optimizer:
     build:
@@ -65,13 +60,9 @@ services:
       - .env.server
     environment:
       - PORT=3000
-      # Extract and VROOM are always in the default stack. Optimizer is optional (see docker-compose.optimizer.yml).
+      # Extract is always in the default stack. Optimizer is optional (see docker-compose.optimizer.yml).
       - EXTRACT_WS_UPSTREAM=http://extract:4000
-      - VROOM_BACKEND_URL=http://vroom:3000
       # OPTIMIZER_BACKEND_URL set only when using optimizer profile: docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
     depends_on:
       extract:
         condition: service_started
-      vroom:
-        condition: service_started
-    restart: unless-stopped

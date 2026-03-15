@@ -78,7 +78,7 @@ class CleanOptions(BaseModel):
     drop_invalid: bool = True
     remove_selfloops: bool = True
     min_length_m: float = 0.1
-    node_snap_m: float = 1.0
+    node_snap_m: float = 1.0  # Merge nodes within this distance (m); use <1 for sub-meter precision
     node_precision_decimals: int = 6
     merge_node_positions: bool = True
     dedupe_edges: bool = True

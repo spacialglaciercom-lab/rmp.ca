@@ -6,6 +6,8 @@ export interface Node {
   id: string;
   lat: number;
   lon: number;
+  /** Optional elevation (m). Used by FuelAwarePlugin when GeoJSON has [lon, lat, z]. */
+  z?: number;
 }
 
 export interface Way {

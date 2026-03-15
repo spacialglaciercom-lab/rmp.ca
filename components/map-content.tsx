@@ -30,6 +30,7 @@ import {
   generateMultiTrackGPXString,
 } from "@/lib/routing-context";
 import { parseGPXForNavigation } from "@/lib/gpxNavParser";
+import { loadGpxAsRoute } from "@/lib/gpxLoader";
 
 import {
   matchGPXToRoads,
@@ -66,6 +67,7 @@ import { MapsAndResourcesScreen } from "@/components/mapTab/resources/MapsAndRes
 import { ConfigureScreenSheet } from "@/components/mapTab/resources/ConfigureScreenSheet";
 import { RouteParametersSheet } from "@/components/mapTab/resources/RouteParametersSheet";
 import { MapMarkersScreen } from "@/components/mapTab/markers/MapMarkersScreen";
+import { GpxDropZone } from "@/components/mapTab/GpxDropZone";
 import { PlaceInfoSheet } from "@/components/mapTab/PlaceInfoSheet";
 import { MapillaryViewer } from "@/components/MapillaryViewer";
 import { StreetViewPreview } from "@/components/StreetViewPreview";
@@ -324,6 +326,28 @@ export default function MapContent() {
       });
     },
     [dispatch],
+  );
+
+  const handleGpxDropped = useCallback(
+    async (gpxText: string) => {
+      try {
+        const positions = await loadGpxAsRoute(gpxText);
+        if (positions.length < 2) return;
+        const points = positions.map(([lon, lat]) => ({ lat, lon }));
+        actions.setRoutePoints(points);
+        useFavoritesStore.getState().importFromGPX(gpxText);
+        if (Platform.OS === "web") {
+          setTimeout(() => mapRef.current?.fitToRoute(), 100);
+        }
+      } catch (e) {
+        if (Platform.OS === "web") {
+          window.alert("Could not load GPX. Check that the file is valid.");
+        } else {
+          Alert.alert("GPX Error", "Could not load GPX. Check that the file is valid.");
+        }
+      }
+    },
+    [actions],
   );
 
   const showTraffic = useMapDisplayStore((s) => s.showTraffic);
@@ -1594,7 +1618,11 @@ export default function MapContent() {
 
   return (
     <View style={styles.container} onLayout={handleContainerLayout}>
-      <View style={mapWrapperStyle}>{mapContent}</View>
+      <View style={mapWrapperStyle}>
+        <GpxDropZone onGpxLoaded={handleGpxDropped}>
+          {mapContent}
+        </GpxDropZone>
+      </View>
 
       <HelpPrompt />
 

@@ -10,6 +10,8 @@
     "collection-route": { "enabled": false },
     "navigation": { "enabled": false },
     "vrp-solvers": { "enabled": true },
+    "fuel-aware-routing": { "enabled": false },
+    "turn-penalty": { "enabled": false },
     "dev": { "enabled": false }
   }
 }

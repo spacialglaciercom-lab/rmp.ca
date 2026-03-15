@@ -78,9 +78,21 @@ const config = {
       NSCameraUsageDescription:
         "Allow $(PRODUCT_NAME) to capture street-level imagery for Mapillary.",
       // Allow tile servers used by Map (UrlTile) — without these, map shows gray grid on iOS
-      NSAppTransportSecurity: {
-        NSAllowsArbitraryLoads: false,
-        NSExceptionDomains: {
+      NSAppTransportSecurity: (() => {
+        const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
+        const apiUrl = apiBase.trim();
+        const allowHttpForApiHost =
+          apiUrl.startsWith("http://") &&
+          !apiUrl.startsWith("https://");
+        let apiHost: string | null = null;
+        if (allowHttpForApiHost) {
+          try {
+            apiHost = new URL(apiUrl).hostname;
+          } catch {
+            apiHost = null;
+          }
+        }
+        const baseDomains: Record<string, { NSExceptionAllowsInsecureHTTPLoads: boolean; NSExceptionMinimumTLSVersion: string; NSExceptionRequiresForwardSecrecy: boolean }> = {
           "cdnjs.cloudflare.com": {
             NSExceptionAllowsInsecureHTTPLoads: true,
             NSExceptionMinimumTLSVersion: "TLSv1.2",
@@ -141,8 +153,26 @@ const config = {
             NSExceptionMinimumTLSVersion: "TLSv1.2",
             NSExceptionRequiresForwardSecrecy: false,
           },
-        },
-      },
+        };
+        if (apiHost && !baseDomains[apiHost]) {
+          baseDomains[apiHost] = {
+            NSExceptionAllowsInsecureHTTPLoads: true,
+            NSExceptionMinimumTLSVersion: "TLSv1.2",
+            NSExceptionRequiresForwardSecrecy: false,
+          };
+        }
+        if (!baseDomains["127.0.0.1"]) {
+          baseDomains["127.0.0.1"] = {
+            NSExceptionAllowsInsecureHTTPLoads: true,
+            NSExceptionMinimumTLSVersion: "TLSv1.2",
+            NSExceptionRequiresForwardSecrecy: false,
+          };
+        }
+        return {
+          NSAllowsArbitraryLoads: false,
+          NSExceptionDomains: baseDomains,
+        };
+      })(),
     },
   },
   android: {

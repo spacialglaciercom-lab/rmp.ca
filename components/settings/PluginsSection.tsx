@@ -70,7 +70,7 @@ export const PluginsSection: React.FC = () => {
       <Text style={[styles.sectionTitle, { color: theme.text }]}>Plugins</Text>
       <Text style={[styles.sectionDesc, { color: theme.textTertiary }]}>
         Enable or disable feature extensions (weather, route optimization,
-        Overture extraction). List from plugin registry.
+        Overture extraction, fuel-aware routing). List from plugin registry.
       </Text>
       <View style={styles.rows}>
         {descriptors.map((d) => {

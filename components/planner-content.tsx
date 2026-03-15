@@ -59,6 +59,7 @@ import {
   buildOvertureOptimizeRequest,
 } from "@/services/overtureOptimizerService";
 import { getPlugin } from "@/lib/plugins/registry";
+import { usePluginStore } from "@/stores/pluginStore";
 import { osmDataToGeoJSON } from "@/lib/geojsonToOsmData";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { isMockCollectionPoints } from "@/lib/is-mock-route";
@@ -87,6 +88,12 @@ export default function PlannerContent() {
   >([]);
   const customStartPoint = useCustomStartPoint();
   const { optimizeRoute: optimizeRouteTurnAware } = useRouteOptimization();
+  const useTurnPenaltyPlugin = usePluginStore((s) =>
+    s.isPluginEnabled("turn-penalty", false),
+  );
+  const fuelAwareRoutingOn = usePluginStore((s) =>
+    s.isPluginEnabled("fuel-aware-routing", false),
+  );
   const { isExperimentalRoute, features } = useBetaFeatures();
   // Ref so "Generate Route" always uses the latest OSM import (avoids stale state race)
   const lastImportedPointsRef = useRef<CollectionPoint[]>([]);
@@ -316,6 +323,7 @@ export default function PlannerContent() {
             start_lon: startCoords?.longitude,
             config: state.configuration,
             cleanBeforeOptimize: true,
+            useTurnPenaltyPlugin,
           });
           const routeOpt = getPlugin("routeOptimization")?.getFeatures?.() as
             | {
@@ -678,6 +686,22 @@ export default function PlannerContent() {
           msg: `Applying turn penalties: Left=${state.configuration.turnPenalties.leftTurn}, U-Turn=${state.configuration.turnPenalties.uTurn}`,
           type: "info" as const,
         },
+        ...(fuelAwareRoutingOn
+          ? [
+              {
+                msg: "Fuel-aware routing: on",
+                type: "info" as const,
+              },
+            ]
+          : []),
+        ...(useTurnPenaltyPlugin
+          ? [
+              {
+                msg: "Turn penalty (UPS-style): on",
+                type: "info" as const,
+              },
+            ]
+          : []),
         { msg: "Route generation complete!", type: "success" as const },
       ];
 
@@ -884,6 +908,7 @@ export default function PlannerContent() {
                       start_lat: startCoords?.latitude,
                       start_lon: startCoords?.longitude,
                       config: state.configuration,
+                      useTurnPenaltyPlugin,
                     }),
                   );
                   optResult = {

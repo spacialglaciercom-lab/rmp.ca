@@ -4,22 +4,24 @@
  * exact same algorithm as the Videos app.
  *
  * Only adaptations: class name RouteOptimizerSimpleV2, types from @/lib/route-optimizer-v2/types,
- * and route points include nodeId for rmp.ca compatibility. No console.log.
+ * route points include nodeId for rmp.ca compatibility, and optional RoutingCostPlugin support
+ * (directed edges, transition costs). No console.log.
  */
 
 import type {
   Node,
   Way,
-  RoutePoint,
   OptimizationResult,
 } from "@/lib/route-optimizer-v2/types";
+import type { RoutingCostPlugin, Coord } from "@/lib/routing_plugins";
+import { haversineMeters } from "@/lib/routing_plugins";
 
 interface EdgeData {
   length: number;
   oneway: boolean;
 }
 
-// Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2
+// Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2 (used when no plugins)
 const TURN_COSTS = {
   U_TURN: 800,
   SHARP_LEFT: 150,
@@ -33,10 +35,16 @@ export class RouteOptimizerSimpleV2 {
   private nodes: Map<string, Node>;
   private ways: Way[];
   private graph: Map<string, Map<string, EdgeData>> = new Map();
+  private plugins: RoutingCostPlugin[];
 
-  constructor(nodes: Map<string, Node>, ways: Way[]) {
+  constructor(
+    nodes: Map<string, Node>,
+    ways: Way[],
+    plugins?: RoutingCostPlugin[],
+  ) {
     this.nodes = nodes;
     this.ways = ways;
+    this.plugins = plugins ?? [];
   }
 
   optimize(customLat?: number, customLon?: number): OptimizationResult {
@@ -99,36 +107,84 @@ export class RouteOptimizerSimpleV2 {
     };
   }
 
+  /** [lon, lat, z] for plugin calls. */
+  private getCoords(nodeId: string): Coord {
+    const n = this.nodes.get(nodeId);
+    if (!n) return [0, 0, 0];
+    return [Number(n.lon), Number(n.lat), n.z ?? 0];
+  }
+
   private buildGraph(): void {
     this.graph.clear();
+    const usePlugins = this.plugins.length > 0;
+    const emptyData = {} as Record<string, unknown>;
 
     for (const way of this.ways) {
       const isOneway = way.tags?.oneway === "yes";
 
       for (let i = 0; i < way.nodes.length - 1; i++) {
-        const from = way.nodes[i];
-        const to = way.nodes[i + 1];
+        const from = way.nodes[i]!;
+        const to = way.nodes[i + 1]!;
 
         const fromNode = this.nodes.get(from);
         const toNode = this.nodes.get(to);
         if (!fromNode || !toNode) continue;
 
-        const length = this.haversine(fromNode, toNode) * 1000;
+        const distanceM =
+          haversineMeters(
+            Number(fromNode.lon),
+            Number(fromNode.lat),
+            Number(toNode.lon),
+            Number(toNode.lat),
+          );
 
-        if (!this.graph.has(from)) this.graph.set(from, new Map());
-        this.graph.get(from)!.set(to, { length, oneway: isOneway });
-
-        if (!isOneway) {
-          if (!this.graph.has(to)) this.graph.set(to, new Map());
-          this.graph.get(to)!.set(from, { length, oneway: false });
+        if (usePlugins) {
+          const coordsU: Coord = this.getCoords(from);
+          const coordsV: Coord = this.getCoords(to);
+          let costUV = distanceM;
+          let costVU = distanceM;
+          for (const plugin of this.plugins) {
+            costUV *= plugin.calculateMultiplier(
+              coordsU,
+              coordsV,
+              emptyData,
+              emptyData,
+              distanceM,
+            );
+            costVU *= plugin.calculateMultiplier(
+              coordsV,
+              coordsU,
+              emptyData,
+              emptyData,
+              distanceM,
+            );
+          }
+          if (!this.graph.has(from)) this.graph.set(from, new Map());
+          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway });
+          if (!isOneway) {
+            if (!this.graph.has(to)) this.graph.set(to, new Map());
+            this.graph.get(to)!.set(from, { length: costVU, oneway: false });
+          }
+        } else {
+          const length = distanceM;
+          if (!this.graph.has(from)) this.graph.set(from, new Map());
+          this.graph.get(from)!.set(to, { length, oneway: isOneway });
+          if (!isOneway) {
+            if (!this.graph.has(to)) this.graph.set(to, new Map());
+            this.graph.get(to)!.set(from, { length, oneway: false });
+          }
         }
       }
     }
   }
 
   private makeEulerian(): void {
-    const toAdd: Array<[string, string, EdgeData]> = [];
+    if (this.plugins.length > 0) {
+      this.makeEulerianDirected();
+      return;
+    }
 
+    const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
         if (!this.graph.get(to)?.has(from)) {
@@ -136,11 +192,123 @@ export class RouteOptimizerSimpleV2 {
         }
       }
     }
-
     for (const [from, to, data] of toAdd) {
       if (!this.graph.has(from)) this.graph.set(from, new Map());
       this.graph.get(from)!.set(to, data);
     }
+  }
+
+  /** Directed graph: balance in/out degree by adding shortest paths (with transition costs). */
+  private makeEulerianDirected(): void {
+    const inDeg = new Map<string, number>();
+    const outDeg = new Map<string, number>();
+    for (const [u, edges] of this.graph) {
+      outDeg.set(u, (outDeg.get(u) ?? 0) + edges.size);
+      for (const v of edges.keys()) {
+        inDeg.set(v, (inDeg.get(v) ?? 0) + 1);
+      }
+    }
+    const allNodes = new Set<string>([...this.graph.keys(), ...inDeg.keys()]);
+    const deficitCount = new Map<string, number>();
+    const surplusCount = new Map<string, number>();
+    for (const n of allNodes) {
+      const inD = inDeg.get(n) ?? 0;
+      const outD = outDeg.get(n) ?? 0;
+      const imbalance = outD - inD;
+      if (imbalance < 0) deficitCount.set(n, -imbalance);
+      else if (imbalance > 0) surplusCount.set(n, imbalance);
+    }
+    const deficitList = [...deficitCount.keys()];
+    const surplusList = [...surplusCount.keys()];
+    if (deficitList.length === 0 || surplusList.length === 0) return;
+
+    const pairs: Array<{ from: string; to: string; cost: number; path: string[] }> = [];
+    for (const from of deficitList) {
+      const { lengths, paths } = this.dijkstraWithTransitionCosts(from, this.plugins);
+      for (const to of surplusList) {
+        const cost = lengths[to];
+        const path = paths[to];
+        if (cost === undefined || !path || path.length < 2) continue;
+        pairs.push({ from, to, cost, path });
+      }
+    }
+    pairs.sort((a, b) => a.cost - b.cost);
+    const deficitRemain = new Map(deficitCount);
+    const surplusRemain = new Map(surplusCount);
+    const augmentPaths: string[][] = [];
+    for (const { from, to, path } of pairs) {
+      const dr = deficitRemain.get(from) ?? 0;
+      const sr = surplusRemain.get(to) ?? 0;
+      if (dr <= 0 || sr <= 0) continue;
+      deficitRemain.set(from, dr - 1);
+      surplusRemain.set(to, sr - 1);
+      augmentPaths.push(path);
+    }
+
+    for (const path of augmentPaths) {
+      for (let k = 0; k < path.length - 1; k++) {
+        const u = path[k]!;
+        const v = path[k + 1]!;
+        const data = this.graph.get(u)?.get(v);
+        if (!data) continue;
+        if (!this.graph.has(u)) this.graph.set(u, new Map());
+        this.graph.get(u)!.set(v, { ...data });
+      }
+    }
+  }
+
+  private dijkstraWithTransitionCosts(
+    source: string,
+    plugins: RoutingCostPlugin[],
+  ): { lengths: Record<string, number>; paths: Record<string, string[]> } {
+    const lengths: Record<string, number> = { [source]: 0 };
+    const paths: Record<string, string[]> = { [source]: [source] };
+    type State = [string, string | null];
+    const pathToState = new Map<string, string[]>();
+    pathToState.set(`${source},`, [source]);
+    const heap: Array<[number, State]> = [[0, [source, null]]];
+    const expanded = new Set<string>();
+
+    const stateKey = (u: string, t: string | null) => `${u},${t ?? ""}`;
+
+    while (heap.length > 0) {
+      heap.sort((a, b) => a[0] - b[0]);
+      const entry = heap.shift()!;
+      const [d, [u, t]] = entry;
+      const key = stateKey(u, t);
+      if (expanded.has(key)) continue;
+      expanded.add(key);
+
+      const coordsU = this.getCoords(u);
+      const edges = this.graph.get(u);
+      if (!edges) continue;
+
+      for (const [v, edgeData] of edges) {
+        let transitionMult = 1;
+        if (t !== null && plugins.length > 0) {
+          const coordsT = this.getCoords(t);
+          const coordsV = this.getCoords(v);
+          for (const plugin of plugins) {
+            transitionMult *= plugin.calculateTransitionMultiplier(
+              coordsT,
+              coordsU,
+              coordsV,
+            );
+          }
+        }
+        const cost = edgeData.length * transitionMult;
+        const newD = d + cost;
+        if (newD < (lengths[v] ?? Infinity)) {
+          lengths[v] = newD;
+          const prevPath = pathToState.get(key) ?? [];
+          const newPath = [...prevPath, v];
+          paths[v] = newPath;
+          pathToState.set(stateKey(v, u), newPath);
+          heap.push([newD, [v, u]]);
+        }
+      }
+    }
+    return { lengths, paths };
   }
 
   private hierholzer(start: string): string[] {
@@ -183,33 +351,40 @@ export class RouteOptimizerSimpleV2 {
     edges: Map<string, EdgeData>,
   ): string {
     const keys = Array.from(edges.keys());
-    if (!prev || keys.length === 1) return keys[0]!;
+    if (keys.length === 1) return keys[0]!;
+    if (!prev) return keys[0]!;
 
-    const inBearing = this.bearing(prev, current);
+    const useTransition = this.plugins.length > 0;
+    const coordsT = this.getCoords(prev);
+    const coordsU = this.getCoords(current);
+
     let best = keys[0]!;
     let bestScore = Infinity;
 
     for (const next of keys) {
-      const outBearing = this.bearing(current, next);
-      const turn = this.normalizeTurn(outBearing - inBearing);
-
-      let cost: number;
-      if (Math.abs(turn) > 150) {
-        cost = TURN_COSTS.U_TURN;
-      } else if (turn > 120) {
-        cost = TURN_COSTS.SHARP_LEFT;
-      } else if (turn > 30) {
-        cost = TURN_COSTS.LEFT_TURN;
-      } else if (turn >= -30) {
-        cost = TURN_COSTS.STRAIGHT;
-      } else if (turn >= -120) {
-        cost = TURN_COSTS.RIGHT_TURN;
-      } else {
-        cost = TURN_COSTS.SHARP_RIGHT;
-      }
-
       const edgeData = edges.get(next)!;
-      const score = edgeData.length + cost;
+      let score: number;
+
+      if (useTransition) {
+        const coordsV = this.getCoords(next);
+        let mult = 1;
+        for (const plugin of this.plugins) {
+          mult *= plugin.calculateTransitionMultiplier(coordsT, coordsU, coordsV);
+        }
+        score = edgeData.length * mult;
+      } else {
+        const outBearing = this.bearing(current, next);
+        const inBearing = this.bearing(prev, current);
+        const turn = this.normalizeTurn(outBearing - inBearing);
+        let cost: number;
+        if (Math.abs(turn) > 150) cost = TURN_COSTS.U_TURN;
+        else if (turn > 120) cost = TURN_COSTS.SHARP_LEFT;
+        else if (turn > 30) cost = TURN_COSTS.LEFT_TURN;
+        else if (turn >= -30) cost = TURN_COSTS.STRAIGHT;
+        else if (turn >= -120) cost = TURN_COSTS.RIGHT_TURN;
+        else cost = TURN_COSTS.SHARP_RIGHT;
+        score = edgeData.length + cost;
+      }
 
       if (score < bestScore) {
         bestScore = score;

@@ -13,6 +13,7 @@ import { useRouting, generateGPXString } from "@/lib/routing-context";
 import { useMapActions } from "@/stores/mapStateStore";
 import { useMapSidebarStore } from "@/stores/mapSidebarStore";
 import { useDisplayModeStore } from "@/stores/displayModeStore";
+import { usePluginStore } from "@/stores/pluginStore";
 import {
   optimizeRoute as callOptimizer,
   buildOvertureOptimizeRequest,
@@ -34,6 +35,9 @@ export function useOvertureOptimizeRoute() {
   const actions = useMapActions();
   const closeOSMExtractor = useMapSidebarStore((s) => s.closeOSMExtractor);
   const setDisplayMode = useDisplayModeStore((s) => s.setMode);
+  const useTurnPenaltyPlugin = usePluginStore((s) =>
+    s.isPluginEnabled("turn-penalty", false),
+  );
   const [optimizing, setOptimizing] = useState(false);
   const [optimizationStatus, setOptimizationStatus] = useState("");
   const [lastResult, setLastResult] = useState<OptimizeResponse | null>(null);
@@ -51,6 +55,7 @@ export function useOvertureOptimizeRoute() {
           start_lat: options.startLat,
           start_lon: options.startLon,
           config: state?.configuration,
+          useTurnPenaltyPlugin,
           overrides: {
             oneway_mode: options.onewayMode,
             service_both_sides: options.serviceBothSides,
@@ -113,6 +118,7 @@ export function useOvertureOptimizeRoute() {
     },
     [
       state?.configuration,
+      useTurnPenaltyPlugin,
       actions,
       dispatch,
       closeOSMExtractor,

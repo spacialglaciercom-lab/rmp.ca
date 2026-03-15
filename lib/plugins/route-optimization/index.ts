@@ -6,6 +6,7 @@
 
 import type { Plugin } from "../types";
 import { getPlugin } from "../registry";
+import { usePluginStore } from "@/stores/pluginStore";
 import {
   optimizeRoute as backendOptimize,
   partitionZonesFromGeoJSON,
@@ -43,6 +44,9 @@ export const routeOptimizationPlugin: Plugin = {
           options?: Partial<Omit<OptimizeRouteParams, "geojson">>,
         ): Promise<OptimizeResponse> => {
           const params: OptimizeRouteParams = { geojson, ...options };
+          params.use_turn_penalty_plugin = usePluginStore
+            .getState()
+            .isPluginEnabled("turn-penalty", false);
           const weather = getPlugin("weather")?.getFeatures?.();
           const routeWeather = weather?.dataProviderForRoute as
             | ((opts: {

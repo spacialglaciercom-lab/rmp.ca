@@ -153,6 +153,7 @@ export function registerRateLimits(app: Express): void {
   // 4. AI / Voice (billable third-party APIs)
   app.use("/api/voice", aiVoiceLimiter);
   app.use("/api/ai", aiVoiceLimiter);
+  app.use("/api/analyze-route", aiVoiceLimiter);
   app.use("/api/elevenlabs", aiVoiceLimiter);
 
   // 5. Maps proxy (Google Maps quota protection)

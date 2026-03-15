@@ -65,6 +65,7 @@ const OPTIMIZER_BACKEND_URL = rawOptimizerUrl
 /** Paths that should be forwarded to the Python optimizer backend. */
 const OPTIMIZER_PATHS = [
   "/api/optimize",
+  "/api/vrp/solve",
   "/api/geojson/clean",
   "/api/geojson/filter",
   "/api/geojson/validate",

@@ -96,7 +96,46 @@ interface NominatimResult {
 }
 
 function parseCoordinates(text: string): VRPStop[] {
-  const lines = text.trim().split("\n");
+  const raw = text.trim();
+  if (!raw) return [];
+
+  // Accept JSON array: [[lat,lon],...] or [[lon,lat],...] (auto-detect: lat in [-90,90], lon in [-180,180])
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      const locations: VRPStop[] = [];
+      for (let i = 0; i < parsed.length; i++) {
+        const item = parsed[i];
+        if (Array.isArray(item) && item.length >= 2) {
+          const a = Number(item[0]);
+          const b = Number(item[1]);
+          if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+          // Prefer [lat, lon]; if a looks like lon (e.g. -73) and b like lat (e.g. 45), treat as [lon, lat]
+          const lat =
+            Math.abs(a) <= 90 && Math.abs(b) <= 180 ? a : b;
+          const lon =
+            Math.abs(a) <= 90 && Math.abs(b) <= 180 ? b : a;
+          if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+            locations.push({
+              lat,
+              lon,
+              label: typeof item[2] === "string" ? item[2] : `Stop ${locations.length + 1}`,
+              demand:
+                item[3] !== undefined && Number.isFinite(Number(item[3]))
+                  ? Number(item[3])
+                  : undefined,
+            });
+          }
+        }
+      }
+      return locations;
+    } catch {
+      // Fall through to line-based parsing
+    }
+  }
+
+  const lines = raw.split("\n");
   const locations: VRPStop[] = [];
 
   for (const line of lines) {
@@ -903,56 +942,61 @@ export function VRPPlanner({
   };
 
   const runVRP = async () => {
-    Keyboard.dismiss();
-    const coordsValue = useUncontrolledInputs
-      ? coordinatesRef.current
-      : coordinates;
-    const addressesValue = useUncontrolledInputs
-      ? addressesTextRef.current
-      : addressesText;
-    const useCurrentAsDepot = startFromCurrentPosition;
-    const minStops = useCurrentAsDepot ? 1 : 2;
-    const locations =
-      inputMode === "coordinates"
-        ? parseCoordinates(coordsValue)
-        : await (async () => {
-            const lines = addressesValue
-              .trim()
-              .split("\n")
-              .map((l) => l.trim())
-              .filter(Boolean);
-            if (lines.length < minStops) return [];
-            setGeocodeProgress({ done: 0, total: lines.length });
-            const stops = await geocodeAddressesBatch(lines, (d, t) =>
-              setGeocodeProgress({ done: d, total: t }),
-            );
-            setGeocodeProgress(null);
-            return stops;
-          })();
-    if (useCurrentAsDepot) {
-      if (!locations || locations.length < 1) {
+    setLoading(true);
+    setResult(null);
+    if (__DEV__ || typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.log("[VRP] Optimize button pressed, runVRP started");
+    }
+    try {
+      Keyboard.dismiss();
+      hapticImpact(ImpactFeedbackStyle.Medium);
+      const coordsValue = useUncontrolledInputs
+        ? coordinatesRef.current
+        : coordinates;
+      const addressesValue = useUncontrolledInputs
+        ? addressesTextRef.current
+        : addressesText;
+      const useCurrentAsDepot = startFromCurrentPosition;
+      const minStops = useCurrentAsDepot ? 1 : 2;
+      const locations =
+        inputMode === "coordinates"
+          ? parseCoordinates(coordsValue ?? "")
+          : await (async () => {
+              const lines = (addressesValue ?? "")
+                .trim()
+                .split("\n")
+                .map((l) => l.trim())
+                .filter(Boolean);
+              if (lines.length < minStops) return [];
+              setGeocodeProgress({ done: 0, total: lines.length });
+              const stops = await geocodeAddressesBatch(lines, (d, t) =>
+                setGeocodeProgress({ done: d, total: t }),
+              );
+              setGeocodeProgress(null);
+              return stops;
+            })();
+      if (useCurrentAsDepot) {
+        if (!locations || locations.length < 1) {
+          Alert.alert(
+            "Error",
+            inputMode === "coordinates"
+              ? "Enter at least 1 coordinate when using Start from current position."
+              : "Enter at least 1 address when using Start from current position.",
+          );
+          setLoading(false);
+          return;
+        }
+      } else if (!locations || locations.length < 2) {
         Alert.alert(
           "Error",
           inputMode === "coordinates"
-            ? "Enter at least 1 coordinate when using Start from current position."
-            : "Enter at least 1 address when using Start from current position.",
+            ? "Enter at least 2 coordinates (lat,lon or lat,lon,label or lat,lon,label,demand per line)."
+            : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds.",
         );
+        setLoading(false);
         return;
       }
-    } else if (!locations || locations.length < 2) {
-      Alert.alert(
-        "Error",
-        inputMode === "coordinates"
-          ? "Enter at least 2 coordinates (lat,lon or lat,lon,label or lat,lon,label,demand per line)."
-          : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds.",
-      );
-      return;
-    }
-
-    hapticImpact(ImpactFeedbackStyle.Medium);
-    setLoading(true);
-    setResult(null);
-    try {
       let locationsForMatrix = locations;
       if (useCurrentAsDepot) {
         const Location = await import("expo-location");
@@ -1066,12 +1110,16 @@ export function VRPPlanner({
       });
       // ─────────────────────────────────────────────────────────────────────
     } catch (error) {
-      Alert.alert(
-        "Error",
-        useValhallaApi
-          ? "Failed to calculate route. Check your internet connection."
-          : "Failed to calculate route.",
-      );
+      const rawMessage =
+        error instanceof Error ? error.message : "Failed to calculate route.";
+      const isBackendOffline =
+        /backend offline|unreachable|network request failed|failed to fetch|could not connect|connection refused/i.test(rawMessage);
+      const message = isBackendOffline
+        ? "Backend offline or unreachable. Start the server (pnpm run dev:server) and, on a device, set EXPO_PUBLIC_API_BASE_URL to your computer's IP (e.g. http://192.168.1.5:3000)."
+        : useValhallaApi
+          ? rawMessage.includes("internet") ? rawMessage : "Failed to calculate route. Check your internet connection."
+          : rawMessage;
+      Alert.alert("Error", message);
       console.error(error);
     } finally {
       setLoading(false);
@@ -1851,7 +1899,16 @@ export function VRPPlanner({
               },
               loading && styles.disabled,
             ]}
-            onPress={runVRP}
+            onPress={async () => {
+              if (loading) return;
+              try {
+                await runVRP();
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                Alert.alert("Error", msg);
+                setLoading(false);
+              }
+            }}
             disabled={loading}
             activeOpacity={0.8}
           >

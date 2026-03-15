@@ -19,6 +19,10 @@ export const ENV = {
   aiGatewayApiKey: (process.env.AI_GATEWAY_API_KEY ?? "").trim(),
   /** OpenRouter — alternative gateway; when set, CoPilot uses OpenRouter. Server-only. */
   openRouterApiKey: (process.env.OPENROUTER_API_KEY ?? "").trim(),
+  /** When set, route-logger middleware POSTs JSON logs (input, output, extracted) here. No latency added (fire-and-forget). */
+  routeLogUploadUrl: (process.env.ROUTE_LOG_UPLOAD_URL ?? "").trim(),
+  /** When "true", route logger uses a smaller model to extract GPX coords, distance estimates, route errors. */
+  routeLogAnalyze: process.env.ROUTE_LOG_ANALYZE === "true",
   /** ElevenLabs TTS — set on Railway so the app can use TTS without storing the key on the client. */
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? "",
   /** Firebase Admin SDK service account JSON (for verifying Firebase Auth ID tokens) */

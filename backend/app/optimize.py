@@ -8,7 +8,9 @@ minimum total distance), and returns an ordered route with turn statistics.
 """
 from __future__ import annotations
 
+import heapq
 import math
+import os
 from typing import Any
 
 import networkx as nx
@@ -25,11 +27,14 @@ from .geojson_ops import (
     _haversine_km,
     _haversine_m,
     _get_road_class,
-    fuel_multiplier,
-    grade_percent,
-    sample_elevation_from_dem,
 )
 from .hierholzer import eulerian_circuit_nx
+from .routing_plugins import (
+    FuelAwarePlugin,
+    RoutingCostPlugin,
+    TurnPenaltyPlugin,
+    calculate_bearing,
+)
 from .vector_clean import CleanOptions, clean_geojson
 
 # GPX export support
@@ -100,6 +105,7 @@ class OptimizeRequest(BaseModel):
     clean_before_optimize: bool = True  # run vector_clean before building graph (reduces loops from duplicate/self-loop edges)
     clean_options: CleanOptions | None = None
     dem_path: str | None = None  # optional DEM GeoTIFF path for fuel-aware (directed) edge weights
+    use_turn_penalty_plugin: bool = False  # when True, apply UPS-style left/U-turn penalties via transition costs
 
 
 class RoutePoint(BaseModel):
@@ -156,13 +162,13 @@ def _node_id(lon: float, lat: float) -> str:
 def _build_graph(
     features: list[GeoJSONFeature],
     oneway_mode: str = "ignore",
-    dem_path: str | None = None,
+    plugins: list[RoutingCostPlugin] | None = None,
 ) -> nx.MultiGraph | nx.MultiDiGraph:
-    """Build a MultiGraph (or MultiDiGraph when dem_path is set) from LineString features.
+    """Build a MultiGraph (or MultiDiGraph when plugins are set) from LineString features.
 
-    When dem_path is None: undirected MultiGraph, edge weight = geometric length_km.
-    When dem_path is set: directed MultiDiGraph with two edges per segment (u->v and v->u),
-    edge weight = fuel cost (distance_m * fuel_multiplier(grade)) so the solver minimizes fuel.
+    When plugins is None or empty: undirected MultiGraph, edge weight = geometric length_km.
+    When plugins is non-empty: directed MultiDiGraph with two edges per segment (u->v and v->u),
+    edge weight = compounded cost (distance_m * product of each plugin's multiplier) / 1000.
 
     Splitting at shared intersection nodes is unchanged.
     """
@@ -197,9 +203,9 @@ def _build_graph(
         if cnt >= 2:
             split_nodes.add(nid)
 
-    if dem_path is not None:
+    if plugins:
         # ------------------------------------------------------------------ #
-        # Fuel-aware path: collect segments and node coords, then sample DEM  #
+        # Plugin path: collect segments and node coords, run plugins          #
         # ------------------------------------------------------------------ #
         node_order: list[str] = []
         node_id_to_coord: dict[str, tuple[float, float]] = {}
@@ -237,11 +243,11 @@ def _build_graph(
                 run_start = i
 
         coords_list = [node_id_to_coord[nid] for nid in node_order]
-        elevations = sample_elevation_from_dem(coords_list, dem_path)
-        node_id_to_elev: dict[str, float] = {
-            nid: (elevations[i] if elevations[i] is not None else 0.0)
-            for i, nid in enumerate(node_order)
-        }
+        plugin_node_data: list[dict[int, dict]] = []
+        for plugin in plugins:
+            plugin_node_data.append(plugin.pre_process_nodes(coords_list))
+
+        node_id_to_index = {nid: i for i, nid in enumerate(node_order)}
 
         G = nx.MultiDiGraph()
         for nid in node_order:
@@ -250,19 +256,27 @@ def _build_graph(
 
         edge_idx = 0
         for u, v, segment, length_km, feat_idx, feat in segments_raw:
-            lon_u, lat_u = node_id_to_coord[u]
-            lon_v, lat_v = node_id_to_coord[v]
-            distance_m = _haversine_m(lon_u, lat_u, lon_v, lat_v)
-            z_u = node_id_to_elev[u]
-            z_v = node_id_to_elev[v]
+            coords_u = node_id_to_coord[u]
+            coords_v = node_id_to_coord[v]
+            distance_m = _haversine_m(coords_u[0], coords_u[1], coords_v[0], coords_v[1])
 
-            grade_uv = grade_percent(z_u, z_v, distance_m)
-            grade_vu = grade_percent(z_v, z_u, distance_m)
-            mult_uv = fuel_multiplier(grade_uv)
-            mult_vu = fuel_multiplier(grade_vu)
+            cost_uv_m = distance_m
+            for i, plugin in enumerate(plugins):
+                data_u = plugin_node_data[i].get(node_id_to_index[u], {})
+                data_v = plugin_node_data[i].get(node_id_to_index[v], {})
+                cost_uv_m *= plugin.calculate_multiplier(
+                    coords_u, coords_v, data_u, data_v, distance_m
+                )
+            weight_uv_km = cost_uv_m / 1000.0
 
-            weight_uv_km = (distance_m * mult_uv) / 1000.0
-            weight_vu_km = (distance_m * mult_vu) / 1000.0
+            cost_vu_m = distance_m
+            for i, plugin in enumerate(plugins):
+                data_u = plugin_node_data[i].get(node_id_to_index[u], {})
+                data_v = plugin_node_data[i].get(node_id_to_index[v], {})
+                cost_vu_m *= plugin.calculate_multiplier(
+                    coords_v, coords_u, data_v, data_u, distance_m
+                )
+            weight_vu_km = cost_vu_m / 1000.0
 
             props = feat.properties or {}
             edge_attrs = dict(
@@ -277,10 +291,11 @@ def _build_graph(
             G.add_edge(v, u, key=edge_idx + 1, length_km=weight_vu_km, **edge_attrs)
             edge_idx += 2
 
+        G.graph["routing_plugins"] = plugins
         return G
 
     # ------------------------------------------------------------------ #
-    # Standard path (no DEM): undirected MultiGraph, geometric length_km   #
+    # Standard path (no plugins): undirected MultiGraph, geometric length_km #
     # ------------------------------------------------------------------ #
     G = nx.MultiGraph()
     edge_idx = 0
@@ -329,6 +344,73 @@ def _build_graph(
     return G
 
 
+def _get_node_coord(G: nx.MultiGraph | nx.MultiDiGraph, node: str) -> tuple[float, float]:
+    """Return (lon, lat) for a graph node."""
+    nd = G.nodes[node]
+    return (nd.get("lon", 0.0), nd.get("lat", 0.0))
+
+
+def _dijkstra_with_transition_costs(
+    G: nx.MultiGraph | nx.MultiDiGraph,
+    source: str,
+    plugins: list[RoutingCostPlugin],
+) -> tuple[dict[str, float], dict[str, list[str]]]:
+    """
+    Shortest paths from source with path-dependent transition costs.
+    State is (current_node, previous_node); when previous is None (start), transition mult = 1.0.
+    Returns (lengths, paths) where lengths[v] = cost to v, paths[v] = node list from source to v.
+    """
+    lengths: dict[str, float] = {source: 0.0}
+    paths: dict[str, list[str]] = {source: [source]}
+    # state = (node, prev_node); prev_node None only at start
+    path_to_state: dict[tuple[str, str | None], list[str]] = {(source, None): [source]}
+    # (distance, (node, prev_node))
+    heap: list[tuple[float, tuple[str, str | None]]] = [(0.0, (source, None))]
+    expanded: set[tuple[str, str | None]] = set()
+
+    def edge_weight(u: str, v: str) -> float:
+        """Minimum length_km over all edges u->v (or u-v)."""
+        data = G.get_edge_data(u, v)
+        if not data:
+            return float("inf")
+        return min(data[k].get("length_km", float("inf")) for k in data)
+
+    def neighbors(u: str):
+        if G.is_directed():
+            return G.successors(u)
+        return G.neighbors(u)
+
+    while heap:
+        d, (u, t) = heapq.heappop(heap)
+        if (u, t) in expanded:
+            continue
+        expanded.add((u, t))
+        coords_u = _get_node_coord(G, u)
+        for v in neighbors(u):
+            w = edge_weight(u, v)
+            if w == float("inf"):
+                continue
+            if t is None:
+                transition_mult = 1.0
+            else:
+                coords_t = _get_node_coord(G, t)
+                coords_v = _get_node_coord(G, v)
+                transition_mult = 1.0
+                for plugin in plugins:
+                    transition_mult *= plugin.calculate_transition_multiplier(
+                        coords_t, coords_u, coords_v
+                    )
+            cost = w * transition_mult
+            new_d = d + cost
+            if new_d < lengths.get(v, float("inf")):
+                lengths[v] = new_d
+                path_to_state[(v, u)] = path_to_state[(u, t)] + [v]
+                paths[v] = path_to_state[(v, u)]
+                heapq.heappush(heap, (new_d, (v, u)))
+
+    return lengths, paths
+
+
 # ---------------------------------------------------------------------------
 # Chinese Postman Problem solver
 # ---------------------------------------------------------------------------
@@ -367,6 +449,8 @@ def _solve_cpp(
         full_route: list[str] = []
         for comp_nodes in sorted(components, key=len, reverse=True):
             sub = G.subgraph(comp_nodes).copy()
+            if "routing_plugins" in G.graph:
+                sub.graph["routing_plugins"] = G.graph["routing_plugins"]
             # Skip components with no edges (isolated nodes)
             if sub.number_of_edges() == 0:
                 continue
@@ -398,26 +482,31 @@ def _solve_cpp(
         odd_pairs_dist: dict[tuple[str, str], float] = {}
         odd_pairs_path: dict[tuple[str, str], list[str]] = {}
 
+        plugins = G.graph.get("routing_plugins", [])
+        use_transition_costs = len(plugins) > 0
+
         for i, u in enumerate(odd_nodes):
             try:
-                # Use plain distance for path finding.
-                # Adding turn penalties to the matching weight below ensures
-                # the Blossom algorithm prefers paths with fewer/cheaper turns.
-                lengths, paths = nx.single_source_dijkstra(G, u, weight="length_km")
-                for j in range(i + 1, len(odd_nodes)):
-                    v = odd_nodes[j]
-                    if v in lengths:
-                        dist_km = lengths[v]
-                        path = paths[v]
-
-                        # Add turn penalties if provided
-                        penalty_cost = 0.0
-                        if turn_penalties:
-                            penalty_cost = _calculate_path_turn_cost(path, G, turn_penalties)
-
-                        # Store total cost (distance + penalties) for matching
-                        odd_pairs_dist[(u, v)] = dist_km + penalty_cost
-                        odd_pairs_path[(u, v)] = path
+                if use_transition_costs:
+                    lengths, paths = _dijkstra_with_transition_costs(G, u, plugins)
+                    # Path cost already includes transition (turn) multipliers
+                    for j in range(i + 1, len(odd_nodes)):
+                        v = odd_nodes[j]
+                        if v in lengths:
+                            odd_pairs_dist[(u, v)] = lengths[v]
+                            odd_pairs_path[(u, v)] = paths[v]
+                else:
+                    lengths, paths = nx.single_source_dijkstra(G, u, weight="length_km")
+                    for j in range(i + 1, len(odd_nodes)):
+                        v = odd_nodes[j]
+                        if v in lengths:
+                            dist_km = lengths[v]
+                            path = paths[v]
+                            penalty_cost = 0.0
+                            if turn_penalties:
+                                penalty_cost = _calculate_path_turn_cost(path, G, turn_penalties)
+                            odd_pairs_dist[(u, v)] = dist_km + penalty_cost
+                            odd_pairs_path[(u, v)] = path
             except nx.NetworkXError:
                 continue
 
@@ -507,16 +596,6 @@ def _solve_cpp(
 # ---------------------------------------------------------------------------
 
 
-def _bearing(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
-    """Compute bearing in degrees from (lon1,lat1) to (lon2,lat2)."""
-    dlon = math.radians(lon2 - lon1)
-    lat1_r = math.radians(lat1)
-    lat2_r = math.radians(lat2)
-    x = math.sin(dlon) * math.cos(lat2_r)
-    y = math.cos(lat1_r) * math.sin(lat2_r) - math.sin(lat1_r) * math.cos(lat2_r) * math.cos(dlon)
-    return (math.degrees(math.atan2(x, y)) + 360) % 360
-
-
 def _calculate_path_turn_cost(path: list[str], G: nx.MultiGraph, penalties: TurnPenalties | None) -> float:
     """Calculate total turn penalties for a given sequence of nodes."""
     if not penalties or len(path) < 3:
@@ -564,7 +643,7 @@ def _calculate_path_turn_cost(path: list[str], G: nx.MultiGraph, penalties: Turn
                     # "Start" of our traversal is end of coords (u).
                     p1, p2 = coords[-1], coords[-2]
 
-            return _bearing(p1[0], p1[1], p2[0], p2[1])
+            return calculate_bearing(p1[0], p1[1], p2[0], p2[1])
 
         bearing_in = get_edge_bearing(prev_node, curr_node, traverse_to_v=True)
         bearing_out = get_edge_bearing(curr_node, next_node, traverse_to_v=False)
@@ -699,13 +778,21 @@ def optimize_route(request: Request, body: OptimizeRequest):
             detail="No LineString/MultiLineString features found in the GeoJSON",
         )
 
-    # Build graph (directed with fuel weights when dem_path is set, else undirected)
+    # Build graph (directed with plugin costs when dem_path or turn penalty plugin set, else undirected)
     oneway_mode = body.oneway_mode or "ignore"
-    G = _build_graph(features, oneway_mode, dem_path=body.dem_path)
+    resolved_dem_path = body.dem_path or os.getenv("DEM_PATH")
+    plugins: list[RoutingCostPlugin] | None = None
+    if resolved_dem_path or body.use_turn_penalty_plugin:
+        plugins = []
+        if resolved_dem_path:
+            plugins.append(FuelAwarePlugin(resolved_dem_path))
+        if body.use_turn_penalty_plugin:
+            plugins.append(TurnPenaltyPlugin())
+    G = _build_graph(features, oneway_mode, plugins=plugins)
 
     # When service_both_sides is True and graph is undirected, convert to directed so each
     # segment is traversed in BOTH directions (u→v and v→u = both curbs). Skip when G is
-    # already directed (e.g. fuel-aware from dem_path).
+    # already directed (e.g. from routing plugins).
     if body.service_both_sides and not G.is_directed():
         edges_snapshot = list(G.edges(keys=True, data=True))
         max_key = max((k for _, _, k in G.edges(keys=True)), default=0)
@@ -839,8 +926,8 @@ def optimize_route(request: Request, body: OptimizeRequest):
         # Instruction Generation (Simple)
         # -----------------------------------------------------------
         if not is_component_bridge and edge_coords and len(edge_coords) >= 2:
-            start_bearing = _bearing(edge_coords[0][0], edge_coords[0][1], edge_coords[1][0], edge_coords[1][1])
-            end_bearing = _bearing(edge_coords[-2][0], edge_coords[-2][1], edge_coords[-1][0], edge_coords[-1][1])
+            start_bearing = calculate_bearing(edge_coords[0][0], edge_coords[0][1], edge_coords[1][0], edge_coords[1][1])
+            end_bearing = calculate_bearing(edge_coords[-2][0], edge_coords[-2][1], edge_coords[-1][0], edge_coords[-1][1])
 
             # Decide on maneuver based on previous bearing
             maneuver = "continue"
@@ -896,7 +983,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
 
             # Turn stats only for real graph edges; component-bridge hops have no road geometry
             if not is_component_bridge:
-                curr_bearing = _bearing(c0[0], c0[1], c1[0], c1[1])
+                curr_bearing = calculate_bearing(c0[0], c0[1], c1[0], c1[1])
                 if prev_bearing is not None:
                     turn = _classify_turn(prev_bearing, curr_bearing)
                     if turn == "right":

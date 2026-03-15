@@ -86,12 +86,17 @@ export function geojsonToOsmData(
   const fmt = (x: number) => Number(x.toFixed(7));
   const key = (lat: number, lon: number) => `${fmt(lat)},${fmt(lon)}`;
 
-  function ensureNode(lat: number, lon: number): string {
+  function ensureNode(lat: number, lon: number, z?: number): string {
     const k = key(lat, lon);
     const existing = coordToNodeId.get(k);
-    if (existing) return existing;
+    if (existing) {
+      const n = nodes.get(existing);
+      if (n && z !== undefined && n.z === undefined) n.z = z;
+      return existing;
+    }
     const id = String(nextNodeId++);
     const n: Node = { id, lat: fmt(lat), lon: fmt(lon) };
+    if (z !== undefined) n.z = z;
     nodes.set(id, n);
     coordToNodeId.set(k, id);
     return id;
@@ -108,7 +113,8 @@ export function geojsonToOsmData(
       if (!Array.isArray(c) || c.length < 2) continue;
       const lon = Number(c[0]);
       const lat = Number(c[1]);
-      nodeIds.push(ensureNode(lat, lon));
+      const z = c.length >= 3 && typeof c[2] === "number" ? c[2] : undefined;
+      nodeIds.push(ensureNode(lat, lon, z));
     }
     if (nodeIds.length < 2) return;
     const id = props?.id ? String(props.id) : `g${nextWayId++}`;

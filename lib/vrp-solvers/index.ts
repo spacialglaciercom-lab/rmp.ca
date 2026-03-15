@@ -13,7 +13,8 @@ import { clarkeWrightSolver } from "./clarke-wright";
 import { sweepSolver } from "./sweep";
 import { twoOptSolver } from "./two-opt";
 import { orOptSolver } from "./or-opt";
-import { vroomSolver } from "./vroom";
+import { ortoolsSolver } from "./ortools";
+import { kmpSolver } from "./kmp";
 import { defaultSolver } from "./default";
 
 /** Ordered list of available solvers. Order determines UI display order. */
@@ -22,7 +23,8 @@ export const VRP_SOLVER_LIST: readonly VRPSolver[] = [
   sweepSolver,
   orOptSolver,
   twoOptSolver,
-  vroomSolver,
+  kmpSolver,
+  ortoolsSolver,
 ] as const;
 
 /** Registry keyed by solver id for fast lookup. */

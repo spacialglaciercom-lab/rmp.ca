@@ -1,15 +1,20 @@
 /**
- * Lazy-loaded Extract tab. Draw polygon → preview roads → extract & process.
+ * Extract tab. Draw polygon → preview roads → extract & process.
  * When the Overture maps extraction plugin is disabled, redirect to Home so the Extract tab is fully hidden.
+ * On native we import eagerly so the tab is in the main bundle and doesn't require loading a split bundle
+ * from Metro (avoids "Failed to load split bundle" when the device can't reach the dev server).
  */
 import React, { Suspense, lazy, useEffect } from "react";
 import { useRouter } from "expo-router";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Platform } from "react-native";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { usePluginStore } from "@/stores/pluginStore";
 
-const ExtractContent = lazy(() => import("@/components/extract-content"));
+const ExtractContent =
+  Platform.OS === "web"
+    ? lazy(() => import("@/components/extract-content"))
+    : require("@/components/extract-content").default;
 
 function LoadingFallback() {
     return (
