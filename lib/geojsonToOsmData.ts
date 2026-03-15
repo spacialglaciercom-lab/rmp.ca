@@ -133,6 +133,9 @@ export function geojsonToOsmData(
     if (props?.oneway === true || props?.oneway === "yes") tags.oneway = "yes";
     if (props?.oneway === -1 || props?.direction === "backward")
       tags.oneway = "-1";
+    // OSM: dual_carriageway=yes  |  Overture: is_dual_carriageway=true
+    if (props?.dual_carriageway === "yes" || props?.is_dual_carriageway === true)
+      tags.dual_carriageway = "yes";
 
     ways.push({ id, nodes: nodeIds, tags });
   }

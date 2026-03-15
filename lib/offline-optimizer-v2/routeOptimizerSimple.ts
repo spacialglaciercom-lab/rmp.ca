@@ -19,6 +19,8 @@ import { haversineMeters } from "@/lib/routing_plugins";
 interface EdgeData {
   length: number;
   oneway: boolean;
+  /** True when the OSM way has dual_carriageway=yes. U-turns are physically impossible. */
+  dualCarriageway?: boolean;
 }
 
 // Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2 (used when no plugins)
@@ -30,6 +32,13 @@ const TURN_COSTS = {
   RIGHT_TURN: -20,
   SHARP_RIGHT: -10,
 };
+
+/**
+ * Extra penalty (metres) added when a U-turn is attempted on a dual-carriageway road.
+ * Dual-carriageway U-turns are physically impossible in most real-world scenarios
+ * (physical median divider). 500 km equivalent makes them effectively forbidden.
+ */
+const DUAL_CARRIAGEWAY_UTURN_METERS = 500_000;
 
 export class RouteOptimizerSimpleV2 {
   private nodes: Map<string, Node>;
@@ -121,6 +130,7 @@ export class RouteOptimizerSimpleV2 {
 
     for (const way of this.ways) {
       const isOneway = way.tags?.oneway === "yes";
+      const isDualCarriageway = way.tags?.dual_carriageway === "yes";
 
       for (let i = 0; i < way.nodes.length - 1; i++) {
         const from = way.nodes[i]!;
@@ -160,18 +170,17 @@ export class RouteOptimizerSimpleV2 {
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway });
+          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: costVU, oneway: false });
+            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined });
           }
         } else {
-          const length = distanceM;
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length, oneway: isOneway });
+          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length, oneway: false });
+            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined });
           }
         }
       }
@@ -296,7 +305,17 @@ export class RouteOptimizerSimpleV2 {
             );
           }
         }
-        const cost = edgeData.length * transitionMult;
+        let cost = edgeData.length * transitionMult;
+
+        // Dual-carriageway U-turn: physically impossible — treat as forbidden.
+        if (t !== null && edgeData.dualCarriageway) {
+          const inBearing = this.bearing(t, u);
+          const outBearing = this.bearing(u, v);
+          if (Math.abs(this.normalizeTurn(outBearing - inBearing)) > 150) {
+            cost += DUAL_CARRIAGEWAY_UTURN_METERS;
+          }
+        }
+
         const newD = d + cost;
         if (newD < (lengths[v] ?? Infinity)) {
           lengths[v] = newD;
@@ -384,6 +403,15 @@ export class RouteOptimizerSimpleV2 {
         else if (turn >= -120) cost = TURN_COSTS.RIGHT_TURN;
         else cost = TURN_COSTS.SHARP_RIGHT;
         score = edgeData.length + cost;
+      }
+
+      // Dual-carriageway U-turn penalty (physically impossible manoeuvre).
+      // Applied on top of any plugin or built-in turn cost.
+      if (edgeData.dualCarriageway) {
+        const inBearing = this.bearing(prev, current);
+        const outBearing = this.bearing(current, next);
+        const turn = this.normalizeTurn(outBearing - inBearing);
+        if (Math.abs(turn) > 150) score += DUAL_CARRIAGEWAY_UTURN_METERS;
       }
 
       if (score < bestScore) {

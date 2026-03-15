@@ -21,6 +21,10 @@ from pydantic import BaseModel, Field, field_validator
 # Cap turn penalties to avoid overflow in matching weights and nonsensical cost
 MAX_TURN_PENALTY = 10_000.0
 
+# Fixed cost (km) added when a U-turn is attempted on a dual_carriageway=yes road.
+# Physical median dividers make this manoeuvre essentially impossible in practice.
+DUAL_CARRIAGEWAY_UTURN_KM = 500.0
+
 from .geojson_ops import (
     GeoJSONFeature,
     GeoJSONFeatureCollection,
@@ -281,12 +285,14 @@ def _build_graph(
             weight_vu_km = cost_vu_m / 1000.0
 
             props = feat.properties or {}
+            dc = props.get("dual_carriageway") == "yes" or props.get("is_dual_carriageway") is True
             edge_attrs = dict(
                 coords=segment,
                 feature_idx=feat_idx,
                 road_class=_get_road_class(feat),
                 name=props.get("name"),
                 osm_id=props.get("osm_id"),
+                dual_carriageway=dc,
             )
 
             G.add_edge(u, v, key=edge_idx, length_km=weight_uv_km, **edge_attrs)
@@ -329,6 +335,7 @@ def _build_graph(
                 G.add_node(v, lon=_round_coord(end[0]), lat=_round_coord(end[1]))
 
             props = feat.properties or {}
+            dc = props.get("dual_carriageway") == "yes" or props.get("is_dual_carriageway") is True
             G.add_edge(
                 u,
                 v,
@@ -339,6 +346,7 @@ def _build_graph(
                 road_class=_get_road_class(feat),
                 name=props.get("name"),
                 osm_id=props.get("osm_id"),
+                dual_carriageway=dc,
             )
             edge_idx += 1
             run_start = i
@@ -377,6 +385,13 @@ def _dijkstra_with_transition_costs(
             return float("inf")
         return min(data[k].get("length_km", float("inf")) for k in data)
 
+    def edge_is_dual_carriageway(u: str, v: str) -> bool:
+        data = G.get_edge_data(u, v)
+        if not data:
+            return False
+        best_k = min(data, key=lambda k: data[k].get("length_km", float("inf")))
+        return bool(data[best_k].get("dual_carriageway"))
+
     def neighbors(u: str):
         if G.is_directed():
             return G.successors(u)
@@ -403,6 +418,16 @@ def _dijkstra_with_transition_costs(
                         coords_t, coords_u, coords_v
                     )
             cost = w * transition_mult
+
+            # Dual-carriageway U-turn: physically impossible.
+            if t is not None and edge_is_dual_carriageway(u, v):
+                bearing_in = calculate_bearing(
+                    *_get_node_coord(G, t), *coords_u
+                )
+                bearing_out = calculate_bearing(*coords_u, *_get_node_coord(G, v))
+                if _classify_turn(bearing_in, bearing_out) == "u_turn":
+                    cost += DUAL_CARRIAGEWAY_UTURN_KM
+
             new_d = d + cost
             if new_d < lengths.get(v, float("inf")):
                 lengths[v] = new_d
@@ -649,7 +674,7 @@ def _calculate_path_turn_cost(path: list[str], G: nx.MultiGraph, penalties: Turn
 
         bearing_in = get_edge_bearing(prev_node, curr_node, traverse_to_v=True)
         bearing_out = get_edge_bearing(curr_node, next_node, traverse_to_v=False)
-        
+
         turn_type = _classify_turn(bearing_in, bearing_out)
         if turn_type == "right":
             cost += penalties.right_turn
@@ -657,7 +682,15 @@ def _calculate_path_turn_cost(path: list[str], G: nx.MultiGraph, penalties: Turn
             cost += penalties.left_turn
         elif turn_type == "u_turn":
             cost += penalties.u_turn
-            
+
+        # Dual-carriageway U-turn: physically impossible — add a fixed large cost.
+        if turn_type == "u_turn":
+            out_edge_data = G.get_edge_data(curr_node, next_node)
+            if out_edge_data:
+                best_k = min(out_edge_data, key=lambda k: out_edge_data[k].get("length_km", float("inf")))
+                if out_edge_data[best_k].get("dual_carriageway"):
+                    cost += DUAL_CARRIAGEWAY_UTURN_KM
+
     return cost
 
 
