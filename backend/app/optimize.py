@@ -1041,6 +1041,21 @@ def optimize_route(request: Request, body: OptimizeRequest):
         route_points.append(RoutePoint(latitude=ndata.get("lat", 0), longitude=ndata.get("lon", 0), node_id=node))
         route_coords.append([ndata.get("lon", 0), ndata.get("lat", 0)])
 
+    # Hierholzer closes the circuit: route_nodes[0] == route_nodes[-1].
+    # The last emitted route_point therefore duplicates the first, drawing a
+    # straight "return to start" line on the map.  Strip it.
+    if len(route_points) > 1:
+        first_p = route_points[0]
+        last_p = route_points[-1]
+        COORD_TOL = 1e-6
+        if (
+            abs(first_p.latitude - last_p.latitude) < COORD_TOL
+            and abs(first_p.longitude - last_p.longitude) < COORD_TOL
+        ):
+            route_points.pop()
+            if route_coords:
+                route_coords.pop()
+
     # Count dead ends (degree-1 nodes)
     dead_ends = sum(1 for n in G.nodes() if G.degree(n) == 1)
 
