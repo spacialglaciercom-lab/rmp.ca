@@ -14,6 +14,13 @@ const duckdb = require("duckdb");
 const path = require("path");
 
 const PORT = Number(process.env.PORT) || 9000;
+
+/**
+ * CAUTION: Overture Maps schema changes frequently.
+ * Before updating this release version, run `node check_schema.js` 
+ * to ensure `road_flags` and `access_restrictions` columns still exist.
+ * Broken schema = Broken routing (loops/wrong directions).
+ */
 const OVERTURE_RELEASE = process.env.OVERTURE_RELEASE || "2026-02-18.0";
 
 const ROAD_CLASSES = [
@@ -110,6 +117,7 @@ function buildGraph(features) {
   let nextNodeId = 0;
   const edges = [];
 
+  // Overture segment geometry is 2D LineString (lon, lat) per schema; no Z/elevation in nodes.
   function getNodeId(lon, lat) {
     // Snap to ~1m precision to merge nearby endpoints
     const key = `${lon.toFixed(6)},${lat.toFixed(6)}`;
@@ -125,6 +133,7 @@ function buildGraph(features) {
     if (coords.length < 2) continue;
     const startCoord = coords[0];
     const endCoord = coords[coords.length - 1];
+    // Use first two elements only (lon, lat); Overture segments are 2D per schema
     const u = getNodeId(startCoord[0], startCoord[1]);
     const v = getNodeId(endCoord[0], endCoord[1]);
     edges.push({ u, v, feature: f });
@@ -154,6 +163,9 @@ async function extractOverture(polygon, ws, theme) {
       subtype,
       class,
       subclass,
+      access_restrictions,
+      road_flags,
+      sources,
       ST_AsGeoJSON(geometry) AS geometry_json,
       road_surface[1].value AS surface
     FROM read_parquet(
@@ -177,6 +189,22 @@ async function extractOverture(polygon, ws, theme) {
   }
   console.log(`[Extract] Segments from S3: ${segments.length}`);
 
+  // Check whether Overture segment geometry includes Z (elevation). Schema/docs use 2D LineString.
+  let coordDims = null;
+  for (const row of segments) {
+    try {
+      const g = JSON.parse(row.geometry_json);
+      const coords = g?.coordinates;
+      if (Array.isArray(coords) && coords.length > 0 && Array.isArray(coords[0])) {
+        coordDims = coords[0].length;
+        break;
+      }
+    } catch (_) {}
+  }
+  if (coordDims !== null) {
+    console.log(`[Extract] Overture segment coordinate dimensions: ${coordDims} (2=lon,lat only; 3+=includes Z/elevation)`);
+  }
+
   // Stage 2: Clip to exact polygon
   ws.send(JSON.stringify({ stage: "clipping", progress: 30 }));
 
@@ -195,6 +223,72 @@ async function extractOverture(polygon, ws, theme) {
     if (row.subtype) props.subtype = row.subtype;
     if (row.subclass) props.subclass = row.subclass;
     if (row.surface) props.surface = row.surface;
+
+    // Extract OSM Way ID from sources
+    // Overture sources format: [{ dataset: 'OpenStreetMap', record_id: 'w12345@1' }]
+    if (Array.isArray(row.sources)) {
+      const osmSource = row.sources.find(s => s.dataset === 'OpenStreetMap');
+      if (osmSource && osmSource.record_id) {
+        // record_id often looks like 'w12345@1', we want '12345'
+        // Regex: matches (node|way|relation)? followed by digits
+        const match = osmSource.record_id.match(/w(\d+)/); 
+        if (match) {
+            props.osm_id = match[1];
+        }
+      }
+    }
+
+    // --- ONEWAY & ROUNDABOUT LOGIC (Updated for Overture 2026-02-18) ---
+    
+    let isRoundabout = false;
+    // Check road_flags for 'is_roundabout'
+    if (Array.isArray(row.road_flags)) {
+      for (const rf of row.road_flags) {
+        if (rf.values && Array.isArray(rf.values)) {
+          if (rf.values.includes("is_roundabout") || rf.values.includes("roundabout")) {
+            isRoundabout = true;
+          }
+        }
+      }
+    }
+    // Fallback check on subclass
+    if (row.subclass === "roundabout" || row.class === "roundabout") {
+      isRoundabout = true;
+    }
+
+    if (isRoundabout) {
+      props.junction = "roundabout";
+      // Assume one-way for roundabouts unless restricted otherwise (though usually implied)
+    }
+
+    // Check access_restrictions for one-way rules
+    let oneway = null;
+    if (Array.isArray(row.access_restrictions)) {
+      for (const rule of row.access_restrictions) {
+        if (rule.access_type === "denied" && rule.when) {
+          const h = rule.when.heading;
+          const mode = rule.when.mode;
+          // Apply if mode is unset (all) or explicitly includes motor_vehicle
+          const applies = !mode || (Array.isArray(mode) && mode.includes("motor_vehicle"));
+          
+          if (applies && h) {
+            if (h === "backward") oneway = "yes";
+            else if (h === "forward") oneway = "-1";
+          }
+        }
+      }
+    }
+
+    if (oneway) {
+      props.oneway = oneway;
+    } else {
+      // Retain heuristic fallbacks if no explicit restriction found
+      if (row.class && row.class.endsWith("_link")) props.oneway = "yes";
+      if (row.class === "motorway" || row.class === "trunk") props.oneway = "yes";
+      // If inferred as roundabout but no explicit restriction, ensure one-way
+      if (isRoundabout) props.oneway = "yes"; 
+    }
+
     features.push({ type: "Feature", geometry: geom, properties: props });
   }
 

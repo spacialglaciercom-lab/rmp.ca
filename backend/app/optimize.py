@@ -13,16 +13,33 @@ from typing import Any
 
 import networkx as nx
 import numpy as np
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import BaseModel, Field, field_validator
+
+# Cap turn penalties to avoid overflow in matching weights and nonsensical cost
+MAX_TURN_PENALTY = 10_000.0
 
 from .geojson_ops import (
     GeoJSONFeature,
     GeoJSONFeatureCollection,
     _haversine_km,
+    _haversine_m,
     _get_road_class,
+    fuel_multiplier,
+    grade_percent,
+    sample_elevation_from_dem,
 )
+from .hierholzer import eulerian_circuit_nx
 from .vector_clean import CleanOptions, clean_geojson
+
+# GPX export support
+try:
+    from .gpx_export import Waypoint, RouteSegment, build_gpx
+    GPX_EXPORT_AVAILABLE = True
+    ACCEPT_GPX = "application/gpx+xml"
+except ImportError:
+    GPX_EXPORT_AVAILABLE = False
+    ACCEPT_GPX = "application/gpx+xml"  # Still define for type checking
 
 router = APIRouter()
 
@@ -65,6 +82,12 @@ class TurnPenalties(BaseModel):
     u_turn: float = 0
     right_turn: float = 0
 
+    @field_validator("left_turn", "u_turn", "right_turn", mode="after")
+    @classmethod
+    def clamp_penalty(cls, v: float) -> float:
+        """Clamp penalty values to prevent overflow and negative weights."""
+        return max(0.0, min(MAX_TURN_PENALTY, float(v)))
+
 
 class OptimizeRequest(BaseModel):
     geojson: GeoJSONFeatureCollection
@@ -76,6 +99,7 @@ class OptimizeRequest(BaseModel):
     turn_penalties: TurnPenalties | None = None
     clean_before_optimize: bool = True  # run vector_clean before building graph (reduces loops from duplicate/self-loop edges)
     clean_options: CleanOptions | None = None
+    dem_path: str | None = None  # optional DEM GeoTIFF path for fuel-aware (directed) edge weights
 
 
 class RoutePoint(BaseModel):
@@ -132,22 +156,18 @@ def _node_id(lon: float, lat: float) -> str:
 def _build_graph(
     features: list[GeoJSONFeature],
     oneway_mode: str = "ignore",
-) -> nx.MultiGraph:
-    """Build a MultiGraph from LineString features, splitting at shared intersection nodes.
+    dem_path: str | None = None,
+) -> nx.MultiGraph | nx.MultiDiGraph:
+    """Build a MultiGraph (or MultiDiGraph when dem_path is set) from LineString features.
 
-    Each LineString's intermediate coordinates are checked against all other features.
-    Any coordinate that appears in more than one feature (or is an endpoint of any feature)
-    is treated as an intersection node, and the containing feature is split there.
-    This ensures that road branches connecting at mid-segment points are properly connected
-    in the graph and not silently dropped.
+    When dem_path is None: undirected MultiGraph, edge weight = geometric length_km.
+    When dem_path is set: directed MultiDiGraph with two edges per segment (u->v and v->u),
+    edge weight = fuel cost (distance_m * fuel_multiplier(grade)) so the solver minimizes fuel.
+
+    Splitting at shared intersection nodes is unchanged.
     """
-    G = nx.MultiGraph()
-
     # ------------------------------------------------------------------ #
     # Step 1: Collect all lines and find split nodes                       #
-    # A split node is any coordinate that is:                              #
-    #   (a) an endpoint of any feature, or                                 #
-    #   (b) shared by more than one feature (i.e., an intersection)        #
     # ------------------------------------------------------------------ #
     all_lines: list[tuple[list[list[float]], int]] = []  # (coords, feat_idx)
     coord_count: dict[str, int] = {}
@@ -169,7 +189,6 @@ def _build_graph(
                 nid = _node_id(c[0], c[1])
                 coord_count[nid] = coord_count.get(nid, 0) + 1
 
-    # Endpoints and shared coordinates are split nodes
     split_nodes: set[str] = set()
     for line_coords, _ in all_lines:
         split_nodes.add(_node_id(line_coords[0][0], line_coords[0][1]))
@@ -178,9 +197,92 @@ def _build_graph(
         if cnt >= 2:
             split_nodes.add(nid)
 
+    if dem_path is not None:
+        # ------------------------------------------------------------------ #
+        # Fuel-aware path: collect segments and node coords, then sample DEM  #
+        # ------------------------------------------------------------------ #
+        node_order: list[str] = []
+        node_id_to_coord: dict[str, tuple[float, float]] = {}
+        segments_raw: list[tuple[str, str, list[list[float]], float, int, GeoJSONFeature]] = []
+
+        for line_coords, feat_idx in all_lines:
+            feat = features[feat_idx]
+            run_start = 0
+            for i in range(1, len(line_coords)):
+                nid = _node_id(line_coords[i][0], line_coords[i][1])
+                if nid not in split_nodes and i != len(line_coords) - 1:
+                    continue
+
+                segment = line_coords[run_start : i + 1]
+                if len(segment) < 2:
+                    run_start = i
+                    continue
+
+                length_km = sum(
+                    _haversine_km(segment[j - 1][0], segment[j - 1][1], segment[j][0], segment[j][1])
+                    for j in range(1, len(segment))
+                )
+                start, end = segment[0], segment[-1]
+                u = _node_id(start[0], start[1])
+                v = _node_id(end[0], end[1])
+
+                if u not in node_id_to_coord:
+                    node_id_to_coord[u] = (_round_coord(start[0]), _round_coord(start[1]))
+                    node_order.append(u)
+                if v not in node_id_to_coord:
+                    node_id_to_coord[v] = (_round_coord(end[0]), _round_coord(end[1]))
+                    node_order.append(v)
+
+                segments_raw.append((u, v, segment, length_km, feat_idx, feat))
+                run_start = i
+
+        coords_list = [node_id_to_coord[nid] for nid in node_order]
+        elevations = sample_elevation_from_dem(coords_list, dem_path)
+        node_id_to_elev: dict[str, float] = {
+            nid: (elevations[i] if elevations[i] is not None else 0.0)
+            for i, nid in enumerate(node_order)
+        }
+
+        G = nx.MultiDiGraph()
+        for nid in node_order:
+            lon, lat = node_id_to_coord[nid]
+            G.add_node(nid, lon=lon, lat=lat)
+
+        edge_idx = 0
+        for u, v, segment, length_km, feat_idx, feat in segments_raw:
+            lon_u, lat_u = node_id_to_coord[u]
+            lon_v, lat_v = node_id_to_coord[v]
+            distance_m = _haversine_m(lon_u, lat_u, lon_v, lat_v)
+            z_u = node_id_to_elev[u]
+            z_v = node_id_to_elev[v]
+
+            grade_uv = grade_percent(z_u, z_v, distance_m)
+            grade_vu = grade_percent(z_v, z_u, distance_m)
+            mult_uv = fuel_multiplier(grade_uv)
+            mult_vu = fuel_multiplier(grade_vu)
+
+            weight_uv_km = (distance_m * mult_uv) / 1000.0
+            weight_vu_km = (distance_m * mult_vu) / 1000.0
+
+            props = feat.properties or {}
+            edge_attrs = dict(
+                coords=segment,
+                feature_idx=feat_idx,
+                road_class=_get_road_class(feat),
+                name=props.get("name"),
+                osm_id=props.get("osm_id"),
+            )
+
+            G.add_edge(u, v, key=edge_idx, length_km=weight_uv_km, **edge_attrs)
+            G.add_edge(v, u, key=edge_idx + 1, length_km=weight_vu_km, **edge_attrs)
+            edge_idx += 2
+
+        return G
+
     # ------------------------------------------------------------------ #
-    # Step 2: Build graph, splitting each feature at split nodes           #
+    # Standard path (no DEM): undirected MultiGraph, geometric length_km   #
     # ------------------------------------------------------------------ #
+    G = nx.MultiGraph()
     edge_idx = 0
     for line_coords, feat_idx in all_lines:
         feat = features[feat_idx]
@@ -199,7 +301,6 @@ def _build_graph(
                 _haversine_km(segment[j - 1][0], segment[j - 1][1], segment[j][0], segment[j][1])
                 for j in range(1, len(segment))
             )
-
             start = segment[0]
             end = segment[-1]
             u = _node_id(start[0], start[1])
@@ -266,6 +367,9 @@ def _solve_cpp(
         full_route: list[str] = []
         for comp_nodes in sorted(components, key=len, reverse=True):
             sub = G.subgraph(comp_nodes).copy()
+            # Skip components with no edges (isolated nodes)
+            if sub.number_of_edges() == 0:
+                continue
             sub_route = _solve_cpp(sub, turn_penalties=turn_penalties)
             if sub_route:
                 if full_route:
@@ -283,7 +387,7 @@ def _solve_cpp(
     if len(odd_nodes) == 0:
         # Already Eulerian — find circuit directly
         try:
-            circuit = list(nx.eulerian_circuit(G))
+            circuit = eulerian_circuit_nx(G)
             if circuit:
                 return [circuit[0][0]] + [e[1] for e in circuit]
         except nx.NetworkXError:
@@ -305,12 +409,12 @@ def _solve_cpp(
                     if v in lengths:
                         dist_km = lengths[v]
                         path = paths[v]
-                        
+
                         # Add turn penalties if provided
                         penalty_cost = 0.0
                         if turn_penalties:
                             penalty_cost = _calculate_path_turn_cost(path, G, turn_penalties)
-                            
+
                         # Store total cost (distance + penalties) for matching
                         odd_pairs_dist[(u, v)] = dist_km + penalty_cost
                         odd_pairs_path[(u, v)] = path
@@ -365,7 +469,7 @@ def _solve_cpp(
                     G_aug.add_edge(u, v, **data)
 
         try:
-            circuit = list(nx.eulerian_circuit(G_aug))
+            circuit = eulerian_circuit_nx(G_aug)
             if circuit:
                 return [circuit[0][0]] + [e[1] for e in circuit]
         except nx.NetworkXError:
@@ -489,18 +593,72 @@ def _classify_turn(bearing_in: float, bearing_out: float) -> str:
         return "u_turn"
 
 
+def cpp_solution_to_gpx_segments(
+    G: nx.Graph,
+    route_nodes: list,
+) -> list[RouteSegment]:
+    """
+    Convert CPP solution to RouteSegment list for GPX export.
+    
+    Args:
+        G: NetworkX graph with node coordinates in node attributes (lat, lon)
+        route_nodes: List of nodes in the Eulerian circuit
+        
+    Returns:
+        List of RouteSegment objects for GPX export
+    """
+    if not GPX_EXPORT_AVAILABLE:
+        return []
+        
+    if not route_nodes:
+        return []
+        
+    # Create waypoints for each unique node
+    waypoints = []
+    added_nodes = set()
+    
+    for node in route_nodes:
+        if node not in added_nodes:
+            # Get node coordinates from graph
+            if node in G.nodes:
+                ndata = G.nodes[node]
+                lat = ndata.get("lat", 0)
+                lon = ndata.get("lon", 0)
+                waypoints.append(Waypoint(lat, lon, name=f"Node {node}"))
+                added_nodes.add(node)
+    
+    # Create track points from the route
+    track = []
+    for node in route_nodes:
+        # Get node coordinates from graph
+        if node in G.nodes:
+            ndata = G.nodes[node]
+            lat = ndata.get("lat", 0)
+            lon = ndata.get("lon", 0)
+            track.append((lat, lon))
+    
+    # Create a single route segment for the entire Eulerian circuit
+    segment = RouteSegment(
+        track=track,
+        waypoints=waypoints,
+        name="Eulerian Circuit"
+    )
+    return [segment]
+
+
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
 
 
 @router.post("/api/optimize", response_model=OptimizeResponse)
-def optimize_route(body: OptimizeRequest):
+def optimize_route(request: Request, body: OptimizeRequest):
     """
     Chinese Postman route optimization on GeoJSON road data.
 
     Builds a graph from LineString features, solves the CPP (approximate),
     and returns an ordered route with turn statistics.
+    If Accept header is "application/gpx+xml", returns GPX instead of JSON.
     """
     features = body.geojson.features
 
@@ -541,13 +699,14 @@ def optimize_route(body: OptimizeRequest):
             detail="No LineString/MultiLineString features found in the GeoJSON",
         )
 
-    # Build graph
+    # Build graph (directed with fuel weights when dem_path is set, else undirected)
     oneway_mode = body.oneway_mode or "ignore"
-    G = _build_graph(features, oneway_mode)
+    G = _build_graph(features, oneway_mode, dem_path=body.dem_path)
 
-    # When service_both_sides is True, ensure each segment is traversed in BOTH directions
-    # (u→v and v→u = both curbs). Use a directed graph so the Eulerian circuit must use both.
-    if body.service_both_sides:
+    # When service_both_sides is True and graph is undirected, convert to directed so each
+    # segment is traversed in BOTH directions (u→v and v→u = both curbs). Skip when G is
+    # already directed (e.g. fuel-aware from dem_path).
+    if body.service_both_sides and not G.is_directed():
         edges_snapshot = list(G.edges(keys=True, data=True))
         max_key = max((k for _, _, k in G.edges(keys=True)), default=0)
         G_dir = nx.MultiDiGraph()
@@ -569,6 +728,19 @@ def optimize_route(body: OptimizeRequest):
             status_code=400,
             detail=f"Graph has only {G.number_of_nodes()} node(s) — need at least 2",
         )
+
+    if G.number_of_edges() == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Graph has no edges — cannot compute route",
+        )
+
+    # Detect disconnected components for user-facing message
+    n_components = (
+        len(list(nx.weakly_connected_components(G)))
+        if G.is_directed()
+        else len(list(nx.connected_components(G)))
+    )
 
     # Count odd-degree vertices (before solving)
     odd_degree = sum(1 for n in G.nodes() if G.degree(n) % 2 != 0)
@@ -642,8 +814,9 @@ def optimize_route(body: OptimizeRequest):
 
         if edge_data:
             for ek, edata in edge_data.items():
-                canon = (min(u, v), max(u, v), ek)
-                if canon not in consumed_edge_keys: # Only use UNCONSUMED
+                # Directed: (u,v) and (v,u) are different edges; undirected: canonical (min,max)
+                canon = (u, v, ek) if G.is_directed() else (min(u, v), max(u, v), ek)
+                if canon not in consumed_edge_keys:  # Only use UNCONSUMED
                     chosen_key = ek
                     consumed_edge_keys.add(canon)
                     is_deadhead = bool(edata.get("deadhead"))
@@ -749,8 +922,22 @@ def optimize_route(body: OptimizeRequest):
     # Count dead ends (degree-1 nodes)
     dead_ends = sum(1 for n in G.nodes() if G.degree(n) == 1)
 
-    # Efficiency = minimum possible distance / actual distance
-    efficiency = (total_edge_dist / total_distance_km * 100) if total_distance_km > 0 else 100.0
+    # Efficiency = minimum possible distance / actual distance; guard against NaN and overflow
+    if total_distance_km <= 0 or not math.isfinite(total_distance_km):
+        total_distance_km = 0.0
+        efficiency = 100.0
+    else:
+        efficiency = (total_edge_dist / total_distance_km * 100)
+        efficiency = 100.0 if not math.isfinite(efficiency) else max(0.0, min(100.0, efficiency))
+
+    # Ensure response totals are finite and non-negative
+    total_distance_km = max(0.0, total_distance_km) if math.isfinite(total_distance_km) else 0.0
+    deadhead_distance_km = max(0.0, deadhead_distance_km) if math.isfinite(deadhead_distance_km) else 0.0
+
+    # Message: mention disconnected components when applicable
+    msg = f"Route computed: {total_traversals} traversals, {round(total_distance_km, 2)} km, {round(efficiency, 1)}% efficiency"
+    if n_components > 1:
+        msg += f" (disconnected graph: {n_components} components solved independently)"
 
     # Build route GeoJSON
     route_geojson = GeoJSONFeatureCollection(
@@ -782,11 +969,28 @@ def optimize_route(body: OptimizeRequest):
         efficiency=round(efficiency, 2),
     )
 
-    return OptimizeResponse(
+    response = OptimizeResponse(
         route=route_points,
         route_geojson=route_geojson,
         instructions=instructions,
         total_distance_km=round(total_distance_km, 4),
-        message=f"Route computed: {total_traversals} traversals, {round(total_distance_km, 2)} km, {round(efficiency, 1)}% efficiency",
+        message=msg,
         stats=stats,
     )
+    
+    # Dual-path: return GPX when client requests application/gpx+xml
+    accept = request.headers.get("Accept", "")
+    if ACCEPT_GPX in accept and route_nodes and GPX_EXPORT_AVAILABLE:
+        try:
+            segments = cpp_solution_to_gpx_segments(G, route_nodes)
+            if segments:
+                gpx_str = build_gpx(segments)
+                return Response(
+                    content=gpx_str,
+                    media_type=ACCEPT_GPX,
+                    headers={"Content-Disposition": "attachment; filename=route.gpx"},
+                )
+        except Exception as e:
+            print(f"Warning: Failed to export to GPX: {e}", file=sys.stderr)
+    
+    return response

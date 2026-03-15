@@ -14,6 +14,11 @@ import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+try:
+    import rasterio
+except ImportError:
+    rasterio = None  # type: ignore[assignment]
+
 router = APIRouter()
 
 
@@ -326,6 +331,65 @@ def _feature_length_km(feat: GeoJSONFeature) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Elevation and fuel-aware helpers
+# ---------------------------------------------------------------------------
+
+
+def _haversine_m(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """Surface distance in meters (reuses Haversine in km)."""
+    return _haversine_km(lon1, lat1, lon2, lat2) * 1000.0
+
+
+def sample_elevation_from_dem(
+    nodes_2d: list[tuple[float, float]], dem_path: str
+) -> list[float | None]:
+    """
+    Sample elevation in meters for each (lon, lat) from a GeoTIFF DEM.
+    Returns one elevation per node; None for no-data or out-of-extent.
+    DEM must be WGS84 (EPSG:4326).
+    """
+    if rasterio is None:
+        raise ImportError("rasterio is required for elevation sampling; install with pip install rasterio")
+    with rasterio.open(dem_path) as dataset:
+        if dataset.crs is None or dataset.crs.to_epsg() != 4326:
+            raise ValueError(
+                "DEM must be WGS84 (EPSG:4326); Overture data is strictly WGS84. "
+                f"Got CRS: {dataset.crs}"
+            )
+        nodata = dataset.nodata
+        # sample() returns a generator of arrays (one per band per point)
+        out: list[float | None] = []
+        for arr in dataset.sample(nodes_2d):
+            val = float(arr[0]) if arr.size > 0 else None
+            if val is not None and nodata is not None and val == nodata:
+                val = None
+            out.append(val)
+        return out
+
+
+def grade_percent(elev_a_m: float, elev_b_m: float, distance_m: float) -> float:
+    """
+    Grade percentage from A to B: ((elev_B - elev_A) / distance_m) * 100.
+    Returns 0.0 if distance_m < 1.0 to avoid extreme spikes from tiny segments.
+    """
+    if distance_m < 1.0:
+        return 0.0
+    return ((elev_b_m - elev_a_m) / distance_m) * 100.0
+
+
+def fuel_multiplier(grade_pct: float, min_multiplier: float = 0.5) -> float:
+    """
+    0% grade -> 1.0. Uphill: mult = 1.0 + (grade_pct * 0.1). Downhill: mult = 1.0 + (grade_pct * 0.04).
+    Clamped from below by min_multiplier.
+    """
+    if grade_pct >= 0:
+        mult = 1.0 + (grade_pct * 0.1)
+    else:
+        mult = 1.0 + (grade_pct * 0.04)
+    return max(min_multiplier, mult)
+
+
+# ---------------------------------------------------------------------------
 # GeoJSON -> graph for zones partition
 # ---------------------------------------------------------------------------
 
@@ -394,4 +458,93 @@ def geojson_to_partition_graph(
         }
         for u, v, length_km in edges_raw
     ]
+    return edges, node_count, id_to_coords
+
+
+def geojson_to_fuel_aware_partition_graph(
+    body: GeoJSONFeatureCollection,
+    dem_path: str,
+) -> tuple[list[dict[str, Any]], int, list[tuple[float, float]]]:
+    """
+    Build directed (edges, node_count, id_to_coords) with fuel-aware weights.
+    Same node set and segments as geojson_to_partition_graph, but each segment
+    yields two directed edges (u->v and v->u) with weight = distance_m * fuel_multiplier / 1000.
+    """
+    node_key_to_id: dict[tuple[float, float], int] = {}
+    id_to_coords: list[tuple[float, float]] = []
+    edges_raw: list[tuple[int, int, float]] = []  # (u, v, length_km)
+
+    def _ensure_node(lon: float, lat: float) -> int:
+        k = _round_key(lon, lat)
+        if k not in node_key_to_id:
+            nid = len(node_key_to_id)
+            node_key_to_id[k] = nid
+            id_to_coords.append(k)
+        return node_key_to_id[k]
+
+    for feat in body.features:
+        geom = feat.geometry
+        gtype = geom.get("type", "")
+        coords_list: list[list[list[float]]] = []
+        if gtype == "LineString":
+            coords_list = [geom.get("coordinates", [])]
+        elif gtype == "MultiLineString":
+            coords_list = geom.get("coordinates", [])
+        else:
+            continue
+
+        for line_coords in coords_list:
+            for i in range(1, len(line_coords)):
+                c0 = line_coords[i - 1]
+                c1 = line_coords[i]
+                lon0, lat0 = c0[0], c0[1]
+                lon1, lat1 = c1[0], c1[1]
+                u = _ensure_node(lon0, lat0)
+                v = _ensure_node(lon1, lat1)
+                length_km = _haversine_km(lon0, lat0, lon1, lat1)
+                if length_km <= 0:
+                    continue
+                edges_raw.append((u, v, length_km))
+
+    node_count = len(node_key_to_id)
+    if node_count == 0:
+        return [], 0, []
+
+    elevations = sample_elevation_from_dem(id_to_coords, dem_path)
+
+    edges: list[dict[str, Any]] = []
+    for u, v, length_km in edges_raw:
+        lon_u, lat_u = id_to_coords[u]
+        lon_v, lat_v = id_to_coords[v]
+        distance_m = _haversine_m(lon_u, lat_u, lon_v, lat_v)
+        z_u = elevations[u] if elevations[u] is not None else 0.0
+        z_v = elevations[v] if elevations[v] is not None else 0.0
+
+        grade_uv = grade_percent(z_u, z_v, distance_m)
+        grade_vu = grade_percent(z_v, z_u, distance_m)
+        mult_uv = fuel_multiplier(grade_uv)
+        mult_vu = fuel_multiplier(grade_vu)
+
+        weight_uv_km = (distance_m * mult_uv) / 1000.0
+        weight_vu_km = (distance_m * mult_vu) / 1000.0
+
+        edges.append({
+            "u": u,
+            "v": v,
+            "length": length_km,
+            "weight": weight_uv_km,
+            "intersection_density": 1.0,
+            "cul_de_sac_penalty": 1.0,
+            "width_penalty": 1.0,
+        })
+        edges.append({
+            "u": v,
+            "v": u,
+            "length": length_km,
+            "weight": weight_vu_km,
+            "intersection_density": 1.0,
+            "cul_de_sac_penalty": 1.0,
+            "width_penalty": 1.0,
+        })
+
     return edges, node_count, id_to_coords
