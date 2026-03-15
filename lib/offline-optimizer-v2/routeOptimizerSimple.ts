@@ -87,6 +87,11 @@ export class RouteOptimizerSimpleV2 {
       );
       if (!startNode) continue;
       const circuit = this.hierholzer(startNode);
+      if (circuit.length > 1 && circuit[0] === circuit[circuit.length - 1]) {
+        // Hierholzer closes the loop: strip the duplicate end node so each
+        // component doesn't draw a straight line back to its own start.
+        circuit.pop();
+      }
       if (circuit.length > 0) circuits.push(circuit);
     }
 
@@ -106,20 +111,6 @@ export class RouteOptimizerSimpleV2 {
         return n ? { latitude: n.lat, longitude: n.lon, nodeId: id } : null;
       })
       .filter((p): p is NonNullable<typeof p> => p !== null);
-
-    // Hierholzer produces circuit[0] === circuit[last] (closed loop).
-    // Strip the closing duplicate so the map doesn't draw a straight line back to start.
-    if (routePoints.length > 1) {
-      const first = routePoints[0]!;
-      const last = routePoints[routePoints.length - 1]!;
-      const COORD_TOL = 1e-6;
-      if (
-        Math.abs(first.latitude - last.latitude) < COORD_TOL &&
-        Math.abs(first.longitude - last.longitude) < COORD_TOL
-      ) {
-        routePoints.pop();
-      }
-    }
 
     const stats = this.calculateStats(circuit);
 
