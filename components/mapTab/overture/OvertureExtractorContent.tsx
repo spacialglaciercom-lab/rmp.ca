@@ -31,6 +31,7 @@ import {
   filterGeoJSON,
   type GeoJSONFeatureCollection,
   type OptimizeResponse,
+  type RouteMetrics,
 } from "@/services/overtureOptimizerService";
 import {
   connectAndExtract,
@@ -76,6 +77,86 @@ const OPTIONAL_EXCLUDE_CLASSES = [
 function formatArea(areaKm2: number): string {
   if (areaKm2 >= 1) return `${areaKm2.toFixed(3)} km²`;
   return `${(areaKm2 * 1_000_000).toFixed(2)} m²`;
+}
+
+function PluginMetricsSection({
+  metrics,
+  colors,
+}: {
+  metrics: RouteMetrics;
+  colors: ReturnType<typeof import("@/hooks/use-colors").useColors>;
+}) {
+  const physKm = (metrics.physical_distance_m / 1000).toFixed(2);
+  const adjKm  = (metrics.adjusted_cost_m / 1000).toFixed(2);
+  const overhead =
+    metrics.physical_distance_m > 0
+      ? (((metrics.adjusted_cost_m - metrics.physical_distance_m) /
+          metrics.physical_distance_m) *
+          100
+        ).toFixed(1)
+      : "0.0";
+  const hasElevation = metrics.elevation_gain_m > 0;
+  const hasAdjustment = metrics.adjusted_cost_m !== metrics.physical_distance_m;
+
+  return (
+    <View style={{ marginTop: 12, marginBottom: 4 }}>
+      <Text style={[styles.sectionTitle, { color: colors.muted, marginBottom: 6 }]}>
+        Plugin Metrics
+      </Text>
+      <View style={styles.statsGrid}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>{physKm}</Text>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>Physical km</Text>
+        </View>
+        {hasAdjustment && (
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.statValue, { color: colors.text }]}>{adjKm}</Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Adjusted km</Text>
+          </View>
+        )}
+        {hasAdjustment && (
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {Number(overhead) >= 0 ? "+" : ""}{overhead}%
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Cost overhead</Text>
+          </View>
+        )}
+        {hasElevation && (
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {metrics.elevation_gain_m.toFixed(0)} m
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Elev. gain</Text>
+          </View>
+        )}
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {metrics.turns.right}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>Right turns</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {metrics.turns.left}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>Left turns</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {metrics.turns.u_turn}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>U-turns</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {metrics.turns.straight}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>Straight</Text>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export interface OvertureExtractorContentProps {
@@ -816,6 +897,10 @@ export function OvertureExtractorContent({
               </Text>
             </View>
           </View>
+
+          {lastResult.metrics && (
+            <PluginMetricsSection metrics={lastResult.metrics} colors={colors} />
+          )}
 
           <Text style={[styles.messageText, { color: colors.muted }]}>
             {lastResult.message}

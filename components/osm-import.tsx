@@ -24,6 +24,10 @@ import {
   optimizeFromGeoJSON,
   RouteOptimizerSimpleV2,
 } from "@/lib/offline-optimizer-v2";
+import { FuelAwarePlugin, TurnPenaltyPlugin } from "@/lib/routing_plugins";
+import type { RoutingCostPlugin } from "@/lib/routing_plugins";
+import { enrichNodesWithElevation } from "@/lib/elevationEnrichment";
+import { usePluginStore } from "@/stores/pluginStore";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 
 interface OSMImportProps {
@@ -44,6 +48,12 @@ export function OSMImport({
   const customStartPoint = useCustomStartPoint();
   const { optimizeRoute } = useRouteOptimization();
   const { isExperimentalRoute } = useBetaFeatures();
+  const fuelAwareRoutingOn = usePluginStore((s) =>
+    s.isPluginEnabled("fuel-aware-routing", false),
+  );
+  const useTurnPenaltyPlugin = usePluginStore((s) =>
+    s.isPluginEnabled("turn-penalty", false),
+  );
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -384,7 +394,17 @@ export function OSMImport({
               message: "Running offline optimizer (v2)...",
             });
             await new Promise<void>((r) => setTimeout(r, 0));
-            const v2 = new RouteOptimizerSimpleV2(nodes, ways);
+            const v2Plugins: RoutingCostPlugin[] = [];
+            if (fuelAwareRoutingOn) {
+              await enrichNodesWithElevation(nodes);
+              v2Plugins.push(FuelAwarePlugin);
+            }
+            if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
+            const v2 = new RouteOptimizerSimpleV2(
+              nodes,
+              ways,
+              v2Plugins.length ? v2Plugins : undefined,
+            );
             optResult = v2.optimize(
               startCoords?.latitude,
               startCoords?.longitude,

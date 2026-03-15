@@ -16,6 +16,7 @@ except ImportError:
     pass
 
 import logging
+import os
 from typing import Literal
 
 import numpy as np
@@ -699,6 +700,48 @@ def partition_graph(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# DEM elevation sampling endpoint
+# ---------------------------------------------------------------------------
+
+class ElevationRequest(BaseModel):
+    """List of [lon, lat] coordinate pairs to sample elevation for."""
+    points: list[list[float]]  # [[lon, lat], ...]
+
+
+class ElevationResponse(BaseModel):
+    """Elevation in metres for each input point (null = out-of-extent / no-data)."""
+    elevations: list[float | None]
+    dem_available: bool
+
+
+@app.post("/api/elevation", response_model=ElevationResponse)
+def post_elevation(body: ElevationRequest):
+    """
+    Sample elevation (metres, WGS84) from the configured DEM for each [lon, lat] point.
+    Returns dem_available=false when DEM_PATH is not set or rasterio is unavailable.
+    Clients should treat null elevations as 0 m (flat-terrain fallback).
+    """
+    from .routing_plugins import sample_elevation_from_dem
+
+    dem_path = os.getenv("DEM_PATH", "")
+    if not dem_path:
+        return ElevationResponse(
+            elevations=[None] * len(body.points),
+            dem_available=False,
+        )
+
+    try:
+        coords = [(float(p[0]), float(p[1])) for p in body.points if len(p) >= 2]
+        raw = sample_elevation_from_dem(coords, dem_path)
+        return ElevationResponse(elevations=raw, dem_available=True)
+    except Exception:
+        return ElevationResponse(
+            elevations=[None] * len(body.points),
+            dem_available=False,
+        )
 
 
 class PartitionFromGeoJSONRequest(BaseModel):

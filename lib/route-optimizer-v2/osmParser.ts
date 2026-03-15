@@ -18,7 +18,6 @@ const INCLUDED_HIGHWAYS = new Set([
   "living_street",
   "tertiary_link",
   "secondary_link",
-  "service",
   "track",
 ]);
 
@@ -108,22 +107,6 @@ export class OSMParser {
       const highway = tags["highway"];
       if (!highway || EXCLUDED_HIGHWAYS.has(highway)) continue;
       if (!INCLUDED_HIGHWAYS.has(highway)) continue;
-      // Service subtypes to exclude (match Videos app EXCLUDED_SERVICE_TYPES)
-      if (highway === "service") {
-        const service = tags["service"];
-        if (
-          service &&
-          [
-            "driveway",
-            "parking_aisle",
-            "parking",
-            "private",
-            "alley",
-            "emergency_access",
-          ].includes(service)
-        )
-          continue;
-      }
       if (tags["area"] === "yes" || tags["area"] === "parking") continue;
       if (
         tags["access"] === "private" ||
@@ -265,19 +248,7 @@ export class OSMParser {
       const tags = (el.tags as Record<string, string>) ?? {};
       const highway = tags.highway;
       if (!highway || EXCLUDED_HIGHWAYS.has(highway)) continue;
-      if (!INCLUDED_HIGHWAYS.has(highway) && highway !== "service") continue;
-      const service = tags.service;
-      if (
-        service &&
-        [
-          "parking_aisle",
-          "driveway",
-          "parking",
-          "drive-through",
-          "emergency_access",
-        ].includes(service)
-      )
-        continue;
+      if (!INCLUDED_HIGHWAYS.has(highway)) continue;
       if (tags.area === "yes" || tags.area === "parking") continue;
       if (tags.access === "private") continue;
 

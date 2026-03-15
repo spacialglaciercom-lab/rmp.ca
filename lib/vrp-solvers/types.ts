@@ -38,12 +38,20 @@ export interface VRPSolverInput {
   windowClose?: number;
 }
 
+export interface VRPRouteMetrics {
+  physical_distance_m: number;
+  adjusted_cost_m: number;
+  elevation_gain_m: number;
+  turns: { left: number; right: number; u_turn: number; straight: number };
+}
+
 export interface VRPSolverOutput {
   stops: VRPSolverStop[];
   routes?: VRPSolverStop[][];
   totalDistanceKm: string;
   totalTimeMin: number;
   routeStats?: VRPSolverRouteStats[];
+  routeMetrics?: VRPRouteMetrics[];
   unassigned?: string[];
 }
 

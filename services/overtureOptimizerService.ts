@@ -112,12 +112,20 @@ export interface GeoJSONFeatureCollection {
   features: GeoJSONFeature[];
 }
 
+export interface RouteMetrics {
+  physical_distance_m: number;
+  adjusted_cost_m: number;
+  elevation_gain_m: number;
+  turns: { left: number; right: number; u_turn: number; straight: number };
+}
+
 export interface OptimizeResponse {
   route: RoutePoint[];
   route_geojson: GeoJSONFeatureCollection;
   total_distance_km: number;
   message: string;
   stats: RouteStats;
+  metrics?: RouteMetrics;
 }
 
 export interface ValidateResponse {

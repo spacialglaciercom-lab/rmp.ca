@@ -188,7 +188,14 @@ const config = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: true,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS", "ACCESS_BACKGROUND_LOCATION"],
+    permissions: [
+      "POST_NOTIFICATIONS",
+      "ACCESS_BACKGROUND_LOCATION",
+      "BLUETOOTH",
+      "BLUETOOTH_ADMIN",
+      "BLUETOOTH_SCAN",
+      "BLUETOOTH_CONNECT",
+    ],
     queries: [
       {
         package: "com.google.android.gms",
@@ -297,6 +304,16 @@ const config = {
       : []),
     // Vector map on native (iOS/Android). No token required; use OSM or MapLibre styles. Replaces Mapbox; no Podfile hacks.
     "@maplibre/maplibre-react-native",
+    // BLE scanning for nearby devices
+    [
+      "react-native-ble-plx",
+      {
+        isBackgroundEnabled: false,
+        modes: ["central"],
+        bluetoothAlwaysPermission:
+          "Allow $(PRODUCT_NAME) to connect to nearby Bluetooth devices.",
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,

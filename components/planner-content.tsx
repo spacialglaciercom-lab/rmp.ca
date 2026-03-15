@@ -53,6 +53,9 @@ import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 import { RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
+import { FuelAwarePlugin, TurnPenaltyPlugin } from "@/lib/routing_plugins";
+import type { RoutingCostPlugin } from "@/lib/routing_plugins";
+import { enrichNodesWithElevation } from "@/lib/elevationEnrichment";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import {
   optimizeRoute as backendOptimizeRoute,
@@ -296,7 +299,17 @@ export default function PlannerContent() {
         // When v2 is on, we never use the backend (Overture); we only try v2 then local fallback.
         if (useOfflineOptimizerV2) {
           try {
-            const v2 = new RouteOptimizerSimpleV2(nodes, ways);
+            const v2Plugins: RoutingCostPlugin[] = [];
+            if (fuelAwareRoutingOn) {
+              await enrichNodesWithElevation(nodes);
+              v2Plugins.push(FuelAwarePlugin);
+            }
+            if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
+            const v2 = new RouteOptimizerSimpleV2(
+              nodes,
+              ways,
+              v2Plugins.length ? v2Plugins : undefined,
+            );
             optResult = v2.optimize(
               startCoords?.latitude,
               startCoords?.longitude,
@@ -888,7 +901,17 @@ export default function PlannerContent() {
                 | undefined;
               if (useOfflineOptimizerV2) {
                 try {
-                  const v2 = new RouteOptimizerSimpleV2(nodes, ways);
+                  const v2Plugins: RoutingCostPlugin[] = [];
+                  if (fuelAwareRoutingOn) {
+                    await enrichNodesWithElevation(nodes);
+                    v2Plugins.push(FuelAwarePlugin);
+                  }
+                  if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
+                  const v2 = new RouteOptimizerSimpleV2(
+                    nodes,
+                    ways,
+                    v2Plugins.length ? v2Plugins : undefined,
+                  );
                   optResult = v2.optimize(
                     startCoords?.latitude,
                     startCoords?.longitude,

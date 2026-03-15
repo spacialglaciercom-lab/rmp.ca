@@ -42,6 +42,7 @@ import {
   buildHaversineMatrix,
   getValhallaMatrix,
 } from "@/lib/vrp-solvers";
+import type { VRPRouteMetrics } from "@/lib/vrp-solvers/types";
 
 type InputMode = "coordinates" | "address";
 
@@ -83,6 +84,8 @@ interface VRPResult {
   totalTime: number;
   /** Per-route stats (distance m, duration s). VROOM only. */
   routeStats?: VRPRouteStats[];
+  /** Per-route analytics from the backend analytics module. OR-Tools only. */
+  routeMetrics?: VRPRouteMetrics[];
   /** Stops that could not be assigned (capacity / time-window infeasible). VROOM only. */
   unassigned?: string[];
 }
@@ -139,8 +142,39 @@ function parseCoordinates(text: string): VRPStop[] {
   const locations: VRPStop[] = [];
 
   for (const line of lines) {
-    if (!line.trim()) continue;
-    const parts = line.split(",").map((p) => p.trim());
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    let parsedFromJson = false;
+    // One array per line, e.g. "[-73.5912, 45.5017]" or "[45.5017, -73.5912]"
+    if (trimmed.startsWith("[") && trimmed.includes("]")) {
+      try {
+        const item = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(item) && item.length >= 2) {
+          const a = Number(item[0]);
+          const b = Number(item[1]);
+          if (Number.isFinite(a) && Number.isFinite(b)) {
+            const lat = Math.abs(a) <= 90 && Math.abs(b) <= 180 ? a : b;
+            const lon = Math.abs(a) <= 90 && Math.abs(b) <= 180 ? b : a;
+            if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+              locations.push({
+                lat,
+                lon,
+                label: typeof item[2] === "string" ? item[2] : `Stop ${locations.length + 1}`,
+                demand: item[3] !== undefined && Number.isFinite(Number(item[3])) ? Number(item[3]) : undefined,
+              });
+              parsedFromJson = true;
+            }
+          }
+        }
+      } catch {
+        // Fall through to comma-split
+      }
+    }
+
+    if (parsedFromJson) continue;
+
+    const parts = trimmed.split(",").map((p) => p.trim());
     if (parts.length >= 2) {
       const lat = parseFloat(parts[0]);
       const lon = parseFloat(parts[1]);
@@ -352,8 +386,12 @@ export function VRPPlanner({
   const [addressesText, setAddressesText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VRPResult | null>(null);
-  const [useValhallaApi, setUseValhallaApi] = useState(true);
+  /** Default false so local solvers (Clarke-Wright, etc.) work without network; enable for better road distances. */
+  const [useValhallaApi, setUseValhallaApi] = useState(false);
+  /** Shown when Optimize is pressed but input is invalid (e.g. 0 locations) so user sees why no results appear. */
+  const [vrpInlineError, setVrpInlineError] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
+  const resultCardRef = useRef<View | null>(null);
 
   /** Refs for iOS: avoid full re-render on every keystroke (reduces freeze when keyboard opens). */
   const coordinatesRef = useRef("");
@@ -379,8 +417,10 @@ export function VRPPlanner({
   const [nominatimKey, setNominatimKey] = useState(0);
   /** Bump to remount numeric/advanced inputs with fresh defaultValue (e.g. after Clear). */
   const [numericInputsKey, setNumericInputsKey] = useState(0);
-  /** On iOS, use uncontrolled inputs everywhere to prevent keyboard-open freeze from re-renders. */
-  const useUncontrolledInputs = Platform.OS === "ios";
+  /** On iOS, use uncontrolled inputs everywhere to prevent keyboard-open freeze from re-renders.
+   *  On web, also use uncontrolled inputs so coordinatesRef.current is authoritative and
+   *  we don't depend on React state being up-to-date at the moment Optimize is pressed. */
+  const useUncontrolledInputs = Platform.OS === "ios" || Platform.OS === "web";
 
   const [geocodeProgress, setGeocodeProgress] = useState<{
     done: number;
@@ -897,7 +937,25 @@ export function VRPPlanner({
       });
     }
 
-    const csv = [comment, headerWithInstructions, ...rows].join("\n");
+    // Append per-route metrics section if available
+    const metricsRows: string[] = [];
+    if (result.routeMetrics && result.routeMetrics.length > 0) {
+      metricsRows.push("");
+      metricsRows.push("# Route Metrics");
+      metricsRows.push(
+        "Route,PhysicalDistanceKm,AdjustedCostKm,ElevationGainM,RightTurns,LeftTurns,UTurns,StraightSegments",
+      );
+      result.routeMetrics.forEach((m, idx) => {
+        const physKm = (m.physical_distance_m / 1000).toFixed(3);
+        const adjKm = (m.adjusted_cost_m / 1000).toFixed(3);
+        const elevM = m.elevation_gain_m.toFixed(1);
+        metricsRows.push(
+          `${idx + 1},${physKm},${adjKm},${elevM},${m.turns.right},${m.turns.left},${m.turns.u_turn},${m.turns.straight}`,
+        );
+      });
+    }
+
+    const csv = [comment, headerWithInstructions, ...rows, ...metricsRows].join("\n");
     const fileName = `vrp_route_${new Date().toISOString().slice(0, 10)}.csv`;
 
     try {
@@ -944,16 +1002,43 @@ export function VRPPlanner({
   const runVRP = async () => {
     setLoading(true);
     setResult(null);
+    setVrpInlineError(null);
     if (__DEV__ || typeof window !== "undefined") {
       // eslint-disable-next-line no-console
       console.log("[VRP] Optimize button pressed, runVRP started");
     }
+    // Yield so the loading spinner can paint before we do sync work
+    await new Promise<void>((r) =>
+      typeof requestAnimationFrame !== "undefined"
+        ? requestAnimationFrame(() => r())
+        : setTimeout(r, 0),
+    );
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.log("[VRP] After yield, starting work");
+    }
     try {
       Keyboard.dismiss();
       hapticImpact(ImpactFeedbackStyle.Medium);
-      const coordsValue = useUncontrolledInputs
+      // On web, state can be empty if paste didn't trigger onChange; use ref and DOM fallback
+      let coordsValue = useUncontrolledInputs
         ? coordinatesRef.current
-        : coordinates;
+        : (coordinates || coordinatesRef.current);
+      if (
+        typeof window !== "undefined" &&
+        inputMode === "coordinates" &&
+        (!coordsValue || !String(coordsValue).trim())
+      ) {
+        const node = coordinatesInputRef.current as { value?: string } | null;
+        if (node?.value?.trim()) coordsValue = node.value;
+        else {
+          const wrap = document.querySelector("[data-vrp-coordinates-wrap]");
+          const el = wrap?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            "textarea, input",
+          );
+          if (el?.value?.trim()) coordsValue = el.value;
+        }
+      }
       const addressesValue = useUncontrolledInputs
         ? addressesTextRef.current
         : addressesText;
@@ -988,14 +1073,22 @@ export function VRPPlanner({
           return;
         }
       } else if (!locations || locations.length < 2) {
-        Alert.alert(
-          "Error",
+        if (typeof window !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.log("[VRP] Not enough locations", locations?.length ?? 0);
+        }
+        const msg =
           inputMode === "coordinates"
-            ? "Enter at least 2 coordinates (lat,lon or lat,lon,label or lat,lon,label,demand per line)."
-            : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds.",
-        );
+            ? "Enter at least 2 coordinates: one [lon,lat] or lat,lon per line in the Coordinates box above."
+            : "Enter at least 2 addresses (one per line) and ensure geocoding succeeds.";
+        setVrpInlineError(msg);
+        Alert.alert("Error", msg);
         setLoading(false);
         return;
+      }
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.log("[VRP] Locations parsed:", locations.length);
       }
       let locationsForMatrix = locations;
       if (useCurrentAsDepot) {
@@ -1082,12 +1175,20 @@ export function VRPPlanner({
             ) || 0) * 60
           : 0;
 
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.log("[VRP] Building matrix, algorithm:", algorithm);
+      }
       const matrix = solver.requiresMatrix
         ? useValhallaApi
           ? await getValhallaMatrix(locationsForMatrix)
           : buildHaversineMatrix(locationsForMatrix)
         : undefined;
 
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.log("[VRP] Solving...");
+      }
       const output = await solver.solve({
         locations: locationsForMatrix,
         numVehicles,
@@ -1106,10 +1207,31 @@ export function VRPPlanner({
         totalDistance: output.totalDistanceKm,
         totalTime: output.totalTimeMin,
         routeStats: output.routeStats,
+        routeMetrics: output.routeMetrics,
         unassigned: output.unassigned,
       });
+      setVrpInlineError(null);
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.log("[VRP] Done. Stops:", output.stops?.length);
+      }
+      // Scroll to the result card at the bottom so the user sees it
+      setTimeout(() => {
+        if (!nestedInScrollView && scrollViewRef.current) {
+          const sv = scrollViewRef.current as { scrollToEnd?: (o: { animated?: boolean }) => void } | null;
+          sv?.scrollToEnd?.({ animated: true });
+        } else if (typeof window !== "undefined" && resultCardRef.current) {
+          // On web with nestedInScrollView, scroll the result card into view
+          const el = resultCardRef.current as unknown as HTMLElement | null;
+          el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        }
+      }, 300);
       // ─────────────────────────────────────────────────────────────────────
     } catch (error) {
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.error("[VRP] Error:", error);
+      }
       const rawMessage =
         error instanceof Error ? error.message : "Failed to calculate route.";
       const isBackendOffline =
@@ -1247,10 +1369,20 @@ export function VRPPlanner({
       const newLines = stops
         .map((s) => `${s.lat},${s.lon},${s.label}`)
         .join("\n");
-      setCoordinates((prev) =>
-        prev.trim() ? prev.trim() + "\n" + newLines : newLines,
-      );
-      setAddressesText("");
+      if (useUncontrolledInputs) {
+        const next = (coordinatesRef.current.trim()
+          ? coordinatesRef.current.trim() + "\n"
+          : "") + newLines;
+        coordinatesRef.current = next;
+        coordinatesInputRef.current?.setNativeProps?.({ text: next });
+        addressesTextRef.current = "";
+        setAddressesKey((k) => k + 1);
+      } else {
+        setCoordinates((prev) =>
+          prev.trim() ? prev.trim() + "\n" + newLines : newLines,
+        );
+        setAddressesText("");
+      }
       if (stops.length < lines.length) {
         Alert.alert(
           "Partially done",
@@ -1362,35 +1494,48 @@ export function VRPPlanner({
         </View>
 
         {inputMode === "coordinates" ? (
-          <TextInput
-            key={useUncontrolledInputs ? `coords-${coordinatesKey}` : undefined}
-            ref={coordinatesInputRef}
-            style={[
-              styles.input,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-                color: colors.foreground,
-              },
-              fillScreen && { flex: 1, minHeight: 120 },
-            ]}
-            multiline
-            numberOfLines={5}
-            placeholder="45.5017,-73.5673, Downtown\n45.5234,-73.5834, West End\n45.5100,-73.6000, Depot, 12"
-            placeholderTextColor={colors.muted}
-            {...(useUncontrolledInputs
-              ? {
-                  defaultValue: "",
-                  onChangeText: (t) => {
-                    coordinatesRef.current = t;
-                  },
-                }
-              : { value: coordinates, onChangeText: setCoordinates })}
-            onFocus={handleInputFocus}
-            autoCapitalize="none"
-            autoCorrect={false}
-            textAlignVertical="top"
-          />
+          <View
+            style={fillScreen ? { flex: 1, minHeight: 120 } : undefined}
+            {...(typeof document !== "undefined"
+              ? { "data-vrp-coordinates-wrap": true }
+              : {})}
+          >
+            <TextInput
+              key={useUncontrolledInputs ? `coords-${coordinatesKey}` : undefined}
+              ref={coordinatesInputRef}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                },
+                fillScreen && { flex: 1, minHeight: 120 },
+              ]}
+              multiline
+              numberOfLines={5}
+              placeholder="45.5017,-73.5673, Downtown\n45.5234,-73.5834, West End\n45.5100,-73.6000, Depot, 12"
+              placeholderTextColor={colors.muted}
+              {...(useUncontrolledInputs
+                ? {
+                    defaultValue: "",
+                    onChangeText: (t) => {
+                      coordinatesRef.current = t;
+                    },
+                  }
+                : {
+                    value: coordinates,
+                    onChangeText: (t) => {
+                      coordinatesRef.current = t;
+                      setCoordinates(t);
+                    },
+                  })}
+              onFocus={handleInputFocus}
+              autoCapitalize="none"
+              autoCorrect={false}
+              textAlignVertical="top"
+            />
+          </View>
         ) : (
           <>
             <TextInput
@@ -1888,6 +2033,28 @@ export function VRPPlanner({
           </Text>
         </TouchableOpacity>
 
+        {vrpInlineError ? (
+          <View
+            style={{
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 8,
+              backgroundColor: (colors.error ?? "#dc3545") + "22",
+              borderWidth: 1,
+              borderColor: (colors.error ?? "#dc3545") + "66",
+            }}
+          >
+            <Text
+              style={{
+                color: colors.error ?? "#dc3545",
+                fontSize: 14,
+              }}
+              numberOfLines={3}
+            >
+              {vrpInlineError}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[
@@ -2153,7 +2320,7 @@ export function VRPPlanner({
       </View>
 
       {result ? (
-        <View style={[styles.resultCard, { backgroundColor: colors.surface }]}>
+        <View ref={resultCardRef} style={[styles.resultCard, { backgroundColor: colors.surface }]}>
           <Text style={[styles.resultTitle, { color: colors.foreground }]}>
             Optimized Route
           </Text>
@@ -2217,6 +2384,10 @@ export function VRPPlanner({
           {result.routes && result.routes.length > 1
             ? result.routes.map((routeStops, routeIdx) => {
                 const stats = result.routeStats?.[routeIdx];
+                const metrics = result.routeMetrics?.[routeIdx];
+                const hasAdjustment =
+                  metrics &&
+                  metrics.adjusted_cost_m !== metrics.physical_distance_m;
                 return (
                   <View
                     key={routeIdx}
@@ -2245,6 +2416,69 @@ export function VRPPlanner({
                         </Text>
                       )}
                     </View>
+                    {metrics && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <View
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            backgroundColor: colors.surface,
+                          }}
+                        >
+                          <Text style={[styles.helperText, { color: colors.muted }]}>
+                            📏 {(metrics.physical_distance_m / 1000).toFixed(2)} km
+                          </Text>
+                        </View>
+                        {hasAdjustment && (
+                          <View
+                            style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 6,
+                              backgroundColor: colors.surface,
+                            }}
+                          >
+                            <Text style={[styles.helperText, { color: magenta }]}>
+                              ⚡ {(metrics.adjusted_cost_m / 1000).toFixed(2)} km adj
+                            </Text>
+                          </View>
+                        )}
+                        {metrics.elevation_gain_m > 0 && (
+                          <View
+                            style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 6,
+                              backgroundColor: colors.surface,
+                            }}
+                          >
+                            <Text style={[styles.helperText, { color: colors.muted }]}>
+                              ⛰ +{metrics.elevation_gain_m.toFixed(0)} m
+                            </Text>
+                          </View>
+                        )}
+                        <View
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            backgroundColor: colors.surface,
+                          }}
+                        >
+                          <Text style={[styles.helperText, { color: colors.muted }]}>
+                            ↰{metrics.turns.left} ↱{metrics.turns.right} ↩{metrics.turns.u_turn}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                     {routeStops.map((stop, idx) => (
                       <View
                         key={idx}

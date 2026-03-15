@@ -36,6 +36,7 @@ from .routing_plugins import (
     calculate_bearing,
 )
 from .vector_clean import CleanOptions, clean_geojson
+from .analytics import calculate_route_metrics
 
 # GPX export support
 try:
@@ -143,6 +144,7 @@ class OptimizeResponse(BaseModel):
     total_distance_km: float
     message: str
     stats: RouteStats
+    metrics: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -1026,6 +1028,14 @@ def optimize_route(request: Request, body: OptimizeRequest):
     if n_components > 1:
         msg += f" (disconnected graph: {n_components} components solved independently)"
 
+    # Analytics: compute plugin-aware metrics for the full solved route.
+    # route_coords is [[lon, lat], ...]; convert to (lon, lat) tuples for analytics.
+    path_for_analytics: list[tuple[float, float]] = [
+        (c[0], c[1]) for c in route_coords
+    ]
+    active_plugins: list[RoutingCostPlugin] = plugins or []
+    route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
+
     # Build route GeoJSON
     route_geojson = GeoJSONFeatureCollection(
         type="FeatureCollection",
@@ -1036,6 +1046,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
                 properties={
                     "total_distance_km": round(total_distance_km, 4),
                     "total_traversals": total_traversals,
+                    "metrics": route_metrics,
                 },
             )
         ],
@@ -1063,6 +1074,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
         total_distance_km=round(total_distance_km, 4),
         message=msg,
         stats=stats,
+        metrics=route_metrics,
     )
     
     # Dual-path: return GPX when client requests application/gpx+xml
