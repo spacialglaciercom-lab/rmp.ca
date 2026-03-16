@@ -61,6 +61,7 @@ import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingCon
 import { MapSidebar } from "@/components/mapTab/sidebar/MapSidebar";
 import { AIChatBubble } from "@/components/AIChatBubble";
 import { AvoidedNodesPanel } from "@/components/AvoidedNodesPanel";
+import { DeletedSegmentsPanel } from "@/components/DeletedSegmentsPanel";
 import { HelpPrompt } from "@/components/help/HelpPrompt";
 import { NavigationPanel } from "@/components/mapTab/navigation/NavigationPanel";
 import { MyPlacesScreen } from "@/components/mapTab/places/MyPlacesScreen";
@@ -1774,6 +1775,7 @@ export default function MapContent() {
       {aiChatEnabled && <AIChatBubble />}
 
       <AvoidedNodesPanel />
+      <DeletedSegmentsPanel />
 
       <MapSidebar />
 

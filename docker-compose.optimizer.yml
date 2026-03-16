@@ -1,7 +1,75 @@
-# Optional: add Python optimizer + nginx. Use with:
+# Optional: add Python optimizer + nginx + Redis + Celery worker. Use with:
 #   docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
 # Default "docker compose up" runs backend + extract + vroom only (no optimizer).
+#
+# Service graph (optimizer profile):
+#   backend ──► nginx-optimizer ──► optimizer (FastAPI, stateless)
+#                                         │
+#                                         ▼
+#                                   celery-worker ◄── redis (broker + result backend)
+#
+# The FastAPI app (optimizer) enqueues tasks to Redis; celery-worker pops
+# and executes them.  The Node.js backend (BFF) polls the Python status
+# endpoints, so it never holds a long-lived HTTP connection to OR-Tools.
+
 services:
+  # ── Redis — broker + result backend ────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: rmpca-redis
+    profiles: [optimizer]
+    # No host port mapping — Redis is internal to the optimizer stack only.
+    # If you need a host port for debugging: add "- 6379:6379" here.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    # Persist the result backend across container restarts so in-flight tasks
+    # survive a FastAPI container restart.  Increase maxmemory for large fleets.
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+
+  # ── Celery worker ───────────────────────────────────────────────────────────
+  celery-worker:
+    build:
+      context: ./backend
+      args:
+        BASE_IMAGE: public.ecr.aws/docker/library/python:3.12-slim
+    # No container_name — allows docker compose up --scale celery-worker=N
+    profiles: [optimizer]
+    # One worker process, one thread: OR-Tools can be CPU/memory-intensive and
+    # we want predictable resource usage per container.
+    command: >
+      celery -A app.celery_app:celery_app worker
+      --loglevel=info
+      --concurrency=1
+      --pool=solo
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      # Forward DEM_PATH so the fuel-aware plugin works inside the worker
+      - DEM_PATH=${DEM_PATH:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Give OR-Tools enough heap; tune down if memory is constrained
+    mem_limit: 2g
+
+  # ── FastAPI app — now stateless: just enqueues tasks ───────────────────────
+  optimizer:
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Node.js BFF — point at the nginx-optimizer front-door ──────────────────
   backend:
     environment:
       - OPTIMIZER_BACKEND_URL=http://nginx-optimizer:80

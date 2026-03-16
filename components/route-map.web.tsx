@@ -197,6 +197,7 @@ function LeafletGeoJSONOverlay({
   onAvoidNode,
   osrmBaseUrl,
   nodeInspectorEnabled = false,
+  segmentEditMode = false,
 }: {
   data: GeoJSONFeatureCollection;
   strokeColor: string;
@@ -205,6 +206,7 @@ function LeafletGeoJSONOverlay({
   onAvoidNode?: (node: { lat: number; lon: number; nodeId?: number; name?: string }) => void;
   osrmBaseUrl?: string;
   nodeInspectorEnabled?: boolean;
+  segmentEditMode?: boolean;
 }) {
   const map = useMapHook?.();
   const layerRef = React.useRef<any>(null);
@@ -223,20 +225,18 @@ function LeafletGeoJSONOverlay({
         style: (feature: any) => {
           const role = feature?.properties?.role;
           if (role === "optimized-route") {
-            return {
-              color: strokeColor,
-              weight: strokeWidth + 2,
-              opacity: 0.9,
-              lineCap: "round",
-              lineJoin: "round",
-            };
+            // Hidden — the full-route LineString re-traces deadhead roads multiple
+            // times inside a single <path>, causing those segments to look much
+            // thicker/bolder than single-pass roads. All visual rendering is
+            // handled by the individual "step" features below, which are drawn
+            // once per traversal and use consistent styling.
+            return { opacity: 0, weight: 0 };
           }
           if (role === "step") {
             return {
               color: strokeColor,
               weight: strokeWidth,
-              opacity: 0.7,
-              dashArray: "8 4",
+              opacity: 0.85,
               lineCap: "round",
               lineJoin: "round",
             };
@@ -384,6 +384,79 @@ function LeafletGeoJSONOverlay({
             return;
           }
 
+          // Step segments — show info popup + optional "Delete segment" button
+          if (role === "step") {
+            const uid = `step-seg-${props.stepIndex ?? Math.random().toString(36).slice(2)}`;
+            const segName: string = props.name || "(unnamed road)";
+            const distStr =
+              props.distance != null
+                ? `${(props.distance / 1000).toFixed(2)} km`
+                : "";
+            const durStr =
+              props.duration != null
+                ? `${Math.round(props.duration / 60)} min`
+                : "";
+
+            const deleteBtn =
+              onAvoidNode
+                ? `<button id="del-seg-${uid}" style="margin-top:6px;padding:4px 10px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;width:100%;">✂ Delete segment</button>`
+                : "";
+
+            const popupHtml = `
+              <div style="font-family:sans-serif;font-size:13px;min-width:170px;">
+                <div style="font-weight:700;margin-bottom:4px;">${segName}</div>
+                ${distStr ? `<div style="color:#666;font-size:11px;">Distance: ${distStr}</div>` : ""}
+                ${durStr ? `<div style="color:#666;font-size:11px;">Duration: ${durStr}</div>` : ""}
+                ${deleteBtn}
+              </div>`;
+
+            layer.bindPopup(popupHtml, { maxWidth: 260 });
+
+            if (onAvoidNode) {
+              // Highlight segment red on hover
+              layer.on("mouseover", () => {
+                layer.setStyle({
+                  color: "#ef4444",
+                  opacity: 1,
+                  weight: strokeWidth + 2,
+                  dashArray: undefined,
+                });
+              });
+              layer.on("mouseout", () => {
+                layer.setStyle({
+                  color: strokeColor,
+                  opacity: 0.85,
+                  weight: strokeWidth,
+                });
+              });
+
+              // Wire delete button — uses midpoint of step geometry
+              layer.on("popupopen", () => {
+                const btn = document.getElementById(`del-seg-${uid}`);
+                if (btn) {
+                  btn.addEventListener("click", () => {
+                    const stepCoords = (
+                      feature.geometry as { coordinates: [number, number][] }
+                    ).coordinates;
+                    const midIdx = Math.floor(stepCoords.length / 2);
+                    const [midLon, midLat] =
+                      stepCoords[midIdx] ?? stepCoords[0];
+                    onAvoidNode({
+                      lat: midLat,
+                      lon: midLon,
+                      name:
+                        segName !== "(unnamed road)"
+                          ? `Segment: ${segName}`
+                          : "Segment (unnamed)",
+                    });
+                    layer.closePopup();
+                  });
+                }
+              });
+            }
+            return;
+          }
+
           const parts: string[] = [];
           if (props.name) parts.push(`<strong>${props.name}</strong>`);
           if (props.distance != null)
@@ -417,7 +490,7 @@ function LeafletGeoJSONOverlay({
         layerRef.current = null;
       }
     };
-  }, [map, data, strokeColor, strokeWidth, fillColor]);
+  }, [map, data, strokeColor, strokeWidth, fillColor, segmentEditMode, onAvoidNode]);
 
   return null;
 }
@@ -847,6 +920,7 @@ export const RouteMap = React.memo(
     const nodeInspectorEnabled = useMapWebPluginsStore(
       (s) => s.nodeInspectorEnabled,
     );
+    const segmentEditMode = useMapWebPluginsStore((s) => s.segmentEditMode);
     const markerClusteringEnabled = useMapWebPluginsStore(
       (s) => s.markerClusteringEnabled,
     );
@@ -1419,7 +1493,8 @@ export const RouteMap = React.memo(
                   strokeWidth={geojsonStrokeWidth}
                   fillColor={geojsonFillColor}
                   nodeInspectorEnabled={nodeInspectorEnabled}
-                  onAvoidNode={nodeInspectorEnabled ? onAvoidNode : undefined}
+                  segmentEditMode={segmentEditMode}
+                  onAvoidNode={onAvoidNode}
                   osrmBaseUrl={nodeInspectorEnabled ? osrmBaseUrl : undefined}
                 />
               )}

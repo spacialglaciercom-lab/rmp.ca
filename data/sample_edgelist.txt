@@ -1,0 +1,7 @@
+# Undirected edge list: u v [weight]
+# Eulerian example (all even degree): triangle + one extra edge
+1 2 10
+2 3 20
+3 1 15
+1 4 5
+4 2 8

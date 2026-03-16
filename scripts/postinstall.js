@@ -8,6 +8,13 @@ if (process.env.VERCEL === "1") {
 }
 
 const { execSync } = require("child_process");
-const cmd =
-  "node scripts/patch-react-native-css-interop.js && node scripts/patch-firestore-ios.js && node scripts/patch-crashlytics-ios.js && node scripts/patch-rnfb-app-check.js && node scripts/patch-rnfb-app-module.js && node scripts/patch-rnfb-app-module-header.js && node scripts/patch-rnfb-simple.js && node scripts/patch-rnfb-app-check-specific.js && node scripts/patch-ngrok-utils.js && patch-package";
-execSync(cmd, { stdio: "inherit" });
+const run = (cmd, opts = {}) => {
+  try {
+    execSync(cmd, { stdio: "inherit", ...opts });
+  } catch (e) {
+    if (opts.ignoreFailure) return;
+    throw e;
+  }
+};
+run("node scripts/patch-react-native-css-interop.js && node scripts/patch-firestore-ios.js && node scripts/patch-crashlytics-ios.js && node scripts/patch-rnfb-app-check.js && node scripts/patch-rnfb-app-module.js && node scripts/patch-rnfb-app-module-header.js && node scripts/patch-rnfb-simple.js && node scripts/patch-rnfb-app-check-specific.js && node scripts/patch-ngrok-utils.js");
+run("patch-package", { ignoreFailure: true });

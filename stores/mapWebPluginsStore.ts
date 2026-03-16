@@ -11,6 +11,7 @@ export interface MapWebPluginsState {
   geomanDrawingEnabled: boolean;
   nodeInspectorEnabled: boolean;
   avoidedNodesPanelEnabled: boolean;
+  segmentEditMode: boolean;
 }
 
 interface MapWebPluginsStore extends MapWebPluginsState {
@@ -18,6 +19,7 @@ interface MapWebPluginsStore extends MapWebPluginsState {
   setGeomanDrawingEnabled: (v: boolean) => void;
   setNodeInspectorEnabled: (v: boolean) => void;
   setAvoidedNodesPanelEnabled: (v: boolean) => void;
+  setSegmentEditMode: (v: boolean) => void;
   /** @deprecated No longer needed -- store auto-hydrates via Zustand persist middleware */
   hydrate: () => Promise<void>;
 }
@@ -29,11 +31,13 @@ export const useMapWebPluginsStore = create<MapWebPluginsStore>()(
       geomanDrawingEnabled: true,
       nodeInspectorEnabled: false,
       avoidedNodesPanelEnabled: true,
+      segmentEditMode: false,
 
       setMarkerClusteringEnabled: (v) => set({ markerClusteringEnabled: v }),
       setGeomanDrawingEnabled: (v) => set({ geomanDrawingEnabled: v }),
       setNodeInspectorEnabled: (v) => set({ nodeInspectorEnabled: v }),
       setAvoidedNodesPanelEnabled: (v) => set({ avoidedNodesPanelEnabled: v }),
+      setSegmentEditMode: (v) => set({ segmentEditMode: v }),
 
       // Backward-compat stub: no-op since persist middleware handles hydration
       hydrate: async () => {},
@@ -46,6 +50,7 @@ export const useMapWebPluginsStore = create<MapWebPluginsStore>()(
         geomanDrawingEnabled: s.geomanDrawingEnabled,
         nodeInspectorEnabled: s.nodeInspectorEnabled,
         avoidedNodesPanelEnabled: s.avoidedNodesPanelEnabled,
+        segmentEditMode: s.segmentEditMode,
       }),
     },
   ),

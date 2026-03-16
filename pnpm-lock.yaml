@@ -431,6 +431,12 @@ importers:
       jsdom:
         specifier: ^27.4.0
         version: 27.4.0
+      metro:
+        specifier: 0.83.3
+        version: 0.83.3
+      metro-file-map:
+        specifier: 0.83.3
+        version: 0.83.3
       patch-package:
         specifier: ^8.0.1
         version: 8.0.1
@@ -13393,7 +13399,7 @@ snapshots:
       '@react-native/dev-middleware': 0.81.5
       debug: 4.4.3
       invariant: 2.2.4
-      metro: 0.83.5
+      metro: 0.83.3
       metro-config: 0.83.5
       metro-core: 0.83.5
       semver: 7.7.4

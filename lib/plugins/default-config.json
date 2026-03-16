@@ -4,6 +4,7 @@
     "routeOptimization": { "enabled": true },
     "overture": { "enabled": false },
     "overture-extraction": { "enabled": false },
+    "osm-extraction": { "enabled": false },
     "zones": { "enabled": false },
     "ai-chat": { "enabled": false },
     "drive-preview": { "enabled": false },

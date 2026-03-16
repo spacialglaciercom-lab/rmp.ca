@@ -4,12 +4,15 @@
  * Uses multiple public Overpass API endpoints with fallback on failure.
  */
 
-/** Public Overpass API endpoints (try in order until one succeeds). */
+/** Public Overpass API endpoints (tried round-robin until one succeeds). */
 export const OVERPASS_API_ENDPOINTS: readonly string[] = [
-  "https://overpass-api.de/api/interpreter", // Main (DE)
-  "https://overpass.kumi.systems/api/interpreter", // Kumi Systems
-  "https://overpass.openstreetmap.fr/api/interpreter", // French
-  "https://overpass.osm.rambler.ru/cgi/interpreter", // Russian
+  "https://overpass-api.de/api/interpreter",                  // Main — official, high capacity (DE)
+  "https://overpass.openstreetmap.fr/api/interpreter",        // French — reliable, may lag ~minutes (FR)
+  "https://overpass.osm.ch/api/interpreter",                  // Swiss — fast, best for European queries (CH)
+  "https://overpass.kumi.systems/api/interpreter",            // Kumi Systems — independent, strict rate limits (AT)
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",  // mail.ru (RU)
+  "https://overpass.osm.rambler.ru/cgi/interpreter",          // Rambler (RU)
+  "https://overpass.private.coffee/api/interpreter",          // private.coffee (AT)
 ];
 
 /** Current index for round-robin (optional load spreading). */
