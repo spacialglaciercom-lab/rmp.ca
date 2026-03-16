@@ -225,20 +225,18 @@ function LeafletGeoJSONOverlay({
         style: (feature: any) => {
           const role = feature?.properties?.role;
           if (role === "optimized-route") {
-            return {
-              color: strokeColor,
-              weight: strokeWidth + 2,
-              opacity: 0.9,
-              lineCap: "round",
-              lineJoin: "round",
-            };
+            // Hidden — the full-route LineString re-traces deadhead roads multiple
+            // times inside a single <path>, causing those segments to look much
+            // thicker/bolder than single-pass roads. All visual rendering is
+            // handled by the individual "step" features below, which are drawn
+            // once per traversal and use consistent styling.
+            return { opacity: 0, weight: 0 };
           }
           if (role === "step") {
             return {
               color: strokeColor,
               weight: strokeWidth,
-              opacity: 0.7,
-              dashArray: "8 4",
+              opacity: 0.85,
               lineCap: "round",
               lineJoin: "round",
             };
@@ -427,9 +425,8 @@ function LeafletGeoJSONOverlay({
               layer.on("mouseout", () => {
                 layer.setStyle({
                   color: strokeColor,
-                  opacity: 0.7,
+                  opacity: 0.85,
                   weight: strokeWidth,
-                  dashArray: "8 4",
                 });
               });
 
