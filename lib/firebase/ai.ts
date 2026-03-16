@@ -82,101 +82,125 @@ IMPORTANT: Respond with ONLY valid JSON matching this exact schema (no markdown,
   "summary": "<human-readable summary of what was parsed>"
 }`;
 
-// ── Lazy-loaded AI instance ───────────────────────────────────────────────
+// ── Shared Gemini model factory ───────────────────────────────────────────
 
-let _modelPromise: Promise<{
+export type GeminiModel = {
   generateContent: (
     prompt: string,
   ) => Promise<{ response: { text: () => string } }>;
-}> | null = null;
+};
 
-function getModel() {
-  if (_modelPromise) return _modelPromise;
+export interface GeminiModelConfig {
+  systemInstruction: string;
+  maxOutputTokens: number;
+}
 
-  _modelPromise = (async () => {
-    const isExpoGo = Constants.appOwnership === "expo";
+export function createLazyGeminiModel(config: GeminiModelConfig): {
+  getModel: () => Promise<GeminiModel>;
+  resetModel: () => void;
+} {
+  let _modelPromise: Promise<GeminiModel> | null = null;
 
-    if (Platform.OS !== "web" && !isExpoGo) {
-      // Native dev build: use @react-native-firebase/ai
+  function getModel() {
+    if (_modelPromise) return _modelPromise;
+
+    _modelPromise = (async () => {
+      const isExpoGo = Constants.appOwnership === "expo";
+
+      if (Platform.OS !== "web" && !isExpoGo) {
+        try {
+          const {
+            getAI,
+            getGenerativeModel,
+            GoogleAIBackend,
+          } = require("@react-native-firebase/ai");
+          const ai = getAI(undefined, { backend: new GoogleAIBackend() });
+          return getGenerativeModel(ai, {
+            model: "gemini-2.0-flash",
+            systemInstruction: config.systemInstruction,
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: config.maxOutputTokens,
+              responseMimeType: "application/json",
+            },
+          });
+        } catch (e) {
+          console.warn(
+            "[FirebaseAI] Native module not available, trying JS SDK:",
+            (e as Error).message,
+          );
+        }
+      }
+
       try {
         const {
-          getAI,
-          getGenerativeModel,
-          GoogleAIBackend,
-        } = require("@react-native-firebase/ai");
-        const ai = getAI(undefined, { backend: new GoogleAIBackend() });
-        return getGenerativeModel(ai, {
+          initializeApp,
+          getApps,
+        } = require("firebase/app");
+        const {
+          getAI: getAIWeb,
+          getGenerativeModel: getGenModelWeb,
+          GoogleAIBackend: GoogleAIBackendWeb,
+        } = require("firebase/ai");
+
+        let app;
+        const existingApps = getApps();
+        const aiApp = existingApps.find(
+          (a: { name: string }) => a.name === "trashroute-ai",
+        );
+        if (aiApp) {
+          app = aiApp;
+        } else {
+          app = initializeApp(
+            {
+              apiKey: process.env.EXPO_PUBLIC_FIREBASE_AI_API_KEY || "",
+              projectId: "trashroutemobile",
+              appId: "1:970176642480:web:placeholder",
+            },
+            "trashroute-ai",
+          );
+        }
+
+        const ai = getAIWeb(app, { backend: new GoogleAIBackendWeb() });
+        return getGenModelWeb(ai, {
           model: "gemini-2.0-flash",
-          systemInstruction: CONSTRAINT_SYSTEM_PROMPT,
+          systemInstruction: config.systemInstruction,
           generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 2048,
+            maxOutputTokens: config.maxOutputTokens,
             responseMimeType: "application/json",
           },
         });
       } catch (e) {
-        console.warn(
-          "[FirebaseAI] Native module not available, trying JS SDK:",
+        console.error(
+          "[FirebaseAI] JS SDK fallback failed:",
           (e as Error).message,
         );
-      }
-    }
-
-    // Web / Expo Go fallback: use firebase JS SDK
-    try {
-      const {
-        initializeApp,
-        getApps,
-        getApp: getExistingApp,
-      } = require("firebase/app");
-      const {
-        getAI: getAIWeb,
-        getGenerativeModel: getGenModelWeb,
-        GoogleAIBackend: GoogleAIBackendWeb,
-      } = require("firebase/ai");
-
-      // Reuse existing JS app or create one for AI
-      let app;
-      const existingApps = getApps();
-      const aiApp = existingApps.find(
-        (a: { name: string }) => a.name === "trashroute-ai",
-      );
-      if (aiApp) {
-        app = aiApp;
-      } else {
-        // Web config from Firebase Console — same project as native (trashroutemobile)
-        app = initializeApp(
-          {
-            apiKey: process.env.EXPO_PUBLIC_FIREBASE_AI_API_KEY || "",
-            projectId: "trashroutemobile",
-            appId: "1:970176642480:web:placeholder", // Replace with actual web app ID from Firebase Console
-          },
-          "trashroute-ai",
+        throw new Error(
+          "Firebase AI not available. Use a native dev build or set EXPO_PUBLIC_FIREBASE_AI_API_KEY for web.",
         );
       }
+    })();
 
-      const ai = getAIWeb(app, { backend: new GoogleAIBackendWeb() });
-      return getGenModelWeb(ai, {
-        model: "gemini-2.0-flash",
-        systemInstruction: CONSTRAINT_SYSTEM_PROMPT,
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2048,
-          responseMimeType: "application/json",
-        },
-      });
-    } catch (e) {
-      console.error(
-        "[FirebaseAI] JS SDK fallback failed:",
-        (e as Error).message,
-      );
-      throw new Error(
-        "Firebase AI not available. Use a native dev build or set EXPO_PUBLIC_FIREBASE_AI_API_KEY for web.",
-      );
-    }
-  })();
+    return _modelPromise;
+  }
 
-  return _modelPromise;
+  function resetModel() {
+    _modelPromise = null;
+  }
+
+  return { getModel, resetModel };
+}
+
+// ── Lazy-loaded AI instance for constraint parsing ────────────────────────
+
+const constraintModel = createLazyGeminiModel({
+  systemInstruction: CONSTRAINT_SYSTEM_PROMPT,
+  maxOutputTokens: 2048,
+});
+
+function getModel() {
+  return constraintModel.getModel();
 }
 
 // ── Public API ────────────────────────────────────────────────────────────
@@ -221,5 +245,5 @@ export async function parseConstraint(
 
 /** Reset the cached model (e.g. if Firebase config changes). */
 export function resetFirebaseAIModel(): void {
-  _modelPromise = null;
+  constraintModel.resetModel();
 }

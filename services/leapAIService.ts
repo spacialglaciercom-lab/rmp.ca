@@ -8,14 +8,13 @@
  * parsing) so the feature works on iOS, Android, and web.
  */
 
-import Constants from "expo-constants";
-import { Platform } from "react-native";
 import type {
   RouteData,
   WeatherData,
   WeatherConstraints,
 } from "@/types/weather";
 import { DEFAULT_WEATHER_CONSTRAINTS } from "@/types/weather";
+import { createLazyGeminiModel } from "@/lib/firebase/ai";
 
 const LEAP_SCHEMA_HINT = `You are a route and weather analyst. Input is a JSON object with:
 - route: { points, totalDistanceKm, estimatedTotalMinutes, segmentCount }
@@ -34,88 +33,17 @@ export interface LeapWeatherInput {
   constraints: WeatherConstraints;
 }
 
-// ── Lazy-loaded Gemini model (same pattern as lib/firebase/ai.ts) ──────────
+// ── Lazy-loaded Gemini model using shared factory ──────────────────────────
 
-let _modelPromise: Promise<{
-  generateContent: (
-    prompt: string,
-  ) => Promise<{ response: { text: () => string } }>;
-}> | null = null;
+const leapModel = createLazyGeminiModel({
+  systemInstruction: LEAP_SCHEMA_HINT,
+  maxOutputTokens: 512,
+});
 
-function getModel() {
-  if (_modelPromise) return _modelPromise;
+const getModel = leapModel.getModel;
 
-  _modelPromise = (async () => {
-    const isExpoGo = Constants.appOwnership === "expo";
-
-    if (Platform.OS !== "web" && !isExpoGo) {
-      try {
-        const {
-          getAI,
-          getGenerativeModel,
-          GoogleAIBackend,
-        } = require("@react-native-firebase/ai");
-        const ai = getAI(undefined, { backend: new GoogleAIBackend() });
-        return getGenerativeModel(ai, {
-          model: "gemini-2.0-flash",
-          systemInstruction: LEAP_SCHEMA_HINT,
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 512,
-            responseMimeType: "application/json",
-          },
-        });
-      } catch (e) {
-        console.warn(
-          "[LeapAI] Native firebase/ai not available, trying JS SDK:",
-          (e as Error).message,
-        );
-      }
-    }
-
-    // Web / Expo Go fallback: use firebase JS SDK
-    const {
-      initializeApp,
-      getApps,
-    } = require("firebase/app");
-    const {
-      getAI: getAIWeb,
-      getGenerativeModel: getGenModelWeb,
-      GoogleAIBackend: GoogleAIBackendWeb,
-    } = require("firebase/ai");
-
-    let app;
-    const existingApps = getApps();
-    const aiApp = existingApps.find(
-      (a: { name: string }) => a.name === "trashroute-ai",
-    );
-    if (aiApp) {
-      app = aiApp;
-    } else {
-      app = initializeApp(
-        {
-          apiKey: process.env.EXPO_PUBLIC_FIREBASE_AI_API_KEY || "",
-          projectId: "trashroutemobile",
-          appId: "1:970176642480:web:placeholder",
-        },
-        "trashroute-ai",
-      );
-    }
-
-    const ai = getAIWeb(app, { backend: new GoogleAIBackendWeb() });
-    return getGenModelWeb(ai, {
-      model: "gemini-2.0-flash",
-      systemInstruction: LEAP_SCHEMA_HINT,
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 512,
-        responseMimeType: "application/json",
-      },
-    });
-  })();
-
-  return _modelPromise;
-}
+/** Reset the cached model (e.g. to recover from transient initialization failures). */
+export const resetLeapAIModel = leapModel.resetModel;
 
 /**
  * Call Gemini with route + weather + constraints. Returns recommendations array.
