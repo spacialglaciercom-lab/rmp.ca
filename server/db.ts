@@ -5,6 +5,7 @@ import {
   InsertOrganization,
   InsertUser,
   Organization,
+  User,
   organizations,
   users,
 } from "../drizzle/schema";
@@ -103,7 +104,11 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getUsersByOrgId(orgId: number): Promise<User[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users).where(eq(users.orgId, orgId));
+}
 
 // ── Organization queries ──────────────────────────────────────────────────
 
