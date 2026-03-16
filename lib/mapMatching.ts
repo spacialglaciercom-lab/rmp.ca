@@ -34,20 +34,33 @@ function getProxyBaseUrl(): string {
   }
 }
 
+export interface OsrmIntersection {
+  location: [number, number]; // [lon, lat]
+  bearings: number[];
+  classes?: string[];
+  entry: boolean[];
+  in?: number;
+  out?: number;
+}
+
 export interface MatchedStep {
   geometry: { type: "LineString"; coordinates: [number, number][] };
-  maneuver: { type: string; modifier?: string; exit?: number };
+  maneuver: { type: string; modifier?: string; exit?: number; location?: [number, number] };
   name?: string;
+  ref?: string;
   distance: number;
   duration: number;
+  intersections?: OsrmIntersection[];
 }
 
 export interface MatchedRoute {
   steps: MatchedStep[];
-  legs: Array<{ steps?: MatchedStep[]; distance: number; duration: number }>;
+  legs: Array<{ steps?: MatchedStep[]; distance: number; duration: number; annotation?: { nodes: number[] } }>;
   totalDistance: number;
   totalDuration: number;
   matchedGeometry: Array<{ lat: number; lon: number }>;
+  /** Flat list of all OSM node IDs along the route (from leg annotations). */
+  nodeIds?: number[];
 }
 
 /** Public OSRM demo server is strict: small batches and short URLs. */
@@ -523,7 +536,7 @@ export async function routeBetweenPoints(
 
   const coords = `${from.lon},${from.lat};${to.lon},${to.lat}`;
   const baseUrl = config.baseUrl;
-  const url = `${baseUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+  const url = `${baseUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&annotations=nodes`;
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -538,6 +551,9 @@ export async function routeBetweenPoints(
     const steps: MatchedStep[] = legs.flatMap(
       (leg: { steps?: MatchedStep[] }) => leg.steps ?? [],
     );
+    const nodeIds: number[] = legs.flatMap(
+      (leg: { annotation?: { nodes: number[] } }) => leg.annotation?.nodes ?? [],
+    );
     return {
       steps,
       legs: legs.map(
@@ -545,15 +561,18 @@ export async function routeBetweenPoints(
           distance: number;
           duration: number;
           steps?: MatchedStep[];
+          annotation?: { nodes: number[] };
         }) => ({
           steps: leg.steps ?? [],
           distance: leg.distance ?? 0,
           duration: leg.duration ?? 0,
+          annotation: leg.annotation,
         }),
       ),
       totalDistance: route.distance ?? 0,
       totalDuration: route.duration ?? 0,
       matchedGeometry,
+      nodeIds: nodeIds.length > 0 ? nodeIds : undefined,
     };
   } catch (err) {
     console.warn("Routing route request failed:", err);
@@ -594,8 +613,10 @@ export async function routeThroughWaypoints(
     steps?: MatchedStep[];
     distance: number;
     duration: number;
+    annotation?: { nodes: number[] };
   }> = [];
   const allSteps: MatchedStep[] = [];
+  const allNodeIds: number[] = [];
   let totalDistance = 0;
   let totalDuration = 0;
   const matchedGeometry: Array<{ lat: number; lon: number }> = [];
@@ -608,7 +629,7 @@ export async function routeThroughWaypoints(
     const end = Math.min(i + chunkSize, points.length);
     const chunk = points.slice(i, end);
     const coords = chunk.map((p) => `${p.lon},${p.lat}`).join(";");
-    const url = `${config.baseUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+    const url = `${config.baseUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&annotations=nodes`;
     try {
       const response = await fetch(url);
       const data = await response.json();
@@ -630,6 +651,7 @@ export async function routeThroughWaypoints(
       for (const leg of legs) {
         allLegs.push(leg);
         if (leg.steps) allSteps.push(...leg.steps);
+        if (leg.annotation?.nodes) allNodeIds.push(...leg.annotation.nodes);
       }
     } catch (err) {
       console.warn("OSRM route-through-waypoints failed:", err);
@@ -648,6 +670,7 @@ export async function routeThroughWaypoints(
     totalDistance,
     totalDuration,
     matchedGeometry,
+    nodeIds: allNodeIds.length > 0 ? allNodeIds : undefined,
   };
 }
 
@@ -694,8 +717,10 @@ export async function matchGPXToRoads(
     steps?: MatchedStep[];
     distance: number;
     duration: number;
+    annotation?: { nodes: number[] };
   }> = [];
   const allSteps: MatchedStep[] = [];
+  const allNodeIds: number[] = [];
   let totalDistance = 0;
   let totalDuration = 0;
 
@@ -707,7 +732,7 @@ export async function matchGPXToRoads(
     const coords = batch.map((p) => `${p.lon},${p.lat}`).join(";");
     const radiuses = batch.map(() => "25").join(";");
 
-    const url = `${config.baseUrl}/match/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&annotations=true&radiuses=${radiuses}`;
+    const url = `${config.baseUrl}/match/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&annotations=nodes&radiuses=${radiuses}`;
 
     try {
       const response = await fetch(url);
@@ -730,6 +755,9 @@ export async function matchGPXToRoads(
           allLegs.push(leg);
           if (leg.steps) {
             allSteps.push(...leg.steps);
+          }
+          if (leg.annotation?.nodes) {
+            allNodeIds.push(...leg.annotation.nodes);
           }
         }
       }
@@ -760,6 +788,7 @@ export async function matchGPXToRoads(
     totalDistance,
     totalDuration,
     matchedGeometry,
+    nodeIds: allNodeIds.length > 0 ? allNodeIds : undefined,
   };
 }
 

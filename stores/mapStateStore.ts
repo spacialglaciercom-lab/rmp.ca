@@ -44,6 +44,17 @@ interface RouteSlice {
 }
 
 // --- Navigation Slice ---
+
+/** A lat/lon location the user wants OSRM to route around. */
+export interface AvoidedNode {
+  lat: number;
+  lon: number;
+  nodeId?: number;
+  wayName?: string;
+  /** Human-readable label shown in the avoid list. */
+  label: string;
+}
+
 interface NavigationSlice {
   navigationMode: boolean;
   matchedRoute: MatchedRoute | null;
@@ -51,6 +62,7 @@ interface NavigationSlice {
   navLoading: boolean;
   fixToRoadsLoading: boolean;
   directionsLoading: boolean;
+  avoidedNodes: AvoidedNode[];
 
   setNavigationMode: (mode: boolean) => void;
   setMatchedRoute: (route: MatchedRoute | null) => void;
@@ -58,6 +70,9 @@ interface NavigationSlice {
   setNavLoading: (loading: boolean) => void;
   setFixToRoadsLoading: (loading: boolean) => void;
   setDirectionsLoading: (loading: boolean) => void;
+  addAvoidedNode: (node: AvoidedNode) => void;
+  removeAvoidedNode: (index: number) => void;
+  clearAvoidedNodes: () => void;
 }
 
 // --- Interaction Slice ---
@@ -294,6 +309,7 @@ export const useMapStateStore = createWithEqualityFn<MapState>()(
             matchedRoute: null,
             cachedMatchedRoute: null,
             navigationMode: false,
+            avoidedNodes: [],
             // wipe any overlays or temporary state that might still be
             // rendered by RouteMap
             tapDestination: null,
@@ -315,6 +331,7 @@ export const useMapStateStore = createWithEqualityFn<MapState>()(
       navLoading: false,
       fixToRoadsLoading: false,
       directionsLoading: false,
+      avoidedNodes: [],
 
       setNavigationMode: (navigationMode) => set({ navigationMode }),
       setMatchedRoute: (matchedRoute) => set({ matchedRoute }),
@@ -323,6 +340,11 @@ export const useMapStateStore = createWithEqualityFn<MapState>()(
       setNavLoading: (navLoading) => set({ navLoading }),
       setFixToRoadsLoading: (fixToRoadsLoading) => set({ fixToRoadsLoading }),
       setDirectionsLoading: (directionsLoading) => set({ directionsLoading }),
+      addAvoidedNode: (node) =>
+        set((s) => ({ avoidedNodes: [...s.avoidedNodes, node] })),
+      removeAvoidedNode: (index) =>
+        set((s) => ({ avoidedNodes: s.avoidedNodes.filter((_, i) => i !== index) })),
+      clearAvoidedNodes: () => set({ avoidedNodes: [] }),
 
       // ---- Interaction Slice ----
       mapCenter: { lat: 40.7128, lon: -74.006 },
@@ -507,6 +529,9 @@ export const useMapActions = () =>
       clearRouteData: s.clearRouteData,
       addOsmExtractionPoint: s.addOsmExtractionPoint,
       clearOsmExtraction: s.clearOsmExtraction,
+      addAvoidedNode: s.addAvoidedNode,
+      removeAvoidedNode: s.removeAvoidedNode,
+      clearAvoidedNodes: s.clearAvoidedNodes,
     })),
   );
 

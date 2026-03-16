@@ -3,7 +3,7 @@
  * load only when the user opens this tab.
  * When the Route Optimizer plugin is disabled, redirect to Home so the planner is fully hidden.
  */
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 
 import { TabScreenSkeleton } from "@/components/tab-screen-skeleton";
@@ -32,15 +32,17 @@ const PlannerContent = lazy(async () => {
 
 export default function PlannerScreen() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const routeOptimizerEnabled = usePluginStore((s) =>
     s.isPluginEnabled("routeOptimization", true),
   );
 
   useEffect(() => {
     if (!routeOptimizerEnabled) {
-      router.replace("/(tabs)");
+      routerRef.current.replace("/(tabs)");
     }
-  }, [routeOptimizerEnabled, router]);
+  }, [routeOptimizerEnabled]);
 
   if (!routeOptimizerEnabled) {
     return null;

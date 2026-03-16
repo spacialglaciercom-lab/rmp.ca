@@ -194,11 +194,17 @@ function LeafletGeoJSONOverlay({
   strokeColor,
   strokeWidth,
   fillColor,
+  onAvoidNode,
+  osrmBaseUrl,
+  nodeInspectorEnabled = false,
 }: {
   data: GeoJSONFeatureCollection;
   strokeColor: string;
   strokeWidth: number;
   fillColor: string;
+  onAvoidNode?: (node: { lat: number; lon: number; nodeId?: number; name?: string }) => void;
+  osrmBaseUrl?: string;
+  nodeInspectorEnabled?: boolean;
 }) {
   const map = useMapHook?.();
   const layerRef = React.useRef<any>(null);
@@ -254,21 +260,130 @@ function LeafletGeoJSONOverlay({
         },
         pointToLayer: (feature: any, latlng: any) => {
           const role = feature?.properties?.role;
+          // Skip step-start circles when node inspector plugin is off
+          if (role === "step-start" && !nodeInspectorEnabled) return null as any;
           const label = feature?.properties?.label || "";
           const isStart = role === "start" || role === "vehicle-start";
           const isEnd = role === "end" || role === "vehicle-end";
-          const bg = isStart ? "#22c55e" : isEnd ? "#ef4444" : "#2196F3";
+          const isStepStart = role === "step-start";
+          const bg = isStart ? "#22c55e" : isEnd ? "#ef4444" : isStepStart ? "#f97316" : "#2196F3";
+          const size = isStepStart ? 20 : 26;
           const icon = L.divIcon({
-            html: `<span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:${bg};color:white;font-size:10px;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);">${label.slice(0, 3)}</span>`,
+            html: `<span style="display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:${bg};color:white;font-size:10px;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer;">${isStepStart ? "" : label.slice(0, 3)}</span>`,
             className: "geojson-overlay-marker",
-            iconSize: [26, 26],
-            iconAnchor: [13, 13],
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
           });
           return L.marker(latlng, { icon });
         },
         onEachFeature: (feature: any, layer: any) => {
           const props = feature?.properties;
           if (!props) return;
+          const role = props.role;
+
+          if (role === "step-start") {
+            const lat: number = props.lat;
+            const lon: number = props.lon;
+            const name: string = props.name || "";
+            const nodeId: number | null = props.nodeId ?? null;
+            const uid = `osrm-node-${props.stepIndex ?? Math.random().toString(36).slice(2)}`;
+
+            // Mutable — updated once snap/Overpass resolves
+            let bestNodeId: number | undefined = nodeId ?? undefined;
+
+            const initialSnapRow = `<span id="snap-${uid}" style="color:#666;font-size:11px;">Loading snap info…</span>`;
+            const avoidBtn = onAvoidNode
+              ? `<button id="avoid-${uid}" style="margin-top:6px;padding:4px 8px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">⛔ Avoid this spot</button>`
+              : "";
+
+            const nodeIdLabel =
+              nodeId !== null
+                ? `Node ID: <span style="font-family:monospace;font-weight:600;">${nodeId}</span>`
+                : `Node ID: <span id="nodeid-val-${uid}" style="font-family:monospace;font-weight:600;">…</span>`;
+            const nodeLink =
+              nodeId !== null
+                ? `<div style="color:#666;font-size:11px;margin-bottom:2px;">
+                    <a href="https://www.openstreetmap.org/node/${nodeId}" target="_blank" rel="noopener noreferrer"
+                       style="color:#3b82f6;text-decoration:underline;font-family:monospace;">Open in OpenStreetMap</a>
+                   </div>`
+                : `<div id="nodeid-link-${uid}" style="color:#666;font-size:11px;margin-bottom:2px;"></div>`;
+
+            const popupHtml = `
+              <div style="font-family:sans-serif;font-size:13px;min-width:210px;">
+                <div style="font-weight:700;margin-bottom:4px;">${name || "(unnamed road)"}</div>
+                <div style="color:#374151;font-size:12px;margin-bottom:2px;">${nodeIdLabel}</div>
+                ${nodeLink}
+                <div style="color:#666;font-size:11px;font-family:monospace;">${lat.toFixed(6)}, ${lon.toFixed(6)}</div>
+                <div style="margin-top:4px;">${initialSnapRow}</div>
+                ${avoidBtn}
+              </div>`;
+
+            layer.bindPopup(popupHtml, { maxWidth: 280 });
+
+            /** Update the node ID label + OSM link in the open popup. */
+            const updateNodeIdDisplay = (id: number) => {
+              const valEl = document.getElementById(`nodeid-val-${uid}`);
+              const linkEl = document.getElementById(`nodeid-link-${uid}`);
+              if (valEl) valEl.textContent = String(id);
+              if (linkEl)
+                linkEl.innerHTML = `<a href="https://www.openstreetmap.org/node/${id}" target="_blank" rel="noopener noreferrer" style="color:#3b82f6;text-decoration:underline;font-family:monospace;">Open in OpenStreetMap</a>`;
+            };
+
+            layer.on("popupopen", () => {
+              // Wire avoid button — reads bestNodeId at click time so it
+              // automatically picks up any node ID resolved by snap/Overpass.
+              if (onAvoidNode) {
+                const btn = document.getElementById(`avoid-${uid}`);
+                if (btn) {
+                  btn.addEventListener("click", () => {
+                    onAvoidNode({ lat, lon, nodeId: bestNodeId, name: name || undefined });
+                    layer.closePopup();
+                  });
+                }
+              }
+
+              // Async snap-to-road info + node ID resolution
+              if (osrmBaseUrl) {
+                import("@/lib/osrmNearest").then(({ snapToRoad }) => {
+                  snapToRoad(lat, lon, osrmBaseUrl).then(async (snap) => {
+                    const snapEl = document.getElementById(`snap-${uid}`);
+                    if (!snapEl) return;
+                    if (snap) {
+                      snapEl.textContent = `Snapped: ${snap.snappedLat.toFixed(6)}, ${snap.snappedLon.toFixed(6)} (${snap.snapDistanceM.toFixed(1)} m)`;
+                      if (snap.nodeId != null && nodeId == null) {
+                        bestNodeId = snap.nodeId;
+                        updateNodeIdDisplay(snap.nodeId);
+                      }
+                    } else {
+                      snapEl.textContent = "Snap unavailable";
+                      // Overpass fallback: find nearest highway node via public API
+                      if (nodeId == null) {
+                        try {
+                          const query = `[out:json][timeout:5];(way["highway"](around:30,${lat},${lon}););node(w)(around:30,${lat},${lon});out 1;`;
+                          const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+                          if (res.ok) {
+                            const data = await res.json();
+                            const id: number | undefined = data.elements?.[0]?.id;
+                            if (id != null) {
+                              bestNodeId = id;
+                              updateNodeIdDisplay(id);
+                            }
+                          }
+                        } catch {
+                          // Overpass unreachable — leave "…"
+                        }
+                      }
+                    }
+                  });
+                });
+              } else {
+                const snapEl = document.getElementById(`snap-${uid}`);
+                if (snapEl) snapEl.textContent = "";
+              }
+            });
+            return;
+          }
+
           const parts: string[] = [];
           if (props.name) parts.push(`<strong>${props.name}</strong>`);
           if (props.distance != null)
@@ -515,6 +630,10 @@ export interface RouteMapProps {
   userPosition?: { latitude: number; longitude: number } | null;
   /** Zones waste mode: bins and dumpsters to show with custom icons. */
   wastePoints?: WastePoint[];
+  /** Called when the user clicks "Avoid this spot" in a route-node popup. */
+  onAvoidNode?: (node: { lat: number; lon: number; nodeId?: number; name?: string }) => void;
+  /** OSRM base URL used for snap-to-road requests in node popups. */
+  osrmBaseUrl?: string;
 }
 
 /** Web: no-op. Native: zoom, locate, compass. */
@@ -709,6 +828,8 @@ export const RouteMap = React.memo(
       zonesPreviewPolygons,
       initialBounds,
       wastePoints = [],
+      onAvoidNode,
+      osrmBaseUrl,
     },
     _ref,
   ) {
@@ -723,6 +844,9 @@ export const RouteMap = React.memo(
     const mapRef = useRef<any>(null);
     const leafletMapRef = useRef<any>(null);
     const boundsRef = useRef<[[number, number], [number, number]] | null>(null);
+    const nodeInspectorEnabled = useMapWebPluginsStore(
+      (s) => s.nodeInspectorEnabled,
+    );
     const markerClusteringEnabled = useMapWebPluginsStore(
       (s) => s.markerClusteringEnabled,
     );
@@ -1294,6 +1418,9 @@ export const RouteMap = React.memo(
                   strokeColor={geojsonStrokeColor}
                   strokeWidth={geojsonStrokeWidth}
                   fillColor={geojsonFillColor}
+                  nodeInspectorEnabled={nodeInspectorEnabled}
+                  onAvoidNode={nodeInspectorEnabled ? onAvoidNode : undefined}
+                  osrmBaseUrl={nodeInspectorEnabled ? osrmBaseUrl : undefined}
                 />
               )}
 

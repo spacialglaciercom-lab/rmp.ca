@@ -4,12 +4,13 @@
  * can be added for cross-device sync (see docs/PLUGIN-DEVELOPMENT.md).
  */
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { useTheme } from "@/lib/theme-provider";
 import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
 import { usePluginStore } from "@/stores/pluginStore";
 import { getBuiltinPluginDescriptors } from "@/lib/plugins/load";
 import { loadPluginConfig } from "@/lib/plugins/config";
+import { useMapWebPluginsStore } from "@/stores/mapWebPluginsStore";
 
 export const PluginsSection: React.FC = () => {
   const { theme } = useTheme();
@@ -18,6 +19,12 @@ export const PluginsSection: React.FC = () => {
   );
   /** Local copy of enabled state so the toggle updates immediately on press (avoids persist/subscribe timing). */
   const [localEnabled, setLocalEnabled] = useState<Record<string, boolean>>({});
+
+  // Web-only map plugins
+  const nodeInspector = useMapWebPluginsStore((s) => s.nodeInspectorEnabled);
+  const avoidedNodesPanel = useMapWebPluginsStore((s) => s.avoidedNodesPanelEnabled);
+  const setNodeInspector = useMapWebPluginsStore((s) => s.setNodeInspectorEnabled);
+  const setAvoidedNodesPanel = useMapWebPluginsStore((s) => s.setAvoidedNodesPanelEnabled);
 
   const descriptors = getBuiltinPluginDescriptors();
 
@@ -108,6 +115,48 @@ export const PluginsSection: React.FC = () => {
             </Pressable>
           );
         })}
+
+        {/* Web-only map plugins */}
+        {Platform.OS === "web" && (
+          <>
+            <Pressable
+              style={[styles.row, { borderTopColor: theme.borderLight }]}
+              onPress={() => { hapticImpact(); setNodeInspector(!nodeInspector); }}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: nodeInspector }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.text }]}>
+                  Node inspector
+                </Text>
+                <Text style={[styles.description, { color: theme.textTertiary }]}>
+                  Click route nodes to see OSM data and avoid spots (requires Fix to roads)
+                </Text>
+              </View>
+              <View style={[styles.toggle, { backgroundColor: nodeInspector ? theme.accent : theme.border }]}>
+                <View style={[styles.toggleThumb, { marginLeft: nodeInspector ? 22 : 2 }]} />
+              </View>
+            </Pressable>
+            <Pressable
+              style={[styles.row, { borderTopColor: theme.borderLight }]}
+              onPress={() => { hapticImpact(); setAvoidedNodesPanel(!avoidedNodesPanel); }}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: avoidedNodesPanel }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.text }]}>
+                  Avoided nodes panel
+                </Text>
+                <Text style={[styles.description, { color: theme.textTertiary }]}>
+                  Show right-side panel listing avoided route spots
+                </Text>
+              </View>
+              <View style={[styles.toggle, { backgroundColor: avoidedNodesPanel ? theme.accent : theme.border }]}>
+                <View style={[styles.toggleThumb, { marginLeft: avoidedNodesPanel ? 22 : 2 }]} />
+              </View>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );
