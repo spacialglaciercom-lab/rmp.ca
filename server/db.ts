@@ -165,3 +165,18 @@ export async function assignUserToOrg(
     .where(eq(users.openId, openId));
 }
 
+export async function setUserRole(
+  openId: string,
+  role: "user" | "admin",
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot set user role: database not available");
+    return;
+  }
+  await db
+    .update(users)
+    .set({ role, updatedAt: new Date() })
+    .where(eq(users.openId, openId));
+}
+
