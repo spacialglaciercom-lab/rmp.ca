@@ -49,6 +49,7 @@ import { routeThroughWaypoints } from "@/lib/mapMatching";
 import { repairRouteGaps, countGaps } from "@/lib/routeGapFilter";
 import { getRoutingConfigAsync } from "@/lib/routing-config";
 import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
+import { useMapStateStore } from "@/stores/mapStateStore";
 import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
@@ -110,6 +111,23 @@ export default function PlannerContent() {
   >([]);
   /** When true, use the offline optimizer from route-optimizer-mobile-v2 (Videos app). */
   const [useOfflineOptimizerV2, setUseOfflineOptimizerV2] = useState(false);
+
+  // Keep GPX data in sync when the map reroutes due to avoidance.
+  // matchedRoute is updated by map-content.tsx after every avoid-node reroute;
+  // planner-content.tsx must regenerate gpxData so the Download button reflects the new path.
+  const matchedRoute = useMapStateStore((s) => s.matchedRoute);
+  useEffect(() => {
+    if (!matchedRoute || matchedRoute.matchedGeometry.length < 2) return;
+    // Only regenerate if we already have gpxData (i.e. a route was previously generated)
+    if (!state.gpxData) return;
+    const pts = matchedRoute.matchedGeometry;
+    const fileName =
+      state.configuration.outputFileName?.trim() || outputFileName?.trim() || "trash_route";
+    import("@/lib/routing-context").then(({ generateGPXString }) => {
+      dispatch({ type: "SET_GPX_DATA", payload: generateGPXString(fileName, pts) });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchedRoute]);
 
   const applyRouteFromPoints = useCallback(
     async (
@@ -371,6 +389,13 @@ export default function PlannerContent() {
             }
           }
           if (optResult === undefined) {
+            dispatch({
+              type: "ADD_LOG_ENTRY",
+              payload: generateLogEntry(
+                "Sending to backend optimizer (Python)...",
+                "info",
+              ),
+            });
             try {
               const backendResult = await backendOptimizeRoute(requestParams);
               optResult = {
@@ -380,9 +405,28 @@ export default function PlannerContent() {
                 timing_ms: backendResult.timing_ms,
               };
               optimizerSource = "backend";
+              const backendMs = backendResult.timing_ms ?? "?";
+              const backendPts = backendResult.route?.length ?? "?";
+              console.log(
+                `%c✅ BACKEND OPTIMIZER — ${backendPts} points, ${backendMs} ms server-side`,
+                "background:#166534;color:#bbf7d0;font-weight:bold;padding:2px 6px;border-radius:3px",
+              );
+              dispatch({
+                type: "ADD_LOG_ENTRY",
+                payload: generateLogEntry(
+                  `✅ Backend optimizer: ${backendPts} route points, ${backendMs} ms`,
+                  "info",
+                ),
+              });
             } catch (backendErr) {
-              debug("Planner.generateRoute", {
-                backendOptimizerFailed: (backendErr as Error).message,
+              const msg = backendErr instanceof Error ? backendErr.message : String(backendErr);
+              debug("Planner.generateRoute", { backendOptimizerFailed: msg });
+              dispatch({
+                type: "ADD_LOG_ENTRY",
+                payload: generateLogEntry(
+                  `⚠️ Backend optimizer unreachable (${msg}); falling back to local optimizer`,
+                  "warning",
+                ),
               });
             }
           }
@@ -390,12 +434,15 @@ export default function PlannerContent() {
         if (optResult === undefined) {
           // Offline mode, backend failed, or v2 failed/empty: use local optimizer (route may be loopier)
           optimizerSource = "local";
+          if (__DEV__ || typeof window !== "undefined") {
+            console.log("[Planner] Using local optimizer (backend unavailable or v2 empty)");
+          }
           dispatch({
             type: "ADD_LOG_ENTRY",
             payload: generateLogEntry(
               useOfflineOptimizerV2
-                ? "Offline optimizer (v2) could not produce a route; using local optimizer."
-                : "Backend optimizer unavailable; using local optimizer. Route may be loopier.",
+                ? "⚠️ LOCAL OPTIMIZER (offline v2 failed) — route may be loopier"
+                : "⚠️ LOCAL OPTIMIZER (backend unavailable) — route may be loopier",
               "warning",
             ),
           });
@@ -558,6 +605,7 @@ export default function PlannerContent() {
       let pointsForStorage: CollectionPoint[] = optimizedPoints;
       const skipSnapToRoads =
         optimizerSource === "offline-v2" || optimizerSource === "backend";
+      let snappedToRoads = skipSnapToRoads; // true when we intentionally skip (backend/v2); false when we tried and may have failed
       try {
         if (!skipSnapToRoads) {
           const routingConfig = await getRoutingConfigAsync();
@@ -570,6 +618,7 @@ export default function PlannerContent() {
             if (matched && matched.matchedGeometry.length >= 2) {
               gpxPoints = matched.matchedGeometry;
               optimizerDistanceKm = matched.totalDistance / 1000;
+              snappedToRoads = true;
               const gapsBefore = countGaps(gpxPoints);
               if (gapsBefore > 0) {
                 debug("Planner.generateRoute", {
@@ -599,7 +648,17 @@ export default function PlannerContent() {
                 snappedToRoads: true,
                 points: gpxPoints.length,
               });
+            } else {
+              debug("Planner.generateRoute", {
+                snappedToRoads: false,
+                reason: "routeThroughWaypoints returned null or empty",
+              });
             }
+          } else {
+            debug("Planner.generateRoute", {
+              snappedToRoads: false,
+              reason: routingConfig.baseUrl ? "waypoints < 2" : "no routing config baseUrl",
+            });
           }
         } else {
           debug("Planner.generateRoute", {
@@ -609,6 +668,16 @@ export default function PlannerContent() {
         }
       } catch (e) {
         debug("Planner.generateRoute", { snappedToRoads: false, error: e });
+        if (__DEV__ || typeof window !== "undefined") {
+          console.warn("[Planner] Snap-to-roads threw:", e instanceof Error ? e.message : e);
+        }
+      }
+      if (__DEV__ || typeof window !== "undefined") {
+        console.log("[Planner] Snap-to-roads:", snappedToRoads ? "succeeded" : "skipped or failed", {
+          optimizerSource: optimizerSource ?? "local",
+          skipSnapToRoads,
+          gpxPointsCount: gpxPoints.length,
+        });
       }
 
       // Generate GPX and stats so Download/Preview are available
@@ -666,6 +735,8 @@ export default function PlannerContent() {
       }
 
       // Cosmetic log animation (non-blocking — doesn't delay GPX availability)
+      const routeMayNotFollowRoads =
+        optimizerSource === "local" && !snappedToRoads;
       const optimizerLabel =
         optimizerSource === "backend"
           ? "Overture route optimizer (same as Map Extractor)"
@@ -695,6 +766,14 @@ export default function PlannerContent() {
         },
         ...(optimizerLabel
           ? [{ msg: `Optimizer: ${optimizerLabel}`, type: "info" as const }]
+          : []),
+        ...(routeMayNotFollowRoads
+          ? [
+              {
+                msg: "Route may not follow roads (snap failed). On the Map tab, tap \"Fix to roads\" to snap to the road network.",
+                type: "warning" as const,
+              },
+            ]
           : []),
         {
           msg: `Applying turn penalties: Left=${state.configuration.turnPenalties.leftTurn}, U-Turn=${state.configuration.turnPenalties.uTurn}`,
@@ -732,6 +811,13 @@ export default function PlannerContent() {
           type: "ADD_LOG_ENTRY",
           payload: generateLogEntry(log.msg, log.type),
         });
+      }
+      if (routeMayNotFollowRoads) {
+        Alert.alert(
+          "Route may not follow roads",
+          "The backend optimizer was unavailable, so the route was generated locally. Snap to roads failed, so segments may appear as straight lines. On the Map tab, tap \"Fix to roads\" to snap the route to the road network.",
+          [{ text: "OK" }],
+        );
       }
       hapticNotification(NotificationFeedbackType.Success);
     } catch (e) {

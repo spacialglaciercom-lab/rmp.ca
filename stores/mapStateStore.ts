@@ -403,6 +403,7 @@ export const useMapStateStore = createWithEqualityFn<MapState>()(
       partialize: (state) => ({
         roadClosureHandlingOn: state.roadClosureHandlingOn,
         mapCenter: state.mapCenter,
+        avoidedNodes: state.avoidedNodes,
       }),
     },
   ),

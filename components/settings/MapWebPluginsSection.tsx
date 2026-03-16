@@ -22,6 +22,7 @@ export const MapWebPluginsSection: React.FC = () => {
   const geomanDrawing = useMapWebPluginsStore((s) => s.geomanDrawingEnabled);
   const nodeInspector = useMapWebPluginsStore((s) => s.nodeInspectorEnabled);
   const avoidedNodesPanel = useMapWebPluginsStore((s) => s.avoidedNodesPanelEnabled);
+  const segmentEditMode = useMapWebPluginsStore((s) => s.segmentEditMode);
   const setMarkerClustering = useMapWebPluginsStore(
     (s) => s.setMarkerClusteringEnabled,
   );
@@ -33,6 +34,9 @@ export const MapWebPluginsSection: React.FC = () => {
   );
   const setAvoidedNodesPanel = useMapWebPluginsStore(
     (s) => s.setAvoidedNodesPanelEnabled,
+  );
+  const setSegmentEditMode = useMapWebPluginsStore(
+    (s) => s.setSegmentEditMode,
   );
   const hydrate = useMapWebPluginsStore((s) => s.hydrate);
 
@@ -162,6 +166,33 @@ export const MapWebPluginsSection: React.FC = () => {
               style={[
                 styles.toggleThumb,
                 { marginLeft: avoidedNodesPanel ? 22 : 2 },
+              ]}
+            />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.row, { borderTopColor: theme.borderLight }]}
+          onPress={() => onToggle(setSegmentEditMode, segmentEditMode)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>
+              Segment edit mode
+            </Text>
+            <Text style={[styles.description, { color: theme.textTertiary }]}>
+              Click route segments to delete them and recalculate
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.toggle,
+              { backgroundColor: segmentEditMode ? theme.accent : theme.border },
+            ]}
+          >
+            <View
+              style={[
+                styles.toggleThumb,
+                { marginLeft: segmentEditMode ? 22 : 2 },
               ]}
             />
           </View>
