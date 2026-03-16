@@ -119,6 +119,15 @@ export interface RouteMetrics {
   turns: { left: number; right: number; u_turn: number; straight: number };
 }
 
+export interface OptimizeTiming {
+  clean_ms: number;
+  graph_build_ms: number;
+  cpp_solve_ms: number;
+  route_build_ms: number;
+  analytics_ms: number;
+  total_ms: number;
+}
+
 export interface OptimizeResponse {
   route: RoutePoint[];
   route_geojson: GeoJSONFeatureCollection;
@@ -126,6 +135,7 @@ export interface OptimizeResponse {
   message: string;
   stats: RouteStats;
   metrics?: RouteMetrics;
+  timing_ms?: OptimizeTiming;
 }
 
 export interface ValidateResponse {

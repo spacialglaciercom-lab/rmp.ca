@@ -183,60 +183,56 @@ export default function PointDetailScreen() {
   const handleReportIssue = async () => {
     if (!point) return;
 
-    Alert.alert(
-      "Report Issue",
-      "What type of issue would you like to report?",
-      [
-        {
-          text: "Blocked Access",
-          onPress: async () => {
-            const route = await storage.loadRoute();
-            if (!route) return;
-            await storage.updateCollectionPoint(route.id, point.id, {
-              status: "issue",
-              notes: (point.notes || "") + "\n[Issue: Blocked Access]",
-            });
-            await loadPoint();
+    const applyIssue = async (label: string) => {
+      const route = await storage.loadRoute();
+      if (!route) return;
+      await storage.updateCollectionPoint(route.id, point.id, {
+        status: "issue",
+        notes: (point.notes || "") + `\n[Issue: ${label}]`,
+      });
+      await loadPoint();
+    };
+
+    if (Platform.OS === "web") {
+      const choice = window.prompt(
+        "Report Issue\n\nType a number:\n1 - Blocked Access\n2 - Hazard\n3 - Other (describe)\n\nOr press Cancel.",
+      );
+      if (!choice) return;
+      const trimmed = choice.trim();
+      if (trimmed === "1") await applyIssue("Blocked Access");
+      else if (trimmed === "2") await applyIssue("Hazard");
+      else if (trimmed === "3") {
+        const desc = window.prompt("Please describe the issue:");
+        if (desc?.trim()) await applyIssue(desc.trim());
+      } else {
+        await applyIssue(trimmed);
+      }
+    } else {
+      Alert.alert(
+        "Report Issue",
+        "What type of issue would you like to report?",
+        [
+          { text: "Blocked Access", onPress: () => applyIssue("Blocked Access") },
+          { text: "Hazard", onPress: () => applyIssue("Hazard") },
+          {
+            text: "Other",
+            onPress: () => {
+              Alert.prompt(
+                "Describe Issue",
+                "Please describe the issue:",
+                async (description) => {
+                  if (description?.trim()) await applyIssue(description.trim());
+                },
+                "plain-text",
+                "",
+                "default",
+              );
+            },
           },
-        },
-        {
-          text: "Hazard",
-          onPress: async () => {
-            const route = await storage.loadRoute();
-            if (!route) return;
-            await storage.updateCollectionPoint(route.id, point.id, {
-              status: "issue",
-              notes: (point.notes || "") + "\n[Issue: Hazard]",
-            });
-            await loadPoint();
-          },
-        },
-        {
-          text: "Other",
-          onPress: () => {
-            Alert.prompt(
-              "Describe Issue",
-              "Please describe the issue:",
-              async (description) => {
-                if (!description?.trim()) return;
-                const route = await storage.loadRoute();
-                if (!route) return;
-                await storage.updateCollectionPoint(route.id, point.id, {
-                  status: "issue",
-                  notes:
-                    (point.notes || "") + `\n[Issue: ${description.trim()}]`,
-                });
-                await loadPoint();
-              },
-              "plain-text",
-              "",
-              "default",
-            );
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ],
-    );
+          { text: "Cancel", style: "cancel" },
+        ],
+      );
+    }
   };
 
   const handleNavigate = () => {
