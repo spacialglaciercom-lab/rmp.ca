@@ -113,6 +113,17 @@ async function initDuckDB() {
 }
 
 // ---------------------------------------------------------------------------
+// Web-safe alert (Alert.alert is no-op on web)
+// ---------------------------------------------------------------------------
+function alertUser(title: string, message?: string) {
+  if (Platform.OS === "web") {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Stage badge colors
 // ---------------------------------------------------------------------------
 const STAGE_COLORS: Record<ExtractionStage, string> = {
@@ -192,12 +203,18 @@ export default function ExtractContent() {
   >("time");
   const [zoneName, setZoneName] = useState("");
   const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
+  const zonePartitionInProgressRef = useRef(false);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
+  const dimensionsRef = useRef<{ width: number; height: number } | null>(null);
   const handleContainerLayout = useCallback(
     (e: { nativeEvent: { layout: { width: number; height: number } } }) => {
       const { width: w, height: h } = e.nativeEvent.layout;
-      if (w > 0 && h > 0) setDimensions({ width: w, height: h });
+      if (w <= 0 || h <= 0) return;
+      const prev = dimensionsRef.current;
+      if (prev && prev.width === w && prev.height === h) return;
+      dimensionsRef.current = { width: w, height: h };
+      setDimensions({ width: w, height: h });
     },
     [],
   );
@@ -364,8 +381,9 @@ export default function ExtractContent() {
       mapRef.current = null;
       drawRef.current = null;
     };
+    // Depend on primitive values so we don't re-run when dimensions object reference changes (e.g. same w/h from onLayout).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimensions]);
+  }, [dimensions?.width, dimensions?.height]);
 
   // -------------------------------------------------------------------------
   // Polygon update handler
@@ -662,22 +680,25 @@ export default function ExtractContent() {
   // Zone partitioning: send to Map → Zones dropdown (uses extracted GeoJSON after Extract & Process)
   // -------------------------------------------------------------------------
   const sendToZones = useCallback(async () => {
+    if (zonePartitionInProgressRef.current) return;
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      Alert.alert(
+      alertUser(
         "Zone partitioning",
         "Polygon must have at least 3 vertices.",
       );
       return;
     }
     if (!resultHash) {
-      Alert.alert(
+      alertUser(
         "Run Extract & Process first",
         "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones.",
       );
       return;
     }
+    zonePartitionInProgressRef.current = true;
+    setZonePartitionLoading(true);
     const truckCount = Math.max(
       1,
       Math.min(12, parseInt(zoneTruckCount, 10) || 2),
@@ -686,7 +707,6 @@ export default function ExtractContent() {
       lat,
       lng,
     ]);
-    setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };
       if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
@@ -715,20 +735,21 @@ export default function ExtractContent() {
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
-      Alert.alert(
+      alertUser(
         "Sent to Zones",
         "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map.",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const is404Or503 = /404|503/.test(msg);
-      Alert.alert(
+      alertUser(
         "Zone partitioning failed",
         is404Or503
           ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
           : msg,
       );
     } finally {
+      zonePartitionInProgressRef.current = false;
       setZonePartitionLoading(false);
     }
   }, [
@@ -1171,6 +1192,15 @@ export default function ExtractContent() {
                 ]}
                 onPress={sendToZones}
                 disabled={zonePartitionLoading}
+                {...(Platform.OS === "web"
+                  ? {
+                      onClick: (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!zonePartitionLoading) sendToZones();
+                      },
+                    }
+                  : {})}
               >
                 {zonePartitionLoading ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -1495,14 +1525,14 @@ function NativeExtractFallback({
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      Alert.alert(
+      alertUser(
         "Zone partitioning",
         "Polygon must have at least 3 vertices.",
       );
       return;
     }
     if (!resultHash) {
-      Alert.alert(
+      alertUser(
         "Run Extract & Process first",
         "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones.",
       );
@@ -1545,14 +1575,14 @@ function NativeExtractFallback({
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
-      Alert.alert(
+      alertUser(
         "Sent to Zones",
         "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map.",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const is404Or503 = /404|503/.test(msg);
-      Alert.alert(
+      alertUser(
         "Zone partitioning failed",
         is404Or503
           ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."

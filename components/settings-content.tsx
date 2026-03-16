@@ -30,7 +30,6 @@ import { OfflineTilePackSection } from "@/components/settings/OfflineTilePackSec
 import { BboxRegionDownloadSection } from "@/components/settings/BboxRegionDownloadSection";
 import { MinimalCard, SectionLabel } from "@/components/minimal";
 import { MapOrientationSection } from "@/components/settings/MapOrientationSection";
-import { MapWebPluginsSection } from "@/components/settings/MapWebPluginsSection";
 import { NavigationProviderSection } from "@/components/settings/NavigationProviderSection";
 import { PowerSavingSettingsSection } from "@/components/PowerSavingSettings/PowerSavingSettingsSection";
 
@@ -192,16 +191,6 @@ export default function SettingsContent() {
           component: MapOrientationSection,
           isComponent: true,
         },
-        ...(Platform.OS === "web"
-          ? [
-              {
-                label: "",
-                value: "",
-                component: MapWebPluginsSection,
-                isComponent: true,
-              },
-            ]
-          : []),
         {
           label: "",
           value: "",

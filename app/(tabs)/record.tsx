@@ -4,7 +4,7 @@
  * On native we import eagerly so the tab is in the main bundle and doesn't require loading a split bundle
  * from Metro (avoids "Failed to load split bundle" when the device can't reach the dev server).
  */
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { View, Text, ActivityIndicator, Platform } from "react-native";
 
@@ -27,15 +27,17 @@ function LoadingFallback() {
 
 export default function RecordScreen() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const overtureExtractionEnabled = usePluginStore((s) =>
     s.isPluginEnabled("overture-extraction", true),
   );
 
   useEffect(() => {
     if (!overtureExtractionEnabled) {
-      router.replace("/(tabs)");
+      routerRef.current.replace("/(tabs)");
     }
-  }, [overtureExtractionEnabled, router]);
+  }, [overtureExtractionEnabled]);
 
   if (!overtureExtractionEnabled) {
     return null;
