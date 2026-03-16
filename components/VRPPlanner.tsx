@@ -38,7 +38,7 @@ import { useDeliveryInstructions } from "@/context/DeliveryInstructionsContext";
 import { usePluginStore } from "@/stores/pluginStore";
 import {
   getSolver,
-  ALGORITHM_OPTIONS as VRP_ALGORITHM_OPTIONS,
+  getAlgorithmOptions,
   buildHaversineMatrix,
   getValhallaMatrix,
 } from "@/lib/vrp-solvers";
@@ -52,8 +52,6 @@ const OBJECTIVE_OPTIONS = [
   { value: "balance_load", label: "Balance load evenly" },
   { value: "min_vehicles", label: "Minimize vehicles used" },
 ] as const;
-
-const ALGORITHM_OPTIONS = VRP_ALGORITHM_OPTIONS;
 
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 const nl = "\n";
@@ -442,12 +440,20 @@ export function VRPPlanner({
   const [objective, setObjective] = useState<
     (typeof OBJECTIVE_OPTIONS)[number]["value"]
   >(DEFAULT_VRP_CONFIG.objective);
-  const [algorithm, setAlgorithm] = useState<
-    (typeof ALGORITHM_OPTIONS)[number]["value"]
-  >(DEFAULT_VRP_CONFIG.algorithm);
+  const [algorithm, setAlgorithm] = useState<string>(DEFAULT_VRP_CONFIG.algorithm);
   const [pickerOpen, setPickerOpen] = useState<
     "objective" | "algorithm" | null
   >(null);
+
+  /** Dynamic solver list (built-ins + plugin-contributed). */
+  const algorithmOptions = getAlgorithmOptions();
+  React.useEffect(() => {
+    const opts = getAlgorithmOptions();
+    const valid = opts.some((o) => o.value === algorithm);
+    if (!valid && opts.length > 0) {
+      setAlgorithm(opts[0].value);
+    }
+  }, [algorithm]);
 
   // VROOM-specific settings (only active when algorithm === "vroom")
   const [vroomServiceTimeMins, setVroomServiceTimeMins] = useState("0");
@@ -1726,7 +1732,7 @@ export function VRPPlanner({
           onPress={() => setPickerOpen("algorithm")}
         >
           <Text style={{ color: colors.foreground }} numberOfLines={1}>
-            {ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ??
+            {algorithmOptions.find((o) => o.value === algorithm)?.label ??
               algorithm}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.muted} />
@@ -2167,7 +2173,7 @@ export function VRPPlanner({
                 </TouchableOpacity>
               ))}
             {pickerOpen === "algorithm" &&
-              ALGORITHM_OPTIONS.map((opt) => (
+              algorithmOptions.map((opt) => (
                 <TouchableOpacity
                   key={opt.value}
                   style={[

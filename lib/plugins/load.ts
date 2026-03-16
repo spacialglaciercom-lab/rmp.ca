@@ -3,6 +3,7 @@ import { registerPlugin, unloadPlugin, getAllPlugins } from "./registry";
 import { loadPluginConfig } from "./config";
 import { usePluginStore } from "@/stores/pluginStore";
 import { useMapLayerStore } from "@/stores/mapLayerStore";
+import { registerSolver, unregisterSolver, setSolverListConfig } from "@/lib/vrp-solvers";
 import { weatherPlugin } from "./weather";
 import { routeOptimizationPlugin } from "./route-optimization";
 import { overturePlugin } from "./overture";
@@ -65,11 +66,19 @@ export function createPluginContext(api: unknown): PluginContext {
   };
 }
 
+/** Tracks which solver ids each plugin contributed (for teardown on unload). */
+const pluginIdToSolverIds = new Map<string, string[]>();
+
 /**
  * Unload all currently registered plugins (e.g. before re-registering after toggle).
  */
 export function unloadAllPlugins(): void {
   for (const p of getAllPlugins()) {
+    const ids = pluginIdToSolverIds.get(p.id);
+    if (ids) {
+      for (const sid of ids) unregisterSolver(sid);
+      pluginIdToSolverIds.delete(p.id);
+    }
     unloadPlugin(p.id);
   }
 }
@@ -103,6 +112,11 @@ export async function loadAndRegisterPlugins(
   const toUnload = [...currentlyRegistered].filter((id) => !enabledIds.has(id));
   for (const id of toUnload) {
     if (signal?.aborted) return;
+    const ids = pluginIdToSolverIds.get(id);
+    if (ids) {
+      for (const sid of ids) unregisterSolver(sid);
+      pluginIdToSolverIds.delete(id);
+    }
     unloadPlugin(id);
   }
 
@@ -119,5 +133,30 @@ export async function loadAndRegisterPlugins(
       }
     });
     registerPlugin(plugin, context);
+    // Apply vrp-solvers config (solverOrder, allowlistOnly) when the plugin is enabled
+    if (id === "vrp-solvers") {
+      const entry = config.plugins[id];
+      setSolverListConfig(
+        entry && (entry.solverOrder != null || entry.allowlistOnly != null)
+          ? {
+              solverOrder: Array.isArray(entry.solverOrder) ? entry.solverOrder : undefined,
+              allowlistOnly: entry.allowlistOnly === true,
+            }
+          : null,
+      );
+    }
+    // Register custom solvers contributed by this plugin
+    const features = plugin.getFeatures?.();
+    const vrpSolvers = features?.vrpSolvers as import("@/lib/vrp-solvers").VRPSolver[] | undefined;
+    if (Array.isArray(vrpSolvers) && vrpSolvers.length > 0) {
+      const solverIds: string[] = [];
+      for (const s of vrpSolvers) {
+        if (s?.id && typeof s.solve === "function") {
+          registerSolver(s);
+          solverIds.push(s.id);
+        }
+      }
+      if (solverIds.length > 0) pluginIdToSolverIds.set(id, solverIds);
+    }
   }
 }
