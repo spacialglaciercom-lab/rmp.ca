@@ -182,6 +182,10 @@ export function createLazyGeminiModel(config: GeminiModelConfig): {
       }
     })();
 
+    _modelPromise.catch(() => {
+      _modelPromise = null;
+    });
+
     return _modelPromise;
   }
 
