@@ -78,3 +78,23 @@ export const orgProcedure = t.procedure.use(
     });
   }),
 );
+
+/**
+ * Factory that returns a procedure requiring both org membership AND a specific
+ * permission key. Builds on orgProcedure — ctx.user and ctx.org are non-null.
+ *
+ * @example
+ * permissionProcedure("can_manage_fleet").query(({ ctx }) => { ... })
+ */
+export const permissionProcedure = (permission: string) =>
+  orgProcedure.use(
+    t.middleware(async ({ ctx, next }) => {
+      if (!ctx.permissions.includes(permission)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Missing permission: ${permission} (10003)`,
+        });
+      }
+      return next({ ctx });
+    }),
+  );

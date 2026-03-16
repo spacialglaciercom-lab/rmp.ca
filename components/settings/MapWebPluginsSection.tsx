@@ -20,11 +20,19 @@ export const MapWebPluginsSection: React.FC = () => {
     (s) => s.markerClusteringEnabled,
   );
   const geomanDrawing = useMapWebPluginsStore((s) => s.geomanDrawingEnabled);
+  const nodeInspector = useMapWebPluginsStore((s) => s.nodeInspectorEnabled);
+  const avoidedNodesPanel = useMapWebPluginsStore((s) => s.avoidedNodesPanelEnabled);
   const setMarkerClustering = useMapWebPluginsStore(
     (s) => s.setMarkerClusteringEnabled,
   );
   const setGeomanDrawing = useMapWebPluginsStore(
     (s) => s.setGeomanDrawingEnabled,
+  );
+  const setNodeInspector = useMapWebPluginsStore(
+    (s) => s.setNodeInspectorEnabled,
+  );
+  const setAvoidedNodesPanel = useMapWebPluginsStore(
+    (s) => s.setAvoidedNodesPanelEnabled,
   );
   const hydrate = useMapWebPluginsStore((s) => s.hydrate);
 
@@ -100,6 +108,60 @@ export const MapWebPluginsSection: React.FC = () => {
               style={[
                 styles.toggleThumb,
                 { marginLeft: geomanDrawing ? 22 : 2 },
+              ]}
+            />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.row, { borderTopColor: theme.borderLight }]}
+          onPress={() => onToggle(setNodeInspector, nodeInspector)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>
+              Node inspector
+            </Text>
+            <Text style={[styles.description, { color: theme.textTertiary }]}>
+              Click route nodes to see OSM data and avoid spots (requires Fix to roads)
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.toggle,
+              { backgroundColor: nodeInspector ? theme.accent : theme.border },
+            ]}
+          >
+            <View
+              style={[
+                styles.toggleThumb,
+                { marginLeft: nodeInspector ? 22 : 2 },
+              ]}
+            />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.row, { borderTopColor: theme.borderLight }]}
+          onPress={() => onToggle(setAvoidedNodesPanel, avoidedNodesPanel)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>
+              Avoided nodes panel
+            </Text>
+            <Text style={[styles.description, { color: theme.textTertiary }]}>
+              Show right-side panel listing avoided route spots
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.toggle,
+              { backgroundColor: avoidedNodesPanel ? theme.accent : theme.border },
+            ]}
+          >
+            <View
+              style={[
+                styles.toggleThumb,
+                { marginLeft: avoidedNodesPanel ? 22 : 2 },
               ]}
             />
           </View>

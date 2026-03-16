@@ -83,6 +83,45 @@ export function matchedRouteToGeoJSON(
         duration: step.duration,
       },
     });
+
+    // Step-start marker: clickable orange circle for node inspection / avoid.
+    // Use the maneuver location when available; fall back to first geometry coord.
+    const maneuverLoc = step.maneuver?.location ?? (coords[0] as [number, number] | undefined);
+    if (maneuverLoc) {
+      const [lon, lat] = maneuverLoc;
+
+      // Correlate to OSM node ID by finding the closest matchedGeometry point.
+      let nodeId: number | undefined;
+      if (route.nodeIds && route.matchedGeometry.length > 0) {
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < route.matchedGeometry.length; i++) {
+          const d =
+            Math.abs(route.matchedGeometry[i].lat - lat) +
+            Math.abs(route.matchedGeometry[i].lon - lon);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+          }
+        }
+        nodeId = route.nodeIds[bestIdx];
+      }
+
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [lon, lat] },
+        properties: {
+          role: "step-start",
+          stepIndex: idx,
+          name: step.name ?? "",
+          ref: step.ref ?? "",
+          lat,
+          lon,
+          nodeId: nodeId ?? null,
+          maneuverType: step.maneuver?.type ?? "unknown",
+        },
+      });
+    }
   });
 
   if (route.matchedGeometry.length >= 1) {

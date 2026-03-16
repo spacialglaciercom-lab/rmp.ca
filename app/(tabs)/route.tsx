@@ -4,7 +4,7 @@
  * When the Collection Route plugin is disabled, redirect to Home so the Route tab is fully hidden.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme-provider";
@@ -15,15 +15,17 @@ import { usePluginStore } from "@/stores/pluginStore";
 export default function RouteScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const collectionRouteEnabled = usePluginStore((s) =>
     s.isPluginEnabled("collection-route", true),
   );
 
   useEffect(() => {
     if (!collectionRouteEnabled) {
-      router.replace("/(tabs)");
+      routerRef.current.replace("/(tabs)");
     }
-  }, [collectionRouteEnabled, router]);
+  }, [collectionRouteEnabled]);
 
   if (!collectionRouteEnabled) {
     return null;

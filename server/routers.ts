@@ -8,6 +8,7 @@ import { navigationRouter } from "./navigationRouter";
 import { optimizerRouter } from "./optimizerRouter";
 import { orgRouter } from "./orgRouter";
 import { ragRouter } from "./rag/ragRouter";
+import { rbacRouter } from "./rbac/rbacRouter";
 import { voiceRouter } from "./voiceRouter";
 
 export const appRouter = router({
@@ -41,6 +42,9 @@ export const appRouter = router({
 
   // Cost history for ML cost-correction model — scoped per organization
   costHistory: costHistoryRouter,
+
+  // RBAC — role/permission management and per-user permission queries
+  rbac: rbacRouter,
 });
 
 export type AppRouter = typeof appRouter;
