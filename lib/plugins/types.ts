@@ -42,7 +42,8 @@ export type PluginFeatureKey =
   | "dataProvider"
   | "widget"
   | "routeOptimizer"
-  | "extractService";
+  | "extractService"
+  | "vrpSolvers";
 
 /**
  * Result of polygon-to-GeoJSON extraction (e.g. Overture).
