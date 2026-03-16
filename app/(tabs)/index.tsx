@@ -1,7 +1,7 @@
 /**
  * Home tab — Minimalist Route OS. No cyberpunk styling.
  */
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import Constants from "expo-constants";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 
 import { useTheme } from "@/lib/theme-provider";
 import { useColors } from "@/hooks/use-colors";
@@ -82,9 +82,11 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [contributingLoading, setContributingLoading] = useState(false);
 
-  useEffect(() => {
-    loadRoute();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadRoute();
+    }, []),
+  );
 
   const loadRoute = async () => {
     try {

@@ -377,6 +377,7 @@ export default function PlannerContent() {
                 route: backendResult.route,
                 totalDistance: backendResult.total_distance_km,
                 stats: backendResult.stats,
+                timing_ms: backendResult.timing_ms,
               };
               optimizerSource = "backend";
             } catch (backendErr) {
@@ -715,6 +716,14 @@ export default function PlannerContent() {
               },
             ]
           : []),
+        ...(optResult?.timing_ms
+          ? [
+              {
+                msg: `Optimization timing — total: ${optResult.timing_ms.total_ms}ms (clean: ${optResult.timing_ms.clean_ms}ms, graph: ${optResult.timing_ms.graph_build_ms}ms, CPP solve: ${optResult.timing_ms.cpp_solve_ms}ms, route build: ${optResult.timing_ms.route_build_ms}ms, analytics: ${optResult.timing_ms.analytics_ms}ms)`,
+                type: "info" as const,
+              },
+            ]
+          : []),
         { msg: "Route generation complete!", type: "success" as const },
       ];
 
@@ -892,6 +901,7 @@ export default function PlannerContent() {
                       nodeId?: string;
                     }[];
                     totalDistance?: number;
+                    timing_ms?: import("@/services/overtureOptimizerService").OptimizeTiming;
                   }
                 | undefined;
               let libraryOptimizerSource:
@@ -937,6 +947,7 @@ export default function PlannerContent() {
                   optResult = {
                     route: backendResult.route,
                     totalDistance: backendResult.total_distance_km,
+                    timing_ms: backendResult.timing_ms,
                   };
                   libraryOptimizerSource = "backend";
                 } catch {

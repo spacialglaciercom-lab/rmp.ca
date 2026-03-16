@@ -11,6 +11,7 @@ from __future__ import annotations
 import heapq
 import math
 import os
+import time
 from typing import Any
 
 import networkx as nx
@@ -149,6 +150,11 @@ class OptimizeResponse(BaseModel):
     message: str
     stats: RouteStats
     metrics: dict = {}
+    timing_ms: dict[str, float] = Field(
+        default_factory=dict,
+        description="Wall-clock milliseconds for each optimization phase: "
+                    "clean, graph_build, cpp_solve, route_build, analytics, total",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -774,6 +780,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
     and returns an ordered route with turn statistics.
     If Accept header is "application/gpx+xml", returns GPX instead of JSON.
     """
+    _t_start = time.perf_counter()
     features = body.geojson.features
 
     if body.clean_before_optimize:
@@ -793,6 +800,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
             )
         cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
         features = cleaned_fc.features
+    _t_after_clean = time.perf_counter()
 
     # Road class filtering:
     # 1. If caller supplies road_classes, use that allowlist exactly.
@@ -824,6 +832,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
         if body.use_turn_penalty_plugin:
             plugins.append(TurnPenaltyPlugin())
     G = _build_graph(features, oneway_mode, plugins=plugins)
+    _t_after_graph = time.perf_counter()
 
     # When service_both_sides is True and graph is undirected, convert to directed so each
     # segment is traversed in BOTH directions (u→v and v→u = both curbs). Skip when G is
@@ -888,7 +897,9 @@ def optimize_route(request: Request, body: OptimizeRequest):
                 start_node = node
 
     # Solve CPP
+    _t_before_cpp = time.perf_counter()
     route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties)
+    _t_after_cpp = time.perf_counter()
 
     if not route_nodes:
         raise HTTPException(status_code=400, detail="Could not compute route — graph may be empty or disconnected")
@@ -1056,6 +1067,8 @@ def optimize_route(request: Request, body: OptimizeRequest):
             if route_coords:
                 route_coords.pop()
 
+    _t_after_route_build = time.perf_counter()
+
     # Count dead ends (degree-1 nodes)
     dead_ends = sum(1 for n in G.nodes() if G.degree(n) == 1)
 
@@ -1083,6 +1096,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
     ]
     active_plugins: list[RoutingCostPlugin] = plugins or []
     route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
+    _t_after_analytics = time.perf_counter()
 
     # Build route GeoJSON
     route_geojson = GeoJSONFeatureCollection(
@@ -1115,6 +1129,20 @@ def optimize_route(request: Request, body: OptimizeRequest):
         efficiency=round(efficiency, 2),
     )
 
+    _t_end = time.perf_counter()
+
+    def _ms(a: float, b: float) -> float:
+        return round((b - a) * 1000, 2)
+
+    timing_ms = {
+        "clean_ms": _ms(_t_start, _t_after_clean),
+        "graph_build_ms": _ms(_t_after_clean, _t_after_graph),
+        "cpp_solve_ms": _ms(_t_before_cpp, _t_after_cpp),
+        "route_build_ms": _ms(_t_after_cpp, _t_after_route_build),
+        "analytics_ms": _ms(_t_after_route_build, _t_after_analytics),
+        "total_ms": _ms(_t_start, _t_end),
+    }
+
     response = OptimizeResponse(
         route=route_points,
         route_geojson=route_geojson,
@@ -1123,6 +1151,7 @@ def optimize_route(request: Request, body: OptimizeRequest):
         message=msg,
         stats=stats,
         metrics=route_metrics,
+        timing_ms=timing_ms,
     )
     
     # Dual-path: return GPX when client requests application/gpx+xml
