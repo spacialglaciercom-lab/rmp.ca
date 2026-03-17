@@ -22,6 +22,11 @@ import type {
   SegmentStatus,
   SegmentGroup,
 } from "@/types/navigation";
+import { useCircuitStore } from "@/stores/circuitStore";
+import { rerouteAfterBreakdown } from "@/lib/onlineReopt/breakdownRerouter";
+import { insertEmergencyStop } from "@/lib/onlineReopt/stopInsertion";
+import { turnCircuitToRoutePoints } from "@/lib/turnAwareCpp";
+import type { TurnNode } from "@/types/turnAware";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -242,6 +247,20 @@ interface CollectionNavigationActions {
     collectionPoints: CollectionPoint[],
   ) => void;
 
+  /**
+   * Re-solve the remaining circuit after a vehicle breakdown and re-initialize
+   * navigation from the current position. Requires a circuit to be present in
+   * circuitStore (populated by useRouteOptimization after a turn-aware solve).
+   */
+  rerouteFromBreakdown: () => Promise<void>;
+
+  /**
+   * Insert an emergency (unscheduled) pickup at the given coordinates using
+   * cheapest-insertion and re-initialize the remaining segments.
+   * Requires a circuit in circuitStore.
+   */
+  insertEmergencyStopAt: (coords: [number, number]) => Promise<void>;
+
   /** Initialize from pre-split backend segment data. */
   initRouteFromSplitSegments: (
     splitSegments: Array<{
@@ -311,6 +330,7 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
     segmentGroups: [],
     totalStreets: 0,
     completedStreets: 0,
+    activeCollectionPoints: [],
 
     initRoute: (routePoints, collectionPoints) => {
       const segments = buildSegments(routePoints, collectionPoints);
@@ -331,6 +351,7 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
         segmentGroups: groups,
         totalStreets: streets.total,
         completedStreets: streets.completed,
+        activeCollectionPoints: collectionPoints,
       });
     },
 
@@ -673,9 +694,147 @@ export const useCollectionNavigationStore = create<CollectionNavigationStore>()(
         segmentGroups: [],
         totalStreets: 0,
         completedStreets: 0,
+        activeCollectionPoints: [],
       }),
 
     setAutoAdvanceRadius: (meters) => set({ autoAdvanceRadius: meters }),
+
+    rerouteFromBreakdown: async () => {
+      const state = get();
+      const { circuit, streetEdges } = useCircuitStore.getState();
+      if (circuit.length === 0) return;
+
+      // Approximate which circuit edge the truck is currently at using the
+      // distance-ratio. The re-solve is forgiving of small offsets.
+      const ratio =
+        state.totalDistance > 0
+          ? state.completedDistance / state.totalDistance
+          : 0;
+      const breakdownIdx = Math.max(
+        0,
+        Math.floor(ratio * circuit.length) - 1,
+      );
+
+      const result = await rerouteAfterBreakdown(circuit, breakdownIdx);
+      if (result.circuit.length === 0) return;
+
+      const newRoutePoints = turnCircuitToRoutePoints(
+        streetEdges,
+        result.circuit,
+      );
+
+      // Update circuit store with the re-solved remainder
+      useCircuitStore.getState().setCircuit(result.circuit, streetEdges);
+
+      // Re-initialize navigation with the new route, preserving isTracking so
+      // the driver's GPS session continues without interruption.
+      const wasTracking = state.isTracking;
+      const currentLocation = state.currentLocation;
+      const collectionPoints = state.activeCollectionPoints;
+
+      const newSegments = buildSegments(
+        newRoutePoints.map((p) => ({ lat: p.latitude, lon: p.longitude })),
+        collectionPoints,
+      );
+      const totalDistance = newSegments.reduce((sum, s) => sum + s.distance, 0);
+      const totalStops = newSegments.filter((s) => s.collectionPoint).length;
+      const groups = buildSegmentGroups(newSegments);
+      const streets = computeStreetCounts(groups);
+
+      set({
+        segments: newSegments,
+        activeSegmentIndex: 0,
+        totalDistance,
+        completedDistance: 0,
+        completedStops: 0,
+        totalStops,
+        isTracking: wasTracking,
+        currentLocation,
+        segmentGroups: groups,
+        totalStreets: streets.total,
+        completedStreets: streets.completed,
+        activeCollectionPoints: collectionPoints,
+      });
+    },
+
+    insertEmergencyStopAt: async (coords) => {
+      const state = get();
+      const { circuit, streetEdges } = useCircuitStore.getState();
+      if (circuit.length === 0) return;
+
+      // Build a lookup for TurnNode → [lat, lon] using street edge coordinates.
+      const edgeLookup = new Map(streetEdges.map((e) => [e.id, e]));
+      const coordFn = (node: TurnNode): [number, number] | null => {
+        // Detour nodes encode coordinates in their edgeId
+        if (node.edgeId.startsWith("detour:")) {
+          const parts = node.edgeId.split(":");
+          if (parts.length >= 3) {
+            return [parseFloat(parts[1]!), parseFloat(parts[2]!)];
+          }
+          return null;
+        }
+        const edge = edgeLookup.get(node.edgeId);
+        if (!edge || !edge.coordinates.length) return null;
+        // The intersection is at the end of the edge in the given direction
+        const coord =
+          node.direction === "forward"
+            ? edge.coordinates[edge.coordinates.length - 1]
+            : edge.coordinates[0];
+        return coord ? [coord[0], coord[1]] : null;
+      };
+
+      const ratio =
+        state.totalDistance > 0
+          ? state.completedDistance / state.totalDistance
+          : 0;
+      const currentEdgeIdx = Math.max(
+        0,
+        Math.floor(ratio * circuit.length) - 1,
+      );
+
+      const result = insertEmergencyStop(
+        circuit,
+        currentEdgeIdx,
+        coords,
+        coordFn,
+      );
+
+      const newRoutePoints = turnCircuitToRoutePoints(
+        streetEdges,
+        result.circuit,
+      );
+
+      // Update circuit store with the updated circuit
+      useCircuitStore.getState().setCircuit(result.circuit, streetEdges);
+
+      const wasTracking = state.isTracking;
+      const currentLocation = state.currentLocation;
+      const collectionPoints = state.activeCollectionPoints;
+
+      const newSegments = buildSegments(
+        newRoutePoints.map((p) => ({ lat: p.latitude, lon: p.longitude })),
+        collectionPoints,
+      );
+      const totalDistance = newSegments.reduce((sum, s) => sum + s.distance, 0);
+      const totalStops = newSegments.filter((s) => s.collectionPoint).length;
+      const groups = buildSegmentGroups(newSegments);
+      const streets = computeStreetCounts(groups);
+
+      set({
+        segments: newSegments,
+        activeSegmentIndex: 0,
+        totalDistance,
+        completedDistance: 0,
+        completedStops: 0,
+        totalStops,
+        isTracking: wasTracking,
+        currentLocation,
+        segmentGroups: groups,
+        totalStreets: streets.total,
+        completedStreets: streets.completed,
+        activeCollectionPoints: collectionPoints,
+      });
+    },
   }),
 );
 

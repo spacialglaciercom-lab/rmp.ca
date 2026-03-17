@@ -17,6 +17,7 @@ import {
   getOrgById,
   getUsersByOrgId,
   listOrgs,
+  setUserRole,
   upsertOrg,
 } from "./db";
 
@@ -78,6 +79,36 @@ export const orgRouter = router({
         });
       }
       return getUsersByOrgId(input.id);
+    }),
+
+  /**
+   * Promote or demote a user's role. Only admins can call this.
+   * Pass role: "admin" to promote, "user" to demote.
+   * Prevents the caller from demoting themselves.
+   */
+  setRole: adminProcedure
+    .input(
+      z.object({
+        openId: z.string().min(1),
+        role: z.enum(["user", "admin"]),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (input.openId === ctx.user.openId && input.role !== "admin") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You cannot demote yourself.",
+        });
+      }
+      const target = await getUserByOpenId(input.openId);
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `User ${input.openId} not found.`,
+        });
+      }
+      await setUserRole(input.openId, input.role);
+      return { ok: true };
     }),
 
   /**

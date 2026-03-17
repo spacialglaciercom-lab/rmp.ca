@@ -15,6 +15,7 @@ from ortools.constraint_solver import pywrapcp
 
 from .gpx_export import Waypoint, RouteSegment, build_gpx
 from .analytics import calculate_route_metrics
+from .vrp_registry import get_solver, get_solver_ids, get_default_solver_id, register_solver
 
 router = APIRouter()
 
@@ -49,6 +50,7 @@ class VrpRequest(BaseModel):
     vehicles: List[VrpVehicle]
     use_time_windows: bool = False
     objective: str = "min_distance"  # min_distance | min_time | balance_load | min_vehicles
+    solver: Optional[str] = None  # solver id from registry; default "ortools"
 
 class VrpRouteStep(BaseModel):
     type: str  # "start", "job", "end"
@@ -125,13 +127,15 @@ def _vrp_response_to_gpx_segments(response: VrpResponse) -> list[RouteSegment]:
     return segments
 
 
-@router.post("/api/vrp/solve")
-def solve_vrp(request: Request, req: VrpRequest):
-    if not req.vehicles:
-        raise HTTPException(status_code=400, detail="No vehicles provided")
-    if not req.stops:
-        return VrpResponse(routes=[], total_distance=0, total_duration=0)
+class OrtoolsVrpSolver:
+    """OR-Tools-based VRP solver. Registered as "ortools" in the solver registry."""
 
+    def solve(self, req: VrpRequest) -> VrpResponse:
+        return _solve_ortools(req)
+
+
+def _solve_ortools(req: VrpRequest) -> VrpResponse:
+    """OR-Tools solve logic (used by OrtoolsVrpSolver)."""
     # 1. Prepare Data
     all_locs = [] # List[Tuple[lat, lon]]
     
@@ -377,12 +381,127 @@ def solve_vrp(request: Request, req: VrpRequest):
         if i not in assigned_stop_indices:
             unassigned_ids.append(req.stops[i].id)
 
-    response = VrpResponse(
+    return VrpResponse(
         routes=response_routes,
         total_distance=total_dist_all,
         total_duration=total_dur_all,
         unassigned=unassigned_ids,
     )
+
+
+# Register built-in OR-Tools solver so /api/vrp/solve can dispatch by solver id
+register_solver("ortools", OrtoolsVrpSolver())
+
+
+# ---------------------------------------------------------------------------
+# Async endpoint — enqueue task, return 202 immediately
+# ---------------------------------------------------------------------------
+
+@router.post("/api/vrp/solve")
+def solve_vrp_async(req: VrpRequest) -> Response:
+    """Enqueue a VRP solve job.
+
+    Returns HTTP 202 Accepted with ``{"task_id": "<uuid>", "status": "PENDING"}``.
+    Poll ``GET /api/vrp/status/{task_id}`` for progress and the final result.
+
+    Falls back to HTTP 503 when the Redis broker is unreachable.
+    """
+    from .tasks.vrp_task import solve_vrp_task
+    import json as _json
+
+    if not req.vehicles:
+        raise HTTPException(status_code=400, detail="No vehicles provided")
+
+    try:
+        task = solve_vrp_task.delay(req.model_dump())
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Task queue unavailable — is Redis running? {exc}",
+        )
+
+    return Response(
+        content=_json.dumps({"task_id": task.id, "status": "PENDING"}),
+        status_code=202,
+        media_type="application/json",
+    )
+
+
+@router.get("/api/vrp/status/{task_id}")
+def get_vrp_status(task_id: str) -> Response:
+    """Poll VRP task status.
+
+    State machine:
+      PENDING    → job is waiting in the Redis queue
+      PROCESSING → worker is actively solving
+      SUCCESS    → result ready; ``result`` key contains VrpResponse
+      FAILURE    → solver error; ``error`` key contains the message
+
+    HTTP status codes mirror the error taxonomy:
+      200 for PENDING / PROCESSING / SUCCESS
+      400 for client errors (ValueError — bad stops/vehicles)
+      500 for unexpected solver errors
+    """
+    from celery.result import AsyncResult
+    from .celery_app import celery_app
+    import json as _json
+
+    ar = AsyncResult(task_id, app=celery_app)
+    state = ar.state
+
+    if state == "PENDING":
+        payload = {"task_id": task_id, "status": "PENDING"}
+        return Response(content=_json.dumps(payload), media_type="application/json")
+
+    if state == "STARTED":
+        payload = {"task_id": task_id, "status": "PROCESSING"}
+        return Response(content=_json.dumps(payload), media_type="application/json")
+
+    if state == "SUCCESS":
+        payload = {"task_id": task_id, "status": "SUCCESS", "result": ar.result}
+        return Response(content=_json.dumps(payload), media_type="application/json")
+
+    if state == "FAILURE":
+        exc = ar.result
+        error_msg = str(exc) if exc else "Unknown VRP solver error"
+        http_status = 400 if isinstance(exc, ValueError) else 500
+        payload = {"task_id": task_id, "status": "FAILURE", "error": error_msg}
+        return Response(
+            content=_json.dumps(payload),
+            status_code=http_status,
+            media_type="application/json",
+        )
+
+    payload = {"task_id": task_id, "status": state}
+    return Response(content=_json.dumps(payload), media_type="application/json")
+
+
+# ---------------------------------------------------------------------------
+# Sync endpoint — kept for GPX export and backward-compat testing
+# ---------------------------------------------------------------------------
+
+@router.post("/api/vrp/solve/sync")
+def solve_vrp_sync(request: Request, req: VrpRequest):
+    """Synchronous VRP solve — blocks until complete.
+
+    Supports GPX export via ``Accept: application/gpx+xml``.
+    Prefer ``POST /api/vrp/solve`` (async) for production use.
+    """
+    if not req.vehicles:
+        raise HTTPException(status_code=400, detail="No vehicles provided")
+    if not req.stops:
+        return VrpResponse(routes=[], total_distance=0, total_duration=0)
+
+    solver_id = req.solver or get_default_solver_id()
+    solver = get_solver(solver_id)
+    if not solver:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown solver: {solver_id}. Available: {', '.join(get_solver_ids())}",
+        )
+
+    response = solver.solve(req)
+
     # Dual-path: return GPX when client requests application/gpx+xml
     accept = request.headers.get("Accept", "")
     if ACCEPT_GPX in accept and response.routes:

@@ -5,6 +5,7 @@ import weatherPluginConfig from "./weather/config.json";
 import overtureExtractionPluginConfig from "./overture-extraction/config.json";
 import vrpSolversPluginConfig from "./vrp-solvers/config.json";
 import fuelAwareRoutingPluginConfig from "./fuel-aware-routing/config.json";
+import osmExtractionPluginConfig from "./osm-extraction/config.json";
 
 export interface PluginEntryConfig {
   enabled: boolean;
@@ -25,6 +26,7 @@ const PLUGIN_CONFIG_MAP: Record<string, PluginEntryConfig> = {
   "overture-extraction": overtureExtractionPluginConfig as PluginEntryConfig,
   "vrp-solvers": vrpSolversPluginConfig as PluginEntryConfig,
   "fuel-aware-routing": fuelAwareRoutingPluginConfig as PluginEntryConfig,
+  "osm-extraction": osmExtractionPluginConfig as PluginEntryConfig,
 };
 
 /**

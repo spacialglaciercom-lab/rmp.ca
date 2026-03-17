@@ -38,8 +38,10 @@ import {
   routeThroughWaypoints,
 } from "@/lib/mapMatching";
 import { buildMatchedRouteFromHierholzer } from "@/lib/hierholzerInstructions";
-import { getRoutingConfigAsync } from "@/lib/routing-config";
+import { getRoutingConfigAsync, getRoutingConfig } from "@/lib/routing-config";
 import type { MatchedRoute } from "@/lib/mapMatching";
+import { insertAvoidDetours } from "@/lib/osrmAvoid";
+import type { AvoidedNode } from "@/stores/mapStateStore";
 
 import { RouteMap, type RouteMapRef } from "@/components/route-map";
 import { matchedRouteToGeoJSON } from "@/lib/geojson-utils";
@@ -58,6 +60,8 @@ import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore
 import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingControls";
 import { MapSidebar } from "@/components/mapTab/sidebar/MapSidebar";
 import { AIChatBubble } from "@/components/AIChatBubble";
+import { AvoidedNodesPanel } from "@/components/AvoidedNodesPanel";
+import { DeletedSegmentsPanel } from "@/components/DeletedSegmentsPanel";
 import { HelpPrompt } from "@/components/help/HelpPrompt";
 import { NavigationPanel } from "@/components/mapTab/navigation/NavigationPanel";
 import { MyPlacesScreen } from "@/components/mapTab/places/MyPlacesScreen";
@@ -149,9 +153,13 @@ export default function MapContent() {
   const osmExtractionPoints = useMapStateStore((s) => s.osmExtractionPoints);
   const osmExtractedData = useMapStateStore((s) => s.osmExtractedData);
   const selectedPoint = useMapStateStore((s) => s.selectedPoint);
+  const avoidedNodes = useMapStateStore((s) => s.avoidedNodes);
 
   // Stable action references (never trigger re-renders)
   const actions = useMapActions();
+
+  // OSRM base URL for snap-to-road in node popups (read once; stable across renders)
+  const osrmBaseUrl = useMemo(() => getRoutingConfig().baseUrl, []);
 
   // Local state that truly belongs to this component only (not shared)
   const [hasOfflineRegions, setHasOfflineRegions] = useState(false);
@@ -959,6 +967,58 @@ export default function MapContent() {
     [matchedRoute, actions],
   );
 
+  /** Re-route the current matched route with all avoided nodes inserted as detour waypoints. */
+  const rerouteWithAvoids = useCallback(
+    async (newAvoidedNodes: AvoidedNode[]) => {
+      const source = matchedRoute ?? cachedMatchedRoute;
+      if (!source || source.matchedGeometry.length < 2) return;
+
+      const baseWaypoints = source.matchedGeometry.map((p) => ({
+        lat: p.lat,
+        lon: p.lon,
+      }));
+      const withDetours = insertAvoidDetours(
+        baseWaypoints,
+        newAvoidedNodes,
+        source.matchedGeometry,
+      );
+      if (withDetours.length < 2) return;
+
+      actions.setFixToRoadsLoading(true);
+      try {
+        const routingConfig = await getRoutingConfigAsync();
+        const newRoute = await routeThroughWaypoints(
+          withDetours,
+          routingConfig,
+          getRouteOptionsForRouting(),
+        );
+        if (newRoute) {
+          actions.setMatchedRoute(newRoute);
+          actions.setCachedMatchedRoute(newRoute);
+        }
+      } catch (e) {
+        console.warn("[AvoidNode] Reroute failed:", e);
+      } finally {
+        actions.setFixToRoadsLoading(false);
+      }
+    },
+    [matchedRoute, cachedMatchedRoute, actions],
+  );
+
+  /** Called when the user taps "Avoid this spot" in a route-node popup. */
+  const handleAvoidNode = useCallback(
+    (node: { lat: number; lon: number; nodeId?: number; name?: string }) => {
+      const label =
+        node.name
+          ? node.name
+          : `${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}`;
+      const newNode: AvoidedNode = { ...node, label };
+      actions.addAvoidedNode(newNode);
+      rerouteWithAvoids([...avoidedNodes, newNode]);
+    },
+    [actions, avoidedNodes, rerouteWithAvoids],
+  );
+
   const getStartForDirections = useCallback((): Promise<{
     lat: number;
     lon: number;
@@ -1201,7 +1261,11 @@ export default function MapContent() {
       return;
     }
     let points: { lat: number; lon: number }[] = [];
-    if (displayRoutePoints?.length) {
+    // Prefer matched-route geometry (reflects avoid-node detours); fall back to stop points.
+    const matchedSource = matchedRoute ?? cachedMatchedRoute;
+    if (matchedSource && matchedSource.matchedGeometry.length >= 2) {
+      points = matchedSource.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon }));
+    } else if (displayRoutePoints?.length) {
       points = displayRoutePoints.map((p) => ({
         lat: "lat" in p ? p.lat : (p as { latitude: number }).latitude,
         lon: "lon" in p ? p.lon : (p as { longitude: number }).longitude,
@@ -1238,7 +1302,7 @@ export default function MapContent() {
         }
       })();
     }
-  }, [displayRoutePoints, state?.previewRoutePointsByVehicle]);
+  }, [displayRoutePoints, state?.previewRoutePointsByVehicle, matchedRoute, cachedMatchedRoute]);
 
   const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), []);
   const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), []);
@@ -1535,6 +1599,8 @@ export default function MapContent() {
         geojsonOverlay={geojsonOverlay}
         zonesPreviewPolygon={zonesPreviewPolygon}
         zonesPreviewPolygons={zonesPreviewPolygons}
+        onAvoidNode={handleAvoidNode}
+        osrmBaseUrl={osrmBaseUrl}
       />
     </>
   );
@@ -1707,6 +1773,9 @@ export default function MapContent() {
       />
 
       {aiChatEnabled && <AIChatBubble />}
+
+      <AvoidedNodesPanel />
+      <DeletedSegmentsPanel />
 
       <MapSidebar />
 

@@ -15,6 +15,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: optimizer
+  namespace: rmpca
   labels:
     app: optimizer
     component: python-fastapi
@@ -37,10 +38,9 @@ spec:
     spec:
       containers:
         - name: optimizer
-          # Replace with your registry image, e.g.:
-          # image: gcr.io/YOUR_PROJECT/rmpca-optimizer:latest
-          image: rmpca-main-optimizer:latest
-          imagePullPolicy: IfNotPresent
+          # Replace PROJECT_ID with your GCP project ID
+          image: northamerica-northeast1-docker.pkg.dev/PROJECT_ID/rmpca/optimizer:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8000
@@ -48,6 +48,8 @@ spec:
           env:
             - name: PORT
               value: "8000"
+            - name: REDIS_URL
+              value: "redis://redis.rmpca.svc.cluster.local:6379/0"
           resources:
             requests:
               cpu: "500m"      # 0.5 vCPU guaranteed

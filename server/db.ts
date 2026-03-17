@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -7,6 +7,9 @@ import {
   Organization,
   User,
   organizations,
+  rolePermissions,
+  roles,
+  userRoles,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -152,7 +155,12 @@ export async function upsertOrg(
       },
     })
     .returning();
-  return result[0];
+  const saved = result[0];
+  if (saved) {
+    // Idempotent — safe for both inserts and updates
+    await seedSystemRoles(saved.id);
+  }
+  return saved;
 }
 
 export async function assignUserToOrg(
@@ -167,6 +175,21 @@ export async function assignUserToOrg(
   await db
     .update(users)
     .set({ orgId, updatedAt: new Date() })
+    .where(eq(users.openId, openId));
+}
+
+export async function setUserRole(
+  openId: string,
+  role: "user" | "admin",
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot set user role: database not available");
+    return;
+  }
+  await db
+    .update(users)
+    .set({ role, updatedAt: new Date() })
     .where(eq(users.openId, openId));
 }
 

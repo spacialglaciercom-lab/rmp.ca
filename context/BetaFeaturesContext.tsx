@@ -15,6 +15,9 @@ interface BetaContextType {
   toggleVoiceCoPilot: (enabled: boolean) => Promise<void>;
   toggleRouteMasterConstraints: (enabled: boolean) => Promise<void>;
   toggleMoonshineVoice: (enabled: boolean) => Promise<void>;
+  toggleVehicleBreakdown: (enabled: boolean) => Promise<void>;
+  toggleEmergencyStopInsertion: (enabled: boolean) => Promise<void>;
+  toggleRealTimeTrafficFeed: (enabled: boolean) => Promise<void>;
   recordCrash: () => Promise<void>; // safety mechanism
   isExperimentalRoute: boolean;
 }
@@ -33,6 +36,9 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
     voiceCoPilot: false,
     routeMasterConstraints: false,
     moonshineVoice: false,
+    vehicleBreakdown: false,
+    emergencyStopInsertion: false,
+    realTimeTrafficFeed: false,
     crashCount: 0,
   });
 
@@ -50,6 +56,9 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
           voiceCoPilot: parsed.voiceCoPilot ?? false,
           routeMasterConstraints: parsed.routeMasterConstraints ?? false,
           moonshineVoice: parsed.moonshineVoice ?? false,
+          vehicleBreakdown: parsed.vehicleBreakdown ?? false,
+          emergencyStopInsertion: parsed.emergencyStopInsertion ?? false,
+          realTimeTrafficFeed: parsed.realTimeTrafficFeed ?? false,
           crashCount: parsed.crashCount ?? 0,
         });
       }
@@ -89,6 +98,9 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
       voiceCoPilot: false,
       routeMasterConstraints: false,
       moonshineVoice: false,
+      vehicleBreakdown: false,
+      emergencyStopInsertion: false,
+      realTimeTrafficFeed: false,
       crashCount: 0,
     });
   };
@@ -121,6 +133,21 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
   const toggleMoonshineVoice = async (enabled: boolean) => {
     if (!features.enabled) return;
     await saveFeatures({ ...features, moonshineVoice: enabled });
+  };
+
+  const toggleVehicleBreakdown = async (enabled: boolean) => {
+    if (!features.enabled) return;
+    await saveFeatures({ ...features, vehicleBreakdown: enabled });
+  };
+
+  const toggleEmergencyStopInsertion = async (enabled: boolean) => {
+    if (!features.enabled) return;
+    await saveFeatures({ ...features, emergencyStopInsertion: enabled });
+  };
+
+  const toggleRealTimeTrafficFeed = async (enabled: boolean) => {
+    if (!features.enabled) return;
+    await saveFeatures({ ...features, realTimeTrafficFeed: enabled });
   };
 
   const recordCrash = async () => {
@@ -159,6 +186,9 @@ export const BetaFeaturesProvider: React.FC<{ children: React.ReactNode }> = ({
         toggleVoiceCoPilot,
         toggleRouteMasterConstraints,
         toggleMoonshineVoice,
+        toggleVehicleBreakdown,
+        toggleEmergencyStopInsertion,
+        toggleRealTimeTrafficFeed,
         recordCrash,
         isExperimentalRoute: isExperimental,
       }}

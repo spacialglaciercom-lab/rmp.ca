@@ -771,14 +771,422 @@ def cpp_solution_to_gpx_segments(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/optimize", response_model=OptimizeResponse)
-def optimize_route(request: Request, body: OptimizeRequest):
-    """
-    Chinese Postman route optimization on GeoJSON road data.
+# ---------------------------------------------------------------------------
+# Pure computation helper — used by the Celery task (async path)
+# ---------------------------------------------------------------------------
 
-    Builds a graph from LineString features, solves the CPP (approximate),
-    and returns an ordered route with turn statistics.
-    If Accept header is "application/gpx+xml", returns GPX instead of JSON.
+def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
+    """Execute Chinese Postman route optimisation without any HTTP context.
+
+    Raises ``ValueError`` (not ``HTTPException``) for invalid / unroutable inputs
+    so Celery tasks can propagate them cleanly as 400-class errors.
+
+    Returns an ``OptimizeResponse`` (JSON-serialisable).  GPX export is NOT
+    performed here; use the sync endpoint or a separate conversion step.
+    """
+    _t_start = time.perf_counter()
+    features = body.geojson.features
+
+    if body.clean_before_optimize:
+        if body.clean_options is not None:
+            opts = body.clean_options
+        else:
+            opts = CleanOptions(
+                remove_selfloops=True,
+                dedupe_edges=True,
+                merge_parallel_edges=False,
+                min_length_m=1.0,
+                max_components=0,
+            )
+        cleaned_fc, _ = clean_geojson(body.geojson.model_dump(), opts)
+        features = cleaned_fc.features
+    _t_after_clean = time.perf_counter()
+
+    allowed: set[str] = set(body.road_classes) if body.road_classes else set(DEFAULT_ROAD_CLASSES)
+    features = [
+        f for f in features
+        if _get_road_class(f) in allowed and _get_road_class(f) not in NON_VEHICLE_CLASSES
+    ]
+    features = [
+        f for f in features
+        if f.geometry.get("type") in ("LineString", "MultiLineString")
+    ]
+
+    if not features:
+        raise ValueError("No LineString/MultiLineString features found in the GeoJSON")
+
+    oneway_mode = body.oneway_mode or "ignore"
+    resolved_dem_path = body.dem_path or os.getenv("DEM_PATH")
+    plugins: list[RoutingCostPlugin] | None = None
+    if resolved_dem_path or body.use_turn_penalty_plugin:
+        plugins = []
+        if resolved_dem_path:
+            plugins.append(FuelAwarePlugin(resolved_dem_path))
+        if body.use_turn_penalty_plugin:
+            plugins.append(TurnPenaltyPlugin())
+    G = _build_graph(features, oneway_mode, plugins=plugins)
+    _t_after_graph = time.perf_counter()
+
+    if body.service_both_sides and not G.is_directed():
+        edges_snapshot = list(G.edges(keys=True, data=True))
+        max_key = max((k for _, _, k in G.edges(keys=True)), default=0)
+        G_dir = nx.MultiDiGraph()
+        for n, ndata in G.nodes(data=True):
+            G_dir.add_node(n, **ndata)
+        for i, (u, v, key, data) in enumerate(edges_snapshot):
+            d = dict(
+                length_km=data["length_km"],
+                coords=data.get("coords", []),
+                feature_idx=data.get("feature_idx", 0),
+                road_class=data.get("road_class", ""),
+            )
+            G_dir.add_edge(u, v, key=key, **d)
+            G_dir.add_edge(v, u, key=max_key + 1 + i, **d)
+        G = G_dir
+
+    if G.number_of_nodes() < 2:
+        raise ValueError(f"Graph has only {G.number_of_nodes()} node(s) — need at least 2")
+
+    if G.number_of_edges() == 0:
+        raise ValueError("Graph has no edges — cannot compute route")
+
+    n_components = (
+        len(list(nx.weakly_connected_components(G)))
+        if G.is_directed()
+        else len(list(nx.connected_components(G)))
+    )
+
+    odd_degree = sum(1 for n in G.nodes() if G.degree(n) % 2 != 0)
+    total_edge_dist = sum(data.get("length_km", 0) for _, _, data in G.edges(data=True))
+
+    start_node = None
+    if body.start_lat is not None and body.start_lon is not None:
+        min_dist = float("inf")
+        for node in G.nodes():
+            ndata = G.nodes[node]
+            d = _haversine_km(
+                body.start_lon, body.start_lat,
+                ndata.get("lon", 0), ndata.get("lat", 0),
+            )
+            if d < min_dist:
+                min_dist = d
+                start_node = node
+
+    _t_before_cpp = time.perf_counter()
+    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties)
+    _t_after_cpp = time.perf_counter()
+
+    if not route_nodes:
+        raise ValueError("Could not compute route — graph may be empty or disconnected")
+
+    if start_node and start_node in route_nodes and route_nodes[0] == route_nodes[-1]:
+        idx = route_nodes.index(start_node)
+        route_nodes = route_nodes[idx:] + route_nodes[1:idx + 1]
+
+    route_points: list[RoutePoint] = []
+    route_coords: list[list[float]] = []
+    instructions: list[Instruction] = []
+    total_distance_km = 0.0
+    deadhead_distance_km = 0.0
+    right_turns = left_turns = u_turns = straight = dead_ends = 0
+    total_traversals = 0
+    prev_bearing: float | None = None
+    consumed_edge_keys: set[tuple[str, str, int]] = set()
+
+    for i in range(len(route_nodes) - 1):
+        u = route_nodes[i]
+        v = route_nodes[i + 1]
+        edge_data = G.get_edge_data(u, v) or G.get_edge_data(v, u)
+        chosen_key: int | None = None
+        edge_coords: list[list[float]] = []
+        is_deadhead = False
+        reversed_coords = False
+        is_component_bridge = False
+        edge_name: str | None = None
+        edge_osm_id: str | None = None
+        edge_dist_km: float = 0.0
+
+        if edge_data:
+            for ek, edata in edge_data.items():
+                canon = (u, v, ek) if G.is_directed() else (min(u, v), max(u, v), ek)
+                if canon not in consumed_edge_keys:
+                    chosen_key = ek
+                    consumed_edge_keys.add(canon)
+                    is_deadhead = bool(edata.get("deadhead"))
+                    raw_coords = edata.get("coords") or []
+                    edge_name = edata.get("name")
+                    edge_osm_id = edata.get("osm_id")
+                    edge_dist_km = edata.get("length_km", 0)
+                    if raw_coords:
+                        start_nid = _node_id(raw_coords[0][0], raw_coords[0][1])
+                        reversed_coords = (start_nid != u)
+                        edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
+                    break
+
+        if not is_component_bridge and edge_coords and len(edge_coords) >= 2:
+            start_bearing = calculate_bearing(
+                edge_coords[0][0], edge_coords[0][1],
+                edge_coords[1][0], edge_coords[1][1],
+            )
+            end_bearing = calculate_bearing(
+                edge_coords[-2][0], edge_coords[-2][1],
+                edge_coords[-1][0], edge_coords[-1][1],
+            )
+            maneuver = "continue"
+            if prev_bearing is not None:
+                turn = _classify_turn(prev_bearing, start_bearing)
+                if turn == "right":
+                    maneuver = "turn_right"
+                elif turn == "left":
+                    maneuver = "turn_left"
+                elif turn == "u_turn":
+                    maneuver = "u_turn"
+            maneuver_text = maneuver.replace("_", " ").capitalize()
+            text = maneuver_text
+            if edge_name:
+                text += f" onto {edge_name}" if maneuver != "continue" else f" on {edge_name}"
+            instructions.append(Instruction(
+                text=text,
+                distance_km=round(edge_dist_km, 4),
+                way_id=edge_osm_id,
+                type=maneuver,
+            ))
+            prev_bearing = end_bearing
+
+        if not edge_coords:
+            is_component_bridge = True
+            u_data = G.nodes[u]
+            v_data = G.nodes[v]
+            edge_coords = [
+                [u_data.get("lon", 0), u_data.get("lat", 0)],
+                [v_data.get("lon", 0), v_data.get("lat", 0)],
+            ]
+
+        start_k = 0 if i == 0 else 1
+        for k, c in enumerate(edge_coords):
+            if k < start_k:
+                continue
+            lon, lat = c[0], c[1]
+            route_points.append(RoutePoint(latitude=lat, longitude=lon, node_id=u if k == 0 else v))
+            route_coords.append([lon, lat])
+
+        for k in range(1, len(edge_coords)):
+            c0 = edge_coords[k - 1]
+            c1 = edge_coords[k]
+            seg_dist = _haversine_km(c0[0], c0[1], c1[0], c1[1])
+            total_distance_km += seg_dist
+            if is_deadhead or is_component_bridge:
+                deadhead_distance_km += seg_dist
+            if not is_component_bridge:
+                curr_bearing = calculate_bearing(c0[0], c0[1], c1[0], c1[1])
+                if prev_bearing is not None:
+                    turn = _classify_turn(prev_bearing, curr_bearing)
+                    if turn == "right":
+                        right_turns += 1
+                    elif turn == "left":
+                        left_turns += 1
+                    elif turn == "u_turn":
+                        u_turns += 1
+                    else:
+                        straight += 1
+                prev_bearing = curr_bearing
+
+        if not is_component_bridge:
+            total_traversals += 1
+
+    if route_nodes and not route_points:
+        node = route_nodes[0]
+        ndata = G.nodes[node]
+        route_points.append(RoutePoint(
+            latitude=ndata.get("lat", 0),
+            longitude=ndata.get("lon", 0),
+            node_id=node,
+        ))
+        route_coords.append([ndata.get("lon", 0), ndata.get("lat", 0)])
+
+    if len(route_points) > 1:
+        first_p = route_points[0]
+        last_p = route_points[-1]
+        COORD_TOL = 1e-6
+        if (
+            abs(first_p.latitude - last_p.latitude) < COORD_TOL
+            and abs(first_p.longitude - last_p.longitude) < COORD_TOL
+        ):
+            route_points.pop()
+            if route_coords:
+                route_coords.pop()
+
+    _t_after_route_build = time.perf_counter()
+    dead_ends = sum(1 for n in G.nodes() if G.degree(n) == 1)
+
+    if total_distance_km <= 0 or not math.isfinite(total_distance_km):
+        total_distance_km = 0.0
+        efficiency = 100.0
+    else:
+        efficiency = total_edge_dist / total_distance_km * 100
+        efficiency = 100.0 if not math.isfinite(efficiency) else max(0.0, min(100.0, efficiency))
+
+    total_distance_km = max(0.0, total_distance_km) if math.isfinite(total_distance_km) else 0.0
+    deadhead_distance_km = max(0.0, deadhead_distance_km) if math.isfinite(deadhead_distance_km) else 0.0
+
+    msg = (
+        f"Route computed: {total_traversals} traversals, "
+        f"{round(total_distance_km, 2)} km, {round(efficiency, 1)}% efficiency"
+    )
+    if n_components > 1:
+        msg += f" (disconnected graph: {n_components} components solved independently)"
+
+    path_for_analytics: list[tuple[float, float]] = [(c[0], c[1]) for c in route_coords]
+    active_plugins: list[RoutingCostPlugin] = plugins or []
+    route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
+    _t_after_analytics = time.perf_counter()
+
+    route_geojson = GeoJSONFeatureCollection(
+        type="FeatureCollection",
+        features=[
+            GeoJSONFeature(
+                type="Feature",
+                geometry={"type": "LineString", "coordinates": route_coords},
+                properties={
+                    "total_distance_km": round(total_distance_km, 4),
+                    "total_traversals": total_traversals,
+                    "metrics": route_metrics,
+                },
+            )
+        ],
+    )
+
+    stats = RouteStats(
+        total_traversals=total_traversals,
+        total_distance_km=round(total_distance_km, 4),
+        right_turns=right_turns,
+        left_turns=left_turns,
+        u_turns=u_turns,
+        straight=straight,
+        dead_ends=dead_ends,
+        odd_degree_vertices=odd_degree,
+        edges_in_graph=G.number_of_edges(),
+        nodes_in_graph=G.number_of_nodes(),
+        deadhead_distance_km=round(deadhead_distance_km, 4),
+        efficiency=round(efficiency, 2),
+    )
+
+    _t_end = time.perf_counter()
+
+    def _ms(a: float, b: float) -> float:
+        return round((b - a) * 1000, 2)
+
+    return OptimizeResponse(
+        route=route_points,
+        route_geojson=route_geojson,
+        instructions=instructions,
+        total_distance_km=round(total_distance_km, 4),
+        message=msg,
+        stats=stats,
+        metrics=route_metrics,
+        timing_ms={
+            "clean_ms": _ms(_t_start, _t_after_clean),
+            "graph_build_ms": _ms(_t_after_clean, _t_after_graph),
+            "cpp_solve_ms": _ms(_t_before_cpp, _t_after_cpp),
+            "route_build_ms": _ms(_t_after_cpp, _t_after_route_build),
+            "analytics_ms": _ms(_t_after_route_build, _t_after_analytics),
+            "total_ms": _ms(_t_start, _t_end),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Async endpoint — enqueue task, return 202 immediately
+# ---------------------------------------------------------------------------
+
+@router.post("/api/optimize")
+def optimize_route_async(body: OptimizeRequest) -> Response:
+    """Enqueue a Chinese Postman optimisation job.
+
+    Returns HTTP 202 Accepted with ``{"task_id": "<uuid>", "status": "PENDING"}``.
+    Poll ``GET /api/optimize/status/{task_id}`` for progress and the final result.
+
+    Falls back to HTTP 503 when the Redis broker is unreachable.
+    """
+    from .tasks.optimize_task import optimize_route_task
+    import json as _json
+
+    try:
+        task = optimize_route_task.delay(body.model_dump())
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Task queue unavailable — is Redis running? {exc}",
+        )
+
+    return Response(
+        content=_json.dumps({"task_id": task.id, "status": "PENDING"}),
+        status_code=202,
+        media_type="application/json",
+    )
+
+
+@router.get("/api/optimize/status/{task_id}")
+def get_optimize_status(task_id: str) -> Response:
+    """Poll optimisation task status.
+
+    State machine:
+      PENDING    → job is waiting in the Redis queue
+      PROCESSING → worker has picked it up and is solving
+      SUCCESS    → result is ready; ``result`` key contains the OptimizeResponse
+      FAILURE    → solver error; ``error`` key contains the message
+
+    HTTP status codes:
+      200   for PENDING / PROCESSING / SUCCESS
+      400   for FAILURE caused by invalid / unroutable input (ValueError)
+      500   for FAILURE caused by an unexpected solver error
+    """
+    from celery.result import AsyncResult
+    from .celery_app import celery_app
+    import json as _json
+
+    ar = AsyncResult(task_id, app=celery_app)
+    state = ar.state
+
+    if state == "PENDING":
+        payload = {"task_id": task_id, "status": "PENDING"}
+        return Response(content=_json.dumps(payload), media_type="application/json")
+
+    if state == "STARTED":
+        payload = {"task_id": task_id, "status": "PROCESSING"}
+        return Response(content=_json.dumps(payload), media_type="application/json")
+
+    if state == "SUCCESS":
+        payload = {"task_id": task_id, "status": "SUCCESS", "result": ar.result}
+        return Response(content=_json.dumps(payload), media_type="application/json")
+
+    if state == "FAILURE":
+        exc = ar.result  # The raised exception instance stored by Celery
+        error_msg = str(exc) if exc else "Unknown optimisation error"
+        # ValueError = client error (bad GeoJSON / unroutable); anything else = server error
+        http_status = 400 if isinstance(exc, ValueError) else 500
+        payload = {"task_id": task_id, "status": "FAILURE", "error": error_msg}
+        return Response(
+            content=_json.dumps(payload),
+            status_code=http_status,
+            media_type="application/json",
+        )
+
+    # Celery can surface REVOKED or custom states
+    payload = {"task_id": task_id, "status": state}
+    return Response(content=_json.dumps(payload), media_type="application/json")
+
+
+# ---------------------------------------------------------------------------
+# Sync endpoint — kept for GPX export and backward-compat testing
+# ---------------------------------------------------------------------------
+
+@router.post("/api/optimize/sync", response_model=OptimizeResponse)
+def optimize_route_sync(request: Request, body: OptimizeRequest):
+    """Synchronous Chinese Postman optimisation — blocks until complete.
+
+    Supports GPX export via ``Accept: application/gpx+xml``.
+    Prefer ``POST /api/optimize`` (async) for large payloads to avoid timeouts.
     """
     _t_start = time.perf_counter()
     features = body.geojson.features

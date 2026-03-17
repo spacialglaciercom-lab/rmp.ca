@@ -21,6 +21,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: optimizer
+  namespace: rmpca
   labels:
     app: optimizer
 spec:

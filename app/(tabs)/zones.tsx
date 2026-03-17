@@ -3,7 +3,7 @@
  * Renders ZonePage (map 70–80%, sidebar with zone list and stats).
  * When the Zones plugin is disabled, redirect to Home so the Zones tab is fully hidden.
  */
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { TabScreenSkeleton } from "@/components/tab-screen-skeleton";
 import { usePluginStore } from "@/stores/pluginStore";
@@ -14,13 +14,15 @@ const ZonePage = lazy(() =>
 
 export default function ZonesScreen() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const zonesEnabled = usePluginStore((s) => s.isPluginEnabled("zones", true));
 
   useEffect(() => {
     if (!zonesEnabled) {
-      router.replace("/(tabs)");
+      routerRef.current.replace("/(tabs)");
     }
-  }, [zonesEnabled, router]);
+  }, [zonesEnabled]);
 
   if (!zonesEnabled) {
     return null;

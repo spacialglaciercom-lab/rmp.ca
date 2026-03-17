@@ -47,6 +47,12 @@ export interface BetaFeatures {
   routeMasterConstraints: boolean;
   /** Moonshine Voice: on-device streaming STT replacing cloud Whisper */
   moonshineVoice: boolean;
+  /** Vehicle Breakdown Rerouting: re-solve remaining circuit when a truck goes out of service */
+  vehicleBreakdown: boolean;
+  /** Emergency Stop Insertion: cheapest-insertion of unscheduled pickups into active circuit */
+  emergencyStopInsertion: boolean;
+  /** Real-time Traffic Feed: pull live speed data and re-weight edges before CPP solve */
+  realTimeTrafficFeed: boolean;
   crashCount: number; // safety fallback
 }
 

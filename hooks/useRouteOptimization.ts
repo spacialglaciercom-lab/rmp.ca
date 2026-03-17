@@ -35,6 +35,12 @@ import {
   getWeatherPenaltyMultiplier,
   type WeatherAnalysisResult,
 } from "@/services/weatherAnalysis";
+import {
+  fetchTrafficMultipliers,
+  mergeTrafficPenalties,
+  type TrafficMultipliers,
+} from "@/lib/onlineReopt/trafficFeed";
+import { useCircuitStore } from "@/stores/circuitStore";
 
 export interface RouteOptimizationOptions {
   customLat?: number;
@@ -220,6 +226,26 @@ export function useRouteOptimization() {
             /* continue without LEAP */
           }
         }
+        if (features.enabled && features.realTimeTrafficFeed && nodes.size > 0) {
+          try {
+            let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+            for (const n of nodes.values()) {
+              if (n.lat < south) south = n.lat;
+              if (n.lat > north) north = n.lat;
+              if (n.lon < west) west = n.lon;
+              if (n.lon > east) east = n.lon;
+            }
+            const trafficMults = await Promise.race([
+              fetchTrafficMultipliers([west, south, east, north]),
+              new Promise<TrafficMultipliers>((r) => setTimeout(() => r(new Map()), 8000)),
+            ]);
+            if (trafficMults.size > 0) {
+              penalties = mergeTrafficPenalties(penalties, trafficMults);
+            }
+          } catch {
+            /* continue without traffic feed */
+          }
+        }
         return { mlPenalties: penalties, weatherSummary };
       };
 
@@ -295,6 +321,10 @@ export function useRouteOptimization() {
           length: circuit.length,
           totalCost: Math.round(totalCost),
         });
+
+        // Persist circuit + street edges for online re-optimization (breakdown
+        // rerouting and emergency stop insertion) during active navigation.
+        useCircuitStore.getState().setCircuit(circuit, streetEdges);
 
         // Build edge lookup once for debug stats, distance, and route points
         const edgeLookup = new Map<string, (typeof streetEdges)[0]>();

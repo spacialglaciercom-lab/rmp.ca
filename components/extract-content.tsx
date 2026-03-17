@@ -42,6 +42,8 @@ import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
 import { useZonesStore } from "@/stores/zonesStore";
 import { extractFromDownloadedData } from "@/lib/offline-extract";
 import { ExtractConnectionStatus } from "@/components/extract/ExtractConnectionStatus";
+import { usePluginStore } from "@/stores/pluginStore";
+import { extractOSM } from "@/lib/plugins/osm-extraction/osmExtractionService";
 
 // ---------------------------------------------------------------------------
 // Web-only lazy imports (MapLibre GL JS, mapbox-gl-draw, DuckDB WASM)
@@ -109,6 +111,17 @@ async function initDuckDB() {
   } catch (e) {
     console.warn("[DuckDB] Init failed:", e);
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Web-safe alert (Alert.alert is no-op on web)
+// ---------------------------------------------------------------------------
+function alertUser(title: string, message?: string) {
+  if (Platform.OS === "web") {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
   }
 }
 
@@ -192,12 +205,24 @@ export default function ExtractContent() {
   >("time");
   const [zoneName, setZoneName] = useState("");
   const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
+  const zonePartitionInProgressRef = useRef(false);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
+  // Extract source: "overture" (default) or "osm" (Overpass API, requires osm-extraction plugin)
+  const [extractSource, setExtractSource] = useState<"overture" | "osm">("overture");
+  const osmExtractionEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("osm-extraction", false),
+  );
+
+  const dimensionsRef = useRef<{ width: number; height: number } | null>(null);
   const handleContainerLayout = useCallback(
     (e: { nativeEvent: { layout: { width: number; height: number } } }) => {
       const { width: w, height: h } = e.nativeEvent.layout;
-      if (w > 0 && h > 0) setDimensions({ width: w, height: h });
+      if (w <= 0 || h <= 0) return;
+      const prev = dimensionsRef.current;
+      if (prev && prev.width === w && prev.height === h) return;
+      dimensionsRef.current = { width: w, height: h };
+      setDimensions({ width: w, height: h });
     },
     [],
   );
@@ -364,8 +389,9 @@ export default function ExtractContent() {
       mapRef.current = null;
       drawRef.current = null;
     };
+    // Depend on primitive values so we don't re-run when dimensions object reference changes (e.g. same w/h from onLayout).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimensions]);
+  }, [dimensions?.width, dimensions?.height]);
 
   // -------------------------------------------------------------------------
   // Polygon update handler
@@ -411,7 +437,7 @@ export default function ExtractContent() {
   }, []);
 
   // -------------------------------------------------------------------------
-  // Preview roads via same backend as Extract (webovertureextract WebSocket)
+  // Preview roads — Overture (WebSocket) or OSM (Overpass API)
   // -------------------------------------------------------------------------
   const previewRoads = useCallback(() => {
     if (!polygon || Platform.OS !== "web") return;
@@ -421,6 +447,36 @@ export default function ExtractContent() {
     setPreviewPointCount(null);
     setExtracting(true);
     setProgress({ stage: "connecting", message: "Connecting..." });
+
+    // OSM path — direct Overpass API call, no WebSocket
+    if (extractSource === "osm") {
+      extractOSM(polygon)
+        .then((result) => {
+          const count = result.geojson.features.length;
+          setPreviewRoadCount(result.stats?.roads ?? count);
+          setPreviewPointCount(count);
+          const map = mapRef.current;
+          if (map && count > 0) {
+            clearPreviewLayer();
+            map.addSource("preview-roads", { type: "geojson", data: result.geojson });
+            map.addLayer({
+              id: "preview-roads",
+              type: "line",
+              source: "preview-roads",
+              paint: { "line-color": "#ef4444", "line-width": 1.5, "line-opacity": 0.7 },
+            });
+          }
+          setProgress({ stage: "complete", message: `OSM preview: ${count} road segments` });
+        })
+        .catch((err) => {
+          setProgress({ stage: "error", message: `OSM preview failed: ${err instanceof Error ? err.message : String(err)}` });
+        })
+        .finally(() => {
+          setExtracting(false);
+          setPreviewLoading(false);
+        });
+      return;
+    }
 
     const handle = connectAndExtract(
       polygon,
@@ -475,10 +531,10 @@ export default function ExtractContent() {
       },
     );
     cancelRef.current = handle;
-  }, [polygon, extracting, clearPreviewLayer]);
+  }, [polygon, extracting, extractSource, clearPreviewLayer]);
 
   // -------------------------------------------------------------------------
-  // Extract & process via WebSocket, with offline fallback
+  // Extract & process — Overture (WebSocket) or OSM (Overpass API)
   // -------------------------------------------------------------------------
   const extractAndProcess = useCallback(() => {
     if (!polygon) return;
@@ -487,6 +543,43 @@ export default function ExtractContent() {
     setResultStats(null);
     offlineGeoJSONRef.current = null;
     setProgress({ stage: "connecting", message: "Connecting..." });
+
+    // OSM path — direct Overpass API call, no WebSocket
+    if (extractSource === "osm") {
+      extractOSM(polygon)
+        .then((result) => {
+          const count = result.geojson.features.length;
+          if (count === 0) {
+            setProgress({ stage: "error", message: "OSM returned no road features for this area." });
+            return;
+          }
+          offlineGeoJSONRef.current = result.geojson;
+          setResultHash("__osm__");
+          setResultStats({
+            roads: result.stats?.roads ?? count,
+            points: count,
+          });
+          setPreviewRoadCount(result.stats?.roads ?? count);
+          setPreviewPointCount(count);
+          const map = mapRef.current;
+          if (map && Platform.OS === "web") {
+            clearPreviewLayer();
+            map.addSource("preview-roads", { type: "geojson", data: result.geojson });
+            map.addLayer({
+              id: "preview-roads",
+              type: "line",
+              source: "preview-roads",
+              paint: { "line-color": "#8b5cf6", "line-width": 2, "line-opacity": 0.8 },
+            });
+          }
+          setProgress({ stage: "complete", message: `OSM: ${count} road segments`, percent: 100 });
+        })
+        .catch((err) => {
+          setProgress({ stage: "error", message: `OSM extraction failed: ${err instanceof Error ? err.message : String(err)}` });
+        })
+        .finally(() => setExtracting(false));
+      return;
+    }
 
     const handle = connectAndExtract(
       polygon,
@@ -624,7 +717,7 @@ export default function ExtractContent() {
       "roads",
     );
     cancelRef.current = handle;
-  }, [polygon, clearPreviewLayer]);
+  }, [polygon, extractSource, clearPreviewLayer]);
 
   const cancelExtraction = useCallback(() => {
     cancelRef.current?.cancel();
@@ -637,7 +730,7 @@ export default function ExtractContent() {
   // -------------------------------------------------------------------------
   const downloadGeoJSON = useCallback(() => {
     if (!resultHash) return;
-    if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+    if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
       try {
         const blob = new Blob([JSON.stringify(offlineGeoJSONRef.current)], {
           type: "application/json",
@@ -645,7 +738,7 @@ export default function ExtractContent() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "offline-extract.geojson";
+        a.download = resultHash === "__osm__" ? "osm-extract.geojson" : "offline-extract.geojson";
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch {}
@@ -662,22 +755,25 @@ export default function ExtractContent() {
   // Zone partitioning: send to Map → Zones dropdown (uses extracted GeoJSON after Extract & Process)
   // -------------------------------------------------------------------------
   const sendToZones = useCallback(async () => {
+    if (zonePartitionInProgressRef.current) return;
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      Alert.alert(
+      alertUser(
         "Zone partitioning",
         "Polygon must have at least 3 vertices.",
       );
       return;
     }
     if (!resultHash) {
-      Alert.alert(
+      alertUser(
         "Run Extract & Process first",
         "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones.",
       );
       return;
     }
+    zonePartitionInProgressRef.current = true;
+    setZonePartitionLoading(true);
     const truckCount = Math.max(
       1,
       Math.min(12, parseInt(zoneTruckCount, 10) || 2),
@@ -686,10 +782,9 @@ export default function ExtractContent() {
       lat,
       lng,
     ]);
-    setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };
-      if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+      if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
         geojson = offlineGeoJSONRef.current as {
           type: string;
           features: unknown[];
@@ -715,20 +810,21 @@ export default function ExtractContent() {
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
-      Alert.alert(
+      alertUser(
         "Sent to Zones",
         "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map.",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const is404Or503 = /404|503/.test(msg);
-      Alert.alert(
+      alertUser(
         "Zone partitioning failed",
         is404Or503
           ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
           : msg,
       );
     } finally {
+      zonePartitionInProgressRef.current = false;
       setZonePartitionLoading(false);
     }
   }, [
@@ -998,6 +1094,62 @@ export default function ExtractContent() {
               </View>
             )}
 
+            {/* Source toggle (visible only when osm-extraction plugin is enabled) */}
+            {osmExtractionEnabled && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 8,
+                  marginBottom: 10,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={[styles.metricsLabel, { color: colors.muted }]}>
+                  Source:
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setExtractSource("overture")}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 6,
+                    backgroundColor:
+                      extractSource === "overture" ? "#3b82f6" : colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: extractSource === "overture" ? "#fff" : colors.text,
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Overture
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setExtractSource("osm")}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 6,
+                    backgroundColor:
+                      extractSource === "osm" ? "#f97316" : colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: extractSource === "osm" ? "#fff" : colors.text,
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                  >
+                    OSM (Overpass)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Action buttons */}
             <View style={styles.actionsRow}>
               {Platform.OS === "web" && (
@@ -1171,6 +1323,15 @@ export default function ExtractContent() {
                 ]}
                 onPress={sendToZones}
                 disabled={zonePartitionLoading}
+                {...(Platform.OS === "web"
+                  ? {
+                      onClick: (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!zonePartitionLoading) sendToZones();
+                      },
+                    }
+                  : {})}
               >
                 {zonePartitionLoading ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -1495,14 +1656,14 @@ function NativeExtractFallback({
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      Alert.alert(
+      alertUser(
         "Zone partitioning",
         "Polygon must have at least 3 vertices.",
       );
       return;
     }
     if (!resultHash) {
-      Alert.alert(
+      alertUser(
         "Run Extract & Process first",
         "Zone partitioning uses the road graph from your extract. Run Extract & Process, then tap Partition & send to Zones.",
       );
@@ -1519,7 +1680,7 @@ function NativeExtractFallback({
     setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };
-      if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+      if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
         geojson = offlineGeoJSONRef.current as {
           type: string;
           features: unknown[];
@@ -1545,14 +1706,14 @@ function NativeExtractFallback({
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
-      Alert.alert(
+      alertUser(
         "Sent to Zones",
         "Zone partition saved. Open the Map tab → sidebar (☰) → Zones to view and display zones on the map.",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const is404Or503 = /404|503/.test(msg);
-      Alert.alert(
+      alertUser(
         "Zone partitioning failed",
         is404Or503
           ? "The optimizer backend does not have the partition-from-geojson endpoint yet, or it is unavailable (503). Redeploy the optimizer from this repo's backend/ folder so it includes POST /api/zones/partition-from-geojson."
