@@ -3,7 +3,6 @@
  * Leap AI SDK to produce risk scores, delay estimates, and recommendations.
  */
 
-import { Platform } from "react-native";
 import type { CurrentWeather } from "./weatherService";
 
 export interface RouteSegmentForWeather {
@@ -213,7 +212,7 @@ export async function analyzeRouteWeather(
 
   let recommendations: string[] = [];
 
-  if (options.useLeap && Platform.OS === "ios" && segments.length > 0) {
+  if (options.useLeap && segments.length > 0) {
     try {
       const points = [
         { lat: segments[0].fromLat, lon: segments[0].fromLon },

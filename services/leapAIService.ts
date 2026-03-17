@@ -2,15 +2,19 @@
  * Leap AI SDK integration for weather-enhanced route optimization.
  * Builds input schema: route, weatherConditions, constraints.
  * Used by weatherAnalysis when useLeap is true.
+ *
+ * The original on-device Leap SDK is unavailable; recommendations are now
+ * generated via Gemini 2.0 Flash (same Firebase AI setup used for constraint
+ * parsing) so the feature works on iOS, Android, and web.
  */
 
-import { Platform } from "react-native";
 import type {
   RouteData,
   WeatherData,
   WeatherConstraints,
 } from "@/types/weather";
 import { DEFAULT_WEATHER_CONSTRAINTS } from "@/types/weather";
+import { createLazyGeminiModel } from "@/lib/firebase/ai";
 
 const LEAP_SCHEMA_HINT = `You are a route and weather analyst. Input is a JSON object with:
 - route: { points, totalDistanceKm, estimatedTotalMinutes, segmentCount }
@@ -29,16 +33,40 @@ export interface LeapWeatherInput {
   constraints: WeatherConstraints;
 }
 
+// ── Lazy-loaded Gemini model using shared factory ──────────────────────────
+
+const leapModel = createLazyGeminiModel({
+  systemInstruction: LEAP_SCHEMA_HINT,
+  maxOutputTokens: 512,
+});
+
+const getModel = leapModel.getModel;
+
+/** Reset the cached model (e.g. to recover from transient initialization failures). */
+export const resetLeapAIModel = leapModel.resetModel;
+
 /**
- * Call Leap Extract with route + weather + constraints. Returns recommendations array.
- * NOTE: Leap SDK module removed - this function now returns empty array.
- * TODO: Re-enable when Leap SDK is available for Android.
+ * Call Gemini with route + weather + constraints. Returns recommendations array.
+ * Falls back to empty array on error so rule-based fallback in weatherAnalysis kicks in.
  */
 export async function getLeapWeatherRecommendations(
   input: LeapWeatherInput,
 ): Promise<string[]> {
-  // Leap SDK module removed - return empty recommendations
-  return [];
+  try {
+    const model = await getModel();
+    const result = await model.generateContent(JSON.stringify(input));
+    const text = result.response.text();
+    const parsed = JSON.parse(text) as { recommendations?: unknown };
+    if (Array.isArray(parsed.recommendations)) {
+      return parsed.recommendations.filter((r): r is string => typeof r === "string");
+    }
+    return [];
+  } catch (e) {
+    if (__DEV__) {
+      console.warn("[LeapAI] Gemini weather recommendations failed:", e);
+    }
+    return [];
+  }
 }
 
 /**

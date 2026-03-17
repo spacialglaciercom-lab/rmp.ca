@@ -15,7 +15,7 @@ import { adminProcedure, router } from "./_core/trpc";
 import {
   assignUserToOrg,
   getOrgById,
-  getUserByOpenId,
+  getUsersByOrgId,
   listOrgs,
   setUserRole,
   upsertOrg,
@@ -65,6 +65,20 @@ export const orgRouter = router({
         });
       }
       return org;
+    }),
+
+  /** List all users belonging to an organization. */
+  listUsers: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const org = await getOrgById(input.id);
+      if (!org) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Organization ${input.id} not found.`,
+        });
+      }
+      return getUsersByOrgId(input.id);
     }),
 
   /**

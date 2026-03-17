@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { Platform } from "react-native";
 import { useBetaFeatures } from "@/context/BetaFeaturesContext";
 import { recordErrorToCrashlytics } from "@/lib/crashlytics-report";
 import { trackEvent } from "@/lib/analytics";
@@ -160,7 +159,7 @@ export function useRouteOptimization() {
         const estimatedMinutes = totalDistanceKm * 3; // rough: ~20 km/h average
         const segments = buildSegmentsFromPoints(points, estimatedMinutes);
         const analysis = await analyzeRouteWeather(segments, weatherMap, {
-          useLeap: features.weatherOptimizedRouting && Platform.OS === "ios",
+          useLeap: features.weatherOptimizedRouting,
         });
         return { ...result, weatherAnalysis: analysis };
       } catch {
