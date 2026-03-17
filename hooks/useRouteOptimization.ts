@@ -41,6 +41,7 @@ import {
   mergeTrafficPenalties,
   type TrafficMultipliers,
 } from "@/lib/onlineReopt/trafficFeed";
+import { useCircuitStore } from "@/stores/circuitStore";
 
 export interface RouteOptimizationOptions {
   customLat?: number;
@@ -321,6 +322,10 @@ export function useRouteOptimization() {
           length: circuit.length,
           totalCost: Math.round(totalCost),
         });
+
+        // Persist circuit + street edges for online re-optimization (breakdown
+        // rerouting and emergency stop insertion) during active navigation.
+        useCircuitStore.getState().setCircuit(circuit, streetEdges);
 
         // Build edge lookup once for debug stats, distance, and route points
         const edgeLookup = new Map<string, (typeof streetEdges)[0]>();
