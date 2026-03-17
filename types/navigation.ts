@@ -68,6 +68,8 @@ export interface CollectionRouteState {
   segments: CollectionSegment[];
   /** Index of the currently active segment. */
   activeSegmentIndex: number;
+  /** Collection points for the active route (kept for re-initialization after re-solve). */
+  activeCollectionPoints: CollectionPoint[];
   /** Total distance of the route in meters. */
   totalDistance: number;
   /** Distance completed so far in meters. */

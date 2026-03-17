@@ -48,6 +48,8 @@ import {
   useSegmentGroups,
 } from "@/stores/collectionNavigationStore";
 import { haversineDistance } from "@/lib/offlineTurnDetection";
+import { useBetaFeatures } from "@/context/BetaFeaturesContext";
+import { useCircuitStore } from "@/stores/circuitStore";
 import type { CollectionPoint } from "@/types";
 import type { CollectionSegment, SegmentGroup } from "@/types/navigation";
 
@@ -112,6 +114,16 @@ export default function CollectionNavigator({
   const resetNavigation = useCollectionNavigationStore(
     (s) => s.resetNavigation,
   );
+  const rerouteFromBreakdown = useCollectionNavigationStore(
+    (s) => s.rerouteFromBreakdown,
+  );
+  const insertEmergencyStopAt = useCollectionNavigationStore(
+    (s) => s.insertEmergencyStopAt,
+  );
+
+  const { features } = useBetaFeatures();
+  const hasCircuit = useCircuitStore((s) => s.circuit.length > 0);
+  const [isRerouting, setIsRerouting] = useState(false);
 
   // Follow user location on map
   useEffect(() => {
@@ -171,6 +183,83 @@ export default function CollectionNavigator({
     resetNavigation();
     onClose();
   }, [stopGPS, resetNavigation, onClose]);
+
+  const handleBreakdown = useCallback(() => {
+    if (!hasCircuit) {
+      Alert.alert(
+        "Not available",
+        "Breakdown rerouting requires a turn-aware route. Re-optimize with Turn-aware CPP enabled.",
+      );
+      return;
+    }
+    Alert.alert(
+      "Vehicle Breakdown",
+      "Re-solve the remaining route from your current position?\n\nCompleted segments will be discarded and a new optimized circuit will be calculated.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reroute",
+          style: "destructive",
+          onPress: async () => {
+            setIsRerouting(true);
+            try {
+              await rerouteFromBreakdown();
+            } catch {
+              Alert.alert(
+                "Reroute failed",
+                "Could not re-solve the route. Please try again.",
+              );
+            } finally {
+              setIsRerouting(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [hasCircuit, rerouteFromBreakdown]);
+
+  const handleEmergencyStop = useCallback(() => {
+    if (!hasCircuit) {
+      Alert.alert(
+        "Not available",
+        "Emergency stop insertion requires a turn-aware route. Re-optimize with Turn-aware CPP enabled.",
+      );
+      return;
+    }
+    if (!currentLocation) {
+      Alert.alert(
+        "Location unavailable",
+        "GPS position is required to insert an emergency stop.",
+      );
+      return;
+    }
+    Alert.alert(
+      "Emergency Pickup",
+      `Insert an unscheduled stop at your current position?\n\n${currentLocation.lat.toFixed(5)}, ${currentLocation.lon.toFixed(5)}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Insert Stop",
+          onPress: async () => {
+            setIsRerouting(true);
+            try {
+              await insertEmergencyStopAt([
+                currentLocation.lat,
+                currentLocation.lon,
+              ]);
+            } catch {
+              Alert.alert(
+                "Insert failed",
+                "Could not insert the stop. Please try again.",
+              );
+            } finally {
+              setIsRerouting(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [hasCircuit, currentLocation, insertEmergencyStopAt]);
 
   // Build polylines per segment, plus a progress overlay for the active segment
   const { polylineGroups, activeProgressOverlay } = useMemo(() => {
@@ -624,6 +713,7 @@ export default function CollectionNavigator({
           </View>
         ) : (
           <View style={styles.trackingControls}>
+            {/* Primary controls */}
             <View style={styles.controlRow}>
               <TouchableOpacity
                 style={[
@@ -631,6 +721,7 @@ export default function CollectionNavigator({
                   { backgroundColor: COLORS.completed },
                 ]}
                 onPress={advanceSegment}
+                disabled={isRerouting}
               >
                 <MaterialCommunityIcons name="check" size={20} color="#fff" />
                 <Text style={styles.controlButtonText}>Complete</Text>
@@ -642,6 +733,7 @@ export default function CollectionNavigator({
                   { backgroundColor: colors.muted + "80" },
                 ]}
                 onPress={skipSegment}
+                disabled={isRerouting}
               >
                 <MaterialCommunityIcons
                   name="skip-next"
@@ -654,11 +746,64 @@ export default function CollectionNavigator({
               <TouchableOpacity
                 style={[styles.controlButton, { backgroundColor: "#ef4444" }]}
                 onPress={handleStop}
+                disabled={isRerouting}
               >
                 <MaterialCommunityIcons name="stop" size={20} color="#fff" />
                 <Text style={styles.controlButtonText}>End</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Online re-optimization controls — visible when beta flags are on */}
+            {features.enabled &&
+              (features.vehicleBreakdown ||
+                features.emergencyStopInsertion) && (
+                <View style={styles.controlRow}>
+                  {features.vehicleBreakdown && (
+                    <TouchableOpacity
+                      style={[
+                        styles.controlButton,
+                        styles.reoptButton,
+                        { backgroundColor: "#92400e" },
+                        isRerouting && { opacity: 0.6 },
+                      ]}
+                      onPress={handleBreakdown}
+                      disabled={isRerouting}
+                    >
+                      {isRerouting ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <MaterialCommunityIcons
+                          name="car-off"
+                          size={18}
+                          color="#fff"
+                        />
+                      )}
+                      <Text style={styles.controlButtonText}>
+                        {isRerouting ? "Rerouting…" : "Breakdown"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {features.emergencyStopInsertion && (
+                    <TouchableOpacity
+                      style={[
+                        styles.controlButton,
+                        styles.reoptButton,
+                        { backgroundColor: "#5b21b6" },
+                        isRerouting && { opacity: 0.6 },
+                      ]}
+                      onPress={handleEmergencyStop}
+                      disabled={isRerouting}
+                    >
+                      <MaterialCommunityIcons
+                        name="map-marker-plus"
+                        size={18}
+                        color="#fff"
+                      />
+                      <Text style={styles.controlButtonText}>Add Stop</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
 
             {/* Stop list toggle */}
             <TouchableOpacity
@@ -977,6 +1122,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "600",
+  },
+  reoptButton: {
+    paddingVertical: 10,
   },
   stopListToggle: {
     flexDirection: "row",

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: rmpca
+  labels:
+    app: backend
+    component: node-api
+spec:
+  # LoadBalancer gives an external IP for direct access.
+  # If you add an Ingress later, switch this to ClusterIP.
+  type: LoadBalancer
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
