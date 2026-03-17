@@ -1,0 +1,20 @@
+# Apply everything: kubectl apply -k k8s/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  # Data layer
+  - redis-deployment.yaml
+  - redis-service.yaml
+  # Extract (WebSocket / elevation)
+  - extract-deployment.yaml
+  - extract-service.yaml
+  # Optimizer (FastAPI + Celery)
+  - optimizer-deployment.yaml
+  - optimizer-service.yaml
+  - optimizer-hpa.yaml
+  - celery-worker-deployment.yaml
+  # Backend BFF (public-facing)
+  - backend-deployment.yaml
+  - backend-service.yaml

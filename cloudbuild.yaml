@@ -1,39 +1,137 @@
-# Cloud Build: build from repo root Dockerfile and deploy to Cloud Run.
-# Trigger: "Push to branch" → ^main$ so every main push builds.
+# Cloud Build: build all service images and deploy to GKE.
+# Trigger: Push to main branch.
+#
+# Prerequisites (one-time setup):
+#   # Create Artifact Registry repo
+#   gcloud artifacts repositories create rmpca \
+#     --repository-format=docker \
+#     --location=${_REGION} \
+#     --project=${PROJECT_ID}
+#
+#   # Create GKE Autopilot cluster
+#   gcloud container clusters create-auto rmpca \
+#     --region=${_REGION} \
+#     --project=${PROJECT_ID}
+#
+#   # Apply k8s manifests for the first time
+#   kubectl apply -k k8s/
+#
+#   # Create backend secret from your .env.server
+#   kubectl create secret generic backend-secret \
+#     --namespace=rmpca \
+#     --from-env-file=.env.server
+#
+# Substitutions (override in Cloud Build trigger UI if needed):
+#   _REGION  — GCP region (default: northamerica-northeast1)
+#   _CLUSTER — GKE cluster name (default: rmpca)
+
 steps:
-  - name: "gcr.io/cloud-builders/docker"
+  # ── Build images in parallel ────────────────────────────────────────────────
+  - id: build-backend
+    name: "gcr.io/cloud-builders/docker"
     args:
-      - "build"
-      - "-t"
-      - "gcr.io/${PROJECT_ID}/trashroute-api:${SHORT_SHA}"
-      - "-t"
-      - "gcr.io/${PROJECT_ID}/trashroute-api:latest"
-      - "."
-  - name: "gcr.io/cloud-builders/docker"
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:${SHORT_SHA}"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:latest"
+      - -f
+      - Dockerfile
+      - .
+    waitFor: ["-"]
+
+  - id: build-extract
+    name: "gcr.io/cloud-builders/docker"
     args:
-      - "push"
-      - "gcr.io/${PROJECT_ID}/trashroute-api:${SHORT_SHA}"
-  - name: "gcr.io/cloud-builders/docker"
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:${SHORT_SHA}"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:latest"
+      - -f
+      - extract/Dockerfile
+      - ./extract
+    waitFor: ["-"]
+
+  - id: build-optimizer
+    name: "gcr.io/cloud-builders/docker"
     args:
-      - "push"
-      - "gcr.io/${PROJECT_ID}/trashroute-api:latest"
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    entrypoint: gcloud
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:${SHORT_SHA}"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:latest"
+      - -f
+      - backend/Dockerfile
+      - ./backend
+    waitFor: ["-"]
+
+  # ── Push images (after their respective builds) ─────────────────────────────
+  - id: push-backend
+    name: "gcr.io/cloud-builders/docker"
+    args: [push, "--all-tags", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend"]
+    waitFor: [build-backend]
+
+  - id: push-extract
+    name: "gcr.io/cloud-builders/docker"
+    args: [push, "--all-tags", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract"]
+    waitFor: [build-extract]
+
+  - id: push-optimizer
+    name: "gcr.io/cloud-builders/docker"
+    args: [push, "--all-tags", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer"]
+    waitFor: [build-optimizer]
+
+  # ── Pin SHA digests and roll out to GKE ─────────────────────────────────────
+  - id: deploy
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: bash
     args:
-      - "run"
-      - "deploy"
-      - "trashroute-mobile"
-      - "--image"
-      - "gcr.io/${PROJECT_ID}/trashroute-api:${SHORT_SHA}"
-      - "--region"
-      - "${_REGION}"
-      - "--platform"
-      - "managed"
-    id: "deploy"
+      - -c
+      - |
+        set -e
+
+        gcloud container clusters get-credentials ${_CLUSTER} \
+          --region ${_REGION} \
+          --project ${PROJECT_ID}
+
+        REGISTRY="${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca"
+
+        kubectl set image deployment/backend \
+          backend=$${REGISTRY}/backend:${SHORT_SHA} \
+          --namespace=rmpca
+
+        kubectl set image deployment/extract \
+          extract=$${REGISTRY}/extract:${SHORT_SHA} \
+          --namespace=rmpca
+
+        kubectl set image deployment/optimizer \
+          optimizer=$${REGISTRY}/optimizer:${SHORT_SHA} \
+          --namespace=rmpca
+
+        # celery-worker shares the optimizer image
+        kubectl set image deployment/celery-worker \
+          celery-worker=$${REGISTRY}/optimizer:${SHORT_SHA} \
+          --namespace=rmpca
+
+        kubectl rollout status deployment/backend       --namespace=rmpca --timeout=120s
+        kubectl rollout status deployment/extract       --namespace=rmpca --timeout=120s
+        kubectl rollout status deployment/optimizer     --namespace=rmpca --timeout=120s
+        kubectl rollout status deployment/celery-worker --namespace=rmpca --timeout=120s
+    waitFor: [push-backend, push-extract, push-optimizer]
+
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
 substitutions:
   _REGION: northamerica-northeast1
+  _CLUSTER: rmpca
+
 images:
-  - "gcr.io/${PROJECT_ID}/trashroute-api:${SHORT_SHA}"
-  - "gcr.io/${PROJECT_ID}/trashroute-api:latest"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:latest"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:latest"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:latest"
