@@ -38,8 +38,8 @@ spec:
     spec:
       containers:
         - name: optimizer
-          # Replace PROJECT_ID with your GCP project ID
-          image: northamerica-northeast1-docker.pkg.dev/PROJECT_ID/rmpca/optimizer:latest
+          # Replace careful-trainer-485803-a9 with your GCP project ID
+          image: northamerica-northeast1-docker.pkg.dev/careful-trainer-485803-a9/rmpca/optimizer:latest
           imagePullPolicy: Always
           ports:
             - name: http
