@@ -36,6 +36,11 @@ import {
   getWeatherPenaltyMultiplier,
   type WeatherAnalysisResult,
 } from "@/services/weatherAnalysis";
+import {
+  fetchTrafficMultipliers,
+  mergeTrafficPenalties,
+  type TrafficMultipliers,
+} from "@/lib/onlineReopt/trafficFeed";
 
 export interface RouteOptimizationOptions {
   customLat?: number;
@@ -219,6 +224,26 @@ export function useRouteOptimization() {
             penalties = merged;
           } catch {
             /* continue without LEAP */
+          }
+        }
+        if (features.enabled && features.realTimeTrafficFeed && nodes.size > 0) {
+          try {
+            let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+            for (const n of nodes.values()) {
+              if (n.lat < south) south = n.lat;
+              if (n.lat > north) north = n.lat;
+              if (n.lon < west) west = n.lon;
+              if (n.lon > east) east = n.lon;
+            }
+            const trafficMults = await Promise.race([
+              fetchTrafficMultipliers([west, south, east, north]),
+              new Promise<TrafficMultipliers>((r) => setTimeout(() => r(new Map()), 8000)),
+            ]);
+            if (trafficMults.size > 0) {
+              penalties = mergeTrafficPenalties(penalties, trafficMults);
+            }
+          } catch {
+            /* continue without traffic feed */
           }
         }
         return { mlPenalties: penalties, weatherSummary };

@@ -38,6 +38,9 @@ interface OptimizationSettings {
   warmStartEnabled: boolean;
   roadClosureHandling: boolean;
   eulerianBalancing: boolean;
+  vehicleBreakdown: boolean;
+  emergencyStopInsertion: boolean;
+  realTimeTrafficFeed: boolean;
 
   // Fallbacks
   fallbackToLNS: boolean;
@@ -64,6 +67,9 @@ const defaultSettings: OptimizationSettings = {
   warmStartEnabled: true,
   roadClosureHandling: true,
   eulerianBalancing: true,
+  vehicleBreakdown: false,
+  emergencyStopInsertion: false,
+  realTimeTrafficFeed: false,
   fallbackToLNS: true,
   rollingHorizon: false,
   subgraphSize: 500,
@@ -372,12 +378,6 @@ export default function RouteOptimizationScreen() {
           title="Online Re-optimization"
           subtitle="Warm-start CPP with dynamic updates"
         >
-          <View
-            className="mb-2 px-3 py-2 rounded-lg"
-            style={{ backgroundColor: colors.background }}
-          >
-            <Text className="text-xs text-muted italic">Features to come</Text>
-          </View>
           <SettingRow
             label="Warm-start CPP"
             description="Edge insertion/deletion for road closures"
@@ -395,6 +395,24 @@ export default function RouteOptimizationScreen() {
             description="Maintain balance via minimal matching deltas"
             value={settings.eulerianBalancing}
             onToggle={(v) => updateSetting("eulerianBalancing", v)}
+          />
+          <SettingRow
+            label="Vehicle Breakdown Rerouting"
+            description="Re-solve remaining stops when a truck goes out of service"
+            value={settings.vehicleBreakdown}
+            onToggle={(v) => updateSetting("vehicleBreakdown", v)}
+          />
+          <SettingRow
+            label="Emergency Stop Insertion"
+            description="Insert unscheduled pickups at lowest-cost position in active circuit"
+            value={settings.emergencyStopInsertion}
+            onToggle={(v) => updateSetting("emergencyStopInsertion", v)}
+          />
+          <SettingRow
+            label="Real-time Traffic Feed"
+            description="Adjust edge weights from live traffic speeds before CPP solve"
+            value={settings.realTimeTrafficFeed}
+            onToggle={(v) => updateSetting("realTimeTrafficFeed", v)}
           />
         </Section>
 
