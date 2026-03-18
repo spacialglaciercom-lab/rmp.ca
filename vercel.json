@@ -4,11 +4,13 @@
   "installCommand": "node scripts/vercel-before-pnpm-install.js && pnpm install",
   "framework": null,
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
-  "env": {
-    "EXPO_PUBLIC_API_BASE_URL": "http://34.47.60.132",
-    "EXPO_PUBLIC_OPTIMIZER_URL": "https://optimizer-286569721223.northamerica-northeast1.run.app",
-    "EXPO_PUBLIC_OVERTURE_EXTRACT_URL": "http://34.47.60.132",
-    "EXPO_PUBLIC_OVERTURE_WS_BASE": "ws://34.47.60.132",
-    "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAsZc4qFsZEqS7y_hxb0wf3g8xIXQUUci8"
+  "build": {
+    "env": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://34.47.60.132",
+      "EXPO_PUBLIC_OPTIMIZER_URL": "https://optimizer-286569721223.northamerica-northeast1.run.app",
+      "EXPO_PUBLIC_OVERTURE_EXTRACT_URL": "http://34.47.60.132",
+      "EXPO_PUBLIC_OVERTURE_WS_BASE": "ws://34.47.60.132",
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAsZc4qFsZEqS7y_hxb0wf3g8xIXQUUci8"
+    }
   }
 }
