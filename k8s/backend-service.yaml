@@ -6,10 +6,13 @@ metadata:
   labels:
     app: backend
     component: node-api
+  annotations:
+    # Attach BackendConfig for WebSocket connection timeout (1 hour)
+    cloud.google.com/backend-config: '{"default": "backend-backendconfig"}'
 spec:
-  # LoadBalancer gives an external IP for direct access.
-  # If you add an Ingress later, switch this to ClusterIP.
-  type: LoadBalancer
+  # NodePort lets the GKE Ingress (backend-ingress.yaml) route to this service.
+  # TLS is terminated at the Ingress (Google-managed cert for api.rmp.ca).
+  type: NodePort
   selector:
     app: backend
   ports:
