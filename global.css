@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet map tiles/layers need this on web; without it the map shows blank blue blocks */
+@import "leaflet/dist/leaflet.css";

@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+{
+  "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.571, 45.5], [-73.57, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    },
+{
+  "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.570001, 45.5], [-73.569, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.569, 45.5], [-73.568, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    }
+  ]
+}

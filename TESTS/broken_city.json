@@ -1,0 +1,93 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.57, 45.5], [-73.569, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.569, 45.5], [-73.568, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.57, 45.5005], [-73.569, 45.5005]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.569, 45.5005], [-73.568, 45.5005]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.57, 45.5], [-73.57, 45.5005]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.569, 45.5], [-73.569, 45.5005]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.568, 45.5], [-73.568, 45.5005]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.568, 45.5], [-73.567, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.55, 45.52], [-73.549, 45.52]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.549, 45.52], [-73.548, 45.52]]
+      },
+      "properties": { "class": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.567, 45.5], [-73.566, 45.5]]
+      },
+      "properties": { "class": "residential" }
+    }
+  ]
+}

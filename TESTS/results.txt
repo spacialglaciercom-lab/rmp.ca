@@ -1,0 +1,32 @@
+--- Phase 1: Environment & Validation ---
+Checking Schema...
+[Schema Check] Verifying Overture Release: 2026-02-18.0
+[Schema Check] DuckDB initialized. Querying schema...
+Checking Sources...
+Checking sources for release 2026-02-18.0...
+--- Phase 2: Data Generation ---
+Generating 3x4 grid to '/app/benchmark_city.json'...
+Done.
+--- Phase 3: Optimization Benchmarking ---
+Loading '/app/benchmark_city.json'...
+                  Optimization Scenarios                  
+┏━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Scenario ┃ Dist (km) ┃ Deadhead ┃ L-Turns ┃ Efficiency ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━┩
+│ Baseline │    71.439 │   43.640 │       0 │    3891.0% │
+│ Strict   │    71.439 │   43.640 │       0 │    3891.0% │
+└──────────┴───────────┴──────────┴─────────┴────────────┘
+--- Phase 4: Logic Verification ---
+Cleaning '/app/benchmark_city.json' -> '/app/benchmark_city_cleaned.json'...
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /app/cli.py:158 in clean                                                     │
+│                                                                              │
+│   155 │   with open(output, "w") as f:                                       │
+│   156 │   │   json.dump(cleaned_fc.model_dump(), f, indent=2)                │
+│   157 │                                                                      │
+│ ❱ 158 │   console.print(f"[bold]Removed:[/bold] {stats['removed_features']}  │
+│   159 │   console.print(f"[bold]Output:[/bold] {output}")                    │
+│   160                                                                        │
+│   161                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+TypeError: 'CleanStats' object is not subscriptable
