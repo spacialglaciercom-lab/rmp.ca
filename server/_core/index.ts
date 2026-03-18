@@ -207,6 +207,10 @@ async function startServer() {
     });
   });
 
+  app.get("/health", (_req, res) => {
+    res.json({ ok: true, timestamp: Date.now() });
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
   });
