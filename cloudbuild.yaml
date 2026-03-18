@@ -114,10 +114,10 @@ steps:
           celery-worker=$${REGISTRY}/optimizer:${_SHORT_SHA} \
           --namespace=rmpca
 
-        kubectl rollout status deployment/backend       --namespace=rmpca --timeout=120s
-        kubectl rollout status deployment/extract       --namespace=rmpca --timeout=120s
-        kubectl rollout status deployment/optimizer     --namespace=rmpca --timeout=120s
-        kubectl rollout status deployment/celery-worker --namespace=rmpca --timeout=120s
+        kubectl rollout status deployment/backend       --namespace=rmpca --timeout=300s
+        kubectl rollout status deployment/extract       --namespace=rmpca --timeout=300s
+        kubectl rollout status deployment/optimizer     --namespace=rmpca --timeout=300s
+        kubectl rollout status deployment/celery-worker --namespace=rmpca --timeout=300s
     waitFor: [push-backend, push-extract, push-optimizer]
 
 options:
