@@ -191,3 +191,129 @@ export async function setUserRole(
     .where(eq(users.openId, openId));
 }
 
+// ── RBAC ──────────────────────────────────────────────────────────────────────
+
+export async function getUserRolesAndPermissions(
+  userId: number,
+  orgId: number,
+): Promise<{ roles: string[]; permissions: string[] }> {
+  const db = await getDb();
+  if (!db) return { roles: [], permissions: [] };
+  const rows = await db
+    .select({
+      roleName: roles.name,
+      permissionKey: rolePermissions.permissionKey,
+    })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .leftJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
+    .where(and(eq(userRoles.userId, userId), eq(userRoles.orgId, orgId)));
+  const roleNames = [...new Set(rows.map((r) => r.roleName))];
+  const permissions = [
+    ...new Set(rows.map((r) => r.permissionKey).filter(Boolean) as string[]),
+  ];
+  return { roles: roleNames, permissions };
+}
+
+export async function getUserById(id: number): Promise<User | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getRoleById(id: number): Promise<Role | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listRolesForOrg(orgId: number): Promise<Role[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(roles).where(eq(roles.orgId, orgId));
+}
+
+export async function createRole(
+  orgId: number,
+  name: string,
+  description?: string,
+): Promise<Role> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .insert(roles)
+    .values({ orgId, name, description, isSystem: false })
+    .returning();
+  return rows[0];
+}
+
+export async function setRolePermissions(
+  roleId: number,
+  permissionKeys: string[],
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+  if (permissionKeys.length > 0) {
+    await db
+      .insert(rolePermissions)
+      .values(permissionKeys.map((permissionKey) => ({ roleId, permissionKey })));
+  }
+}
+
+export async function assignRoleToUser(
+  userId: number,
+  roleId: number,
+  orgId: number,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .insert(userRoles)
+    .values({ userId, roleId, orgId })
+    .onConflictDoNothing();
+}
+
+export async function removeRoleFromUser(
+  userId: number,
+  roleId: number,
+  orgId: number,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(userRoles)
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.roleId, roleId),
+        eq(userRoles.orgId, orgId),
+      ),
+    );
+}
+
+export async function seedSystemRoles(orgId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  for (const [name, perms] of Object.entries(SYSTEM_ROLES)) {
+    const existing = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.orgId, orgId), eq(roles.name, name)))
+      .limit(1);
+    let roleId: number;
+    if (existing.length === 0) {
+      const inserted = await db
+        .insert(roles)
+        .values({ orgId, name, isSystem: true })
+        .returning();
+      roleId = inserted[0].id;
+    } else {
+      roleId = existing[0].id;
+    }
+    await setRolePermissions(roleId, [...perms]);
+  }
+}
+
