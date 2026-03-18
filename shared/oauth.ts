@@ -43,9 +43,9 @@ export const API_BASE_URL = env.apiBaseUrl;
  */
 export function getApiBaseUrl(): string {
   // Explicit override (local backend or custom deployment)
-  const explicit = typeof API_BASE_URL === "string" && API_BASE_URL.trim();
+  const explicit = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (explicit) {
-    return API_BASE_URL.trim().replace(/\/$/, "");
+    return explicit.replace(/\/$/, "");
   }
 
   // Web: same-origin so deployed Vercel app does not hit deleted Railway.
