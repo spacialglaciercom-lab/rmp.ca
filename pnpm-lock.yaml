@@ -109,6 +109,9 @@ importers:
       '@turf/area':
         specifier: ^7.3.4
         version: 7.3.4
+      '@turf/bbox-clip':
+        specifier: ^7.3.4
+        version: 7.3.4
       '@turf/boolean-point-in-polygon':
         specifier: ^7.3.4
         version: 7.3.4
