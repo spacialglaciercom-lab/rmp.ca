@@ -2,10 +2,10 @@
 #
 # This replaces the L4 LoadBalancer service with an L7 Ingress that:
 #   - Terminates TLS using a Google-managed certificate (managed-certificate.yaml)
-#   - Supports WebSocket upgrades (wss://api.routemasterpro.ca/ws/extract)
+#   - Supports WebSocket upgrades (wss://api.rmp.ca/ws/extract)
 #   - Exposes all backend routes over HTTPS
 #
-# Prerequisite: reserve a static IP and point api.routemasterpro.ca at it.
+# Prerequisite: reserve a static IP and point api.rmp.ca at it.
 # See managed-certificate.yaml for step-by-step instructions.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -23,7 +23,7 @@ metadata:
     cloud.google.com/backend-config: '{"default": "backend-backendconfig"}'
 spec:
   rules:
-    - host: api.routemasterpro.ca
+    - host: api.rmp.ca
       http:
         paths:
           - path: /
