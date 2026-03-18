@@ -49,13 +49,9 @@ spec:
           livenessProbe:
             exec:
               command:
-                - celery
-                - -A
-                - app.celery_app:celery_app
-                - inspect
-                - ping
-                - -d
-                - celery@$HOSTNAME
+                - /bin/sh
+                - -c
+                - "celery -A app.celery_app:celery_app inspect ping -d celery@$HOSTNAME"
             initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
