@@ -4,13 +4,12 @@
   "installCommand": "node scripts/vercel-before-pnpm-install.js && pnpm install",
   "framework": null,
   "rewrites": [
-    { "source": "/api/:path*",      "destination": "http://34.47.60.132/api/:path*" },
-    { "source": "/geojson/:path*",  "destination": "http://34.47.60.132/geojson/:path*" },
-    { "source": "/download/:path*", "destination": "http://34.47.60.132/download/:path*" },
-    { "source": "/optimizer/:path*","destination": "http://34.47.60.132/optimizer/:path*" },
-    { "source": "/overture/:path*", "destination": "http://34.47.60.132/overture/:path*" },
-    { "source": "/zones/:path*",    "destination": "http://34.47.60.132/zones/:path*" },
-    { "source": "/ws/:path*",       "destination": "http://34.47.60.132/ws/:path*" },
+    { "source": "/api/:path*",      "destination": "https://api.rmp.ca/api/:path*" },
+    { "source": "/geojson/:path*",  "destination": "https://api.rmp.ca/geojson/:path*" },
+    { "source": "/download/:path*", "destination": "https://api.rmp.ca/download/:path*" },
+    { "source": "/optimizer/:path*","destination": "https://api.rmp.ca/optimizer/:path*" },
+    { "source": "/overture/:path*", "destination": "https://api.rmp.ca/overture/:path*" },
+    { "source": "/zones/:path*",    "destination": "https://api.rmp.ca/zones/:path*" },
     { "source": "/(.*)",            "destination": "/index.html" }
   ],
   "build": {
