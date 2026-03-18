@@ -51,7 +51,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - "celery -A app.celery_app:celery_app inspect ping -d celery@$HOSTNAME"
+                - "celery -A app.celery_app:celery_app inspect ping -d celery@$HOSTNAME --timeout=8"
             initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
