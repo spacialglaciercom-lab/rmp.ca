@@ -109,6 +109,9 @@ importers:
       '@turf/area':
         specifier: ^7.3.4
         version: 7.3.4
+      '@turf/bbox-clip':
+        specifier: ^7.3.4
+        version: 7.3.4
       '@turf/boolean-point-in-polygon':
         specifier: ^7.3.4
         version: 7.3.4
@@ -362,8 +365,8 @@ importers:
         specifier: 0.5.1
         version: 0.5.1(@babel/core@7.29.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       shared-logic:
-        specifier: file:./shared-logic/build/js/packages/shared-logic
-        version: file:shared-logic/build/js/packages/shared-logic
+        specifier: file:./shared-logic/pnpm-stub
+        version: file:shared-logic/pnpm-stub
       superjson:
         specifier: ^1.13.3
         version: 1.13.3
@@ -8704,8 +8707,8 @@ packages:
   shallowequal@1.1.0:
     resolution: {integrity: sha512-y0m1JoUZSlPAjXVtPPW70aZWfIL/dSP7AFkRnniLCrK/8MDKog3TySTBmckD+RObVxH0v4Tox67+F14PdED2oQ==}
 
-  shared-logic@file:shared-logic/build/js/packages/shared-logic:
-    resolution: {directory: shared-logic/build/js/packages/shared-logic, type: directory}
+  shared-logic@file:shared-logic/pnpm-stub:
+    resolution: {directory: shared-logic/pnpm-stub, type: directory}
 
   shebang-command@2.0.0:
     resolution: {integrity: sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==}
@@ -20480,7 +20483,7 @@ snapshots:
 
   shallowequal@1.1.0: {}
 
-  shared-logic@file:shared-logic/build/js/packages/shared-logic: {}
+  shared-logic@file:shared-logic/pnpm-stub: {}
 
   shebang-command@2.0.0:
     dependencies:

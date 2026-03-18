@@ -2,7 +2,7 @@
 
 Kotlin Multiplatform module containing CVRP/CPP math. Used by:
 
-- **Web / Expo:** The app uses the **real** KMP build when available. package.json points to `file:./shared-logic/build/js/packages/shared-logic`. Build once (see below), then the KMP solver in the planner uses it. The Kotlin/JS export is `sharedlogic.SharedLogicBridge`; the app resolves it in `lib/vrp-solvers/kmp.ts`.
+- **Web / Expo / Vercel:** Default `package.json` uses `file:./shared-logic/pnpm-stub` (empty stub) so `pnpm install` works without Gradle. To enable the **KMP solver**, build JS (see below) then run: `pnpm add shared-logic@file:./shared-logic/build/js/packages/shared-logic`. The Kotlin/JS export is `sharedlogic.SharedLogicBridge`; the app resolves it in `lib/vrp-solvers/kmp.ts`.
 - **Android:** Add as Gradle dependency: `implementation(project(":shared-logic"))`.
 - **iOS:** (Optional) Add `iosArm64()` / `iosSimulatorArm64()` targets and XCFramework output, then link from Swift.
 
@@ -16,7 +16,7 @@ Requires **JDK 17**. From repo root:
 
 Or: `pnpm run build:shared-logic`
 
-JS output: `shared-logic/build/js/packages/shared-logic/` (npm-compatible package). After the build, `pnpm install` is not required—the existing `file:` link already targets this path. Restart Metro/Expo so the app picks up the built module.
+JS output: `shared-logic/build/js/packages/shared-logic/` (npm-compatible package). After the build, point the dependency at it: `pnpm add shared-logic@file:./shared-logic/build/js/packages/shared-logic`, then restart Metro/Expo.
 
 ## React integration
 
