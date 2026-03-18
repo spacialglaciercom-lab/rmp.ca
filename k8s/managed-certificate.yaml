@@ -5,7 +5,7 @@
 #        gcloud compute addresses create rmpca-backend-ip --global
 #   2. Get the reserved IP:
 #        gcloud compute addresses describe rmpca-backend-ip --global --format="get(address)"
-#   3. Add a DNS A record:  api.rmp.ca → [IP from step 2]
+#   3. Add a DNS A record:  api.routemasterpro.ca → [IP from step 2]
 #   4. Apply: kubectl apply -k k8s/
 #
 # The managed cert provisions automatically once DNS resolves (~5-60 min).
@@ -16,4 +16,4 @@ metadata:
   namespace: rmpca
 spec:
   domains:
-    - api.rmp.ca
+    - api.routemasterpro.ca
