@@ -1,0 +1,35 @@
+# GKE L7 HTTPS LoadBalancer for the backend.
+#
+# This replaces the L4 LoadBalancer service with an L7 Ingress that:
+#   - Terminates TLS using a Google-managed certificate (managed-certificate.yaml)
+#   - Supports WebSocket upgrades (wss://api.rmp.ca/ws/extract)
+#   - Exposes all backend routes over HTTPS
+#
+# Prerequisite: reserve a static IP and point api.rmp.ca at it.
+# See managed-certificate.yaml for step-by-step instructions.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: rmpca
+  annotations:
+    # Use the reserved static IP (must match DNS for managed cert to provision)
+    kubernetes.io/ingress.global-static-ip-name: "rmpca-backend-ip"
+    # Attach the managed SSL certificate
+    networking.gke.io/managed-certificates: "backend-managed-cert"
+    # GCE Ingress class (GKE standard/autopilot)
+    kubernetes.io/ingress.class: "gce"
+    # Attach BackendConfig for WebSocket timeout
+    cloud.google.com/backend-config: '{"default": "backend-backendconfig"}'
+spec:
+  rules:
+    - host: api.rmp.ca
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  name: http
