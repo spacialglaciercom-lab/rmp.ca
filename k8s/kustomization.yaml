@@ -18,3 +18,6 @@ resources:
   # Backend BFF (public-facing)
   - backend-deployment.yaml
   - backend-service.yaml
+  - backend-backendconfig.yaml
+  - managed-certificate.yaml
+  - backend-ingress.yaml
