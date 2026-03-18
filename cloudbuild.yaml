@@ -32,7 +32,7 @@ steps:
     args:
       - build
       - -t
-      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:${SHORT_SHA}"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:${_SHORT_SHA}"
       - -t
       - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:latest"
       - -f
@@ -45,7 +45,7 @@ steps:
     args:
       - build
       - -t
-      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:${SHORT_SHA}"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:${_SHORT_SHA}"
       - -t
       - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:latest"
       - -f
@@ -58,7 +58,7 @@ steps:
     args:
       - build
       - -t
-      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:${SHORT_SHA}"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:${_SHORT_SHA}"
       - -t
       - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:latest"
       - -f
@@ -98,20 +98,20 @@ steps:
         REGISTRY="${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca"
 
         kubectl set image deployment/backend \
-          backend=$${REGISTRY}/backend:${SHORT_SHA} \
+          backend=$${REGISTRY}/backend:${_SHORT_SHA} \
           --namespace=rmpca
 
         kubectl set image deployment/extract \
-          extract=$${REGISTRY}/extract:${SHORT_SHA} \
+          extract=$${REGISTRY}/extract:${_SHORT_SHA} \
           --namespace=rmpca
 
         kubectl set image deployment/optimizer \
-          optimizer=$${REGISTRY}/optimizer:${SHORT_SHA} \
+          optimizer=$${REGISTRY}/optimizer:${_SHORT_SHA} \
           --namespace=rmpca
 
         # celery-worker shares the optimizer image
         kubectl set image deployment/celery-worker \
-          celery-worker=$${REGISTRY}/optimizer:${SHORT_SHA} \
+          celery-worker=$${REGISTRY}/optimizer:${_SHORT_SHA} \
           --namespace=rmpca
 
         kubectl rollout status deployment/backend       --namespace=rmpca --timeout=120s
@@ -127,11 +127,12 @@ options:
 substitutions:
   _REGION: northamerica-northeast1
   _CLUSTER: rmpca
+  _SHORT_SHA: latest   # overridden to $SHORT_SHA by the Cloud Build trigger for push-based builds
 
 images:
-  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:${_SHORT_SHA}"
   - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/backend:latest"
-  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:${_SHORT_SHA}"
   - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/extract:latest"
-  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:${_SHORT_SHA}"
   - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/rmpca/optimizer:latest"
