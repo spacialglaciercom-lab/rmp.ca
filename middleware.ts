@@ -1,6 +1,3 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-
 const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
 const COOKIE_NAME = "site_auth";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -74,56 +71,68 @@ const LOGIN_HTML = (error = false) => `<!DOCTYPE html>
 </body>
 </html>`;
 
-export async function middleware(req: NextRequest) {
-  // Skip if no password is set — site is public
-  if (!SITE_PASSWORD) return NextResponse.next();
+function parseCookies(req: Request): Record<string, string> {
+  const header = req.headers.get("cookie") ?? "";
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .map((c) => {
+        const eq = c.indexOf("=");
+        return eq === -1 ? [c, ""] : [c.slice(0, eq), c.slice(eq + 1)];
+      }),
+  );
+}
 
-  const { pathname } = req.nextUrl;
+export default async function middleware(req: Request): Promise<Response | undefined> {
+  // Skip if no password is set — site is public
+  if (!SITE_PASSWORD) return undefined;
+
+  const url = new URL(req.url);
+  const { pathname } = url;
 
   // Handle auth form POST
   if (req.method === "POST" && pathname === "/_auth") {
     const body = await req.text();
     const params = new URLSearchParams(body);
     const submitted = params.get("password") ?? "";
-    const from = req.nextUrl.searchParams.get("from") ?? "/";
+    const from = url.searchParams.get("from") ?? "/";
 
     if (submitted === SITE_PASSWORD) {
-      const res = NextResponse.redirect(new URL(from, req.url));
-      res.cookies.set(COOKIE_NAME, SITE_PASSWORD, {
-        httpOnly: true,
-        sameSite: "lax",
-        maxAge: COOKIE_MAX_AGE,
-        path: "/",
+      const redirectTarget = new URL(from, req.url).toString();
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: redirectTarget,
+          "Set-Cookie": `${COOKIE_NAME}=${SITE_PASSWORD}; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}; Path=/`,
+        },
       });
-      return res;
     }
 
     // Wrong password — show form with error
-    return new NextResponse(LOGIN_HTML(true), {
+    return new Response(LOGIN_HTML(true), {
       status: 401,
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   }
 
   // Check auth cookie
-  const cookie = req.cookies.get(COOKIE_NAME);
-  if (cookie?.value === SITE_PASSWORD) return NextResponse.next();
+  const cookies = parseCookies(req);
+  if (cookies[COOKIE_NAME] === SITE_PASSWORD) return undefined;
 
-  // Not authenticated — show login page
-  const authUrl = new URL("/_auth", req.url);
-  authUrl.searchParams.set("from", pathname);
-
+  // Not authenticated
   if (req.method !== "GET") {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return new Response("Unauthorized", { status: 401 });
   }
 
-  // Rewrite the form action to include ?from=
+  // Show login page with correct form action
   const html = LOGIN_HTML(false).replace(
     'action="/_auth"',
     `action="/_auth?from=${encodeURIComponent(pathname)}"`,
   );
 
-  return new NextResponse(html, {
+  return new Response(html, {
     status: 401,
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
