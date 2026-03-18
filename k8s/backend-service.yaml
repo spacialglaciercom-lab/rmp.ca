@@ -11,7 +11,7 @@ metadata:
     cloud.google.com/backend-config: '{"default": "backend-backendconfig"}'
 spec:
   # NodePort lets the GKE Ingress (backend-ingress.yaml) route to this service.
-  # TLS is terminated at the Ingress (Google-managed cert for api.rmp.ca).
+  # TLS is terminated at the Ingress (Google-managed cert for api.routemasterpro.ca).
   type: NodePort
   selector:
     app: backend
