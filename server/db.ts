@@ -1,12 +1,17 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
   InsertOrganization,
+  PermissionKey,
+  PermissionRequest,
+  Role,
+  SYSTEM_ROLES,
   InsertUser,
   Organization,
   User,
   organizations,
+  permissionRequests,
   rolePermissions,
   roles,
   userRoles,
@@ -317,5 +322,196 @@ export async function seedSystemRoles(orgId: number): Promise<void> {
     }
     await setRolePermissions(roleId, [...perms]);
   }
+}
+
+const ACCESS_REQUEST_ROLE_PREFIX = "access_request_";
+
+export async function createPermissionRequest(params: {
+  orgId: number;
+  requesterId: number;
+  reason: string;
+  requestedPermissions: PermissionKey[];
+  token: string;
+  expiresAt: Date;
+}): Promise<PermissionRequest> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .insert(permissionRequests)
+    .values({
+      orgId: params.orgId,
+      requesterId: params.requesterId,
+      reason: params.reason,
+      requestedPermissions: params.requestedPermissions,
+      token: params.token,
+      expiresAt: params.expiresAt,
+    })
+    .returning();
+  return rows[0];
+}
+
+export async function getPermissionRequestByToken(
+  token: string,
+): Promise<PermissionRequest | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(permissionRequests)
+    .where(eq(permissionRequests.token, token))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findOrgAdmins(orgId: number): Promise<User[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const orgUsers = await db.select().from(users).where(eq(users.orgId, orgId));
+  const withEmails = orgUsers.filter((u) => Boolean(u.email?.trim()));
+  const privilegedUsers: User[] = [];
+  for (const candidate of withEmails) {
+    if (candidate.role === "admin") {
+      privilegedUsers.push(candidate);
+      continue;
+    }
+    const rbac = await getUserRolesAndPermissions(candidate.id, orgId);
+    const canManage =
+      rbac.permissions.includes("can_manage_roles") ||
+      rbac.permissions.includes("can_manage_users");
+    if (canManage) privilegedUsers.push(candidate);
+  }
+  return privilegedUsers;
+}
+
+async function findRoleWithExactPermissions(
+  orgId: number,
+  permissionKeys: PermissionKey[],
+): Promise<Role | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const sortedTarget = [...new Set(permissionKeys)].sort();
+  const orgRoles = await db.select().from(roles).where(eq(roles.orgId, orgId));
+  for (const role of orgRoles) {
+    const perms = await db
+      .select({ permissionKey: rolePermissions.permissionKey })
+      .from(rolePermissions)
+      .where(eq(rolePermissions.roleId, role.id));
+    const sortedCurrent = perms.map((p) => p.permissionKey).sort();
+    if (sortedCurrent.length !== sortedTarget.length) continue;
+    const isSame = sortedCurrent.every((perm, idx) => perm === sortedTarget[idx]);
+    if (isSame) return role;
+  }
+  return null;
+}
+
+export async function createOrReuseRequestedRole(
+  orgId: number,
+  requesterId: number,
+  approvedPermissions: PermissionKey[],
+  requestId: number,
+): Promise<Role | null> {
+  if (approvedPermissions.length === 0) return null;
+  const existing = await findRoleWithExactPermissions(orgId, approvedPermissions);
+  if (existing) return existing;
+
+  const role = await createRole(
+    orgId,
+    `${ACCESS_REQUEST_ROLE_PREFIX}${requestId}`,
+    `Auto-generated role for IAM request #${requestId} (user ${requesterId})`,
+  );
+  await setRolePermissions(role.id, approvedPermissions);
+  return role;
+}
+
+export async function resolvePermissionRequest(params: {
+  token: string;
+  status: "approved" | "denied";
+  approvedPermissions: PermissionKey[];
+  resolverUserId: number;
+  expectedOrgId: number;
+}): Promise<{
+  request: PermissionRequest;
+  status: "approved" | "denied";
+  assignedRoleId: number | null;
+}> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const request = await getPermissionRequestByToken(params.token);
+  if (!request) throw new Error("Permission request not found");
+  if (request.orgId !== params.expectedOrgId) {
+    throw new Error("Permission request does not belong to your organization");
+  }
+  if (request.expiresAt.getTime() < Date.now()) {
+    throw new Error("Permission request token has expired");
+  }
+
+  if (request.status !== "pending") {
+    const existingRoleId =
+      request.status === "approved" && request.approvedPermissions?.length
+        ? (
+            await findRoleWithExactPermissions(
+              request.orgId,
+              request.approvedPermissions as PermissionKey[],
+            )
+          )?.id ?? null
+        : null;
+    return {
+      request,
+      status: request.status as "approved" | "denied",
+      assignedRoleId: existingRoleId,
+    };
+  }
+
+  const approvedPermissions =
+    params.status === "approved"
+      ? [...new Set(params.approvedPermissions)]
+      : ([] as PermissionKey[]);
+  let assignedRoleId: number | null = null;
+  if (params.status === "approved" && approvedPermissions.length > 0) {
+    const role = await createOrReuseRequestedRole(
+      request.orgId,
+      request.requesterId,
+      approvedPermissions,
+      request.id,
+    );
+    if (role) {
+      assignedRoleId = role.id;
+      await assignRoleToUser(request.requesterId, role.id, request.orgId);
+    }
+  }
+
+  const resolvedRows = await db
+    .update(permissionRequests)
+    .set({
+      status: params.status,
+      approvedPermissions,
+      resolvedAt: new Date(),
+      resolvedBy: params.resolverUserId,
+    })
+    .where(
+      and(
+        eq(permissionRequests.id, request.id),
+        eq(permissionRequests.status, "pending"),
+      ),
+    )
+    .returning();
+
+  // If another approver won the race, return final state idempotently.
+  if (resolvedRows.length === 0) {
+    const latest = await getPermissionRequestByToken(params.token);
+    if (!latest) throw new Error("Permission request not found");
+    return {
+      request: latest,
+      status: latest.status as "approved" | "denied",
+      assignedRoleId,
+    };
+  }
+
+  return {
+    request: resolvedRows[0],
+    status: params.status,
+    assignedRoleId,
+  };
 }
 

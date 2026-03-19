@@ -1,5 +1,6 @@
 /**
  * Google Maps API key + navigation provider preference storage.
+ * Default navigation provider is OSRM; user can switch to Google in settings.
  * Stored in AsyncStorage so it persists on web and native.
  *
  * Sources (in order): AsyncStorage (user-entered) → app.config extra.googleMapsApiKey (iOS build-time) →
@@ -65,6 +66,15 @@ export function getCachedServerOsrmUrl(): string | undefined {
   return url || undefined;
 }
 
+/**
+ * Google Maps key from last GET /api/config only (server `GOOGLE_MAPS_API_KEY`).
+ * On web, Directions go through `/api/maps/directions`; a client-only EXPO_PUBLIC key does not
+ * configure that proxy — use this to decide if Google routing is actually available.
+ */
+export function getCachedServerGoogleMapsKey(): string {
+  return (serverConfigCache?.googleMapsApiKey ?? "").trim();
+}
+
 /** Ensure server config is fetched (e.g. so getCachedServerOsrmUrl() is populated). Call when API base is set. */
 export async function ensureServerConfigFetched(): Promise<void> {
   const base = getApiBaseUrl();
@@ -122,10 +132,10 @@ export async function clearGoogleMapsApiKey(): Promise<void> {
 export async function getNavigationProvider(): Promise<NavigationProvider> {
   try {
     const val = await AsyncStorage.getItem(NAV_PROVIDER_STORAGE_KEY);
-    if (val === "osrm") return "osrm";
-    return "google"; // default
+    if (val === "google") return "google";
+    return "osrm"; // default
   } catch {
-    return "google";
+    return "osrm";
   }
 }
 
