@@ -124,7 +124,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Compute next poll delay with exponential backoff, capped at POLL_MAX_DELAY_MS. */
-function nextPollDelay(attempt: number): number {
+export function nextPollDelay(attempt: number): number {
   const delay = POLL_INITIAL_DELAY_MS * Math.pow(POLL_BACKOFF_FACTOR, attempt);
   return Math.min(delay, POLL_MAX_DELAY_MS);
 }
@@ -244,7 +244,7 @@ interface TaskStatusBody {
  * @param body        Request body (already parsed by Express)
  * @param label       Short label for log lines (e.g. "optimize", "vrp/solve")
  */
-async function submitAndPoll(
+export async function submitAndPoll(
   submitUrl: string,
   statusBase: string,
   body: unknown,
@@ -444,7 +444,7 @@ function haversineMeters(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function injectVroomMatrix(
+export function injectVroomMatrix(
   body: Record<string, unknown>,
 ): Record<string, unknown> {
   if (body.matrices) return body;
