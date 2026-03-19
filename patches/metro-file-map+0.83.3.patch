@@ -1,0 +1,33 @@
+diff --git a/node_modules/metro-file-map/README.md b/node_modules/metro-file-map/README.md
+deleted file mode 100644
+index 8fffa18..0000000
+--- a/node_modules/metro-file-map/README.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+-# \[Experimental\] Metro File Map
+-
+-🚇 File system crawling, watching and mapping for [Metro](https://metrobundler.dev/).
+-
+-Originally a fork of [`jest-haste-map`](https://github.com/facebook/jest/tree/main/packages/jest-haste-map).
+-
+-This entire package should be considered "experimental" for the time being -
+-the API is considered internal and changes will not be semver-breaking.
+-
+-If you need to rely on `metro-file-map` APIs directly please
+-[raise an issue](https://github.com/facebook/metro/issues/new) to discuss your
+-use case.
+diff --git a/node_modules/metro-file-map/src/index.js b/node_modules/metro-file-map/src/index.js
+index ec21a55..e63cdc0 100644
+--- a/node_modules/metro-file-map/src/index.js
++++ b/node_modules/metro-file-map/src/index.js
+@@ -324,7 +324,9 @@ class FileMap extends _events.default {
+           ignoreMatched || (!retainAllFiles && filePath.includes(NODE_MODULES))
+         );
+       },
+-      ignorePatternForWatch: ignorePattern,
++      ignorePatternForWatch: new RegExp(
++        '(' + ignorePattern.source + ')|[/\\\\]node_modules[/\\\\]|[/\\\\]\\.git[/\\\\]|[/\\\\]\\.expo[/\\\\]',
++      ),
+       perfLogger: this._startupPerfLogger,
+       previousState,
+       roots,

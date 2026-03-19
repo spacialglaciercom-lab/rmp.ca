@@ -1,0 +1,67 @@
+diff --git a/node_modules/react-native-css-interop/.cache/android.js b/node_modules/react-native-css-interop/.cache/android.js
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-css-interop/.cache/ios.js b/node_modules/react-native-css-interop/.cache/ios.js
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-css-interop/.cache/macos.js b/node_modules/react-native-css-interop/.cache/macos.js
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-css-interop/.cache/native.js b/node_modules/react-native-css-interop/.cache/native.js
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-css-interop/.cache/windows.js b/node_modules/react-native-css-interop/.cache/windows.js
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-css-interop/src/metro/index.ts b/node_modules/react-native-css-interop/src/metro/index.ts
+index fa58c7b..dcb8579 100644
+--- a/node_modules/react-native-css-interop/src/metro/index.ts
++++ b/node_modules/react-native-css-interop/src/metro/index.ts
+@@ -228,7 +228,9 @@ function getConfig(
+               .getDependencyGraph()
+               .then(async (graph: any) => {
+                 haste = graph._haste;
+-                ensureFileSystemPatched(graph._fileSystem);
++                if (graph._fileSystem?.getSha1) {
++                  ensureFileSystemPatched(graph._fileSystem);
++                }
+                 ensureBundlerPatched(bundler);
+               });
+ 
+@@ -369,22 +371,25 @@ async function startCSSProcessor(
+  */
+ function ensureFileSystemPatched(
+   fs: FileSystem & {
+-    getSha1: {
++    getSha1?: {
+       __css_interop_patched?: boolean;
+     };
+   },
+ ) {
+-  if (!fs.getSha1.__css_interop_patched) {
+-    const original_getSha1 = fs.getSha1.bind(fs);
+-    fs.getSha1 = (filename) => {
+-      if (virtualModules.has(filename)) {
+-        // Don't cache this file. It should always be fresh.
+-        return `${filename}-${Date.now()}`;
+-      }
+-      return original_getSha1(filename);
+-    };
+-    fs.getSha1.__css_interop_patched = true;
++  if (!fs?.getSha1 || fs.getSha1.__css_interop_patched) {
++    return fs;
++  }
++  if (typeof fs.getSha1 !== "function") {
++    return fs;
+   }
++  const original_getSha1 = fs.getSha1.bind(fs);
++  fs.getSha1 = (filename: string) => {
++    if (virtualModules.has(filename)) {
++      return `${filename}-${Date.now()}`;
++    }
++    return original_getSha1(filename);
++  };
++  (fs.getSha1 as { __css_interop_patched?: boolean }).__css_interop_patched = true;
+ 
+   return fs;
+ }

@@ -1,0 +1,37 @@
+diff --git a/node_modules/metro/src/Bundler.js b/node_modules/metro/src/Bundler.js
+index 2b64d41..5a89c12 100644
+--- a/node_modules/metro/src/Bundler.js
++++ b/node_modules/metro/src/Bundler.js
+@@ -36,6 +36,7 @@ class Bundler {
+           type: "transformer_load_failed",
+           error,
+         });
++        throw error;
+       });
+   }
+   getWatcher() {
+diff --git a/node_modules/metro/src/node-haste/DependencyGraph.js b/node_modules/metro/src/node-haste/DependencyGraph.js
+index bd42485..13961ff 100644
+--- a/node_modules/metro/src/node-haste/DependencyGraph.js
++++ b/node_modules/metro/src/node-haste/DependencyGraph.js
+@@ -37,6 +37,7 @@ class DependencyGraph extends _events.default {
+   constructor(config, options) {
+     super();
+     this._config = config;
++    this._resolutionCache = new Map();
+     const { hasReducedPerformance, watch } = options ?? {};
+     const initializingMetroLogEntry = log(
+       createActionStartEntry("Initializing Metro"),
+@@ -248,6 +249,12 @@ class DependencyGraph extends _events.default {
+     const mapByPlatform = getOrCreateMap(mapByTarget, targetKey);
+     let resolution = mapByPlatform.get(platformKey);
+     if (!resolution) {
++      if (!this._moduleResolver) {
++        throw new Error(
++          "Metro DependencyGraph is not initialized yet. " +
++            "This usually means the file map build failed — check the Metro startup logs for the root cause.",
++        );
++      }
+       try {
+         resolution = this._moduleResolver.resolveDependency(
+           originModulePath,

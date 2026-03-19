@@ -1,0 +1,5 @@
+# PyPI only has 0.0.x; 2.0.0 does not exist
+moonshine-voice==0.0.49
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-multipart>=0.0.18
