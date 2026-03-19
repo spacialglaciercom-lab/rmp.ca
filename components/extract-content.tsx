@@ -191,6 +191,8 @@ export default function ExtractContent() {
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
   /** Stores GeoJSON graph from offline extraction (set when resultHash === "__offline__"). */
   const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  /** Stores OSM XML from Overpass extraction (set when resultHash === "__osm__"). */
+  const offlineOSMXmlRef = useRef<string | null>(null);
 
   // Dimensions
   const [dimensions, setDimensions] = useState<{
@@ -542,6 +544,7 @@ export default function ExtractContent() {
     setResultHash(null);
     setResultStats(null);
     offlineGeoJSONRef.current = null;
+    offlineOSMXmlRef.current = null;
     setProgress({ stage: "connecting", message: "Connecting..." });
 
     // OSM path — direct Overpass API call, no WebSocket
@@ -554,6 +557,7 @@ export default function ExtractContent() {
             return;
           }
           offlineGeoJSONRef.current = result.geojson;
+          offlineOSMXmlRef.current = result.osmXml ?? null;
           setResultHash("__osm__");
           setResultStats({
             roads: result.stats?.roads ?? count,
@@ -751,6 +755,28 @@ export default function ExtractContent() {
     }
   }, [resultHash]);
 
+  const downloadOSM = useCallback(() => {
+    if (resultHash !== "__osm__" || !offlineOSMXmlRef.current) return;
+    if (Platform.OS === "web") {
+      const blob = new Blob([offlineOSMXmlRef.current], {
+        type: "application/xml",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "extract.osm";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+    Share.share({
+      title: "extract.osm",
+      message: offlineOSMXmlRef.current,
+    }).catch(() => {
+      Alert.alert("Share failed", "Could not share OSM XML data.");
+    });
+  }, [resultHash]);
+
   // -------------------------------------------------------------------------
   // Zone partitioning: send to Map → Zones dropdown (uses extracted GeoJSON after Extract & Process)
   // -------------------------------------------------------------------------
@@ -849,6 +875,7 @@ export default function ExtractContent() {
     setPreviewPointCount(null);
     setResultHash(null);
     setResultStats(null);
+    offlineOSMXmlRef.current = null;
     setProgress(null);
   }, [clearPreviewLayer]);
 
@@ -1410,6 +1437,19 @@ export default function ExtractContent() {
                   />
                   <Text style={styles.actionBtnText}>Download GeoJSON</Text>
                 </TouchableOpacity>
+                {resultHash === "__osm__" && offlineOSMXmlRef.current && (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: "#16a34a" }]}
+                    onPress={downloadOSM}
+                  >
+                    <MaterialCommunityIcons
+                      name="download"
+                      size={16}
+                      color="#fff"
+                    />
+                    <Text style={styles.actionBtnText}>Download OSM</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </ScrollView>
