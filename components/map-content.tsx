@@ -845,7 +845,11 @@ export default function MapContent() {
       let matched: MatchedRoute | null = null;
       const routingConfig = await getRoutingConfigAsync();
       if (routingConfig.baseUrl) {
-        matched = await routeThroughWaypoints(
+        // Use map-matching (OSRM /match/ or Google snap-to-roads), NOT shortest-path
+        // routing. routeThroughWaypoints finds the shortest path *between* waypoints
+        // which shortcuts the collection route; matchGPXToRoads snaps each point to
+        // the nearest road while preserving traversal order.
+        matched = await matchGPXToRoads(
           points,
           routingConfig,
           getRouteOptionsForRouting(),
