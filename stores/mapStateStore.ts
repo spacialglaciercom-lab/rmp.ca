@@ -404,6 +404,12 @@ export const useMapStateStore = createWithEqualityFn<MapState>()(
         roadClosureHandlingOn: state.roadClosureHandlingOn,
         mapCenter: state.mapCenter,
         avoidedNodes: state.avoidedNodes,
+        // Persist the road-snapped route so Fix-to-roads + Start Navigation
+        // works offline after an app restart. matchedRoute is the active
+        // navigation route; cachedMatchedRoute is the pre-computed result
+        // waiting for Start Navigation to be pressed.
+        matchedRoute: state.matchedRoute,
+        cachedMatchedRoute: state.cachedMatchedRoute,
       }),
     },
   ),
