@@ -54,9 +54,6 @@ import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 import { RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
-import { FuelAwarePlugin, TurnPenaltyPlugin } from "@/lib/routing_plugins";
-import type { RoutingCostPlugin } from "@/lib/routing_plugins";
-import { enrichNodesWithElevation } from "@/lib/elevationEnrichment";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import {
   optimizeRoute as backendOptimizeRoute,
@@ -317,17 +314,8 @@ export default function PlannerContent() {
         // When v2 is on, we never use the backend (Overture); we only try v2 then local fallback.
         if (useOfflineOptimizerV2) {
           try {
-            const v2Plugins: RoutingCostPlugin[] = [];
-            if (fuelAwareRoutingOn) {
-              await enrichNodesWithElevation(nodes);
-              v2Plugins.push(FuelAwarePlugin);
-            }
-            if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
-            const v2 = new RouteOptimizerSimpleV2(
-              nodes,
-              ways,
-              v2Plugins.length ? v2Plugins : undefined,
-            );
+            // Plugins (fuel-aware, UPS turn penalty) apply to the backend optimizer only; v2 uses fixed graph + built-in turn costs.
+            const v2 = new RouteOptimizerSimpleV2(nodes, ways, undefined);
             optResult = v2.optimize(
               startCoords?.latitude,
               startCoords?.longitude,
@@ -779,7 +767,7 @@ export default function PlannerContent() {
           msg: `Applying turn penalties: Left=${state.configuration.turnPenalties.leftTurn}, U-Turn=${state.configuration.turnPenalties.uTurn}`,
           type: "info" as const,
         },
-        ...(fuelAwareRoutingOn
+        ...(fuelAwareRoutingOn && !useOfflineOptimizerV2
           ? [
               {
                 msg: "Fuel-aware routing: on",
@@ -787,7 +775,7 @@ export default function PlannerContent() {
               },
             ]
           : []),
-        ...(useTurnPenaltyPlugin
+        ...(useTurnPenaltyPlugin && !useOfflineOptimizerV2
           ? [
               {
                 msg: "Turn penalty (UPS-style): on",
@@ -997,16 +985,10 @@ export default function PlannerContent() {
                 | undefined;
               if (useOfflineOptimizerV2) {
                 try {
-                  const v2Plugins: RoutingCostPlugin[] = [];
-                  if (fuelAwareRoutingOn) {
-                    await enrichNodesWithElevation(nodes);
-                    v2Plugins.push(FuelAwarePlugin);
-                  }
-                  if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
                   const v2 = new RouteOptimizerSimpleV2(
                     nodes,
                     ways,
-                    v2Plugins.length ? v2Plugins : undefined,
+                    undefined,
                   );
                   optResult = v2.optimize(
                     startCoords?.latitude,
@@ -1205,11 +1187,14 @@ export default function PlannerContent() {
             Optimization
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Use offline optimizer (v2): same optimizer as
-            route-optimizer-mobile-v2 (Videos app). When v2 is on, route is
-            always two-pass; one-pass applies only when v2 is off. Off: use
-            Overture route optimizer (same as Map Extractor), then fall back to
-            local if unavailable.
+            Offline v2 builds forward and reverse on bidirectional streets, so
+            the tour covers each direction (two-pass along the centerline — same
+            idea as “both sides”). The backend optimizer defaults to one pass
+            per street unless you enable “Service both sides” in routing
+            settings. Turn v2 off to match that default, or enable “Service both
+            sides” when comparing to v2. Fuel-aware and Turn-penalty plugins
+            apply to the backend optimizer only, not v2. Off: Overture/backend
+            optimizer (Map Extractor path), then local fallback.
           </Text>
           <View className="flex-row items-center justify-between">
             <Text className="text-base text-foreground">

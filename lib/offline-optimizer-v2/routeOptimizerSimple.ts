@@ -6,6 +6,11 @@
  * Only adaptations: class name RouteOptimizerSimpleV2, types from @/lib/route-optimizer-v2/types,
  * route points include nodeId for rmp.ca compatibility, and optional RoutingCostPlugin support
  * (directed edges, transition costs). No console.log.
+ *
+ * Two-pass vs backend: for each bidirectional OSM segment this builds both directed arcs
+ * (A→B and B→A). Hierholzer then uses each arc once → you drive each street in both directions
+ * (centerline out-and-back), similar to “service both sides” / two-pass. The Python backend
+ * defaults to one undirected edge per street (single pass) unless service_both_sides is true.
  */
 
 import type {
@@ -271,29 +276,32 @@ export class RouteOptimizerSimpleV2 {
     }
   }
 
+  /**
+   * Shortest paths with transition costs (UPS-style turn penalties, etc.).
+   * Cost to reach node v depends on the previous node (incoming edge), so we use
+   * state (node, predecessor) — not a single distance per v, which was wrong and
+   * produced huge augmenting paths when pairing for the directed Eulerian circuit.
+   */
   private dijkstraWithTransitionCosts(
     source: string,
     plugins: RoutingCostPlugin[],
   ): { lengths: Record<string, number>; paths: Record<string, string[]> } {
-    const lengths: Record<string, number> = { [source]: 0 };
-    const paths: Record<string, string[]> = { [source]: [source] };
-    type State = [string, string | null];
-    const pathToState = new Map<string, string[]>();
-    pathToState.set(`${source},`, [source]);
-    const heap: Array<[number, State]> = [[0, [source, null]]];
-    const expanded = new Set<string>();
+    const stateKey = (node: string, pred: string | null) =>
+      `${node},${pred ?? ""}`;
 
-    const stateKey = (u: string, t: string | null) => `${u},${t ?? ""}`;
+    const sk0 = stateKey(source, null);
+    const dist: Record<string, number> = { [sk0]: 0 };
+    const pathsByState: Record<string, string[]> = { [sk0]: [source] };
+    type State = [string, string | null];
+    const heap: Array<[number, State]> = [[0, [source, null]]];
 
     while (heap.length > 0) {
       heap.sort((a, b) => a[0] - b[0]);
       const entry = heap.shift()!;
       const [d, [u, t]] = entry;
       const key = stateKey(u, t);
-      if (expanded.has(key)) continue;
-      expanded.add(key);
+      if (d > (dist[key] ?? Infinity)) continue;
 
-      const coordsU = this.getCoords(u);
       const edges = this.graph.get(u);
       if (!edges) continue;
 
@@ -301,6 +309,7 @@ export class RouteOptimizerSimpleV2 {
         let transitionMult = 1;
         if (t !== null && plugins.length > 0) {
           const coordsT = this.getCoords(t);
+          const coordsU = this.getCoords(u);
           const coordsV = this.getCoords(v);
           for (const plugin of plugins) {
             transitionMult *= plugin.calculateTransitionMultiplier(
@@ -312,7 +321,6 @@ export class RouteOptimizerSimpleV2 {
         }
         let cost = edgeData.length * transitionMult;
 
-        // Dual-carriageway U-turn: physically impossible — treat as forbidden.
         if (t !== null && edgeData.dualCarriageway) {
           const inBearing = this.bearing(t, u);
           const outBearing = this.bearing(u, v);
@@ -321,15 +329,27 @@ export class RouteOptimizerSimpleV2 {
           }
         }
 
+        const newKey = stateKey(v, u);
         const newD = d + cost;
-        if (newD < (lengths[v] ?? Infinity)) {
-          lengths[v] = newD;
-          const prevPath = pathToState.get(key) ?? [];
-          const newPath = [...prevPath, v];
-          paths[v] = newPath;
-          pathToState.set(stateKey(v, u), newPath);
+        const prevPath = pathsByState[key] ?? [];
+        const newPath = [...prevPath, v];
+        if (newD < (dist[newKey] ?? Infinity)) {
+          dist[newKey] = newD;
+          pathsByState[newKey] = newPath;
           heap.push([newD, [v, u]]);
         }
+      }
+    }
+
+    const lengths: Record<string, number> = {};
+    const paths: Record<string, string[]> = {};
+    for (const key of Object.keys(dist)) {
+      const lastComma = key.lastIndexOf(",");
+      const node = lastComma >= 0 ? key.slice(0, lastComma) : key;
+      const c = dist[key]!;
+      if (lengths[node] === undefined || c < lengths[node]!) {
+        lengths[node] = c;
+        paths[node] = pathsByState[key]!;
       }
     }
     return { lengths, paths };
