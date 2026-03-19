@@ -10,6 +10,8 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 const extractDir = __dirname;
+/** Match root `dev:extract` (NODE_OPTIONS=--max-old-space-size=4096) — large GeoJSON / Overture extracts need a bigger heap. */
+const NODE_HEAP_MB = "--max-old-space-size=4096";
 
 cli
   .command('process <input>', 'Read JSON (GeoJSON FeatureCollection or polygon config) and output GeoJSON')
@@ -51,7 +53,7 @@ cli
 cli
   .command('serve', 'Start the main Overture extract server (replaces node server.js)')
   .action(() => {
-    const child = spawn(process.execPath, [path.join(extractDir, 'server.js')], {
+    const child = spawn(process.execPath, [NODE_HEAP_MB, path.join(extractDir, "server.js")], {
       stdio: 'inherit',
       cwd: extractDir,
       env: process.env,

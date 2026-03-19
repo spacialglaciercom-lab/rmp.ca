@@ -262,7 +262,7 @@ async function startServer() {
       ENV.osrmUrl &&
       (ENV.osrmUrl.includes("svc.cluster.local") || ENV.osrmUrl.includes("localhost")
         ? `${req.protocol}://${req.get("host")}/api/osrm`
-        : ENV.osrmUrl;
+        : ENV.osrmUrl);
     res.json({
       googleMapsApiKey: ENV.googleMapsApiKey || undefined,
       osrmUrl: osrmUrl || undefined,

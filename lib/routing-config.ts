@@ -2,13 +2,12 @@
  * Routing API configuration: Google Maps (default) or OSRM fallback.
  */
 
-import { Platform } from "react-native";
-
 import {
   getCachedServerOsrmUrl,
   getGoogleMapsApiKey,
   getNavigationProvider,
   ensureServerConfigFetched,
+  shouldUseMapsServerProxy,
 } from "./google-maps-config";
 import { getApiBaseUrl } from "@/shared/oauth";
 
@@ -41,9 +40,8 @@ export function getRoutingConfig(): RoutingConfig {
  * Get routing config (async) — checks user's provider preference.
  * Returns Google Maps config when selected (default), otherwise OSRM.
  *
- * On web, when our API server is used (Railway etc.), Google routing goes through the
- * server proxy which requires GOOGLE_MAPS_API_KEY on the server. If the server has no key,
- * we fall back to OSRM to avoid 503 on /api/maps/directions.
+ * When using the server proxy (web always; native with a remote EXPO_PUBLIC_API_BASE_URL),
+ * Google routing uses GOOGLE_MAPS_API_KEY on the server. If no key after /api/config, OSRM fallback.
  */
 export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   const provider = await getNavigationProvider();
@@ -51,8 +49,7 @@ export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   if (provider === "google") {
     const apiKey = await getGoogleMapsApiKey();
 
-    // Web: proxy uses server's GOOGLE_MAPS_API_KEY. If server has no key (apiKey empty after /api/config), use OSRM to avoid 503.
-    if (Platform.OS === "web" && getApiBaseUrl()) {
+    if (shouldUseMapsServerProxy() && getApiBaseUrl()) {
       if (!apiKey) return getRoutingConfig();
       return {
         baseUrl: GOOGLE_DIRECTIONS_BASE_URL,

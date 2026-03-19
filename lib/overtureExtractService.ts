@@ -1,9 +1,10 @@
 /**
  * Overture Extract WebSocket client + helpers.
  * Connects to the web extractor backend to extract & process road networks from Overture Maps data.
- * By default the app connects directly to the extract service (EXPO_PUBLIC_OVERTURE_EXTRACT_URL).
- * To route WebSocket via the main backend proxy instead (e.g. if the extract service blocks browser origins),
- * set EXPO_PUBLIC_OVERTURE_WS_BASE to your main API URL (e.g. http://localhost:3000).
+ * By default: web uses the main API (same-origin / getApiBaseUrl) so /ws/extract is proxied.
+ * Native without env uses localhost:9000 (local extract container). Set EXPO_PUBLIC_API_BASE_URL
+ * to your deployed API (same as maps/routing) so extract HTTP + WebSocket go through that backend.
+ * Override with EXPO_PUBLIC_OVERTURE_EXTRACT_URL / EXPO_PUBLIC_OVERTURE_WS_BASE / EXPO_PUBLIC_OVERTURE_HTTP_BASE.
  */
 
 import Constants from "expo-constants";
@@ -41,18 +42,25 @@ const defaultWsBase = defaultHttpBase
   .replace(/^https:\/\//i, "wss://")
   .replace(/^http:\/\//i, "ws://");
 
-/** On web, use API base so extract goes through Node proxy (/ws/extract and /geojson/:hash). No direct connection to port 9000. */
+function apiBaseToWsUrl(api: string): string {
+  return api.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+}
+
+/** Web: same-origin API (Node proxies /ws/extract, /geojson/:hash). Native: use main API when EXPO_PUBLIC_API_BASE_URL is set (Expo Go / prod). */
 function getExtractHttpBase(): string {
   if (process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE) return process.env.EXPO_PUBLIC_OVERTURE_HTTP_BASE;
   if (Platform.OS === "web" && typeof window !== "undefined") return getApiBaseUrl();
+  if (process.env.EXPO_PUBLIC_API_BASE_URL?.trim()) return getApiBaseUrl();
   return defaultHttpBase;
 }
 
 function getExtractWsBase(): string {
   if (process.env.EXPO_PUBLIC_OVERTURE_WS_BASE) return process.env.EXPO_PUBLIC_OVERTURE_WS_BASE;
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    const api = getApiBaseUrl();
-    return api.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+    return apiBaseToWsUrl(getApiBaseUrl());
+  }
+  if (process.env.EXPO_PUBLIC_API_BASE_URL?.trim()) {
+    return apiBaseToWsUrl(getApiBaseUrl());
   }
   return defaultWsBase;
 }
