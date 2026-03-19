@@ -8,6 +8,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Switch,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
@@ -778,6 +779,28 @@ export function OvertureExtractorContent({
         </View>
       </View>
 
+      {/* One-way toggle */}
+      <View style={[styles.toggleRow, { backgroundColor: colors.surface }]}>
+        <View style={styles.toggleLabelGroup}>
+          <Text style={[styles.toggleLabel, { color: colors.text }]}>
+            Follow one-ways
+          </Text>
+          <Text style={[styles.toggleSub, { color: colors.muted }]}>
+            {routingState.configuration.onewayMode === "B"
+              ? "Respects one-way streets"
+              : "Traverses both directions"}
+          </Text>
+        </View>
+        <Switch
+          value={routingState.configuration.onewayMode === "B"}
+          onValueChange={(val) =>
+            routingDispatch({ type: "SET_ONEWAY_MODE", payload: val ? "B" : "A" })
+          }
+          trackColor={{ false: colors.surfaceElevated, true: primaryBlue }}
+          thumbColor="#fff"
+        />
+      </View>
+
       {/* Optimize */}
       <TouchableOpacity
         style={[
@@ -1072,6 +1095,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   newExtractionBtnText: { fontSize: 14, fontWeight: "600" },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 12,
+  },
+  toggleLabelGroup: { flex: 1 },
+  toggleLabel: { fontSize: 14, fontWeight: "600" },
+  toggleSub: { fontSize: 12, marginTop: 2 },
 });
 
 OvertureExtractorContent.displayName = "OvertureExtractorContent";
