@@ -1,0 +1,63 @@
+# One-time Job to download OSM data and preprocess it for OSRM (extract → partition → customize).
+# Run once per region; the resulting data is stored in the osrm-data PVC.
+#
+# 1. Create the PVC and this Job (do not apply the OSRM Deployment yet).
+# 2. kubectl apply -f k8s/osrm-pvc.yaml
+# 3. kubectl apply -f k8s/osrm-preprocess-job.yaml
+# 4. kubectl wait --for=condition=complete job/osrm-preprocess -n rmpca --timeout=2h
+# 5. Then apply osrm-deployment.yaml and osrm-service.yaml.
+#
+# To use a different region, set PBF_URL in the Job (e.g. Quebec, Ontario, or full Canada).
+# Quebec is faster (~15–30 min); full Canada can take 1–2 hours.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: osrm-preprocess
+  namespace: rmpca
+  labels:
+    app: osrm
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: osrm
+        job: osrm-preprocess
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: preprocess
+          image: osrm/osrm-backend:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Downloading OSM data from ${PBF_URL}..."
+              wget -q -O /data/region.osm.pbf "$PBF_URL"
+              echo "Running osrm-extract..."
+              osrm-extract -p /opt/car.lua /data/region.osm.pbf
+              echo "Running osrm-partition..."
+              osrm-partition /data/region.osrm
+              echo "Running osrm-customize..."
+              osrm-customize /data/region.osrm
+              echo "Preprocess complete."
+          env:
+            # Quebec: ~150 MB download, ~15–30 min. Use canada-latest for full Canada (~1.5 GB, 1–2 h).
+            - name: PBF_URL
+              value: "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "4000m"
+              memory: "4Gi"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: osrm-data

@@ -5,8 +5,10 @@
 import { Platform } from "react-native";
 
 import {
+  getCachedServerOsrmUrl,
   getGoogleMapsApiKey,
   getNavigationProvider,
+  ensureServerConfigFetched,
 } from "./google-maps-config";
 import { getApiBaseUrl } from "@/shared/oauth";
 
@@ -22,11 +24,15 @@ export interface RoutingConfig {
 
 /**
  * Get routing config (sync) — OSRM only. Use getRoutingConfigAsync() to include Google Maps.
+ * Prefers: server-cached osrmUrl (from GET /api/config) → EXPO_PUBLIC_OSRM_URL → public OSRM.
  */
 export function getRoutingConfig(): RoutingConfig {
-  const osrmUrl = process.env.EXPO_PUBLIC_OSRM_URL ?? OSRM_DEFAULT_URL;
+  const serverOsrm = getCachedServerOsrmUrl();
+  const envOsrm = process.env.EXPO_PUBLIC_OSRM_URL;
+  const baseUrl =
+    (serverOsrm || envOsrm || "").trim() || OSRM_DEFAULT_URL;
   return {
-    baseUrl: osrmUrl || OSRM_DEFAULT_URL,
+    baseUrl,
     provider: "osrm",
   };
 }
@@ -64,5 +70,7 @@ export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
     }
   }
 
+  // OSRM: ensure server config is fetched so getRoutingConfig() can use backend OSRM URL when set (e.g. GKE).
+  if (getApiBaseUrl()) await ensureServerConfigFetched();
   return getRoutingConfig();
 }

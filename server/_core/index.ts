@@ -19,6 +19,7 @@ import {
 } from "../reportErrorPush";
 import { handleEasBuildWebhook } from "../easBuildWebhook";
 import { registerMapsProxyRoutes } from "../mapsProxy";
+import { registerOsrmProxyRoutes } from "../osrmProxy";
 import { registerAiProxyRoutes } from "../aiProxy";
 import { registerElevenLabsProxyRoutes } from "../elevenLabsProxy";
 import {
@@ -158,6 +159,7 @@ async function startServer() {
 
   registerOAuthRoutes(app);
   registerMapsProxyRoutes(app);
+  registerOsrmProxyRoutes(app);
   registerAiProxyRoutes(app);
   registerElevenLabsProxyRoutes(app);
   registerOptimizerProxyRoutes(app);
@@ -184,7 +186,8 @@ async function startServer() {
         elevenLabsVoices: "GET /api/elevenlabs/voices",
         elevenLabsTts: "POST /api/elevenlabs/tts",
         elevenLabsStt: "POST /api/elevenlabs/stt",
-        config: "GET /api/config (Google Maps key from server env)",
+        config: "GET /api/config (Google Maps key, OSRM URL from server env)",
+        osrmProxy: "GET /api/osrm/* (proxy to in-cluster OSRM when OSRM_URL set)",
         reportError: "POST /api/report-error",
         registerPushToken: "POST /api/register-push-token",
         easBuildWebhook: "POST /api/eas-build-webhook (EAS Build events)",
@@ -253,10 +256,16 @@ async function startServer() {
     }
   });
 
-  /** Public config for the app (e.g. Google Maps key from Railway env). App calls this at the public API URL, not .railway.internal. */
-  app.get("/api/config", (_req, res) => {
+  /** Public config for the app (e.g. Google Maps key, OSRM URL from server env). App calls this at the public API URL, not .railway.internal. When OSRM_URL is set (e.g. in-cluster), we return the proxy URL so the client uses /api/osrm instead of the internal hostname. */
+  app.get("/api/config", (req, res) => {
+    const osrmUrl =
+      ENV.osrmUrl &&
+      (ENV.osrmUrl.includes("svc.cluster.local") || ENV.osrmUrl.includes("localhost")
+        ? `${req.protocol}://${req.get("host")}/api/osrm`
+        : ENV.osrmUrl;
     res.json({
       googleMapsApiKey: ENV.googleMapsApiKey || undefined,
+      osrmUrl: osrmUrl || undefined,
     });
   });
 
