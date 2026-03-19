@@ -45,6 +45,7 @@ import { initMapLibreCacheCap } from "@/lib/maplibre-cache";
 import { registerPMTilesProtocol } from "@/lib/maplibre-pmtiles-protocol";
 import { PowerSavingProvider } from "@/src/powerSaving";
 import { WebOSMDropZoneRoot } from "@/components/web-osm-drop-zone-root";
+import { WebPasswordGate } from "@/components/WebPasswordGate";
 import { OSM_DATA_STORAGE_KEY } from "@/lib/osm-storage";
 import type { StoredOSMData } from "@/lib/osm-storage";
 import { storage } from "@/lib/storage";
@@ -358,7 +359,9 @@ export default function RootLayout() {
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       {Platform.OS === "web" ? (
-        appContent
+        <WebPasswordGate style={{ flex: 1 }}>
+          {appContent}
+        </WebPasswordGate>
       ) : (
         <KeyboardProvider>{appContent}</KeyboardProvider>
       )}
