@@ -243,6 +243,48 @@ export async function openOsmAndViewer(options?: {
       }
     }
 
+    // On web with GPX data, download the GPX file so the user can import it into OsmAnd
+    if (Platform.OS === "web" && gpxString && gpxString.trim().length > 0) {
+      try {
+        const blob = new Blob([gpxString], {
+          type: "application/gpx+xml",
+        });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `trashroute_osmand_${Date.now()}.gpx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+
+        // Also open OsmAnd web map centered on the route so user can import the file there
+        const midLat = waypoints
+          ? waypoints.reduce((s, w) => s + w.lat, 0) / waypoints.length
+          : center?.lat ?? 0;
+        const midLon = waypoints
+          ? waypoints.reduce((s, w) => s + w.lon, 0) / waypoints.length
+          : center?.lon ?? 0;
+        const osmUrl = `https://osmand.net/map#12/${midLat.toFixed(4)}/${midLon.toFixed(4)}`;
+
+        Alert.alert(
+          "GPX Downloaded",
+          "The GPX file has been downloaded. To view the full route in OsmAnd:\n\n" +
+            "1. Open OsmAnd on your device\n" +
+            "2. Import the downloaded .gpx file\n" +
+            "3. The complete route with all stops will be displayed\n\n" +
+            "Opening OsmAnd web map now...",
+        );
+
+        setTimeout(() => {
+          Linking.openURL(osmUrl);
+        }, 500);
+        return;
+      } catch {
+        // Fall through to URL-based open
+      }
+    }
+
     let url: string;
     if (waypoints && waypoints.length >= 2) {
       const start = waypoints[0];
