@@ -47,16 +47,32 @@ declare -A CITIES=(
   [edmonton]="53.45|53.65|-113.65|-113.35"
   [quebec_city]="46.75|46.95|-71.35|-71.15"
   [halifax]="44.60|44.72|-63.70|-63.52"
+  [winnipeg]="49.75|49.95|-97.25|-97.05"
+  [saskatoon]="52.08|52.20|-106.72|-106.58"
+  [regina]="50.40|50.50|-104.70|-104.55"
+  [victoria]="48.40|48.50|-123.45|-123.30"
+  [hamilton]="43.20|43.30|-79.95|-79.75"
+  [kitchener]="43.38|43.50|-80.60|-80.40"
+  [london_on]="42.90|43.05|-81.35|-81.15"
+  [st_johns]="47.50|47.60|-52.78|-52.65"
+  [fredericton]="45.90|45.98|-66.70|-66.58"
+  [charlottetown]="46.22|46.28|-63.17|-63.10"
 )
 
 # ─── Per-city zoom levels (core=8-14, secondary=10-13) ────────
 declare -A CITY_MIN_ZOOM=(
   [montreal]=8  [laval]=8  [longueuil]=8  [toronto]=8  [vancouver]=8
   [ottawa]=10  [calgary]=10  [edmonton]=10  [quebec_city]=10  [halifax]=10
+  [winnipeg]=10  [saskatoon]=10  [regina]=10  [victoria]=10
+  [hamilton]=10  [kitchener]=10  [london_on]=10  [st_johns]=10
+  [fredericton]=10  [charlottetown]=10
 )
 declare -A CITY_MAX_ZOOM=(
   [montreal]=14  [laval]=14  [longueuil]=14  [toronto]=14  [vancouver]=14
   [ottawa]=13  [calgary]=13  [edmonton]=13  [quebec_city]=13  [halifax]=13
+  [winnipeg]=13  [saskatoon]=13  [regina]=13  [victoria]=13
+  [hamilton]=13  [kitchener]=13  [london_on]=13  [st_johns]=13
+  [fredericton]=13  [charlottetown]=13
 )
 
 # Road classes to include (drops footway, cycleway, path, track, driveway, parking_aisle, etc.)
