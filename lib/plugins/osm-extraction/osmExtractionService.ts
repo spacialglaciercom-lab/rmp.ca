@@ -178,6 +178,78 @@ function elementsToGeoJSON(
   return { features, roadCount };
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function buildOSMXml(elements: OverpassElement[]): string {
+  const nodes = elements.filter(
+    (el): el is OverpassNode => el.type === "node" && el.lat != null && el.lon != null,
+  );
+  const ways = elements.filter(
+    (el): el is OverpassWay => el.type === "way" && Array.isArray(el.nodes),
+  );
+
+  if (nodes.length === 0) {
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="RouteMasterPro OSM Extractor"></osm>`;
+  }
+
+  let minLat = Infinity;
+  let minLon = Infinity;
+  let maxLat = -Infinity;
+  let maxLon = -Infinity;
+  for (const node of nodes) {
+    if (node.lat < minLat) minLat = node.lat;
+    if (node.lon < minLon) minLon = node.lon;
+    if (node.lat > maxLat) maxLat = node.lat;
+    if (node.lon > maxLon) maxLon = node.lon;
+  }
+
+  const lines: string[] = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<osm version="0.6" generator="RouteMasterPro OSM Extractor">`,
+    `  <bounds minlat="${minLat.toFixed(7)}" minlon="${minLon.toFixed(7)}" maxlat="${maxLat.toFixed(7)}" maxlon="${maxLon.toFixed(7)}"/>`,
+  ];
+
+  for (const node of nodes) {
+    if (!node.tags || Object.keys(node.tags).length === 0) {
+      lines.push(
+        `  <node id="${node.id}" lat="${node.lat.toFixed(7)}" lon="${node.lon.toFixed(7)}"/>`,
+      );
+      continue;
+    }
+    lines.push(
+      `  <node id="${node.id}" lat="${node.lat.toFixed(7)}" lon="${node.lon.toFixed(7)}">`,
+    );
+    for (const [k, v] of Object.entries(node.tags)) {
+      lines.push(`    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`);
+    }
+    lines.push(`  </node>`);
+  }
+
+  for (const way of ways) {
+    if (way.nodes.length < 2) continue;
+    lines.push(`  <way id="${way.id}">`);
+    for (const ref of way.nodes) {
+      lines.push(`    <nd ref="${ref}"/>`);
+    }
+    if (way.tags) {
+      for (const [k, v] of Object.entries(way.tags)) {
+        lines.push(`    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`);
+      }
+    }
+    lines.push(`  </way>`);
+  }
+
+  lines.push(`</osm>`);
+  return lines.join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -201,6 +273,7 @@ export async function extractOSM(
 
   return {
     geojson,
+    osmXml: buildOSMXml(elements),
     stats: {
       roads: roadCount,
       points: features.length,
