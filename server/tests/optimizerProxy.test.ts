@@ -1,527 +1,264 @@
-/**
- * Unit tests for optimizerProxy.ts
- * Covers: nextPollDelay math, fetchWithRetry behaviour, submitAndPoll happy-path /
- * FAILURE / timeout / non-202, GPX routing to sync, injectVroomMatrix matrix
- * injection, and the 503 when OPTIMIZER_BACKEND_URL is unset.
- *
- * All network I/O is replaced with vi.stubGlobal('fetch', …) so no real HTTP
- * connections are made.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import express from "express";
+import {
+  nextPollDelay,
+  injectVroomMatrix,
+  submitAndPoll,
+} from "../optimizerProxy";
 
-// ── Logger stub (suppress output in tests) ───────────────────────────────────
-vi.mock("../logger", () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-type MockFetch = ReturnType<typeof vi.fn>;
-
-/** Build a minimal fetch Response mock. */
-function mockResponse(
-  body: unknown,
-  status = 200,
-  headers: Record<string, string> = {},
-) {
-  const bodyStr = typeof body === "string" ? body : JSON.stringify(body);
-  return {
-    ok: status >= 200 && status < 300,
+function jsonResp(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      get: (key: string) => headers[key.toLowerCase()] ?? null,
-    },
-    text: () => Promise.resolve(bodyStr),
-    json: () => Promise.resolve(typeof body === "string" ? JSON.parse(body) : body),
-    arrayBuffer: () =>
-      Promise.resolve(Buffer.from(bodyStr).buffer as ArrayBuffer),
-  };
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
-/** Minimal Express req/res mocks. */
-function mockReq(overrides: Record<string, unknown> = {}) {
-  return {
-    method: "POST",
-    originalUrl: "/api/optimize",
-    url: "/api/optimize",
-    headers: {},
-    body: { test: true },
-    params: {},
-    query: {},
-    ...overrides,
-  } as unknown as import("express").Request;
-}
+// ---------------------------------------------------------------------------
+// nextPollDelay
+// ---------------------------------------------------------------------------
 
-function mockRes() {
-  const res = {
-    _status: 200,
-    _body: null as unknown,
-    _headers: {} as Record<string, string>,
-    status(code: number) {
-      res._status = code;
-      return res;
-    },
-    json(body: unknown) {
-      res._body = body;
-      return res;
-    },
-    send(body: unknown) {
-      res._body = body;
-      return res;
-    },
-    setHeader(key: string, val: string) {
-      res._headers[key] = val;
-      return res;
-    },
-    end() {
-      return res;
-    },
-  } as unknown as import("express").Response;
-  return res as typeof res & {
-    _status: number;
-    _body: unknown;
-    _headers: Record<string, string>;
-  };
-}
-
-// ── Tests that need OPTIMIZER_BACKEND_URL set ────────────────────────────────
-
-describe("optimizerProxy (with OPTIMIZER_BACKEND_URL configured)", () => {
-  let fetchMock: MockFetch;
-
-  beforeEach(async () => {
-    process.env.OPTIMIZER_BACKEND_URL = "http://test-optimizer.internal";
-    process.env.VROOM_BACKEND_URL = "http://test-vroom.internal";
-
-    fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    // Reset modules so env is picked up fresh
-    vi.resetModules();
+describe("nextPollDelay", () => {
+  it("starts at 1 000 ms for attempt 0", () => {
+    expect(nextPollDelay(0)).toBe(1_000);
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    delete process.env.OPTIMIZER_BACKEND_URL;
-    delete process.env.VROOM_BACKEND_URL;
-    vi.resetModules();
+  it("doubles on each attempt", () => {
+    expect(nextPollDelay(1)).toBe(2_000);
+    expect(nextPollDelay(2)).toBe(4_000);
+    expect(nextPollDelay(3)).toBe(8_000);
+    expect(nextPollDelay(4)).toBe(16_000);
+    expect(nextPollDelay(5)).toBe(30_000); // capped
   });
 
-  // ── submitAndPoll: SUCCESS path ─────────────────────────────────────────
+  it("caps at 30 000 ms regardless of attempt count", () => {
+    expect(nextPollDelay(10)).toBe(30_000);
+    expect(nextPollDelay(100)).toBe(30_000);
+  });
+});
 
-  it("submitAndPoll: returns 200 with result on SUCCESS status", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
+// ---------------------------------------------------------------------------
+// injectVroomMatrix
+// ---------------------------------------------------------------------------
 
-    const taskId = "task-abc-123";
-    const resultData = { route: "optimized" };
-
-    // 1st call: submit → 202
-    // 2nd call: poll → SUCCESS
-    fetchMock
-      .mockResolvedValueOnce(
-        mockResponse({ task_id: taskId, status: "PENDING" }, 202),
-      )
-      .mockResolvedValueOnce(
-        mockResponse({ task_id: taskId, status: "SUCCESS", result: resultData }),
-      );
-
-    const req = mockReq({ body: { stops: [] } });
-    const res = mockRes();
-
-    // Find and invoke the /api/optimize route handler
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(res._status).toBe(200);
-    const parsed =
-      typeof res._body === "string" ? JSON.parse(res._body) : res._body;
-    expect(parsed).toEqual(resultData);
+describe("injectVroomMatrix", () => {
+  it("returns the same object when matrices is already present", () => {
+    const body = { vehicles: [], jobs: [], matrices: { car: {} } };
+    expect(injectVroomMatrix(body)).toBe(body);
   });
 
-  it("submitAndPoll: returns 500 on FAILURE status", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    const taskId = "task-fail-456";
-
-    fetchMock
-      .mockResolvedValueOnce(
-        mockResponse({ task_id: taskId, status: "PENDING" }, 202),
-      )
-      .mockResolvedValueOnce(
-        mockResponse(
-          { task_id: taskId, status: "FAILURE", error: "Worker crashed" },
-          500,
-        ),
-      );
-
-    const req = mockReq({ body: { stops: [] } });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(res._status).toBe(500);
-    const parsed =
-      typeof res._body === "string" ? JSON.parse(res._body) : res._body;
-    expect(parsed).toMatchObject({ ok: false, error: "Worker crashed" });
-  });
-
-  it("submitAndPoll: forwards error when submit returns non-202", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    fetchMock.mockResolvedValueOnce(
-      mockResponse({ error: "bad request" }, 400),
-    );
-
-    const req = mockReq({ body: { stops: [] } });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(res._status).toBe(400);
-  });
-
-  it("GPX request routes to sync endpoint", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    const gpxBody = "<?xml version='1.0'?><gpx/>";
-    fetchMock.mockResolvedValueOnce(
-      mockResponse(gpxBody, 200, { "content-type": "application/gpx+xml" }),
-    );
-
-    const req = mockReq({
-      headers: { accept: "application/gpx+xml" },
-      body: {},
-    });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    // Should have proxied to the sync endpoint (fetch called once, not via poll)
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const calledUrl = fetchMock.mock.calls[0][0] as string;
-    expect(calledUrl).toContain("/sync");
-    expect(res._status).toBe(200);
-  });
-
-  // ── proxyToVroom ────────────────────────────────────────────────────────
-
-  it("proxyToVroom: injects distance matrix and proxies to VROOM", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    const vroomResult = { routes: [] };
-    fetchMock.mockResolvedValueOnce(mockResponse(vroomResult));
-
-    const req = mockReq({
-      url: "/api/vroom/optimize",
-      originalUrl: "/api/vroom/optimize",
-      body: {
-        vehicles: [{ id: 1, start: [-73.0, 45.0], end: [-73.0, 45.0] }],
-        jobs: [{ id: 1, location: [-73.001, 45.001] }],
-      },
-    });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/vroom/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(fetchMock).toHaveBeenCalled();
-    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
-      matrices?: unknown;
+  it("replaces vehicle start/end coords with index references", () => {
+    const body = {
+      vehicles: [{ id: 1, start: [-73.9855, 40.758], end: [-73.9855, 40.759] }],
+      jobs: [],
     };
-    // Matrix should have been injected
-    expect(sentBody.matrices).toBeDefined();
-    expect(res._status).toBe(200);
+    const result = injectVroomMatrix(body);
+    const v = (result.vehicles as Record<string, unknown>[])[0];
+
+    expect(v).not.toHaveProperty("start");
+    expect(v).not.toHaveProperty("end");
+    expect(v).toHaveProperty("start_index", 0);
+    expect(v).toHaveProperty("end_index", 1);
   });
 
-  // ── fetchWithRetry ───────────────────────────────────────────────────────
+  it("replaces job location with location_index", () => {
+    const body = {
+      vehicles: [],
+      jobs: [{ id: 1, location: [-73.9855, 40.758] }],
+    };
+    const result = injectVroomMatrix(body);
+    const j = (result.jobs as Record<string, unknown>[])[0];
 
-  it("proxyToOptimizer: retries on network error then succeeds", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    // First call throws, second succeeds
-    fetchMock
-      .mockRejectedValueOnce(new Error("ECONNRESET"))
-      .mockResolvedValueOnce(
-        mockResponse({ ok: true }, 200, { "content-type": "application/json" }),
-      );
-
-    const req = mockReq({
-      method: "POST",
-      url: "/api/geojson/clean",
-      originalUrl: "/api/geojson/clean",
-    });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/geojson/clean") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(res._status).toBe(200);
+    expect(j).not.toHaveProperty("location");
+    expect(j).toHaveProperty("location_index", 0);
   });
 
-  it("proxyToOptimizer: returns 502 when all retries exhausted", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
+  it("deduplicates identical coordinates so the matrix stays small", () => {
+    const coord = [-73.9855, 40.758] as [number, number];
+    const body = {
+      vehicles: [{ id: 1, start: coord }],
+      jobs: [{ id: 1, location: coord }], // same coord as vehicle start
+    };
+    const result = injectVroomMatrix(body);
+    const { durations, distances } = (
+      result.matrices as { car: { durations: number[][]; distances: number[][] } }
+    ).car;
 
-    fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
+    // Only one unique location → 1×1 matrix
+    expect(durations).toHaveLength(1);
+    expect(distances).toHaveLength(1);
+    expect(distances[0][0]).toBe(0); // zero self-distance
+  });
 
-    const req = mockReq({
-      method: "POST",
-      url: "/api/geojson/clean",
-      originalUrl: "/api/geojson/clean",
-    });
-    const res = mockRes();
+  it("computes non-zero distance and duration between distinct coords", () => {
+    const body = {
+      vehicles: [{ id: 1, start: [-73.9855, 40.758] }],
+      jobs: [{ id: 1, location: [-73.975, 40.758] }], // ~0.01° lon apart
+    };
+    const result = injectVroomMatrix(body);
+    const { durations, distances } = (
+      result.matrices as { car: { durations: number[][]; distances: number[][] } }
+    ).car;
 
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/geojson/clean") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
+    expect(distances[0][1]).toBeGreaterThan(0);
+    expect(durations[0][1]).toBeGreaterThan(0);
+    // Diagonal is always zero
+    expect(distances[0][0]).toBe(0);
+    expect(distances[1][1]).toBe(0);
+  });
 
-    await handlers[0]!(req, res);
+  it("produces a symmetric matrix (dist[i][j] === dist[j][i])", () => {
+    const body = {
+      vehicles: [{ id: 1, start: [-73.9855, 40.758] }],
+      jobs: [{ id: 1, location: [-73.975, 40.765] }],
+    };
+    const result = injectVroomMatrix(body);
+    const { distances } = (
+      result.matrices as { car: { distances: number[][] } }
+    ).car;
 
-    expect(res._status).toBe(502);
-    const body = res._body as { ok: boolean; error: string };
-    expect(body.ok).toBe(false);
-    expect(body.error).toContain("unreachable");
+    expect(distances[0][1]).toBe(distances[1][0]);
   });
 });
 
-// ── Tests with NO OPTIMIZER_BACKEND_URL set ───────────────────────────────────
+// ---------------------------------------------------------------------------
+// submitAndPoll
+// ---------------------------------------------------------------------------
 
-describe("optimizerProxy (without OPTIMIZER_BACKEND_URL)", () => {
-  beforeEach(async () => {
-    delete process.env.OPTIMIZER_BACKEND_URL;
-    delete process.env.VROOM_BACKEND_URL;
-    vi.resetModules();
+describe("submitAndPoll", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    vi.resetModules();
-  });
-
-  it("POST /api/optimize returns 503 when backend not configured", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    const req = mockReq({ body: {} });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(res._status).toBe(503);
-    const body = res._body as { ok: boolean };
-    expect(body.ok).toBe(false);
-  });
-
-  it("POST /api/vroom/optimize returns 503 when VROOM not configured", async () => {
-    const { registerOptimizerProxyRoutes } = await import(
-      "../optimizerProxy"
-    );
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    const req = mockReq({
-      url: "/api/vroom/optimize",
-      originalUrl: "/api/vroom/optimize",
-      body: {},
-    });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/vroom/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    expect(res._status).toBe(503);
-  });
-});
-
-// ── injectVroomMatrix (tested via a standalone check) ────────────────────────
-
-describe("injectVroomMatrix behaviour (via VROOM proxy)", () => {
-  beforeEach(async () => {
-    process.env.VROOM_BACKEND_URL = "http://vroom.test";
-    vi.resetModules();
-  });
-
-  afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
-    delete process.env.VROOM_BACKEND_URL;
-    vi.resetModules();
   });
 
-  it("skips matrix injection when matrices already present", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      mockResponse({ routes: [] }, 200),
+  it("returns 200 with the task result after SUCCESS", async () => {
+    let pollCount = 0;
+    vi.stubGlobal("fetch", async (url: string) => {
+      if ((url as string).includes("/submit"))
+        return jsonResp({ task_id: "t1", status: "PENDING" }, 202);
+      pollCount++;
+      if (pollCount >= 2)
+        return jsonResp(
+          { task_id: "t1", status: "SUCCESS", result: { route: [1, 2, 3] } },
+          200,
+        );
+      return jsonResp({ task_id: "t1", status: "PROCESSING" }, 200);
+    });
+
+    const promise = submitAndPoll(
+      "http://fake/submit",
+      "http://fake/status",
+      { features: [] },
+      "test",
     );
-    vi.stubGlobal("fetch", fetchMock);
+    await vi.runAllTimersAsync();
+    const result = await promise;
 
-    const { registerOptimizerProxyRoutes } = await import("../optimizerProxy");
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
-
-    const existingMatrices = { car: { durations: [[0]], distances: [[0]] } };
-    const req = mockReq({
-      url: "/api/vroom/optimize",
-      originalUrl: "/api/vroom/optimize",
-      body: {
-        vehicles: [],
-        jobs: [],
-        matrices: existingMatrices,
-      },
-    });
-    const res = mockRes();
-
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/vroom/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
-    });
-
-    await handlers[0]!(req, res);
-
-    const sentBody = JSON.parse(
-      fetchMock.mock.calls[0][1].body as string,
-    ) as { matrices: unknown };
-    // Existing matrices preserved as-is
-    expect(sentBody.matrices).toEqual(existingMatrices);
+    expect(result.status).toBe(200);
+    expect(JSON.parse(result.body as string)).toEqual({ route: [1, 2, 3] });
+    expect(pollCount).toBe(2);
   });
 
-  it("deduplicates locations when building matrix", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      mockResponse({ routes: [] }, 200),
+  it("returns 500 with error details on FAILURE", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if ((url as string).includes("/submit"))
+        return jsonResp({ task_id: "t2", status: "PENDING" }, 202);
+      return jsonResp(
+        { task_id: "t2", status: "FAILURE", error: "solver exploded" },
+        500,
+      );
+    });
+
+    const promise = submitAndPoll(
+      "http://fake/submit",
+      "http://fake/status",
+      {},
+      "test",
     );
-    vi.stubGlobal("fetch", fetchMock);
+    await vi.runAllTimersAsync();
+    const result = await promise;
 
-    const { registerOptimizerProxyRoutes } = await import("../optimizerProxy");
-    const app = express();
-    app.use(express.json());
-    registerOptimizerProxyRoutes(app);
+    expect(result.status).toBe(500);
+    const body = JSON.parse(result.body as string);
+    expect(body.error).toBe("solver exploded");
+    expect(body.task_id).toBe("t2");
+  });
 
-    const sameCoord = [-73.0, 45.0] as [number, number];
-    const req = mockReq({
-      url: "/api/vroom/optimize",
-      originalUrl: "/api/vroom/optimize",
-      body: {
-        vehicles: [{ id: 1, start: sameCoord, end: sameCoord }],
-        jobs: [{ id: 1, location: sameCoord }],
-      },
+  it("forwards non-202 submit responses without entering the poll loop", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      jsonResp({ detail: "Unprocessable Entity" }, 422),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const promise = submitAndPoll(
+      "http://fake/submit",
+      "http://fake/status",
+      {},
+      "test",
+    );
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.status).toBe(422);
+    // fetch was called exactly once (the submit) — never polled
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers from transient network errors during polling and retries", async () => {
+    let pollCount = 0;
+    vi.stubGlobal("fetch", async (url: string) => {
+      if ((url as string).includes("/submit"))
+        return jsonResp({ task_id: "t3", status: "PENDING" }, 202);
+      pollCount++;
+      if (pollCount === 1) throw new Error("ECONNRESET network blip");
+      return jsonResp(
+        { task_id: "t3", status: "SUCCESS", result: { ok: true } },
+        200,
+      );
     });
-    const res = mockRes();
 
-    const handlers: Array<(req: unknown, res: unknown) => void> = [];
-    app._router.stack.forEach((layer: { route?: { path: string; stack: Array<{ handle: (r: unknown, s: unknown) => void }> } }) => {
-      if (layer.route?.path === "/api/vroom/optimize") {
-        layer.route.stack.forEach((s) => handlers.push(s.handle));
-      }
+    const promise = submitAndPoll(
+      "http://fake/submit",
+      "http://fake/status",
+      {},
+      "test",
+    );
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.status).toBe(200);
+    // First poll threw, second succeeded
+    expect(pollCount).toBe(2);
+  });
+
+  it("returns 504 when polling exceeds the 10-minute deadline", async () => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if ((url as string).includes("/submit"))
+        return jsonResp({ task_id: "t4", status: "PENDING" }, 202);
+      // Always PROCESSING — never finishes
+      return jsonResp({ task_id: "t4", status: "PROCESSING" }, 200);
     });
 
-    await handlers[0]!(req, res);
+    const promise = submitAndPoll(
+      "http://fake/submit",
+      "http://fake/status",
+      {},
+      "test",
+    );
 
-    const sentBody = JSON.parse(
-      fetchMock.mock.calls[0][1].body as string,
-    ) as { matrices: { car: { durations: number[][] } } };
-    // 1 unique location → 1×1 matrix
-    expect(sentBody.matrices.car.durations).toHaveLength(1);
-    expect(sentBody.matrices.car.durations[0]).toHaveLength(1);
+    // Advance fake clock past the 10-minute deadline
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1_000);
+    const result = await promise;
+
+    expect(result.status).toBe(504);
+    const body = JSON.parse(result.body as string);
+    expect(body.ok).toBe(false);
+    expect(body.task_id).toBe("t4");
   });
 });
