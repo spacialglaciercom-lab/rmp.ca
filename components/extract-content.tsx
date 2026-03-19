@@ -44,6 +44,8 @@ import { extractFromDownloadedData } from "@/lib/offline-extract";
 import { ExtractConnectionStatus } from "@/components/extract/ExtractConnectionStatus";
 import { usePluginStore } from "@/stores/pluginStore";
 import { extractOSM } from "@/lib/plugins/osm-extraction/osmExtractionService";
+import { toOSMXML } from "@/lib/exportService";
+import type { OverpassElement } from "@/lib/overpassService";
 
 // ---------------------------------------------------------------------------
 // Web-only lazy imports (MapLibre GL JS, mapbox-gl-draw, DuckDB WASM)
@@ -191,6 +193,8 @@ export default function ExtractContent() {
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
   /** Stores GeoJSON graph from offline extraction (set when resultHash === "__offline__"). */
   const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  /** Stores raw Overpass elements from OSM extraction (set when resultHash === "__osm__"). */
+  const osmRawElementsRef = useRef<OverpassElement[] | null>(null);
 
   // Dimensions
   const [dimensions, setDimensions] = useState<{
@@ -453,6 +457,7 @@ export default function ExtractContent() {
       extractOSM(polygon)
         .then((result) => {
           const count = result.geojson.features.length;
+          osmRawElementsRef.current = result.rawElements;
           setPreviewRoadCount(result.stats?.roads ?? count);
           setPreviewPointCount(count);
           const map = mapRef.current;
@@ -542,6 +547,7 @@ export default function ExtractContent() {
     setResultHash(null);
     setResultStats(null);
     offlineGeoJSONRef.current = null;
+    osmRawElementsRef.current = null;
     setProgress({ stage: "connecting", message: "Connecting..." });
 
     // OSM path — direct Overpass API call, no WebSocket
@@ -554,6 +560,7 @@ export default function ExtractContent() {
             return;
           }
           offlineGeoJSONRef.current = result.geojson;
+          osmRawElementsRef.current = result.rawElements;
           setResultHash("__osm__");
           setResultStats({
             roads: result.stats?.roads ?? count,
@@ -751,6 +758,30 @@ export default function ExtractContent() {
     }
   }, [resultHash]);
 
+  const downloadOSM = useCallback(() => {
+    if (!osmRawElementsRef.current || osmRawElementsRef.current.length === 0) return;
+    if (!polygon) return;
+    try {
+      const ring = polygon.geometry.coordinates[0];
+      const lats = ring.map(([, lat]) => lat);
+      const lons = ring.map(([lon]) => lon);
+      const bounds = {
+        minLat: Math.min(...lats),
+        minLon: Math.min(...lons),
+        maxLat: Math.max(...lats),
+        maxLon: Math.max(...lons),
+      };
+      const xml = toOSMXML(osmRawElementsRef.current, bounds);
+      const blob = new Blob([xml], { type: "application/xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "osm-extract.osm";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {}
+  }, [polygon]);
+
   // -------------------------------------------------------------------------
   // Zone partitioning: send to Map → Zones dropdown (uses extracted GeoJSON after Extract & Process)
   // -------------------------------------------------------------------------
@@ -850,6 +881,7 @@ export default function ExtractContent() {
     setResultHash(null);
     setResultStats(null);
     setProgress(null);
+    osmRawElementsRef.current = null;
   }, [clearPreviewLayer]);
 
   // -------------------------------------------------------------------------
@@ -1410,6 +1442,19 @@ export default function ExtractContent() {
                   />
                   <Text style={styles.actionBtnText}>Download GeoJSON</Text>
                 </TouchableOpacity>
+                {extractSource === "osm" && (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: "#f97316" }]}
+                    onPress={downloadOSM}
+                  >
+                    <MaterialCommunityIcons
+                      name="download"
+                      size={16}
+                      color="#fff"
+                    />
+                    <Text style={styles.actionBtnText}>Download OSM</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </ScrollView>
@@ -1480,6 +1525,7 @@ function NativeExtractFallback({
   const [zonePartitionLoading, setZonePartitionLoading] = useState(false);
   const cancelRef = useRef<{ cancel: () => void } | null>(null);
   const offlineGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const osmRawElementsRef = useRef<OverpassElement[] | null>(null);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
   const [dims, setDims] = useState<{ width: number; height: number } | null>(
@@ -1549,6 +1595,7 @@ function NativeExtractFallback({
     setResultHash(null);
     setResultStats(null);
     setDrawMode(true);
+    osmRawElementsRef.current = null;
   }, []);
 
   const extractAndProcess = useCallback(() => {
@@ -1558,6 +1605,7 @@ function NativeExtractFallback({
     setResultHash(null);
     setResultStats(null);
     offlineGeoJSONRef.current = null;
+    osmRawElementsRef.current = null;
 
     const handle = connectAndExtract(
       polygon,
@@ -2258,10 +2306,10 @@ function NativeExtractFallback({
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
               onPress={() => {
-                if (resultHash === "__offline__" && offlineGeoJSONRef.current) {
+                if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
                   Share.share({
                     message: JSON.stringify(offlineGeoJSONRef.current),
-                    title: "offline-extract.geojson",
+                    title: resultHash === "__osm__" ? "osm-extract.geojson" : "offline-extract.geojson",
                   }).catch(() =>
                     Alert.alert(
                       "Share failed",
