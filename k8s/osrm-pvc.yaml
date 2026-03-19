@@ -1,0 +1,19 @@
+# PersistentVolumeClaim for OSRM preprocessed data.
+# Required before running the osrm-preprocess Job. After the Job completes,
+# the OSRM Deployment mounts this volume read-only.
+#
+# Size: ~5–10 Gi for Quebec; ~30–50 Gi for full Canada.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: osrm-data
+  namespace: rmpca
+  labels:
+    app: osrm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi
+  # GKE: omit storageClassName to use default; for Autopilot the default is sufficient.

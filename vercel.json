@@ -1,0 +1,22 @@
+{
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
+  "installCommand": "node scripts/vercel-before-pnpm-install.js && pnpm install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/api/:path*",      "destination": "https://api.routemasterpro.ca/api/:path*" },
+    { "source": "/geojson/:path*",  "destination": "https://api.routemasterpro.ca/geojson/:path*" },
+    { "source": "/download/:path*", "destination": "https://api.routemasterpro.ca/download/:path*" },
+    { "source": "/optimizer/:path*","destination": "https://api.routemasterpro.ca/optimizer/:path*" },
+    { "source": "/overture/:path*", "destination": "https://api.routemasterpro.ca/overture/:path*" },
+    { "source": "/zones/:path*",    "destination": "https://api.routemasterpro.ca/zones/:path*" },
+    { "source": "/(.*)",            "destination": "/index.html" }
+  ],
+  "build": {
+    "env": {
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "REDACTED_GOOGLE_MAPS_KEY",
+      "EXPO_PUBLIC_OVERTURE_WS_BASE": "wss://api.routemasterpro.ca",
+      "EXPO_PUBLIC_OVERTURE_HTTP_BASE": "https://api.routemasterpro.ca"
+    }
+  }
+}
