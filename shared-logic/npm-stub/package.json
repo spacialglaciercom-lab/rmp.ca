@@ -1,0 +1,6 @@
+{
+  "name": "shared-logic",
+  "version": "0.0.1-stub",
+  "main": "index.js",
+  "description": "Stub until KMP build. Run: ./gradlew :shared-logic:assemble then use file:./shared-logic/build/js/packages/shared-logic"
+}

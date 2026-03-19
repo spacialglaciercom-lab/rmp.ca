@@ -1,0 +1,60 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.5, 45.5],
+          [-73.5, 45.5]
+        ]
+      },
+      "properties": { "highway": "residential" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.501, 45.501],
+          [-73.501001, 45.501001]
+        ]
+      },
+      "properties": { "highway": "service" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.6, 45.6],
+          [-73.601, 45.601]
+        ]
+      },
+      "properties": { "highway": "primary" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.6, 45.6],
+          [-73.601, 45.601]
+        ]
+      },
+      "properties": { "highway": "primary" }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.7, 45.7],
+          [-73.71, 45.71]
+        ]
+      },
+      "properties": {}
+    }
+  ]
+}
