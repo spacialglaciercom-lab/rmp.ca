@@ -1,0 +1,19 @@
+# ClusterIP Service for OSRM. Backend BFF uses:
+#   OSRM_URL=http://osrm.rmpca.svc.cluster.local:5000
+# (in backend-secret) so the app gets this URL via GET /api/config.
+apiVersion: v1
+kind: Service
+metadata:
+  name: osrm
+  namespace: rmpca
+  labels:
+    app: osrm
+spec:
+  type: ClusterIP
+  selector:
+    app: osrm
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+      protocol: TCP
