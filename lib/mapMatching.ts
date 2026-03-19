@@ -709,9 +709,14 @@ export async function matchGPXToRoads(
     `[MapMatch] Falling through to OSRM (provider=${config.provider}, apiKey=${config.googleApiKey ? "present" : "missing"})`,
   );
 
-  const usePoints = isPublicDemoServer(config.baseUrl)
+  const isPublic = isPublicDemoServer(config.baseUrl);
+  const usePoints = isPublic
     ? downsamplePoints(points, MAX_POINTS_PUBLIC_DEMO)
     : points;
+  // Public demo: small batches + 1s delay to respect rate limits.
+  // Private server: large batches (OSRM handles 500+ points) and no delay.
+  const batchSize = isPublic ? BATCH_SIZE : 500;
+  const batchDelay = isPublic ? BATCH_DELAY_MS : 0;
 
   const allLegs: Array<{
     steps?: MatchedStep[];
@@ -724,11 +729,11 @@ export async function matchGPXToRoads(
   let totalDistance = 0;
   let totalDuration = 0;
 
-  for (let i = 0; i < usePoints.length; i += BATCH_SIZE - 1) {
-    if (i > 0) {
-      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+  for (let i = 0; i < usePoints.length; i += batchSize - 1) {
+    if (i > 0 && batchDelay > 0) {
+      await new Promise((r) => setTimeout(r, batchDelay));
     }
-    const batch = usePoints.slice(i, i + BATCH_SIZE);
+    const batch = usePoints.slice(i, i + batchSize);
     const coords = batch.map((p) => `${p.lon},${p.lat}`).join(";");
     const radiuses = batch.map(() => "25").join(";");
 
