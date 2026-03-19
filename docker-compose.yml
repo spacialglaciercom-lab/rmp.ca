@@ -1,0 +1,68 @@
+# Default: backend + extract (no Python optimizer).
+# For Planner GeoJSON import + optimizer: use BOTH files so backend gets OPTIMIZER_BACKEND_URL:
+#   docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
+# (Without the -f docker-compose.optimizer.yml, the Node backend will return 503 "Optimizer backend not configured".)
+services:
+  extract:
+    build:
+      context: ./extract
+      dockerfile: Dockerfile
+    container_name: rmpca-extract
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+    restart: unless-stopped
+
+
+
+  optimizer:
+    build:
+      context: ./backend
+      args:
+        BASE_IMAGE: public.ecr.aws/docker/library/python:3.12-slim
+    # No container_name — allows docker compose up --scale optimizer=N
+    # No host port mapping — internal traffic only, routed via nginx-optimizer
+    profiles: [optimizer]
+    environment:
+      - PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  nginx-optimizer:
+    image: nginx:1.27-alpine
+    container_name: rmpca-nginx-optimizer
+    profiles: [optimizer]
+    volumes:
+      - ./nginx/optimizer.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8000:80"
+    depends_on:
+      optimizer:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: public.ecr.aws/docker/library/node:20-alpine
+    container_name: rmpca-backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.server
+    environment:
+      - PORT=3000
+      # Extract is always in the default stack. Optimizer is optional (see docker-compose.optimizer.yml).
+      - EXTRACT_WS_UPSTREAM=http://extract:4000
+      # OPTIMIZER_BACKEND_URL set only when using optimizer profile: docker compose -f docker-compose.yml -f docker-compose.optimizer.yml --profile optimizer up
+    depends_on:
+      extract:
+        condition: service_started

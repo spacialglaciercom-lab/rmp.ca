@@ -1,0 +1,48 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'maven-publish'
+
+group = 'com.routemasterpro.moonshine'
+version = '0.1.0'
+
+android {
+  namespace "com.routemasterpro.moonshine"
+  compileSdkVersion safeExtGet("compileSdkVersion", 34)
+
+  defaultConfig {
+    minSdkVersion safeExtGet("minSdkVersion", 24)
+    targetSdkVersion safeExtGet("targetSdkVersion", 34)
+
+    ndk {
+      abiFilters 'armeabi-v7a', 'arm64-v8a'
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = '17'
+  }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.9.25')}"
+
+  // Moonshine Voice Android SDK (JNI + Java bindings).
+  // Prefer Maven Central so EAS Build resolves it without local libs/.
+  def moonshineVersion = "0.0.49"
+  def useLocalAar = file("libs").exists() && file("libs").listFiles()?.any { it.name.endsWith(".aar") || it.name.endsWith(".jar") }
+  if (useLocalAar) {
+    implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
+  } else {
+    implementation "ai.moonshine:moonshine-voice:${moonshineVersion}"
+  }
+}
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
