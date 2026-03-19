@@ -17,8 +17,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
-  Switch,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
@@ -31,6 +29,7 @@ import { NavigationEngine } from "@/lib/NavigationEngine";
 import type { MatchedRoute } from "@/lib/mapMatching";
 import { useMapDisplayStore } from "@/stores/mapDisplayStore";
 import { useRouteParametersStore } from "@/stores/routeParametersStore";
+import { TurnByTurnDirectionsPanel } from "@/components/TurnByTurnDirectionsPanel";
 
 /** Speed below this (m/s) = stationary → use compass to look around. */
 const STATIONARY_SPEED_THRESHOLD = 0.5;
@@ -404,6 +403,22 @@ export default function NavigationView({
 
   const activeBaseLayer = useMapLayerStore((s) => s.activeBaseLayer);
 
+  // Show directions panel before navigation starts (full screen, no map)
+  if (!isStarted) {
+    return (
+      <TurnByTurnDirectionsPanel
+        matchedRoute={matchedRoute}
+        simulationMode={simulationMode}
+        onSimulationModeChange={setSimulationMode}
+        simSpeed={simSpeed}
+        onSimSpeedChange={handleSimSpeedChange}
+        onCancel={onClose}
+        onStart={startNavigation}
+        isStarting={isStarting}
+      />
+    );
+  }
+
   if (!WebView) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -700,76 +715,7 @@ export default function NavigationView({
           },
         ]}
       >
-        {!isStarted ? (
-          <View>
-            <View style={styles.simulationRow}>
-              <Text style={[styles.simulationText, { color: colors.text }]}>
-                Simulation Mode
-              </Text>
-              <Switch
-                value={simulationMode}
-                onValueChange={setSimulationMode}
-                trackColor={{ false: "#767577", true: primary }}
-                thumbColor={
-                  Platform.OS === "ios"
-                    ? "#fff"
-                    : simulationMode
-                      ? primary
-                      : "#f4f3f4"
-                }
-              />
-            </View>
-            {simulationMode && (
-              <View style={styles.speedRow}>
-                <Text style={[styles.speedLabel, { color: colors.text }]}>
-                  Speed
-                </Text>
-                <View style={styles.speedChips}>
-                  {SIM_SPEED_OPTIONS.map((s) => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[
-                        styles.speedChip,
-                        {
-                          borderColor:
-                            simSpeed === s
-                              ? primary
-                              : (colors.muted ?? "#71717a"),
-                        },
-                        simSpeed === s && { backgroundColor: primary },
-                      ]}
-                      onPress={() => handleSimSpeedChange(s)}
-                    >
-                      <Text
-                        style={[
-                          styles.speedChipText,
-                          { color: simSpeed === s ? "#fff" : colors.text },
-                        ]}
-                      >
-                        {s}x
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-            <TouchableOpacity
-              style={[
-                styles.startButton,
-                { backgroundColor: primary },
-                isStarting && { opacity: 0.7 },
-              ]}
-              onPress={startNavigation}
-              disabled={isStarting}
-            >
-              {isStarting ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.startButtonText}>Start Navigation</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : (
+        {(
           <View style={styles.statsRow}>
             <View style={styles.mainStats}>
               <View style={styles.stat}>
