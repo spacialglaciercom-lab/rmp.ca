@@ -15,7 +15,10 @@ const GOOGLE_MAPS_API_KEY_STORAGE_KEY = "@trashroute:google_maps_api_key";
 const NAV_PROVIDER_STORAGE_KEY = "@trashroute:navigation_provider";
 
 /** Cached server config so we don't hit /api/config every time. */
-let serverConfigCache: { googleMapsApiKey?: string } | null = null;
+let serverConfigCache: {
+  googleMapsApiKey?: string;
+  osrmUrl?: string;
+} | null = null;
 
 /** Build-time key from app.config extra (set by EAS when EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is set). Used on iOS where env can be missing. */
 function getExtraConfigKey(): string {
@@ -34,7 +37,7 @@ function getEnvFallback(): string {
   );
 }
 
-/** Fetch Google Maps key from server (Railway env GOOGLE_MAPS_API_KEY). Uses public API URL. */
+/** Fetch Google Maps key from server (Railway/GKE env GOOGLE_MAPS_API_KEY). Uses public API URL. Also caches osrmUrl when present. */
 async function fetchServerGoogleMapsKey(): Promise<string> {
   if (serverConfigCache && serverConfigCache.googleMapsApiKey)
     return serverConfigCache.googleMapsApiKey;
@@ -45,11 +48,40 @@ async function fetchServerGoogleMapsKey(): Promise<string> {
       method: "GET",
     });
     if (!res.ok) return "";
-    const data = (await res.json()) as { googleMapsApiKey?: string };
+    const data = (await res.json()) as {
+      googleMapsApiKey?: string;
+      osrmUrl?: string;
+    };
     serverConfigCache = data;
     return (data.googleMapsApiKey ?? "").trim();
   } catch {
     return "";
+  }
+}
+
+/** Cached OSRM URL from GET /api/config (when server sets OSRM_URL). Used so the app uses backend OSRM instead of public router.project-osrm.org. */
+export function getCachedServerOsrmUrl(): string | undefined {
+  const url = serverConfigCache?.osrmUrl?.trim();
+  return url || undefined;
+}
+
+/** Ensure server config is fetched (e.g. so getCachedServerOsrmUrl() is populated). Call when API base is set. */
+export async function ensureServerConfigFetched(): Promise<void> {
+  const base = getApiBaseUrl();
+  if (!base) return;
+  if (serverConfigCache != null) return;
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/config`, {
+      method: "GET",
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      googleMapsApiKey?: string;
+      osrmUrl?: string;
+    };
+    serverConfigCache = data;
+  } catch {
+    // ignore
   }
 }
 
