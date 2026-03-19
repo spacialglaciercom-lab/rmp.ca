@@ -44,6 +44,11 @@ import {
   type LatLonPoint,
 } from "@/lib/overpassService";
 
+/** ExtractResult extended with raw Overpass elements for OSM XML export. */
+export interface OSMExtractResult extends ExtractResult {
+  rawElements: OverpassElement[];
+}
+
 // ---------------------------------------------------------------------------
 // Routable highway tag allowlist
 // ---------------------------------------------------------------------------
@@ -188,7 +193,7 @@ function elementsToGeoJSON(
  */
 export async function extractOSM(
   polygon: GeoJSON.Feature<GeoJSON.Polygon>,
-): Promise<ExtractResult> {
+): Promise<OSMExtractResult> {
   const points = polygonToLatLonPoints(polygon);
   const query = buildRoutableRoadsQuery(points);
   const elements = await fetchOverpass(query);
@@ -201,6 +206,7 @@ export async function extractOSM(
 
   return {
     geojson,
+    rawElements: elements,
     stats: {
       roads: roadCount,
       points: features.length,
