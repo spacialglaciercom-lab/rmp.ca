@@ -1,0 +1,6 @@
+{
+  "name": "shared-logic",
+  "version": "0.0.1-stub",
+  "main": "index.js",
+  "description": "Empty stub for CI/Vercel. For KMP solver: ./gradlew :shared-logic:assemble then pnpm add shared-logic@file:./shared-logic/build/js/packages/shared-logic"
+}
