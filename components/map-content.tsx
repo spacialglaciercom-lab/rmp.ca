@@ -2317,7 +2317,12 @@ const recStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    ...(Platform.OS === "web" && {
+      minHeight: typeof window !== "undefined" ? Math.max(400, window.innerHeight - 120) : 400,
+    }),
+  },
   mapWrapper: { pointerEvents: "auto" },
   mapPlaceholder: {
     justifyContent: "center",
