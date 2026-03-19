@@ -1,6 +1,6 @@
 /**
  * Map matching: snap GPX trace to road network via Google Maps or OSRM.
- * Google Maps is the default provider; OSRM used as fallback.
+ * OSRM is the default provider; Google Maps when the user selects it (native) or when the server exposes a Maps key (web proxy).
  */
 
 import { Platform } from "react-native";
