@@ -298,6 +298,66 @@ export const OFFLINE_CITIES: OfflineCity[] = [
     country: "Canada",
     bounds: { minLat: 44.6, maxLat: 44.72, minLon: -63.7, maxLon: -63.52 },
   },
+  {
+    id: "winnipeg",
+    name: "Winnipeg",
+    country: "Canada",
+    bounds: { minLat: 49.75, maxLat: 49.95, minLon: -97.25, maxLon: -97.05 },
+  },
+  {
+    id: "saskatoon",
+    name: "Saskatoon",
+    country: "Canada",
+    bounds: { minLat: 52.08, maxLat: 52.2, minLon: -106.72, maxLon: -106.58 },
+  },
+  {
+    id: "regina",
+    name: "Regina",
+    country: "Canada",
+    bounds: { minLat: 50.4, maxLat: 50.5, minLon: -104.7, maxLon: -104.55 },
+  },
+  {
+    id: "victoria",
+    name: "Victoria",
+    country: "Canada",
+    bounds: { minLat: 48.4, maxLat: 48.5, minLon: -123.45, maxLon: -123.3 },
+  },
+  {
+    id: "hamilton",
+    name: "Hamilton",
+    country: "Canada",
+    bounds: { minLat: 43.2, maxLat: 43.3, minLon: -79.95, maxLon: -79.75 },
+  },
+  {
+    id: "kitchener",
+    name: "Kitchener-Waterloo",
+    country: "Canada",
+    bounds: { minLat: 43.38, maxLat: 43.5, minLon: -80.6, maxLon: -80.4 },
+  },
+  {
+    id: "london_on",
+    name: "London",
+    country: "Canada",
+    bounds: { minLat: 42.9, maxLat: 43.05, minLon: -81.35, maxLon: -81.15 },
+  },
+  {
+    id: "st_johns",
+    name: "St. John's",
+    country: "Canada",
+    bounds: { minLat: 47.5, maxLat: 47.6, minLon: -52.78, maxLon: -52.65 },
+  },
+  {
+    id: "fredericton",
+    name: "Fredericton",
+    country: "Canada",
+    bounds: { minLat: 45.9, maxLat: 45.98, minLon: -66.7, maxLon: -66.58 },
+  },
+  {
+    id: "charlottetown",
+    name: "Charlottetown",
+    country: "Canada",
+    bounds: { minLat: 46.22, maxLat: 46.28, minLon: -63.17, maxLon: -63.1 },
+  },
 ];
 
 // ─── S3 bucket listing ────────────────────────────────────────────

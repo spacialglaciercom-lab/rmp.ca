@@ -24,19 +24,29 @@ export function getExtractDiagnostics(): ExtractDiagnostics {
   const { wsUrl, httpBase } = getExtractConfig();
   const apiBase = getApiBaseUrl();
   const isWeb = Platform.OS === "web";
-  const usingProxy = isWeb && wsUrl.replace(/^wss?:\/\//, "").split("/")[0] !== "localhost:9000";
+  /** HTTP base matches main API → /ws/extract and /geojson are proxied (web same-origin, or native with EXPO_PUBLIC_API_BASE_URL). */
+  const usingProxy =
+    httpBase.replace(/\/$/, "") === apiBase.replace(/\/$/, "");
 
   const source = usingProxy
-    ? "Web: using API proxy (same-origin). Backend must proxy /ws/extract and /geojson/:hash to extract service."
-    : "Direct to extract service (EXPO_PUBLIC_OVERTURE_EXTRACT_URL or default localhost:9000).";
+    ? "Extract uses main API base (proxied /ws/extract, /geojson/:hash). Backend must set EXTRACT_WS_UPSTREAM to the extract container."
+    : "Direct to extract service (default localhost:9000 on native without EXPO_PUBLIC_API_BASE_URL, or EXPO_PUBLIC_OVERTURE_EXTRACT_URL).";
 
   const checklist: string[] = [];
   if (usingProxy) {
     checklist.push("Is the backend running? (e.g. pnpm run dev:server or Docker backend on port 3000)");
     checklist.push("Is EXTRACT_WS_UPSTREAM set on the backend? (e.g. http://localhost:9000 or http://extract:4000 in Docker)");
     checklist.push("Is the extract service running? (pnpm run dev:extract → port 9000, or Docker extract container on 4000)");
+    if (!isWeb) {
+      checklist.push(
+        "Native: set EXPO_PUBLIC_API_BASE_URL to your API so extract matches web (otherwise it targets localhost:9000 only).",
+      );
+    }
   } else {
     checklist.push("Is the extract service running? (pnpm run dev:extract on port 9000)");
+    checklist.push(
+      "To use your deployed API instead, set EXPO_PUBLIC_API_BASE_URL (see overtureExtractService header).",
+    );
   }
   checklist.push("DevTools → Network → filter WS or XHR, retry extract, and inspect the failing request.");
 

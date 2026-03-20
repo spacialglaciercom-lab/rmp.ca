@@ -9,6 +9,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
+COPY shared-logic/pnpm-stub ./shared-logic/pnpm-stub
 RUN pnpm install --no-frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm run build:server
@@ -26,6 +27,7 @@ COPY --from=nodebuilder /app/dist ./dist
 COPY --from=nodebuilder /app/package.json ./
 COPY --from=nodebuilder /app/pnpm-lock.yaml ./
 COPY --from=nodebuilder /app/patches ./patches
+COPY shared-logic/pnpm-stub ./shared-logic/pnpm-stub
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate \
     && pnpm install --no-frozen-lockfile --prod --ignore-scripts
 
