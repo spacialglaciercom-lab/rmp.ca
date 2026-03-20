@@ -26,8 +26,8 @@ interface EdgeData {
   oneway: boolean;
   /** True when the OSM way has dual_carriageway=yes. U-turns are physically impossible. */
   dualCarriageway?: boolean;
-  /** Extra traversal count added by Chinese Postman augmentation (default 1). */
-  count?: number;
+  /** OSM way ID — used to detect mid-block nodes (not intersections). */
+  wayId?: string;
 }
 
 // Turn cost penalties (meters equivalent) — used when no plugins are active.
@@ -49,11 +49,27 @@ const TURN_COSTS = {
  */
 const DUAL_CARRIAGEWAY_UTURN_METERS = 500_000;
 
+/** Maximum detour (metres) allowed when inserting a block-circling loop to
+ *  eliminate a U-turn in the post-circuit repair pass. */
+const MAX_UTURN_DETOUR_M = 2_000;
+
+/** Maximum BFS depth (edges) when searching for a non-reversal loop. */
+const MAX_LOOP_BFS_DEPTH = 8;
+
+/** Maximum number of repair iterations to prevent runaway loops. */
+const MAX_REPAIR_ITERATIONS = 50;
+
 export class RouteOptimizerSimpleV2 {
   private nodes: Map<string, Node>;
   private ways: Way[];
   private graph: Map<string, Map<string, EdgeData>> = new Map();
   private plugins: RoutingCostPlugin[];
+  /**
+   * Nodes that are NOT intersections — they lie between two intersections on the
+   * same OSM way. U-turns at these nodes are physically impossible in real life
+   * and must be hard-blocked (not merely penalized).
+   */
+  private midBlockNodes = new Set<string>();
 
   constructor(
     nodes: Map<string, Node>,
@@ -71,6 +87,8 @@ export class RouteOptimizerSimpleV2 {
       return { route: [], totalDistance: 0, message: "No valid roads found" };
     }
 
+    // Must be built before makeEulerian so augmentation edges don't pollute the detection.
+    this.buildMidBlockNodes();
     this.makeEulerian();
 
     // Run Hierholzer on ALL connected components so disconnected residential
@@ -113,6 +131,12 @@ export class RouteOptimizerSimpleV2 {
       };
     }
 
+    // Post-circuit U-turn elimination: repair each component circuit
+    // individually so BFS loops stay within the correct connected component.
+    for (let c = 0; c < circuits.length; c++) {
+      circuits[c] = this.eliminateUTurns(circuits[c]!);
+    }
+
     const circuit = circuits.flat();
 
     const routePoints = circuit
@@ -146,6 +170,7 @@ export class RouteOptimizerSimpleV2 {
     for (const way of this.ways) {
       const isOneway = way.tags?.oneway === "yes";
       const isDualCarriageway = way.tags?.dual_carriageway === "yes";
+      const wayId = way.id ?? undefined;
 
       for (let i = 0; i < way.nodes.length - 1; i++) {
         const from = way.nodes[i]!;
@@ -184,41 +209,17 @@ export class RouteOptimizerSimpleV2 {
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph
-            .get(from)!
-            .set(to, {
-              length: costUV,
-              oneway: isOneway,
-              dualCarriageway: isDualCarriageway || undefined,
-            });
+          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph
-              .get(to)!
-              .set(from, {
-                length: costVU,
-                oneway: false,
-                dualCarriageway: isDualCarriageway || undefined,
-              });
+            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
           }
         } else {
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph
-            .get(from)!
-            .set(to, {
-              length: distanceM,
-              oneway: isOneway,
-              dualCarriageway: isDualCarriageway || undefined,
-            });
+          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph
-              .get(to)!
-              .set(from, {
-                length: distanceM,
-                oneway: false,
-                dualCarriageway: isDualCarriageway || undefined,
-              });
+            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
           }
         }
       }
@@ -226,19 +227,29 @@ export class RouteOptimizerSimpleV2 {
   }
 
   /**
-   * Balance the directed graph for an Eulerian circuit.
-   *
-   * Always uses directed balancing with turn-aware Dijkstra so that
-   * augmentation paths avoid U-turns — even when no plugins are active.
-   * The old no-plugin path simply ensured reciprocal edges exist, which was
-   * completely turn-blind and created graphs where Hierholzer was forced
-   * into unnecessary U-turns.
+   * Identify mid-block nodes: nodes with exactly 2 outgoing edges that both
+   * belong to the same OSM way. These are shape-point nodes between intersections.
+   * U-turns at these nodes are physically impossible in real life.
    */
+  private buildMidBlockNodes(): void {
+    this.midBlockNodes.clear();
+    for (const [nodeId, edges] of this.graph) {
+      if (edges.size !== 2) continue;
+      const wayIds = new Set<string>();
+      for (const data of edges.values()) {
+        if (data.wayId) wayIds.add(data.wayId);
+      }
+      // All edges on the same single way → mid-block node, no U-turn allowed.
+      if (wayIds.size === 1) {
+        this.midBlockNodes.add(nodeId);
+      }
+    }
+  }
+
   private makeEulerian(): void {
-    // Ensure every bidirectional edge has a reciprocal before balancing (required for
-    // bidirectional streets that may only have one direction in the source).
-    // One-way edges are skipped so their nodes remain imbalanced; makeEulerianDirected()
-    // will balance them using turn-aware Dijkstra that avoids U-turns.
+    // First, ensure reciprocal edges exist (bidirectional completion) for both
+    // plugins and non-plugins paths. This balances the graph before any
+    // directed augmentation is attempted.
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
@@ -253,8 +264,11 @@ export class RouteOptimizerSimpleV2 {
       this.graph.get(from)!.set(to, data);
     }
 
-    // Now balance in/out degrees using turn-aware Dijkstra
-    this.makeEulerianDirected();
+    // For plugins path, also run directed balancing (though with reciprocals
+    // already added, the graph should be balanced and this becomes a no-op).
+    if (this.plugins.length > 0) {
+      this.makeEulerianDirected();
+    }
   }
 
   /** Directed graph: balance in/out degree by adding shortest paths (with transition costs). */
@@ -467,30 +481,18 @@ export class RouteOptimizerSimpleV2 {
     current: string,
     edges: Map<string, EdgeData>,
   ): string {
-    const keys = Array.from(edges.keys());
+    let keys = Array.from(edges.keys());
     if (keys.length === 1) return keys[0]!;
     if (!prev) return keys[0]!;
 
-    // --- Partition into U-turn vs non-U-turn candidates ---
-    const nonUTurn: string[] = [];
-    const uTurn: string[] = [];
-    const inBearing = this.bearing(prev, current);
-
-    for (const next of keys) {
-      const outBearing = this.bearing(current, next);
-      const turn = this.normalizeTurn(outBearing - inBearing);
-      if (Math.abs(turn) > 150) {
-        uTurn.push(next);
-      } else {
-        nonUTurn.push(next);
-      }
+    // Hard-block U-turns at mid-block (non-intersection) nodes.
+    // A vehicle cannot reverse direction between two intersections in real life.
+    if (this.midBlockNodes.has(current)) {
+      const nonUturn = keys.filter((k) => k !== prev);
+      if (nonUturn.length > 0) keys = nonUturn;
     }
+    if (keys.length === 1) return keys[0]!;
 
-    // Prefer non-U-turn candidates; fall back to U-turns only when forced
-    const candidates = nonUTurn.length > 0 ? nonUTurn : uTurn;
-    if (candidates.length === 1) return candidates[0]!;
-
-    // --- Score within the chosen partition ---
     const useTransition = this.plugins.length > 0;
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
