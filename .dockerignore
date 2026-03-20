@@ -1,0 +1,17 @@
+node_modules
+.expo
+android
+ios
+dist
+.git
+*.apk
+*.aab
+*.ipa
+.cursor
+.claude
+docs
+*.log
+.env*
+!.env.server.example
+__pycache__
+*.pyc

@@ -1,0 +1,18 @@
+{
+  "plugins": {
+    "weather": { "enabled": false, "apiKey": "" },
+    "routeOptimization": { "enabled": true },
+    "overture": { "enabled": false },
+    "overture-extraction": { "enabled": false },
+    "osm-extraction": { "enabled": false },
+    "zones": { "enabled": false },
+    "ai-chat": { "enabled": false },
+    "drive-preview": { "enabled": false },
+    "collection-route": { "enabled": false },
+    "navigation": { "enabled": false },
+    "vrp-solvers": { "enabled": true },
+    "fuel-aware-routing": { "enabled": false },
+    "turn-penalty": { "enabled": false },
+    "dev": { "enabled": false }
+  }
+}

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: rmpca
+  labels:
+    app: celery-worker
+    component: python-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-worker
+  strategy:
+    # Recreate prevents two workers from competing for the same Celery tasks
+    # during a rollout. Switch to RollingUpdate if you add task idempotency.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+        component: python-worker
+    spec:
+      containers:
+        - name: celery-worker
+          # Same image as optimizer — different entrypoint
+          image: northamerica-northeast1-docker.pkg.dev/careful-trainer-485803-a9/rmpca/optimizer:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - app.celery_app:celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=1
+            - --pool=solo
+          env:
+            - name: REDIS_URL
+              value: "redis://redis.rmpca.svc.cluster.local:6379/0"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              # OR-Tools can be memory-hungry — match docker-compose mem_limit
+              memory: "2Gi"
+          # Workers have no HTTP interface so we use a process-level liveness check
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "celery -A app.celery_app:celery_app inspect ping -d celery@$HOSTNAME --timeout=8"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+      # Allow running OR-Tools tasks to finish before the pod is killed
+      terminationGracePeriodSeconds: 120
