@@ -589,17 +589,18 @@ export default function PlannerContent() {
         });
       }
 
-      // Build initial geometry from optimizer output (raw node coordinates).
+      // Build initial geometry from optimizer output.
+      // When backend (Overture) or v2 is used, the optimizer already emits edge geometry
+      // (intermediate road-shape points), so we skip OSRM re-routing which would guess
+      // different streets than the Hierholzer circuit actually traversed.
       let gpxPoints = optimizedPoints.map((p) => ({
         lat: p.latitude,
         lon: p.longitude,
       }));
       let pointsForStorage: CollectionPoint[] = optimizedPoints;
-      // Always route through OSRM to get road-following geometry, regardless of optimizer source.
-      // Backend/v2 optimizers only return node coordinates — without routing, the map draws
-      // straight diagonal lines between waypoints instead of following actual street geometry.
-      const skipSnapToRoads = false;
-      let snappedToRoads = false;
+      const skipSnapToRoads =
+        optimizerSource === "offline-v2" || optimizerSource === "backend";
+      let snappedToRoads = skipSnapToRoads;
       try {
         const routingConfig = await getRoutingConfigAsync();
         const routeOptions = getRouteOptionsForRouting();
@@ -718,6 +719,11 @@ export default function PlannerContent() {
               reason: routingConfig.baseUrl ? "waypoints < 2" : "no routing config baseUrl",
             });
           }
+        } else {
+          debug("Planner.generateRoute", {
+            snappedToRoads: false,
+            reason: "optimizer-v2/backend-use-edge-geometry",
+          });
         }
       } catch (e) {
         debug("Planner.generateRoute", { snappedToRoads: false, error: e });
