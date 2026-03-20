@@ -42,6 +42,7 @@ import {
   OVERPASS_API_ENDPOINTS,
   pointsToPolyString,
   type LatLonPoint,
+  type OverpassElement,
 } from "@/lib/overpassService";
 
 /** ExtractResult extended with raw Overpass elements for OSM XML export. */
@@ -108,21 +109,6 @@ function buildRoutableRoadsQuery(points: LatLonPoint[]): string {
 // Lightweight Overpass fetch (POST with GET fallback, round-robin endpoints)
 // ---------------------------------------------------------------------------
 
-interface OverpassNode {
-  type: "node";
-  id: number;
-  lat: number;
-  lon: number;
-  tags?: Record<string, string>;
-}
-interface OverpassWay {
-  type: "way";
-  id: number;
-  nodes: number[];
-  tags?: Record<string, string>;
-}
-type OverpassElement = OverpassNode | OverpassWay;
-
 async function fetchOverpass(query: string): Promise<OverpassElement[]> {
   const encoded = encodeURIComponent(query);
   let lastErr: Error | null = null;
@@ -158,14 +144,16 @@ function elementsToGeoJSON(
 ): { features: GeoJSON.Feature[]; roadCount: number } {
   const nodes = new Map<number, [number, number]>();
   for (const el of elements) {
-    if (el.type === "node") nodes.set(el.id, [el.lon, el.lat]);
+    if (el.type === "node" && el.lon != null && el.lat != null) {
+      nodes.set(el.id, [el.lon, el.lat]);
+    }
   }
 
   const features: GeoJSON.Feature[] = [];
   let roadCount = 0;
 
   for (const el of elements) {
-    if (el.type !== "way") continue;
+    if (el.type !== "way" || !el.nodes) continue;
     const coords = el.nodes
       .map((nid) => nodes.get(nid))
       .filter((c): c is [number, number] => c != null);

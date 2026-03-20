@@ -457,7 +457,6 @@ export default function ExtractContent() {
       extractOSM(polygon)
         .then((result) => {
           const count = result.geojson.features.length;
-          osmRawElementsRef.current = result.rawElements;
           setPreviewRoadCount(result.stats?.roads ?? count);
           setPreviewPointCount(count);
           const map = mapRef.current;
