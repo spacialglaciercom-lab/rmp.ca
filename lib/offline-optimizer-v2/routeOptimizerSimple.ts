@@ -95,7 +95,8 @@ export class RouteOptimizerSimpleV2 {
         customLon,
       );
       if (!startNode) continue;
-      const circuit = this.hierholzer(startNode);
+      let circuit = this.hierholzer(startNode);
+      circuit = this.eliminateUTurns(circuit);
       if (circuit.length > 1 && circuit[0] === circuit[circuit.length - 1]) {
         // Hierholzer closes the loop: strip the duplicate end node so each
         // component doesn't draw a straight line back to its own start.
@@ -539,6 +540,117 @@ export class RouteOptimizerSimpleV2 {
     }
 
     return best;
+  }
+
+  /**
+   * BFS from `node` to find a loop back to `node` that avoids immediately
+   * reversing to `prevNode`. Returns the loop as [node, ..., node] with
+   * at least 3 edges, or null if none found.
+   *
+   * Requires depth ≥ 2 before accepting loop closure to prevent degenerate
+   * 2-edge loops [node, N1, node] that would just be another U-turn.
+   */
+  private findNonReversalLoop(
+    node: string,
+    prevNode: string,
+    maxDepth: number = 15,
+  ): string[] | null {
+    const queue: Array<{ path: string[]; visited: Set<string> }> = [];
+
+    const startNeighbors = this.graph.get(node);
+    if (!startNeighbors) return null;
+
+    for (const n1 of startNeighbors.keys()) {
+      if (n1 === prevNode) continue;
+      const visited = new Set<string>([node, n1]);
+      queue.push({ path: [node, n1], visited });
+    }
+
+    let steps = 0;
+    const maxSteps = 2000;
+
+    while (queue.length > 0 && steps < maxSteps) {
+      steps++;
+      const { path, visited } = queue.shift()!;
+      const current = path[path.length - 1]!;
+      const depth = path.length - 1;
+
+      if (depth >= maxDepth) continue;
+
+      const neighbors = this.graph.get(current);
+      if (!neighbors) continue;
+
+      for (const next of neighbors.keys()) {
+        if (path.length >= 2 && next === path[path.length - 2]) continue;
+
+        if (next === node) {
+          if (depth >= 2) {
+            return [...path, node];
+          }
+          continue;
+        }
+
+        if (visited.has(next)) continue;
+
+        const newVisited = new Set(visited);
+        newVisited.add(next);
+        queue.push({ path: [...path, next], visited: newVisited });
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Post-process circuit to eliminate internal U-turns by splicing in
+   * non-reversing loops found via BFS.
+   */
+  private eliminateUTurns(circuit: string[]): string[] {
+    if (circuit.length < 3) return circuit;
+
+    let result = [...circuit];
+    let improved = true;
+    let passes = 0;
+    const maxPasses = 5;
+    let totalEliminated = 0;
+
+    while (improved && passes < maxPasses) {
+      improved = false;
+      passes++;
+
+      for (let i = 1; i < result.length - 1; i++) {
+        const prev = result[i - 1]!;
+        const current = result[i]!;
+        const next = result[i + 1]!;
+
+        if (next !== prev) continue;
+
+        // Skip dead-end nodes (degree 1) where U-turn is the only option
+        const edges = this.graph.get(current);
+        if (edges && edges.size === 1) continue;
+
+        const loop = this.findNonReversalLoop(current, prev);
+        if (!loop) continue;
+
+        // Validate all edges exist
+        let valid = true;
+        for (let j = 0; j < loop.length - 1; j++) {
+          if (!this.graph.get(loop[j]!)?.has(loop[j + 1]!)) {
+            valid = false;
+            break;
+          }
+        }
+        if (!valid) continue;
+
+        const loopMiddle = loop.slice(1);
+        result.splice(i + 1, 0, ...loopMiddle);
+        totalEliminated++;
+        improved = true;
+        i += loopMiddle.length;
+      }
+    }
+
+    return result;
   }
 
   /** Find the best start node within a specific component. */

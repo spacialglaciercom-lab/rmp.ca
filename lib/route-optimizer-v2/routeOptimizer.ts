@@ -947,6 +947,151 @@ export class RouteOptimizer {
   }
 
   /**
+   * BFS from `node` to find a loop back to `node` that avoids immediately
+   * reversing along `prevNode`. Returns the loop as a node sequence
+   * [node, ..., node] with at least 3 intermediate nodes (i.e. ≥ 3 edges),
+   * or null if no such loop exists within the BFS budget.
+   *
+   * The key invariant: the first hop must NOT go to `prevNode` (that would be
+   * the U-turn we're trying to eliminate), and the loop-closure check only
+   * accepts paths with depth ≥ 2 so that degenerate 2-edge out-and-back
+   * loops [node, N1, node] are never returned.
+   */
+  private findNonReversalLoop(
+    node: string,
+    prevNode: string,
+    maxDepth: number = 15,
+  ): string[] | null {
+    // BFS state: each entry is the path from `node` to the current frontier node
+    const queue: Array<{ path: string[]; visited: Set<string> }> = [];
+
+    // Seed BFS with neighbors of `node` that are NOT `prevNode`
+    const startNeighbors = neighborIds(this.doubledGraph, node);
+    for (const n1 of startNeighbors) {
+      if (n1 === prevNode) continue; // skip the immediate reversal direction
+      const visited = new Set<string>([node, n1]);
+      queue.push({ path: [node, n1], visited });
+    }
+
+    let steps = 0;
+    const maxSteps = 2000; // BFS budget to avoid hanging on large graphs
+
+    while (queue.length > 0 && steps < maxSteps) {
+      steps++;
+      const { path, visited } = queue.shift()!;
+      const current = path[path.length - 1]!;
+      const depth = path.length - 1; // number of edges so far
+
+      if (depth >= maxDepth) continue; // prune deep paths
+
+      const neighbors = neighborIds(this.doubledGraph, current);
+      for (const next of neighbors) {
+        // Avoid immediate reversal within the BFS path itself
+        if (path.length >= 2 && next === path[path.length - 2]) continue;
+
+        // Loop closure: `next` leads back to `node`
+        if (next === node) {
+          // Only accept if we have at least 2 edges already (so the full
+          // loop is ≥ 3 edges: node -> ... -> current -> node). This
+          // prevents the degenerate [node, N1, node] 2-edge loop.
+          if (depth >= 2) {
+            return [...path, node];
+          }
+          // depth < 2 means this is the degenerate case — skip it
+          continue;
+        }
+
+        if (visited.has(next)) continue; // no revisiting
+
+        const newVisited = new Set(visited);
+        newVisited.add(next);
+        queue.push({ path: [...path, next], visited: newVisited });
+      }
+    }
+
+    return null; // no suitable loop found
+  }
+
+  /**
+   * Post-process a Hierholzer circuit to eliminate internal U-turns.
+   *
+   * Scans for patterns A → B → A in the circuit (where B→A reverses the
+   * incoming edge A→B). For each such U-turn at node B, attempts to find a
+   * non-reversing loop from B (via `findNonReversalLoop`) and splices it
+   * into the circuit, replacing the U-turn with a proper block-circling
+   * detour.
+   *
+   * Only modifies the circuit if a valid loop is found and all edges in
+   * the loop actually exist in the doubled graph.
+   */
+  private eliminateUTurns(circuit: string[]): string[] {
+    if (circuit.length < 3) return circuit;
+
+    let result = [...circuit];
+    let improved = true;
+    let passes = 0;
+    const maxPasses = 5; // cap iteration to avoid pathological cases
+    let totalEliminated = 0;
+
+    while (improved && passes < maxPasses) {
+      improved = false;
+      passes++;
+
+      for (let i = 1; i < result.length - 1; i++) {
+        const prev = result[i - 1]!;
+        const current = result[i]!;
+        const next = result[i + 1]!;
+
+        // Detect U-turn: prev → current → prev (next === prev)
+        if (next !== prev) continue;
+
+        // Skip dead ends — U-turns are the only option there
+        if (this.deadEndNodes.has(current)) continue;
+
+        // Try to find a non-reversing loop from `current` that avoids
+        // going back to `prev`
+        const loop = this.findNonReversalLoop(current, prev);
+        if (!loop) continue;
+
+        // Validate that all edges in the loop exist in the graph
+        let valid = true;
+        for (let j = 0; j < loop.length - 1; j++) {
+          if (!findEdge(this.doubledGraph, loop[j]!, loop[j + 1]!)) {
+            valid = false;
+            break;
+          }
+        }
+        if (!valid) continue;
+
+        // Splice: replace [current, next(=prev)] with the loop
+        // The loop starts and ends at `current`, so:
+        //   before: ...prev, current, prev, ...
+        //   after:  ...prev, current, <loop interior>, current, prev, ...
+        // But we actually want to eliminate the U-turn, so we replace
+        // the sub-sequence [i..i+1] with the loop (minus its first element
+        // since result[i] is already `current`).
+        const loopMiddle = loop.slice(1); // [n1, n2, ..., current]
+        result.splice(i + 1, 0, ...loopMiddle);
+        totalEliminated++;
+        improved = true;
+        // Skip past the inserted loop to avoid re-processing
+        i += loopMiddle.length;
+      }
+    }
+
+    if (totalEliminated > 0) {
+      debug("eliminateUTurns", {
+        eliminated: totalEliminated,
+        passes,
+        circuitGrew: result.length - circuit.length,
+      });
+      this.stats.u_turns_avoided += totalEliminated;
+    }
+
+    return result;
+  }
+
+  /**
    * Score each candidate edge from `current` and return the best one.
    * Considers turn angle, remaining-degree of destination, recency on the
    * Hierholzer stack, dead-end avoidance, and U-turn restrictions.
@@ -1606,8 +1751,11 @@ export class RouteOptimizer {
         customLon,
       );
       if (!startNode) continue;
-      const circuit = this.hierholzerWithTurnOptimization(startNode);
-      if (circuit.length > 0) circuits.push(circuit);
+      let circuit = this.hierholzerWithTurnOptimization(startNode);
+      if (circuit.length > 0) {
+        circuit = this.eliminateUTurns(circuit);
+        circuits.push(circuit);
+      }
     }
 
     if (circuits.length === 0) {
