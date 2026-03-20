@@ -32,6 +32,8 @@ interface EdgeData {
   wayId?: string;
   /** Traversal multiplicity after directed Eulerian augmentation (Hierholzer consumes each unit once). */
   count?: number;
+  /** Full segment geometry [lat, lon][] so the drawn route follows road shape (no straight jumps). */
+  geometry?: Array<[number, number]>;
 }
 
 // Turn cost penalties (meters equivalent) — used when no plugins are active.
