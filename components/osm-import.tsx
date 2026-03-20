@@ -375,7 +375,7 @@ export function OSMImport({
         const serviceBothSides =
           customStartPoint.state.configuration.serviceBothSides ?? false;
 
-        // When "Use offline optimizer (v2)" is on, use same optimizer as Videos app (RouteOptimizerSimpleV2). Do not prune — correct Eulerian output.
+        // When v2 is on, use RouteOptimizerSimpleV2 (Videos-app lineage; may diverge until ported). Do not prune — correct Eulerian output.
         if (useOfflineOptimizerV2) {
           try {
             setProgress({
