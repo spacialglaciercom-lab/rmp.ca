@@ -1,8 +1,9 @@
 /**
- * Routing API configuration: Google Maps (default) or OSRM fallback.
+ * Routing API configuration: OSRM (default) or Google Maps when selected / available.
  */
 
 import {
+  getCachedServerGoogleMapsKey,
   getCachedServerOsrmUrl,
   getGoogleMapsApiKey,
   getNavigationProvider,
@@ -38,26 +39,29 @@ export function getRoutingConfig(): RoutingConfig {
 
 /**
  * Get routing config (async) — checks user's provider preference.
- * Returns Google Maps config when selected (default), otherwise OSRM.
+ * Returns OSRM when selected (default) or Google when the user chose Google.
  *
- * When using the server proxy (web always; native with a remote EXPO_PUBLIC_API_BASE_URL),
- * Google routing uses GOOGLE_MAPS_API_KEY on the server. If no key after /api/config, OSRM fallback.
+ * On web, Google routing uses `/api/maps/directions`, which only works when the **server**
+ * exposes a key via GET /api/config. A client EXPO_PUBLIC_GOOGLE_MAPS_API_KEY alone does not
+ * configure the proxy — without a server key we use OSRM (OSRM_URL / EXPO_PUBLIC_OSRM_URL).
  */
 export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   const provider = await getNavigationProvider();
 
   if (provider === "google") {
-    const apiKey = await getGoogleMapsApiKey();
-
-    if (shouldUseMapsServerProxy() && getApiBaseUrl()) {
-      if (!apiKey) return getRoutingConfig();
+    // Web: never treat EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as sufficient for Directions (proxy has no key → 503).
+    if (Platform.OS === "web" && getApiBaseUrl()) {
+      await ensureServerConfigFetched();
+      const serverKey = getCachedServerGoogleMapsKey();
+      if (!serverKey) return getRoutingConfig();
       return {
         baseUrl: GOOGLE_DIRECTIONS_BASE_URL,
         provider: "google",
-        googleApiKey: apiKey,
+        googleApiKey: serverKey,
       };
     }
 
+    const apiKey = await getGoogleMapsApiKey();
     if (apiKey) {
       return {
         baseUrl: GOOGLE_DIRECTIONS_BASE_URL,
