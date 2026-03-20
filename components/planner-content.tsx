@@ -589,16 +589,17 @@ export default function PlannerContent() {
         });
       }
 
-      // Build initial geometry from optimizer. When backend (Overture) or v2 is used, skip map-matching
-      // and use the optimizer's points directly — same as Map's Overture extractor and the Videos app.
+      // Build initial geometry from optimizer output (raw node coordinates).
       let gpxPoints = optimizedPoints.map((p) => ({
         lat: p.latitude,
         lon: p.longitude,
       }));
       let pointsForStorage: CollectionPoint[] = optimizedPoints;
-      const skipSnapToRoads =
-        optimizerSource === "offline-v2" || optimizerSource === "backend";
-      let snappedToRoads = skipSnapToRoads; // true when we intentionally skip (backend/v2); false when we tried and may have failed
+      // Always route through OSRM to get road-following geometry, regardless of optimizer source.
+      // Backend/v2 optimizers only return node coordinates — without routing, the map draws
+      // straight diagonal lines between waypoints instead of following actual street geometry.
+      const skipSnapToRoads = false;
+      let snappedToRoads = false;
       try {
         const routingConfig = await getRoutingConfigAsync();
         const routeOptions = getRouteOptionsForRouting();
@@ -717,11 +718,6 @@ export default function PlannerContent() {
               reason: routingConfig.baseUrl ? "waypoints < 2" : "no routing config baseUrl",
             });
           }
-        } else {
-          debug("Planner.generateRoute", {
-            snappedToRoads: false,
-            reason: "optimizer-v2-use-raw-points",
-          });
         }
       } catch (e) {
         debug("Planner.generateRoute", { snappedToRoads: false, error: e });
