@@ -190,7 +190,7 @@ export function createTurnPenaltyPlugin(options?: {
   const straightMult = options?.straightMult ?? 1.0;
   const rightMult = options?.rightMult ?? 1.0;
   const leftMult = options?.leftMult ?? 1.4;
-  const uTurnMult = options?.uTurnMult ?? 3.0;
+  const uTurnMult = options?.uTurnMult ?? 20.0;
   const straightDeg = options?.straightDeg ?? STRAIGHT_DEG;
 
   return createRoutingCostPlugin({
