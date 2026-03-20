@@ -28,9 +28,11 @@ interface EdgeData {
   dualCarriageway?: boolean;
 }
 
-// Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2 (used when no plugins)
+// Turn cost penalties (meters equivalent) — used when no plugins are active.
+// U_TURN raised from 800 → 5000 so the optimizer prefers circling a block
+// (~400-1200 m) over reversing direction. Test range: 2000 / 5000 / 10000.
 const TURN_COSTS = {
-  U_TURN: 800,
+  U_TURN: 5_000,
   SHARP_LEFT: 150,
   LEFT_TURN: 50,
   STRAIGHT: 0,
@@ -197,12 +199,18 @@ export class RouteOptimizerSimpleV2 {
     }
   }
 
+  /**
+   * Balance the directed graph for an Eulerian circuit.
+   *
+   * Always uses directed balancing with turn-aware Dijkstra so that
+   * augmentation paths avoid U-turns — even when no plugins are active.
+   * The old no-plugin path simply ensured reciprocal edges exist, which was
+   * completely turn-blind and created graphs where Hierholzer was forced
+   * into unnecessary U-turns.
+   */
   private makeEulerian(): void {
-    if (this.plugins.length > 0) {
-      this.makeEulerianDirected();
-      return;
-    }
-
+    // Ensure every edge has a reciprocal before balancing (required for
+    // bidirectional streets that may only have one direction in the source).
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
@@ -215,6 +223,9 @@ export class RouteOptimizerSimpleV2 {
       if (!this.graph.has(from)) this.graph.set(from, new Map());
       this.graph.get(from)!.set(to, data);
     }
+
+    // Now balance in/out degrees using turn-aware Dijkstra
+    this.makeEulerianDirected();
   }
 
   /** Directed graph: balance in/out degree by adding shortest paths (with transition costs). */
@@ -321,11 +332,17 @@ export class RouteOptimizerSimpleV2 {
         }
         let cost = edgeData.length * transitionMult;
 
-        if (t !== null && edgeData.dualCarriageway) {
+        // Additive U-turn penalty during balancing — ensures augmentation
+        // paths route around blocks instead of through U-turns, even when
+        // no plugins are active. Applied on top of any plugin multiplier.
+        if (t !== null) {
           const inBearing = this.bearing(t, u);
           const outBearing = this.bearing(u, v);
-          if (Math.abs(this.normalizeTurn(outBearing - inBearing)) > 150) {
-            cost += DUAL_CARRIAGEWAY_UTURN_METERS;
+          const turnAngle = this.normalizeTurn(outBearing - inBearing);
+          if (Math.abs(turnAngle) > 150) {
+            cost += edgeData.dualCarriageway
+              ? DUAL_CARRIAGEWAY_UTURN_METERS
+              : TURN_COSTS.U_TURN;
           }
         }
 
@@ -389,6 +406,14 @@ export class RouteOptimizerSimpleV2 {
     return circuit;
   }
 
+  /**
+   * Pick the best successor edge during Hierholzer traversal.
+   *
+   * Hard-partition: non-U-turn candidates are always preferred over U-turns.
+   * U-turns are only taken when they are the *only* remaining edges (forced
+   * reversal on dead-end stubs). Within each partition, edges are scored by
+   * the usual plugin or built-in turn-cost system.
+   */
   private chooseBest(
     prev: string | null,
     current: string,
@@ -398,14 +423,34 @@ export class RouteOptimizerSimpleV2 {
     if (keys.length === 1) return keys[0]!;
     if (!prev) return keys[0]!;
 
+    // --- Partition into U-turn vs non-U-turn candidates ---
+    const nonUTurn: string[] = [];
+    const uTurn: string[] = [];
+    const inBearing = this.bearing(prev, current);
+
+    for (const next of keys) {
+      const outBearing = this.bearing(current, next);
+      const turn = this.normalizeTurn(outBearing - inBearing);
+      if (Math.abs(turn) > 150) {
+        uTurn.push(next);
+      } else {
+        nonUTurn.push(next);
+      }
+    }
+
+    // Prefer non-U-turn candidates; fall back to U-turns only when forced
+    const candidates = nonUTurn.length > 0 ? nonUTurn : uTurn;
+    if (candidates.length === 1) return candidates[0]!;
+
+    // --- Score within the chosen partition ---
     const useTransition = this.plugins.length > 0;
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
 
-    let best = keys[0]!;
+    let best = candidates[0]!;
     let bestScore = Infinity;
 
-    for (const next of keys) {
+    for (const next of candidates) {
       const edgeData = edges.get(next)!;
       let score: number;
 
@@ -418,7 +463,6 @@ export class RouteOptimizerSimpleV2 {
         score = edgeData.length * mult;
       } else {
         const outBearing = this.bearing(current, next);
-        const inBearing = this.bearing(prev, current);
         const turn = this.normalizeTurn(outBearing - inBearing);
         let cost: number;
         if (Math.abs(turn) > 150) cost = TURN_COSTS.U_TURN;
@@ -431,9 +475,7 @@ export class RouteOptimizerSimpleV2 {
       }
 
       // Dual-carriageway U-turn penalty (physically impossible manoeuvre).
-      // Applied on top of any plugin or built-in turn cost.
       if (edgeData.dualCarriageway) {
-        const inBearing = this.bearing(prev, current);
         const outBearing = this.bearing(current, next);
         const turn = this.normalizeTurn(outBearing - inBearing);
         if (Math.abs(turn) > 150) score += DUAL_CARRIAGEWAY_UTURN_METERS;
