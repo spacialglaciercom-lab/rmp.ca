@@ -216,17 +216,24 @@ export class RouteOptimizerSimpleV2 {
   }
 
   /**
-   * Balance the directed graph for an Eulerian circuit.
+   * Balance the graph for an Eulerian circuit.
    *
-   * Always uses directed balancing with turn-aware Dijkstra so that
-   * augmentation paths avoid U-turns — even when no plugins are active.
-   * The old no-plugin path simply ensured reciprocal edges exist, which was
-   * completely turn-blind and created graphs where Hierholzer was forced
-   * into unnecessary U-turns.
+   * When plugins are active, uses directed balancing with turn-aware Dijkstra
+   * so augmentation paths respect transition costs. Without plugins, simply
+   * ensures reciprocal edges exist (bidirectional completion) — this is
+   * sufficient because buildGraph() already creates both A→B and B→A for
+   * every bidirectional street, making the graph naturally balanced.
+   *
+   * Note: forcing directed balancing without plugins was tried but broke
+   * routes — the 5000m U-turn penalty in Dijkstra caused augmentation paths
+   * to take long cross-town detours, producing chaotic diagonal lines.
    */
   private makeEulerian(): void {
-    // Ensure every edge has a reciprocal before balancing (required for
-    // bidirectional streets that may only have one direction in the source).
+    if (this.plugins.length > 0) {
+      this.makeEulerianDirected();
+      return;
+    }
+
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
@@ -239,9 +246,6 @@ export class RouteOptimizerSimpleV2 {
       if (!this.graph.has(from)) this.graph.set(from, new Map());
       this.graph.get(from)!.set(to, data);
     }
-
-    // Now balance in/out degrees using turn-aware Dijkstra
-    this.makeEulerianDirected();
   }
 
   /** Directed graph: balance in/out degree by adding shortest paths (with transition costs). */
