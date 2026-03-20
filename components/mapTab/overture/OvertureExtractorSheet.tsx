@@ -24,6 +24,7 @@ interface OvertureExtractorSheetProps {
       startLat?: number;
       startLon?: number;
       roadClasses?: string[];
+      onewayMode?: string;
     },
   ) => void;
   optimizing?: boolean;

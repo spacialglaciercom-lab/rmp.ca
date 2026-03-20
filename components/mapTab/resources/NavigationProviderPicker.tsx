@@ -20,7 +20,7 @@ import {
 
 export function NavigationProviderPicker() {
   const colors = useColors();
-  const [provider, setProvider] = useState<NavigationProvider>("google");
+  const [provider, setProvider] = useState<NavigationProvider>("osrm");
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
