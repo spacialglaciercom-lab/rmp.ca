@@ -66,6 +66,12 @@ export class RouteOptimizerSimpleV2 {
    * and must be hard-blocked (not merely penalized).
    */
   private midBlockNodes = new Set<string>();
+  /**
+   * Set of node IDs that are intersection / split nodes (endpoints of ways,
+   * or nodes shared by 2+ ways). Only these become graph vertices — all
+   * intermediate shape-point nodes are folded into edge geometry.
+   */
+  private intersectionNodes = new Set<string>();
 
   constructor(
     nodes: Map<string, Node>,
@@ -182,14 +188,7 @@ export class RouteOptimizerSimpleV2 {
         effWeight += edgeCount;
       }
 
-      const segPoints = nodeCircuit
-        .map((id) => {
-          const n = this.nodes.get(id);
-          return n
-            ? { latitude: n.lat, longitude: n.lon, nodeId: id }
-            : null;
-        })
-        .filter((p): p is NonNullable<typeof p> => p !== null);
+      const segPoints = this.buildRoutePointsFromCircuit(nodeCircuit);
       if (segPoints.length > 0) routeSegments.push(segPoints);
     }
 
@@ -293,8 +292,40 @@ export class RouteOptimizerSimpleV2 {
     return [Number(n.lon), Number(n.lat), n.z ?? 0];
   }
 
+  /**
+   * Build graph with intersection-based splitting (same approach as backend).
+   *
+   * Pass 1: count how many ways reference each node and collect endpoints.
+   *         Any node referenced by 2+ ways or at the start/end of a way is
+   *         an intersection (split node).
+   * Pass 2: iterate each way, splitting at intersection nodes. Each run
+   *         between intersections becomes one graph edge with full geometry
+   *         stored on the edge. This produces ~5-10x fewer nodes/edges than
+   *         the old per-segment approach, giving Hierholzer fewer decision
+   *         points and cleaner circuits.
+   */
   private buildGraph(): void {
     this.graph.clear();
+    this.intersectionNodes.clear();
+
+    // ── Pass 1: find intersection (split) nodes ──
+    const nodeRefCount = new Map<string, number>();
+    for (const way of this.ways) {
+      for (const nid of way.nodes) {
+        nodeRefCount.set(nid, (nodeRefCount.get(nid) ?? 0) + 1);
+      }
+    }
+    for (const way of this.ways) {
+      if (way.nodes.length > 0) {
+        this.intersectionNodes.add(way.nodes[0]!);
+        this.intersectionNodes.add(way.nodes[way.nodes.length - 1]!);
+      }
+    }
+    for (const [nid, cnt] of nodeRefCount) {
+      if (cnt >= 2) this.intersectionNodes.add(nid);
+    }
+
+    // ── Pass 2: split ways at intersections, build edges with geometry ──
     const usePlugins = this.plugins.length > 0;
     const emptyData = {} as Record<string, unknown>;
 
@@ -303,58 +334,140 @@ export class RouteOptimizerSimpleV2 {
       const isDualCarriageway = way.tags?.dual_carriageway === "yes";
       const wayId = way.id ?? undefined;
 
-      for (let i = 0; i < way.nodes.length - 1; i++) {
-        const from = way.nodes[i]!;
-        const to = way.nodes[i + 1]!;
+      let runStart = 0;
+      for (let i = 1; i < way.nodes.length; i++) {
+        const nid = way.nodes[i]!;
+        const isIntersection = this.intersectionNodes.has(nid);
+        const isLast = i === way.nodes.length - 1;
+        if (!isIntersection && !isLast) continue;
 
-        const fromNode = this.nodes.get(from);
-        const toNode = this.nodes.get(to);
-        if (!fromNode || !toNode) continue;
+        // This run is from way.nodes[runStart] to way.nodes[i]
+        const from = way.nodes[runStart]!;
+        const to = nid;
+        if (from === to) {
+          runStart = i;
+          continue;
+        }
 
-        const distanceM = haversineMeters(
-          Number(fromNode.lon),
-          Number(fromNode.lat),
-          Number(toNode.lon),
-          Number(toNode.lat),
-        );
+        // Build geometry and compute total length along the run
+        const geometry: Array<[number, number]> = [];
+        let lengthM = 0;
+        let prevLat: number | null = null;
+        let prevLon: number | null = null;
+        let allNodesValid = true;
+        for (let j = runStart; j <= i; j++) {
+          const n = this.nodes.get(way.nodes[j]!);
+          if (!n) { allNodesValid = false; break; }
+          geometry.push([n.lat, n.lon]);
+          if (prevLat !== null && prevLon !== null) {
+            lengthM += haversineMeters(
+              Number(prevLon), prevLat,
+              Number(n.lon), n.lat,
+            );
+          }
+          prevLat = n.lat;
+          prevLon = Number(n.lon);
+        }
+        if (!allNodesValid || geometry.length < 2) {
+          runStart = i;
+          continue;
+        }
+
+        // Reverse geometry for the reverse edge
+        const revGeometry = [...geometry].reverse() as Array<[number, number]>;
 
         if (usePlugins) {
           const coordsU: Coord = this.getCoords(from);
           const coordsV: Coord = this.getCoords(to);
-          let costUV = distanceM;
-          let costVU = distanceM;
+          let costUV = lengthM;
+          let costVU = lengthM;
           for (const plugin of this.plugins) {
             costUV *= plugin.calculateMultiplier(
-              coordsU,
-              coordsV,
-              emptyData,
-              emptyData,
-              distanceM,
+              coordsU, coordsV, emptyData, emptyData, lengthM,
             );
             costVU *= plugin.calculateMultiplier(
-              coordsV,
-              coordsU,
-              emptyData,
-              emptyData,
-              distanceM,
+              coordsV, coordsU, emptyData, emptyData, lengthM,
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
+          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId, geometry });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
+            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId, geometry: revGeometry });
           }
         } else {
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
+          this.graph.get(from)!.set(to, { length: lengthM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId, geometry });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
+            this.graph.get(to)!.set(from, { length: lengthM, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId, geometry: revGeometry });
           }
+        }
+
+        runStart = i;
+      }
+    }
+  }
+
+  /**
+   * Build route points from circuit using edge geometry when available,
+   * so the drawn route follows road curves instead of straight jumps.
+   * Same approach as the full optimizer's buildRoutePointsFromCircuit and
+   * the backend's route builder.
+   */
+  private buildRoutePointsFromCircuit(circuit: string[]): RoutePoint[] {
+    const routePoints: RoutePoint[] = [];
+    if (circuit.length === 0) return routePoints;
+
+    for (let i = 0; i < circuit.length - 1; i++) {
+      const fromId = circuit[i]!;
+      const toId = circuit[i + 1]!;
+      const edgeData = this.graph.get(fromId)?.get(toId);
+      const geometry = edgeData?.geometry;
+
+      if (geometry && geometry.length >= 2) {
+        // Emit all geometry points; skip the first on non-initial edges
+        // to avoid duplicate points at junctions.
+        const startIdx = routePoints.length === 0 ? 0 : 1;
+        for (let k = startIdx; k < geometry.length; k++) {
+          const [lat, lon] = geometry[k]!;
+          routePoints.push({ latitude: lat, longitude: lon, nodeId: fromId });
+        }
+      } else {
+        // Fallback: emit node coordinates directly
+        if (i === 0) {
+          const fromNode = this.nodes.get(fromId);
+          if (fromNode) {
+            routePoints.push({
+              latitude: fromNode.lat,
+              longitude: fromNode.lon,
+              nodeId: fromId,
+            });
+          }
+        }
+        const toNode = this.nodes.get(toId);
+        if (toNode) {
+          routePoints.push({
+            latitude: toNode.lat,
+            longitude: toNode.lon,
+            nodeId: toId,
+          });
         }
       }
     }
+
+    // Edge case: single-node circuit
+    if (routePoints.length === 0 && circuit.length > 0) {
+      const first = this.nodes.get(circuit[0]!);
+      if (first) {
+        routePoints.push({
+          latitude: first.lat,
+          longitude: first.lon,
+          nodeId: circuit[0],
+        });
+      }
+    }
+    return routePoints;
   }
 
   /**
@@ -386,7 +499,11 @@ export class RouteOptimizerSimpleV2 {
       for (const [to, data] of edges) {
         if (data.oneway) continue;
         if (!this.graph.get(to)?.has(from)) {
-          toAdd.push([to, from, { length: data.length, oneway: false }]);
+          // Reverse geometry for the reciprocal edge
+          const revGeometry = data.geometry
+            ? ([...data.geometry].reverse() as Array<[number, number]>)
+            : undefined;
+          toAdd.push([to, from, { length: data.length, oneway: false, geometry: revGeometry }]);
         }
       }
     }
@@ -449,15 +566,53 @@ export class RouteOptimizerSimpleV2 {
     pairs.sort((a, b) => a.cost - b.cost);
     const deficitRemain = new Map(deficitCount);
     const surplusRemain = new Map(surplusCount);
-    const augmentPaths: string[][] = [];
-    for (const { from, to, path } of pairs) {
+
+    // Build a cost lookup for fast O(1) pair cost access during 2-opt
+    const pairCostMap = new Map<string, { cost: number; path: string[] }>();
+    for (const { from, to, cost, path } of pairs) {
+      pairCostMap.set(`${from}\0${to}`, { cost, path });
+    }
+
+    // Greedy matching (sorted by cost)
+    const matchedPairs: Array<{ from: string; to: string; cost: number; path: string[] }> = [];
+    for (const { from, to, cost, path } of pairs) {
       const dr = deficitRemain.get(from) ?? 0;
       const sr = surplusRemain.get(to) ?? 0;
       if (dr <= 0 || sr <= 0) continue;
       deficitRemain.set(from, dr - 1);
       surplusRemain.set(to, sr - 1);
-      augmentPaths.push(path);
+      matchedPairs.push({ from, to, cost, path });
     }
+
+    // 2-opt improvement: try swapping paired destinations to reduce total cost.
+    // For each pair of matches (a→b, c→d), check if (a→d, c→b) is cheaper.
+    // Repeat until no improvement found (usually converges in 1-2 passes).
+    if (matchedPairs.length >= 2) {
+      let improved = true;
+      let passes = 0;
+      while (improved && passes < 5) {
+        improved = false;
+        passes++;
+        for (let i = 0; i < matchedPairs.length - 1; i++) {
+          for (let j = i + 1; j < matchedPairs.length; j++) {
+            const mi = matchedPairs[i]!;
+            const mj = matchedPairs[j]!;
+            const currentCost = mi.cost + mj.cost;
+
+            // Try swap: mi.from→mj.to and mj.from→mi.to
+            const swap1 = pairCostMap.get(`${mi.from}\0${mj.to}`);
+            const swap2 = pairCostMap.get(`${mj.from}\0${mi.to}`);
+            if (swap1 && swap2 && swap1.cost + swap2.cost < currentCost) {
+              matchedPairs[i] = { from: mi.from, to: mj.to, cost: swap1.cost, path: swap1.path };
+              matchedPairs[j] = { from: mj.from, to: mi.to, cost: swap2.cost, path: swap2.path };
+              improved = true;
+            }
+          }
+        }
+      }
+    }
+
+    const augmentPaths: string[][] = matchedPairs.map((m) => m.path);
 
     for (const path of augmentPaths) {
       for (let k = 0; k < path.length - 1; k++) {
@@ -520,8 +675,8 @@ export class RouteOptimizerSimpleV2 {
         // paths route around blocks instead of through U-turns, even when
         // no plugins are active. Applied on top of any plugin multiplier.
         if (t !== null) {
-          const inBearing = this.bearing(t, u);
-          const outBearing = this.bearing(u, v);
+          const inBearing = this.edgeEndBearing(t, u);
+          const outBearing = this.edgeStartBearing(u, v);
           const turnAngle = this.normalizeTurn(outBearing - inBearing);
           if (Math.abs(turnAngle) > 150) {
             cost += edgeData.dualCarriageway
@@ -626,7 +781,8 @@ export class RouteOptimizerSimpleV2 {
     }
     if (keys.length === 1) return keys[0]!;
 
-    const inBearing = this.bearing(prev, current);
+    // Use edge geometry for incoming bearing (last segment of prev→current edge)
+    const inBearing = this.edgeEndBearing(prev, current);
     const useTransition = this.plugins.length > 0;
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
@@ -637,6 +793,9 @@ export class RouteOptimizerSimpleV2 {
     for (const next of keys) {
       const edgeData = edges.get(next)!;
       let score: number;
+
+      // Use edge geometry for outgoing bearing (first segment of current→next edge)
+      const outBearing = this.edgeStartBearing(current, next);
 
       if (useTransition) {
         const coordsV = this.getCoords(next);
@@ -650,7 +809,6 @@ export class RouteOptimizerSimpleV2 {
         }
         score = edgeData.length * mult;
       } else {
-        const outBearing = this.bearing(current, next);
         const turn = this.normalizeTurn(outBearing - inBearing);
         let cost: number;
         if (Math.abs(turn) > 150) cost = TURN_COSTS.U_TURN;
@@ -664,7 +822,6 @@ export class RouteOptimizerSimpleV2 {
 
       // Dual-carriageway U-turn penalty (physically impossible manoeuvre).
       if (edgeData.dualCarriageway) {
-        const outBearing = this.bearing(current, next);
         const turn = this.normalizeTurn(outBearing - inBearing);
         if (Math.abs(turn) > 150) score += DUAL_CARRIAGEWAY_UTURN_METERS;
       }
@@ -884,16 +1041,27 @@ export class RouteOptimizerSimpleV2 {
       straight = 0;
 
     for (let i = 0; i < circuit.length - 1; i++) {
-      const a = this.nodes.get(circuit[i]!);
-      const b = this.nodes.get(circuit[i + 1]!);
-      if (a && b) total += this.haversine(a, b);
+      const fromId = circuit[i]!;
+      const toId = circuit[i + 1]!;
+      const edgeData = this.graph.get(fromId)?.get(toId);
 
+      // Distance: use edge geometry length if available, else haversine
+      if (edgeData?.geometry && edgeData.geometry.length >= 2) {
+        for (let k = 1; k < edgeData.geometry.length; k++) {
+          const [lat1, lon1] = edgeData.geometry[k - 1]!;
+          const [lat2, lon2] = edgeData.geometry[k]!;
+          total += this.haversine({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
+        }
+      } else {
+        const a = this.nodes.get(fromId);
+        const b = this.nodes.get(toId);
+        if (a && b) total += this.haversine(a, b);
+      }
+
+      // Turn classification using edge geometry endpoints for accurate bearing
       if (i > 0) {
-        const prev = circuit[i - 1]!;
-        const curr = circuit[i]!;
-        const next = circuit[i + 1]!;
-        const inB = this.bearing(prev, curr);
-        const outB = this.bearing(curr, next);
+        const inB = this.edgeEndBearing(circuit[i - 1]!, fromId);
+        const outB = this.edgeStartBearing(fromId, toId);
         const turn = this.normalizeTurn(outB - inB);
 
         if (Math.abs(turn) > 150) uturns++;
@@ -910,6 +1078,30 @@ export class RouteOptimizerSimpleV2 {
       uTurns: uturns,
       straight,
     };
+  }
+
+  /** Bearing of the last segment of an edge (approaching toId). */
+  private edgeEndBearing(fromId: string, toId: string): number {
+    const edgeData = this.graph.get(fromId)?.get(toId);
+    const geo = edgeData?.geometry;
+    if (geo && geo.length >= 2) {
+      const [lat1, lon1] = geo[geo.length - 2]!;
+      const [lat2, lon2] = geo[geo.length - 1]!;
+      return this.bearingCoords(lat1, lon1, lat2, lon2);
+    }
+    return this.bearing(fromId, toId);
+  }
+
+  /** Bearing of the first segment of an edge (leaving fromId). */
+  private edgeStartBearing(fromId: string, toId: string): number {
+    const edgeData = this.graph.get(fromId)?.get(toId);
+    const geo = edgeData?.geometry;
+    if (geo && geo.length >= 2) {
+      const [lat1, lon1] = geo[0]!;
+      const [lat2, lon2] = geo[1]!;
+      return this.bearingCoords(lat1, lon1, lat2, lon2);
+    }
+    return this.bearing(fromId, toId);
   }
 
   private haversine(
@@ -931,13 +1123,17 @@ export class RouteOptimizerSimpleV2 {
     const from = this.nodes.get(fromId);
     const to = this.nodes.get(toId);
     if (!from || !to) return 0;
-    const dLon = ((to.lon - from.lon) * Math.PI) / 180;
-    const lat1 = (from.lat * Math.PI) / 180;
-    const lat2 = (to.lat * Math.PI) / 180;
-    const x = Math.sin(dLon) * Math.cos(lat2);
+    return this.bearingCoords(from.lat, from.lon, to.lat, to.lon);
+  }
+
+  private bearingCoords(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const rLat1 = (lat1 * Math.PI) / 180;
+    const rLat2 = (lat2 * Math.PI) / 180;
+    const x = Math.sin(dLon) * Math.cos(rLat2);
     const y =
-      Math.cos(lat1) * Math.sin(lat2) -
-      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      Math.cos(rLat1) * Math.sin(rLat2) -
+      Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLon);
     return (Math.atan2(x, y) * (180 / Math.PI) + 360) % 360;
   }
 
