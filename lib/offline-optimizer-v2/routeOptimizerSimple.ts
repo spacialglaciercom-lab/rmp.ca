@@ -47,6 +47,16 @@ const TURN_COSTS = {
  */
 const DUAL_CARRIAGEWAY_UTURN_METERS = 500_000;
 
+/** Maximum detour (metres) allowed when inserting a block-circling loop to
+ *  eliminate a U-turn in the post-circuit repair pass. */
+const MAX_UTURN_DETOUR_M = 2_000;
+
+/** Maximum BFS depth (edges) when searching for a non-reversal loop. */
+const MAX_LOOP_BFS_DEPTH = 8;
+
+/** Maximum number of repair iterations to prevent runaway loops. */
+const MAX_REPAIR_ITERATIONS = 50;
+
 export class RouteOptimizerSimpleV2 {
   private nodes: Map<string, Node>;
   private ways: Way[];
@@ -108,6 +118,12 @@ export class RouteOptimizerSimpleV2 {
         totalDistance: 0,
         message: "Could not find start node",
       };
+    }
+
+    // Post-circuit U-turn elimination: repair each component circuit
+    // individually so BFS loops stay within the correct connected component.
+    for (let c = 0; c < circuits.length; c++) {
+      circuits[c] = this.eliminateUTurns(circuits[c]!);
     }
 
     const circuit = circuits.flat();
@@ -488,6 +504,174 @@ export class RouteOptimizerSimpleV2 {
     }
 
     return best;
+  }
+
+  // ─── Post-circuit U-turn elimination ──────────────────────────────────────
+
+  /**
+   * Post-circuit repair pass that scans the completed Hierholzer circuit for
+   * U-turns (>150° reversals) and attempts to replace each one with a short
+   * block-circling loop found via BFS on the original graph.
+   *
+   * The pass runs in a `while(improved)` loop because inserting a loop may
+   * occasionally create a new U-turn at the splice boundaries (rare, but
+   * handled). It preserves all original traversals — loops are pure deadhead
+   * additions that only add distance.
+   */
+  private eliminateUTurns(circuit: string[]): string[] {
+    if (circuit.length < 3) return circuit;
+
+    let result = circuit;
+    let improved = true;
+    let iterations = 0;
+
+    while (improved && iterations < MAX_REPAIR_ITERATIONS) {
+      improved = false;
+      iterations++;
+
+      for (let i = 1; i < result.length - 1; i++) {
+        const prev = result[i - 1]!;
+        const curr = result[i]!;
+        const next = result[i + 1]!;
+
+        const inB = this.bearing(prev, curr);
+        const outB = this.bearing(curr, next);
+        const turn = this.normalizeTurn(outB - inB);
+
+        if (Math.abs(turn) <= 150) continue;
+
+        // Found a U-turn at index i (triple prev→curr→next).
+        // Try to find a short loop curr→...→curr that avoids going to prev.
+        const loop = this.findNonReversalLoop(curr, prev, inB);
+        if (!loop) continue;
+
+        // Compute the total detour distance of the loop
+        let detourM = 0;
+        for (let k = 0; k < loop.length - 1; k++) {
+          const a = this.nodes.get(loop[k]!);
+          const b = this.nodes.get(loop[k + 1]!);
+          if (a && b) {
+            detourM += haversineMeters(
+              Number(a.lon), Number(a.lat),
+              Number(b.lon), Number(b.lat),
+            );
+          }
+        }
+        if (detourM > MAX_UTURN_DETOUR_M) continue;
+
+        // Verify the repair actually reduces U-turns at the splice site.
+        // The loop is: curr → loop[1] → ... → loop[n-1] → curr
+        // After splice the sequence becomes: ...prev, curr, loop[1], ..., loop[n-1], curr, next...
+        // Check the two new junctions: prev→curr→loop[1] and loop[n-1]→curr→next
+        const loopFirst = loop[1]!;
+        const loopLast = loop[loop.length - 2]!; // node before final curr
+
+        const newTurn1 = this.normalizeTurn(
+          this.bearing(curr, loopFirst) - inB,
+        );
+        const newTurn2 = this.normalizeTurn(
+          this.bearing(curr, next) - this.bearing(loopLast, curr),
+        );
+
+        // Count U-turns before and after
+        const oldUTurns = 1; // the one we're fixing
+        let newUTurns = 0;
+        if (Math.abs(newTurn1) > 150) newUTurns++;
+        if (Math.abs(newTurn2) > 150) newUTurns++;
+
+        // Also check internal U-turns within the loop itself
+        for (let k = 1; k < loop.length - 1; k++) {
+          const lPrev = loop[k - 1]!;
+          const lCurr = loop[k]!;
+          const lNext = loop[k + 1]!;
+          const lIn = this.bearing(lPrev, lCurr);
+          const lOut = this.bearing(lCurr, lNext);
+          if (Math.abs(this.normalizeTurn(lOut - lIn)) > 150) newUTurns++;
+        }
+
+        if (newUTurns >= oldUTurns) continue;
+
+        // Splice the loop into the circuit at position i.
+        // result[i] === curr, loop = [curr, ..., curr]
+        // Replace the single curr at i with the full loop (minus trailing curr
+        // since result[i] is followed by next which remains).
+        const loopMiddle = loop.slice(1); // drop leading curr (already at result[i])
+        result = [
+          ...result.slice(0, i + 1), // ...prev, curr
+          ...loopMiddle.slice(0, -1), // loop interior nodes (excl. trailing curr)
+          ...result.slice(i),         // curr, next, ...
+        ];
+
+        improved = true;
+        break; // restart scan from the beginning
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * BFS to find a short loop from `node` back to `node` that does NOT
+   * immediately traverse the edge to `avoidPred` (which would just be
+   * the same U-turn). The first edge must also not be a U-turn relative
+   * to `inBearing` (the direction we arrived from).
+   *
+   * Returns the loop as [node, ..., node] (starts and ends at `node`),
+   * or null if no loop is found within depth/distance limits.
+   */
+  private findNonReversalLoop(
+    node: string,
+    avoidPred: string,
+    inBearing: number,
+  ): string[] | null {
+    // BFS state: [currentNode, path-from-start]
+    type BFSState = [string, string[]];
+    const queue: BFSState[] = [];
+
+    // Seed with all neighbours except the avoided predecessor,
+    // and skip first-step U-turns.
+    const startEdges = this.graph.get(node);
+    if (!startEdges) return null;
+
+    for (const [neighbour] of startEdges) {
+      if (neighbour === avoidPred) continue;
+      const firstBearing = this.bearing(node, neighbour);
+      const firstTurn = this.normalizeTurn(firstBearing - inBearing);
+      if (Math.abs(firstTurn) > 150) continue; // would be another U-turn
+      queue.push([neighbour, [node, neighbour]]);
+    }
+
+    const visited = new Set<string>();
+    visited.add(node); // don't revisit start until we close the loop
+
+    while (queue.length > 0) {
+      const [current, path] = queue.shift()!;
+
+      if (path.length > MAX_LOOP_BFS_DEPTH + 1) continue; // depth limit
+
+      const edges = this.graph.get(current);
+      if (!edges) continue;
+
+      for (const [next] of edges) {
+        // Found a loop back to start
+        if (next === node) {
+          return [...path, node];
+        }
+
+        if (visited.has(next)) continue;
+
+        // Avoid immediate reversal within the BFS itself
+        if (path.length >= 2) {
+          const bfsPrev = path[path.length - 2]!;
+          if (next === bfsPrev) continue;
+        }
+
+        visited.add(next);
+        queue.push([next, [...path, next]]);
+      }
+    }
+
+    return null;
   }
 
   /** Find the best start node within a specific component. */
