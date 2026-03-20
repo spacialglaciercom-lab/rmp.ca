@@ -5,7 +5,7 @@
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --max-old-space-size=4096 server.js"
   },
   "dependencies": {
     "cac": "^7.0.0",

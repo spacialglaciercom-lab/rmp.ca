@@ -17,6 +17,8 @@ import type {
 } from "@/services/overtureOptimizerService";
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import type { Feature, Polygon } from "geojson";
+import { VectorTile } from "@mapbox/vector-tile";
+import Pbf from "pbf";
 import { OSMParser } from "@/lib/route-optimizer-v2/osmParser";
 
 const PMTILES_VERSION = "v2026-02";
@@ -138,9 +140,7 @@ function decodeMvtToFeatures(
   const features: Array<Feature<GeoJSON.LineString, Record<string, unknown>>> =
     [];
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const VectorTile = require("@mapbox/vector-tile").VectorTile;
-    const tile = new VectorTile(new Uint8Array(buffer));
+    const tile = new VectorTile(new Pbf(new Uint8Array(buffer)));
     const layerNames = Object.keys(tile.layers || {});
     for (const layerName of layerNames) {
       const layer = tile.layers[layerName];

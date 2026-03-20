@@ -117,6 +117,11 @@ export interface RouteMetrics {
   adjusted_cost_m: number;
   elevation_gain_m: number;
   turns: { left: number; right: number; u_turn: number; straight: number };
+  /** [min_lon, min_lat, max_lon, max_lat] of input road GeoJSON (extractor extent). */
+  extractor_input_bbox_lon_lat?: number[] | null;
+  /** True when sampled route points stay inside that bbox (axis-aligned, small pad). */
+  route_inside_extractor_coord_bbox?: boolean;
+  extractor_coord_bbox_violation_count?: number;
 }
 
 export interface OptimizeTiming {
@@ -436,11 +441,17 @@ export function buildOvertureOptimizeRequest(params: {
 }): OptimizeRouteParams {
   const c = params.config;
   const turnPenalties = c?.turnPenalties;
+  /** Planner/Map use A=ignore, B=respect; backend expects ignore|respect. */
+  const rawOneway = params.overrides?.oneway_mode ?? c?.onewayMode ?? "A";
+  const r = String(rawOneway).toLowerCase();
+  const oneway_mode: "ignore" | "respect" =
+    r === "b" || r === "respect" ? "respect" : "ignore";
+
   const result: OptimizeRouteParams = {
     geojson: params.geojson,
     start_lat: params.start_lat,
     start_lon: params.start_lon,
-    oneway_mode: params.overrides?.oneway_mode ?? c?.onewayMode ?? "A",
+    oneway_mode,
     service_both_sides: false, // backend always one pass; offline v2 always both sides
     turn_penalties:
       params.overrides?.turn_penalties ??

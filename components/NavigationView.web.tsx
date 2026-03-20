@@ -16,6 +16,7 @@ import {
 import { useColors } from "@/hooks/use-colors";
 import { useMapType } from "@/lib/map-type-preference";
 import type { MatchedRoute } from "@/lib/mapMatching";
+import { TurnByTurnDirectionsPanel } from "@/components/TurnByTurnDirectionsPanel";
 /** Same shape as native NavigationView; defined here so web bundle does not load NavigationView.tsx (react-native-maps). */
 export interface OffRoutePayload {
   location: { lat: number; lon: number };
@@ -114,6 +115,9 @@ export default function NavigationView({
 }: NavigationViewProps) {
   const colors = useColors();
   const [mapTypePreference] = useMapType();
+  const [isStarted, setIsStarted] = useState(false);
+  const [simulationMode, setSimulationMode] = useState(false);
+  const [simSpeed, setSimSpeed] = useState(1);
   // Use bright orange for route line visibility on map (theme primary is near-white in dark mode)
   const primary = "#F97316";
   const { width, height } = Dimensions.get("window");
@@ -178,6 +182,21 @@ export default function NavigationView({
 
   const mapHeight = height;
   const hasMap = MapContainer && TileLayer && routePositions.length >= 2;
+
+  if (!isStarted) {
+    return (
+      <TurnByTurnDirectionsPanel
+        matchedRoute={matchedRoute}
+        simulationMode={simulationMode}
+        onSimulationModeChange={setSimulationMode}
+        simSpeed={simSpeed}
+        onSimSpeedChange={setSimSpeed}
+        onCancel={onClose}
+        onStart={() => setIsStarted(true)}
+        isStarting={false}
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

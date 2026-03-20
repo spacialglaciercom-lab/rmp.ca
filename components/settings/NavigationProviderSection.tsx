@@ -16,7 +16,7 @@ import {
 
 export function NavigationProviderSection() {
   const colors = useColors();
-  const [provider, setProvider] = useState<NavigationProvider>("google");
+  const [provider, setProvider] = useState<NavigationProvider>("osrm");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
