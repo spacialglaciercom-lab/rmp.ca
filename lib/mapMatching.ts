@@ -222,6 +222,15 @@ export interface RouteOptions {
   deliveryParams?: DeliveryRouteParams;
 }
 
+/** Optional tuning for OSRM `/match` (ignored for Google snap path). */
+export interface MapMatchExtraOptions {
+  /**
+   * Per-point search radius in metres for OSRM match (default 25).
+   * Use ~40–60 when input comes from a different map extract than the router graph.
+   */
+  osrmRadiusMeters?: number;
+}
+
 /** Fetch Google Directions — uses server proxy on web to avoid CORS. */
 async function fetchGoogleDirections(
   origin: string,
@@ -680,6 +689,7 @@ export async function matchGPXToRoads(
   points: Array<{ lat: number; lon: number }>,
   config: RoutingConfig,
   options?: RouteOptions,
+  extra?: MapMatchExtraOptions,
 ): Promise<MatchedRoute | null> {
   if (points.length < 2) return null;
   const t0 =
@@ -714,6 +724,10 @@ export async function matchGPXToRoads(
   // Private server: large batches (OSRM handles 500+ points) and no delay.
   const batchSize = isPublic ? BATCH_SIZE : 500;
   const batchDelay = isPublic ? BATCH_DELAY_MS : 0;
+  const radiusM = Math.min(
+    200,
+    Math.max(5, Math.round(extra?.osrmRadiusMeters ?? 25)),
+  );
 
   const allLegs: Array<{
     steps?: MatchedStep[];
@@ -732,7 +746,7 @@ export async function matchGPXToRoads(
     }
     const batch = usePoints.slice(i, i + batchSize);
     const coords = batch.map((p) => `${p.lon},${p.lat}`).join(";");
-    const radiuses = batch.map(() => "25").join(";");
+    const radiuses = batch.map(() => String(radiusM)).join(";");
 
     const url = `${config.baseUrl}/match/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&annotations=nodes&radiuses=${radiuses}`;
 

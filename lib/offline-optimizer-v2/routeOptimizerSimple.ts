@@ -17,6 +17,8 @@ import type {
   Node,
   Way,
   OptimizationResult,
+  RoutePoint,
+  RouteStats,
 } from "@/lib/route-optimizer-v2/types";
 import type { RoutingCostPlugin, Coord } from "@/lib/routing_plugins";
 import { haversineMeters } from "@/lib/routing_plugins";
@@ -28,6 +30,8 @@ interface EdgeData {
   dualCarriageway?: boolean;
   /** OSM way ID — used to detect mid-block nodes (not intersections). */
   wayId?: string;
+  /** Traversal multiplicity after directed Eulerian augmentation (Hierholzer consumes each unit once). */
+  count?: number;
 }
 
 // Turn cost penalties (meters equivalent) — used when no plugins are active.
@@ -48,16 +52,6 @@ const TURN_COSTS = {
  * (physical median divider). 500 km equivalent makes them effectively forbidden.
  */
 const DUAL_CARRIAGEWAY_UTURN_METERS = 500_000;
-
-/** Maximum detour (metres) allowed when inserting a block-circling loop to
- *  eliminate a U-turn in the post-circuit repair pass. */
-const MAX_UTURN_DETOUR_M = 2_000;
-
-/** Maximum BFS depth (edges) when searching for a non-reversal loop. */
-const MAX_LOOP_BFS_DEPTH = 8;
-
-/** Maximum number of repair iterations to prevent runaway loops. */
-const MAX_REPAIR_ITERATIONS = 50;
 
 export class RouteOptimizerSimpleV2 {
   private nodes: Map<string, Node>;
@@ -82,9 +76,28 @@ export class RouteOptimizerSimpleV2 {
   }
 
   optimize(customLat?: number, customLon?: number): OptimizationResult {
+    const emptyStats = (): RouteStats => ({
+      total_traversals: 0,
+      total_distance_km: 0,
+      right_turns: 0,
+      left_turns: 0,
+      u_turns: 0,
+      straight: 0,
+      oneway_violations: [],
+      single_pass_segments: [],
+      dead_ends_identified: 0,
+      u_turns_avoided: 0,
+      efficiency: 0,
+    });
+
     this.buildGraph();
     if (this.graph.size === 0) {
-      return { route: [], totalDistance: 0, message: "No valid roads found" };
+      return {
+        route: [],
+        totalDistance: 0,
+        message: "No valid roads found",
+        stats: emptyStats(),
+      };
     }
 
     // Must be built before makeEulerian so augmentation edges don't pollute the detection.
@@ -128,6 +141,7 @@ export class RouteOptimizerSimpleV2 {
         route: [],
         totalDistance: 0,
         message: "Could not find start node",
+        stats: emptyStats(),
       };
     }
 
@@ -137,22 +151,137 @@ export class RouteOptimizerSimpleV2 {
       circuits[c] = this.eliminateUTurns(circuits[c]!);
     }
 
+    const uTurnsAvoided = 0;
+
+    const routeSegments: RoutePoint[][] = [];
+    let aggKm = 0;
+    let aggRight = 0;
+    let aggLeft = 0;
+    let aggU = 0;
+    let aggStraight = 0;
+    let aggTraversals = 0;
+    let effWeighted = 0;
+    let effWeight = 0;
+
+    for (let c = 0; c < circuits.length; c++) {
+      const nodeCircuit = circuits[c]!;
+      const comp = components[c]!;
+      const ts = this.calculateStats(nodeCircuit);
+      aggKm += ts.totalKm;
+      aggRight += ts.rightTurns;
+      aggLeft += ts.leftTurns;
+      aggU += ts.uTurns;
+      aggStraight += ts.straight;
+      aggTraversals += Math.max(0, nodeCircuit.length - 1);
+
+      const edgeCount = this.undirectedEdgeCountInComponent(comp);
+      if (edgeCount > 0) {
+        effWeighted += this.efficiencyForCircuit(nodeCircuit) * edgeCount;
+        effWeight += edgeCount;
+      }
+
+      const segPoints = nodeCircuit
+        .map((id) => {
+          const n = this.nodes.get(id);
+          return n
+            ? { latitude: n.lat, longitude: n.lon, nodeId: id }
+            : null;
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null);
+      if (segPoints.length > 0) routeSegments.push(segPoints);
+    }
+
+    const routePoints = routeSegments.flat();
     const circuit = circuits.flat();
 
-    const routePoints = circuit
-      .map((id) => {
-        const n = this.nodes.get(id);
-        return n ? { latitude: n.lat, longitude: n.lon, nodeId: id } : null;
-      })
-      .filter((p): p is NonNullable<typeof p> => p !== null);
+    const turnStats = {
+      totalKm: aggKm,
+      rightTurns: aggRight,
+      leftTurns: aggLeft,
+      uTurns: aggU,
+      straight: aggStraight,
+    };
+    const efficiency =
+      effWeight > 0 ? effWeighted / effWeight : this.efficiencyForCircuit(circuit);
+    const routeStats = this.buildRouteStats(
+      turnStats,
+      uTurnsAvoided,
+      aggTraversals,
+      efficiency,
+    );
 
-    const stats = this.calculateStats(circuit);
+    const avoidedSuffix =
+      uTurnsAvoided > 0 ? `, ${uTurnsAvoided} U-turn(s) avoided` : "";
 
     return {
       route: routePoints,
-      totalDistance: stats.totalKm,
-      message: `Offline optimizer (v2): ${stats.totalKm.toFixed(2)} km, ${routePoints.length} points, ${components.length} component(s). Turns: R${stats.rightTurns} L${stats.leftTurns} U${stats.uTurns} S${stats.straight}`,
+      routeSegments:
+        routeSegments.length > 1 ? routeSegments : undefined,
+      totalDistance: turnStats.totalKm,
+      message: `Offline optimizer (v2): ${turnStats.totalKm.toFixed(2)} km, ${routePoints.length} points, ${components.length} component(s). Turns: R${turnStats.rightTurns} L${turnStats.leftTurns} U${turnStats.uTurns} S${turnStats.straight}${avoidedSuffix}`,
+      stats: routeStats,
     };
+  }
+
+  /** Full {@link RouteStats} for exports / UI parity with the main RouteOptimizer. */
+  private buildRouteStats(
+    turnStats: {
+      totalKm: number;
+      rightTurns: number;
+      leftTurns: number;
+      uTurns: number;
+      straight: number;
+    },
+    uTurnsAvoided: number,
+    totalTraversals: number,
+    efficiency: number,
+  ): RouteStats {
+    return {
+      total_traversals: totalTraversals,
+      total_distance_km: turnStats.totalKm,
+      right_turns: turnStats.rightTurns,
+      left_turns: turnStats.leftTurns,
+      u_turns: turnStats.uTurns,
+      straight: turnStats.straight,
+      oneway_violations: [],
+      single_pass_segments: [],
+      dead_ends_identified: 0,
+      u_turns_avoided: uTurnsAvoided,
+      efficiency,
+    };
+  }
+
+  /** Undirected edges with both endpoints in `comp` (for per-component efficiency weighting). */
+  private undirectedEdgeCountInComponent(comp: Set<string>): number {
+    const seen = new Set<string>();
+    for (const u of comp) {
+      const adj = this.graph.get(u);
+      if (!adj) continue;
+      for (const v of adj.keys()) {
+        if (!comp.has(v)) continue;
+        seen.add([u, v].sort().join("\0"));
+      }
+    }
+    return seen.size;
+  }
+
+  /** Share of distinct undirected graph edges that appear at least once in the circuit (0–100). */
+  private efficiencyForCircuit(circuit: string[]): number {
+    const graphUndirected = new Set<string>();
+    for (const [u, adj] of this.graph) {
+      for (const v of adj.keys()) {
+        graphUndirected.add([u, v].sort().join("\0"));
+      }
+    }
+    if (graphUndirected.size === 0) return 0;
+
+    const traversed = new Set<string>();
+    for (let i = 0; i < circuit.length - 1; i++) {
+      const a = circuit[i]!;
+      const b = circuit[i + 1]!;
+      traversed.add([a, b].sort().join("\0"));
+    }
+    return (traversed.size / graphUndirected.size) * 100;
   }
 
   /** [lon, lat, z] for plugin calls. */
@@ -495,14 +624,15 @@ export class RouteOptimizerSimpleV2 {
     }
     if (keys.length === 1) return keys[0]!;
 
+    const inBearing = this.bearing(prev, current);
     const useTransition = this.plugins.length > 0;
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
 
-    let best = candidates[0]!;
+    let best = keys[0]!;
     let bestScore = Infinity;
 
-    for (const next of candidates) {
+    for (const next of keys) {
       const edgeData = edges.get(next)!;
       let score: number;
 

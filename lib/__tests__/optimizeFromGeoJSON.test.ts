@@ -409,6 +409,9 @@ describe("optimizeFromGeoJSON – disconnected components", () => {
     expect(hasRemoteCluster).toBe(true);
     // Message should mention 2 components
     expect(result.message).toMatch(/2 component/i);
+    // Must not rely on a single polyline (would draw teleport chords on the map)
+    expect(result.routeSegments).toBeDefined();
+    expect(result.routeSegments!.length).toBe(2);
   });
 });
 

@@ -39,6 +39,12 @@ export interface RouteStats {
 
 export interface OptimizationResult {
   route: RoutePoint[];
+  /**
+   * When the road graph has several disconnected components, each is a separate
+   * Euler tour. Concatenating them into {@link route} is correct for ordering
+   * but must not be drawn as one polyline — use these segments for map/GPX.
+   */
+  routeSegments?: RoutePoint[][];
   totalDistance: number;
   message: string;
   stats?: RouteStats;

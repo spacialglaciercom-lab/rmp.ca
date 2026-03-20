@@ -13,6 +13,7 @@
     "vrp-solvers": { "enabled": true },
     "fuel-aware-routing": { "enabled": false },
     "turn-penalty": { "enabled": false },
+    "route-post-processing": { "enabled": true },
     "dev": { "enabled": false }
   }
 }

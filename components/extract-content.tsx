@@ -38,7 +38,10 @@ import {
   type MeasurementMetrics,
 } from "@/lib/overtureExtractService";
 import { getElevationForPoints } from "@/services/googleElevationService";
-import { partitionZonesFromGeoJSON } from "@/services/overtureOptimizerService";
+import {
+  partitionZonesFromGeoJSON,
+  type GeoJSONFeatureCollection,
+} from "@/services/overtureOptimizerService";
 import { useZonesStore } from "@/stores/zonesStore";
 import { extractFromDownloadedData } from "@/lib/offline-extract";
 import { ExtractConnectionStatus } from "@/components/extract/ExtractConnectionStatus";
@@ -594,9 +597,17 @@ export default function ExtractContent() {
           offlineGeoJSONRef.current = result.geojson;
           osmRawElementsRef.current = result.rawElements;
           setResultHash("__osm__");
-          setResultStats({
-            roads: result.stats?.roads ?? count,
+          const st = result.stats ?? {
+            roads: count,
             points: count,
+            nodes: count,
+            edges: count,
+          };
+          setResultStats({
+            roads: st.roads,
+            points: st.points,
+            nodes: st.nodes,
+            edges: st.edges,
           });
           setPreviewRoadCount(result.stats?.roads ?? count);
           setPreviewPointCount(count);
@@ -749,7 +760,7 @@ export default function ExtractContent() {
               });
             });
             if (result) {
-              offlineGeoJSONRef.current = result.graphGeojson;
+              offlineGeoJSONRef.current = result.graphGeojson as unknown as GeoJSON.FeatureCollection;
               setResultHash("__offline__");
               setResultStats({
                 points: result.stats.nodes,
@@ -891,8 +902,12 @@ export default function ExtractContent() {
       }
       if (!geojson?.features?.length)
         throw new Error("Extract result has no road features.");
+      const zoneGeojson: GeoJSONFeatureCollection = {
+        type: "FeatureCollection",
+        features: geojson.features as GeoJSONFeatureCollection["features"],
+      };
       const { zones } = await partitionZonesFromGeoJSON({
-        geojson: { type: "FeatureCollection", features: geojson.features },
+        geojson: zoneGeojson,
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
@@ -944,8 +959,9 @@ export default function ExtractContent() {
     setPreviewPointCount(null);
     setResultHash(null);
     setResultStats(null);
-    setProgress(null);
+    offlineGeoJSONRef.current = null;
     osmRawElementsRef.current = null;
+    setProgress(null);
   }, [clearPreviewLayer]);
 
   // -------------------------------------------------------------------------
@@ -971,6 +987,8 @@ export default function ExtractContent() {
     setPreviewPointCount(null);
     setResultHash(null);
     setResultStats(null);
+    offlineGeoJSONRef.current = null;
+    osmRawElementsRef.current = null;
     setProgress(null);
   }, [clearPreviewLayer]);
 
@@ -1105,7 +1123,11 @@ export default function ExtractContent() {
         <View
           style={[
             styles.bottomSheet,
-            { backgroundColor: colors.surface, borderTopColor: colors.border },
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              maxHeight: resultHash ? 380 : 280,
+            },
           ]}
         >
           <ScrollView
@@ -1187,6 +1209,40 @@ export default function ExtractContent() {
                     />
                   </View>
                 )}
+              </View>
+            )}
+
+            {/* Downloads — keep high in sheet; panel maxHeight is limited */}
+            {resultHash && (
+              <View style={[styles.actionsRow, { marginTop: 4 }]}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
+                  onPress={downloadGeoJSON}
+                >
+                  <MaterialCommunityIcons
+                    name="download"
+                    size={16}
+                    color="#fff"
+                  />
+                  <Text style={styles.actionBtnText}>Download GeoJSON</Text>
+                </TouchableOpacity>
+                {resultHash === "__osm__" &&
+                  (osmRawElementsRef.current?.length ?? 0) > 0 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionBtn,
+                        { backgroundColor: "#16a34a" },
+                      ]}
+                      onPress={downloadOSM}
+                    >
+                      <MaterialCommunityIcons
+                        name="download"
+                        size={16}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionBtnText}>Download OSM</Text>
+                    </TouchableOpacity>
+                  )}
               </View>
             )}
 
@@ -1492,36 +1548,6 @@ export default function ExtractContent() {
                 )}
               </View>
             )}
-
-            {/* Download buttons */}
-            {resultHash && (
-              <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
-                  onPress={downloadGeoJSON}
-                >
-                  <MaterialCommunityIcons
-                    name="download"
-                    size={16}
-                    color="#fff"
-                  />
-                  <Text style={styles.actionBtnText}>Download GeoJSON</Text>
-                </TouchableOpacity>
-                {extractSource === "osm" && (
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: "#f97316" }]}
-                    onPress={downloadOSM}
-                  >
-                    <MaterialCommunityIcons
-                      name="download"
-                      size={16}
-                      color="#fff"
-                    />
-                    <Text style={styles.actionBtnText}>Download OSM</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
           </ScrollView>
         </View>
       )}
@@ -1735,7 +1761,7 @@ function NativeExtractFallback({
               });
             });
             if (result) {
-              offlineGeoJSONRef.current = result.graphGeojson;
+              offlineGeoJSONRef.current = result.graphGeojson as unknown as GeoJSON.FeatureCollection;
               setResultHash("__offline__");
               setResultStats({
                 points: result.stats.nodes,
@@ -1806,8 +1832,12 @@ function NativeExtractFallback({
       }
       if (!geojson?.features?.length)
         throw new Error("Extract result has no road features.");
+      const zoneGeojson: GeoJSONFeatureCollection = {
+        type: "FeatureCollection",
+        features: geojson.features as GeoJSONFeatureCollection["features"],
+      };
       const { zones } = await partitionZonesFromGeoJSON({
-        geojson: { type: "FeatureCollection", features: geojson.features },
+        geojson: zoneGeojson,
         truck_count: truckCount,
         balance_metric: zoneBalanceMetric,
       });
@@ -2542,7 +2572,7 @@ const styles = StyleSheet.create({
 
   // Bottom sheet
   bottomSheet: {
-    maxHeight: 250,
+    maxHeight: 280,
     borderTopWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
