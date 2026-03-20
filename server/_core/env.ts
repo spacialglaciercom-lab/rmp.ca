@@ -44,4 +44,7 @@ export const ENV = {
   osmOAuthClientSecret: (process.env.OSM_OAUTH_CLIENT_SECRET ?? "").trim(),
   /** OSRM routing base URL (e.g. http://osrm:5000 in k8s, or https://osrm.yourdomain.com). When set, exposed via GET /api/config so the app uses backend OSRM instead of public router.project-osrm.org. */
   osrmUrl: (process.env.OSRM_URL ?? "").trim().replace(/\/$/, ""),
+  resendApiKey: (process.env.RESEND_API_KEY ?? "").trim(),
+  emailFrom: (process.env.EMAIL_FROM ?? "RouteMaster Pro <contact@routemasterpro.ca>").trim(),
+  appBaseUrl: (process.env.APP_BASE_URL ?? "https://app.rmp.ca").trim().replace(/\/$/, ""),
 };

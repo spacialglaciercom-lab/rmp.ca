@@ -52,6 +52,8 @@ export type PluginFeatureKey =
 export interface ExtractResult {
   geojson: GeoJSON.FeatureCollection;
   stats?: { points: number; roads: number; nodes: number; edges: number };
+  /** Optional raw OSM XML payload (0.6) when extractor can provide it. */
+  osmXml?: string;
   warnings: string[];
 }
 

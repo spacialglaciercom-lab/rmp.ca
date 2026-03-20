@@ -1,14 +1,14 @@
 /**
- * Routing API configuration: Google Maps (default) or OSRM fallback.
+ * Routing API configuration: OSRM (default) or Google Maps when selected / available.
  */
 
-import { Platform } from "react-native";
-
 import {
+  getCachedServerGoogleMapsKey,
   getCachedServerOsrmUrl,
   getGoogleMapsApiKey,
   getNavigationProvider,
   ensureServerConfigFetched,
+  shouldUseMapsServerProxy,
 } from "./google-maps-config";
 import { getApiBaseUrl } from "@/shared/oauth";
 
@@ -39,28 +39,29 @@ export function getRoutingConfig(): RoutingConfig {
 
 /**
  * Get routing config (async) — checks user's provider preference.
- * Returns Google Maps config when selected (default), otherwise OSRM.
+ * Returns OSRM when selected (default) or Google when the user chose Google.
  *
- * On web, when our API server is used (Railway etc.), Google routing goes through the
- * server proxy which requires GOOGLE_MAPS_API_KEY on the server. If the server has no key,
- * we fall back to OSRM to avoid 503 on /api/maps/directions.
+ * On web, Google routing uses `/api/maps/directions`, which only works when the **server**
+ * exposes a key via GET /api/config. A client EXPO_PUBLIC_GOOGLE_MAPS_API_KEY alone does not
+ * configure the proxy — without a server key we use OSRM (OSRM_URL / EXPO_PUBLIC_OSRM_URL).
  */
 export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   const provider = await getNavigationProvider();
 
   if (provider === "google") {
-    const apiKey = await getGoogleMapsApiKey();
-
-    // Web: proxy uses server's GOOGLE_MAPS_API_KEY. If server has no key (apiKey empty after /api/config), use OSRM to avoid 503.
+    // Web: never treat EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as sufficient for Directions (proxy has no key → 503).
     if (Platform.OS === "web" && getApiBaseUrl()) {
-      if (!apiKey) return getRoutingConfig();
+      await ensureServerConfigFetched();
+      const serverKey = getCachedServerGoogleMapsKey();
+      if (!serverKey) return getRoutingConfig();
       return {
         baseUrl: GOOGLE_DIRECTIONS_BASE_URL,
         provider: "google",
-        googleApiKey: apiKey,
+        googleApiKey: serverKey,
       };
     }
 
+    const apiKey = await getGoogleMapsApiKey();
     if (apiKey) {
       return {
         baseUrl: GOOGLE_DIRECTIONS_BASE_URL,
