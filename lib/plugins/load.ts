@@ -18,6 +18,7 @@ import { fuelAwareRoutingPlugin } from "./fuel-aware-routing";
 import { turnPenaltyPlugin } from "./turn-penalty";
 import { osmExtractionPlugin } from "./osm-extraction";
 import { devPlugin } from "./dev";
+import { routePostProcessingPlugin } from "./route-post-processing";
 
 const BUILTIN_PLUGINS: Record<string, Plugin> = {
   weather: weatherPlugin,
@@ -32,6 +33,7 @@ const BUILTIN_PLUGINS: Record<string, Plugin> = {
   "vrp-solvers": vrpSolversPlugin,
   "fuel-aware-routing": fuelAwareRoutingPlugin,
   "turn-penalty": turnPenaltyPlugin,
+  "route-post-processing": routePostProcessingPlugin,
   "osm-extraction": osmExtractionPlugin,
   ...(typeof __DEV__ !== "undefined" && __DEV__ ? { dev: devPlugin } : {}),
 };

@@ -54,6 +54,8 @@ export interface ExtractResult {
   stats?: { points: number; roads: number; nodes: number; edges: number };
   /** Optional raw OSM XML payload (0.6) when extractor can provide it. */
   osmXml?: string;
+  /** Optional raw Overpass API `elements` array (nodes + ways), for tooling / export. */
+  osmRawElements?: unknown[];
   warnings: string[];
 }
 

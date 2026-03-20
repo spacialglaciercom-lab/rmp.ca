@@ -12,8 +12,8 @@
  *  - Pure utility functions (calculateCostEfficiency, generateCostSummary) on the
  *    exported singleton return sensible values without any mocking.
  *  - CostAwareRouteOptimizer constructor creates an instance without throwing.
- *  - optimizeWithCostAwareness returns a valid CostOptimizedRoute even when the
- *    underlying services fail (fallback path).
+ *  - optimizeWithCostAwareness returns a valid CostOptimizedRoute when services
+ *    are unavailable (standard → numeric fallback) and on the full recommendation path.
  *  - getFallbackOptimizedRoute math: costs are non-negative and consistent.
  *  - generateOptimizationReport builds a complete structured report.
  *  - compareRouteOptions assigns cost and efficiency rankings correctly.
@@ -58,6 +58,9 @@ import {
 } from "../cost-aware-route-optimizer";
 import { costCorrectionModel } from "@/lib/cost-correction-model";
 import { costPredictionService } from "@/services/costPredictionService";
+import { getEdgePenaltiesFromLeap } from "@/lib/route-ml-enhancement";
+import type { CostPrediction } from "@/lib/cost-correction-model";
+import type { CostAwareRouteRecommendation } from "@/services/costPredictionService";
 import type { RouteStatistics } from "@/types/routing";
 
 // ─── Test data builders ───────────────────────────────────────────────────────
@@ -122,6 +125,38 @@ function makeWays() {
     { id: "w2", nodes: ["B", "C"], tags: { highway: "residential" } },
     { id: "w3", nodes: ["C", "A"], tags: { highway: "residential" } },
   ];
+}
+
+function makeCostPrediction(overrides: Partial<CostPrediction> = {}): CostPrediction {
+  return {
+    predictedTime: 55,
+    predictedFuelConsumption: 3,
+    predictedTotalCost: 95,
+    confidenceScore: 0.85,
+    costBreakdown: { fuel: 25, labor: 40, maintenance: 20, overhead: 10 },
+    riskFactors: [],
+    optimizationSuggestions: ["Test suggestion"],
+    ...overrides,
+  };
+}
+
+function makeCostAwareRecommendation(
+  overrides: Partial<CostAwareRouteRecommendation> = {},
+): CostAwareRouteRecommendation {
+  const predictedCosts = makeCostPrediction({ predictedTotalCost: 100 });
+  return {
+    routeId: "test-route",
+    predictedCosts,
+    costEfficiencyScore: 70,
+    alternativeRoutes: [],
+    optimizationOpportunities: ["Pool deliveries"],
+    riskAssessment: {
+      costOverrunRisk: "low",
+      likelyCostRange: [80, 120],
+      primaryRiskFactors: [],
+    },
+    ...overrides,
+  };
 }
 
 // ─── Pure utility functions ───────────────────────────────────────────────────
@@ -266,17 +301,45 @@ describe("CostAwareRouteOptimizer – optimizeWithCostAwareness", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(costPredictionService.getCostAwareRecommendations).mockReset();
+    vi.mocked(costCorrectionModel.predictCosts).mockReset();
+    vi.mocked(getEdgePenaltiesFromLeap).mockResolvedValue(new Map());
     optimizer = new CostAwareRouteOptimizer(makeNodes(), makeWays());
   });
 
   it("returns a CostOptimizedRoute even when services fail", async () => {
-    // Due to a scoping bug (`ways` is not in scope inside optimizeWithCostAwareness),
-    // the method throws a ReferenceError internally and falls back to getFallbackOptimizedRoute.
     const stats = makeRouteStats();
     const result = await optimizer.optimizeWithCostAwareness(stats);
 
     expect(result).not.toBeNull();
     expect(result).toBeDefined();
+  });
+
+  it("calls getEdgePenaltiesFromLeap with the constructor ways (no ReferenceError)", async () => {
+    const ways = makeWays();
+    const opt = new CostAwareRouteOptimizer(makeNodes(), ways);
+    vi.mocked(getEdgePenaltiesFromLeap).mockClear();
+
+    await opt.optimizeWithCostAwareness(makeRouteStats());
+
+    expect(getEdgePenaltiesFromLeap).toHaveBeenCalledTimes(1);
+    expect(getEdgePenaltiesFromLeap).toHaveBeenCalledWith(ways, null);
+  });
+
+  it("happy path: uses service recommendation and returns variant-based costs", async () => {
+    const recommendation = makeCostAwareRecommendation();
+    vi.mocked(costPredictionService.getCostAwareRecommendations).mockResolvedValue(
+      recommendation,
+    );
+    vi.mocked(costCorrectionModel.predictCosts).mockResolvedValue(makeCostPrediction());
+
+    const result = await optimizer.optimizeWithCostAwareness(makeRouteStats({ totalDistance: 10 }));
+
+    expect(result).not.toBeNull();
+    expect(result!.predictedCosts.totalCost).toBe(95);
+    expect(result!.predictedCosts.fuelCost).toBe(25);
+    expect(result!.costEfficiencyScore).not.toBe(40);
+    expect(getEdgePenaltiesFromLeap).toHaveBeenCalled();
   });
 
   it("fallback route has correct structure", async () => {
@@ -463,6 +526,9 @@ describe("CostAwareRouteOptimizer – compareRouteOptions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(costPredictionService.getCostAwareRecommendations).mockReset();
+    vi.mocked(costCorrectionModel.predictCosts).mockReset();
+    vi.mocked(getEdgePenaltiesFromLeap).mockResolvedValue(new Map());
     optimizer = new CostAwareRouteOptimizer(makeNodes(), makeWays());
   });
 
@@ -529,6 +595,51 @@ describe("CostAwareRouteOptimizer – compareRouteOptions", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.ranking.costRank).toBe(1);
     expect(result[0]!.ranking.efficiencyRank).toBe(1);
+  });
+
+  it("compareRouteOptions runs ML penalties per option with graph ways", async () => {
+    const ways = makeWays();
+    const opt = new CostAwareRouteOptimizer(makeNodes(), ways);
+    vi.mocked(getEdgePenaltiesFromLeap).mockClear();
+
+    await opt.compareRouteOptions([
+      { name: "A", routeStats: makeRouteStats({ totalDistance: 5 }) },
+      { name: "B", routeStats: makeRouteStats({ totalDistance: 8 }) },
+    ]);
+
+    expect(getEdgePenaltiesFromLeap).toHaveBeenCalledTimes(2);
+    expect(getEdgePenaltiesFromLeap).toHaveBeenCalledWith(ways, null);
+  });
+
+  it("compareRouteOptions happy path ranks options by total predicted cost", async () => {
+    vi.mocked(costPredictionService.getCostAwareRecommendations).mockImplementation(
+      async (req) =>
+        makeCostAwareRecommendation({
+          predictedCosts: makeCostPrediction({
+            predictedTotalCost: (req.routeStats.totalDistance || 1) * 100,
+          }),
+        }),
+    );
+    vi.mocked(costCorrectionModel.predictCosts).mockImplementation(
+      async (stats: RouteStatistics) =>
+        makeCostPrediction({
+          predictedTotalCost: (stats.totalDistance || 1) * 15,
+          predictedTime: stats.estimatedTime,
+        }),
+    );
+
+    const result = await optimizer.compareRouteOptions([
+      { name: "Near", routeStats: makeRouteStats({ totalDistance: 5, estimatedTime: 60 }) },
+      { name: "Far", routeStats: makeRouteStats({ totalDistance: 20, estimatedTime: 90 }) },
+    ]);
+
+    const near = result.find((r) => r.name === "Near")!;
+    const far = result.find((r) => r.name === "Far")!;
+    expect(near.costAnalysis.predictedCosts.totalCost).toBeLessThan(
+      far.costAnalysis.predictedCosts.totalCost,
+    );
+    expect(near.ranking.costRank).toBe(1);
+    expect(far.ranking.costRank).toBe(2);
   });
 });
 

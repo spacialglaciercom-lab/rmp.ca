@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  Switch,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import {
