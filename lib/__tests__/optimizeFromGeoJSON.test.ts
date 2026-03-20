@@ -622,6 +622,81 @@ describe("TurnPenaltyPlugin – pipeline integration", () => {
   });
 });
 
+// ─── One-way street Eulerian augmentation ────────────────────────────────────
+//
+// Regression tests for the bug where makeEulerianDirected's augmentation loop
+// was a no-op (Map.set overwrote the same key rather than incrementing count).
+// With that bug, one-way-street imbalances were never resolved and Hierholzer
+// produced an open (non-closing) path instead of a closed Eulerian circuit.
+//
+// Network used in these tests:
+//   A=[0,0]  B=[0,0.001]  C=[0.001,0]  (GeoJSON [lon,lat] format)
+//   A→B  one-way          creates surplus at A (outDeg>inDeg) and deficit at B
+//   B↔C  bidirectional
+//   C↔A  bidirectional
+//
+// After makeEulerianDirected pairs deficit-B with surplus-A and augments path
+// B→C→A (count+1), the effective edge traversal counts are:
+//   A→B:1  B→C:2  C→B:1  C→A:2  A→C:1  → totalEdges = 7
+//
+// A closed Eulerian circuit of 7 edges visits 7+1 = 8 nodes; the duplicate
+// closing node is stripped by optimize(), leaving route.length === 7.
+// The old no-op bug left totalEdges = 5 and the circuit unclosed (length 6).
+
+describe("optimizeFromGeoJSON – one-way streets (Eulerian augmentation)", () => {
+  // A→B one-way, B↔C, C↔A
+  const ONE_WAY_FC = makeFC([
+    makeLineFeature(
+      [
+        [0.0, 0.0],
+        [0.0, 0.001],
+      ],
+      { highway: "residential", oneway: "yes" },
+    ),
+    makeLineFeature([
+      [0.0, 0.001],
+      [0.001, 0.0],
+    ]),
+    makeLineFeature([
+      [0.001, 0.0],
+      [0.0, 0.0],
+    ]),
+  ]);
+
+  it("produces a non-empty route", () => {
+    const result = optimizeFromGeoJSON(ONE_WAY_FC);
+    expect(result.route.length).toBeGreaterThan(0);
+  });
+
+  it("visits all three nodes (A, B, C)", () => {
+    const result = optimizeFromGeoJSON(ONE_WAY_FC);
+    const lons = new Set(result.route.map((p) => p.longitude.toFixed(3)));
+    // A and C share lon=0.000; B has lon=0.000; C has lon=0.001
+    // All three nodes appear in the route
+    expect(lons.has("0.000")).toBe(true); // A=[0,0] and B=[0,0.001] both lon=0
+    expect(lons.has("0.001")).toBe(true); // C=[0.001,0] lon=0.001
+  });
+
+  it("produces a closed circuit — route length equals total augmented edge count (7)", () => {
+    // With correct augmentation: B→C and C→A get count=2, totalEdges=7.
+    // Hierholzer closes the circuit (8 nodes) and optimize() pops the duplicate
+    // end node, leaving exactly 7 route points.
+    //
+    // With the old Map.set no-op bug: totalEdges=5, circuit is open (6 nodes,
+    // no pop), so route.length would be 6 instead of 7.
+    const result = optimizeFromGeoJSON(ONE_WAY_FC);
+    expect(result.route.length).toBe(7);
+  });
+
+  it("same closed-circuit guarantee holds with TurnPenaltyPlugin", () => {
+    // Ensures the plugins code path also correctly augments one-way imbalances.
+    const result = optimizeFromGeoJSON(ONE_WAY_FC, {
+      plugins: [TurnPenaltyPlugin],
+    });
+    expect(result.route.length).toBe(7);
+  });
+});
+
 // ─── Math helper functions ────────────────────────────────────────────────────
 
 describe("routing_plugins – math helpers", () => {
