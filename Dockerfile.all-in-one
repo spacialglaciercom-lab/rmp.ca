@@ -1,0 +1,45 @@
+# All-in-one: Node API + Python optimizer in a single container.
+# No OPTIMIZER_BACKEND_URL needed — Node proxies to localhost:8000.
+# Build: docker build -f Dockerfile.all-in-one -t rmp-all-in-one .
+# Deploy: gcloud run deploy rmp-ca --image ... --port 8080
+
+# ---- Build Node API ----
+FROM node:20-alpine AS nodebuilder
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
+COPY shared-logic/pnpm-stub ./shared-logic/pnpm-stub
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
+COPY . .
+RUN pnpm run build:server
+
+# ---- Final: Node + Python ----
+FROM node:20-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Node API
+COPY --from=nodebuilder /app/dist ./dist
+COPY --from=nodebuilder /app/package.json ./
+COPY --from=nodebuilder /app/pnpm-lock.yaml ./
+COPY --from=nodebuilder /app/patches ./patches
+COPY shared-logic/pnpm-stub ./shared-logic/pnpm-stub
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate \
+    && pnpm install --no-frozen-lockfile --prod --ignore-scripts
+
+# Python optimizer (backend)
+COPY backend/requirements.txt backend/requirements.txt
+COPY backend/app ./backend/app
+RUN pip3 install --break-system-packages -r backend/requirements.txt
+
+# Entrypoint starts uvicorn then node
+COPY scripts/entrypoint-all-in-one.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENV NODE_ENV=production
+EXPOSE 8080
+ENTRYPOINT ["/app/entrypoint.sh"]
