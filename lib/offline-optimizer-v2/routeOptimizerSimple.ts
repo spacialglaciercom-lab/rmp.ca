@@ -264,11 +264,13 @@ export class RouteOptimizerSimpleV2 {
       this.graph.get(from)!.set(to, data);
     }
 
-    // For plugins path, also run directed balancing (though with reciprocals
-    // already added, the graph should be balanced and this becomes a no-op).
-    if (this.plugins.length > 0) {
-      this.makeEulerianDirected();
-    }
+    // Always run directed balancing so one-way streets are properly handled.
+    // Without this, a network with one-way streets leaves the graph unbalanced:
+    // Hierholzer then produces circuits with large teleport-jumps between
+    // disconnected segments, causing the route to not follow road geometry.
+    // For fully bidirectional graphs this is a no-op (already balanced by
+    // the reciprocal edges added above).
+    this.makeEulerianDirected();
   }
 
   /** Directed graph: balance in/out degree by adding shortest paths (with transition costs). */

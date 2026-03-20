@@ -49,8 +49,9 @@ export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
   const provider = await getNavigationProvider();
 
   if (provider === "google") {
-    // Web: never treat EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as sufficient for Directions (proxy has no key → 503).
-    if (Platform.OS === "web" && getApiBaseUrl()) {
+    // Web always, native when a remote EXPO_PUBLIC_API_BASE_URL is set:
+    // proxy uses the server's GOOGLE_MAPS_API_KEY. Fall back to OSRM when no key.
+    if (shouldUseMapsServerProxy() && getApiBaseUrl()) {
       await ensureServerConfigFetched();
       const serverKey = getCachedServerGoogleMapsKey();
       if (!serverKey) return getRoutingConfig();
