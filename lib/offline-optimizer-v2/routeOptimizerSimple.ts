@@ -152,13 +152,12 @@ export class RouteOptimizerSimpleV2 {
         const toNode = this.nodes.get(to);
         if (!fromNode || !toNode) continue;
 
-        const distanceM =
-          haversineMeters(
-            Number(fromNode.lon),
-            Number(fromNode.lat),
-            Number(toNode.lon),
-            Number(toNode.lat),
-          );
+        const distanceM = haversineMeters(
+          Number(fromNode.lon),
+          Number(fromNode.lat),
+          Number(toNode.lon),
+          Number(toNode.lat),
+        );
 
         if (usePlugins) {
           const coordsU: Coord = this.getCoords(from);
@@ -182,17 +181,41 @@ export class RouteOptimizerSimpleV2 {
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
+          this.graph
+            .get(from)!
+            .set(to, {
+              length: costUV,
+              oneway: isOneway,
+              dualCarriageway: isDualCarriageway || undefined,
+            });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined });
+            this.graph
+              .get(to)!
+              .set(from, {
+                length: costVU,
+                oneway: false,
+                dualCarriageway: isDualCarriageway || undefined,
+              });
           }
         } else {
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
+          this.graph
+            .get(from)!
+            .set(to, {
+              length: distanceM,
+              oneway: isOneway,
+              dualCarriageway: isDualCarriageway || undefined,
+            });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined });
+            this.graph
+              .get(to)!
+              .set(from, {
+                length: distanceM,
+                oneway: false,
+                dualCarriageway: isDualCarriageway || undefined,
+              });
           }
         }
       }
@@ -209,11 +232,14 @@ export class RouteOptimizerSimpleV2 {
    * into unnecessary U-turns.
    */
   private makeEulerian(): void {
-    // Ensure every edge has a reciprocal before balancing (required for
+    // Ensure every bidirectional edge has a reciprocal before balancing (required for
     // bidirectional streets that may only have one direction in the source).
+    // One-way edges are skipped so their nodes remain imbalanced; makeEulerianDirected()
+    // will balance them using turn-aware Dijkstra that avoids U-turns.
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
+        if (data.oneway) continue;
         if (!this.graph.get(to)?.has(from)) {
           toAdd.push([to, from, { length: data.length, oneway: false }]);
         }
@@ -252,9 +278,17 @@ export class RouteOptimizerSimpleV2 {
     const surplusList = [...surplusCount.keys()];
     if (deficitList.length === 0 || surplusList.length === 0) return;
 
-    const pairs: Array<{ from: string; to: string; cost: number; path: string[] }> = [];
+    const pairs: Array<{
+      from: string;
+      to: string;
+      cost: number;
+      path: string[];
+    }> = [];
     for (const from of deficitList) {
-      const { lengths, paths } = this.dijkstraWithTransitionCosts(from, this.plugins);
+      const { lengths, paths } = this.dijkstraWithTransitionCosts(
+        from,
+        this.plugins,
+      );
       for (const to of surplusList) {
         const cost = lengths[to];
         const path = paths[to];
@@ -458,7 +492,11 @@ export class RouteOptimizerSimpleV2 {
         const coordsV = this.getCoords(next);
         let mult = 1;
         for (const plugin of this.plugins) {
-          mult *= plugin.calculateTransitionMultiplier(coordsT, coordsU, coordsV);
+          mult *= plugin.calculateTransitionMultiplier(
+            coordsT,
+            coordsU,
+            coordsV,
+          );
         }
         score = edgeData.length * mult;
       } else {
