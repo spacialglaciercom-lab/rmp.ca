@@ -109,7 +109,7 @@ export default function PlannerContent() {
   const [confirmedConstraints, setConfirmedConstraints] = useState<
     ParsedConstraint[]
   >([]);
-  /** When true, use the offline optimizer from route-optimizer-mobile-v2 (Videos app). */
+  /** When true, use the offline RouteOptimizerSimpleV2 (same family as route-optimizer-mobile-v2; may diverge until ported). */
   const [useOfflineOptimizerV2, setUseOfflineOptimizerV2] = useState(false);
 
   // Keep GPX data in sync when the map reroutes due to avoidance.
@@ -312,7 +312,7 @@ export default function PlannerContent() {
         const serviceBothSides = state.configuration.serviceBothSides ?? false;
         // Yield so React can paint "processing" state before optimisation
         await new Promise<void>((r) => setTimeout(r, 0));
-        // When "Use offline optimizer (v2)" is on, use the same optimizer as the Videos app (RouteOptimizerSimpleV2).
+        // When "Use offline optimizer (v2)" is on, use RouteOptimizerSimpleV2 (Videos app lineage; tune here first).
         // Do not use the full RouteOptimizer here — it uses a different graph and can produce different (loopier) routes.
         // When v2 is on, we never use the backend (Overture); we only try v2 then local fallback.
         if (useOfflineOptimizerV2) {
@@ -1205,8 +1205,9 @@ export default function PlannerContent() {
             Optimization
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Use offline optimizer (v2): same optimizer as
-            route-optimizer-mobile-v2 (Videos app). When v2 is on, route is
+            Use offline optimizer (v2): same algorithm family as
+            route-optimizer-mobile-v2 (Videos app); constants may differ until
+            synced. When v2 is on, route is
             always two-pass; one-pass applies only when v2 is off. Off: use
             Overture route optimizer (same as Map Extractor), then fall back to
             local if unavailable.

@@ -1,11 +1,18 @@
 /**
- * Same optimizer as C:\Users\Space\Videos\route-optimizer-mobile-v2\src\routeOptimizerSimple.ts
- * (RouteOptimizerSimple). Kept in sync so the "Optimizer v2" toggle on planner pages uses the
- * exact same algorithm as the Videos app.
+ * Offline Eulerian route optimizer (Hierholzer + balancing). Derived from the same structure as
+ * route-optimizer-mobile-v2’s RouteOptimizerSimple, but this repo may diverge: TURN_COSTS,
+ * chooseBest() U-turn handling, etc. No-plugin balancing uses simple reciprocal edges (not
+ * directed Dijkstra augmentation). With plugins, balancing uses makeEulerianDirected(). Port when
+ * you want parity with the Videos app.
  *
- * Only adaptations: class name RouteOptimizerSimpleV2, types from @/lib/route-optimizer-v2/types,
- * route points include nodeId for rmp.ca compatibility, and optional RoutingCostPlugin support
- * (directed edges, transition costs). No console.log.
+ * Adaptations vs a generic RouteOptimizerSimple: class name RouteOptimizerSimpleV2, types from
+ * @/lib/route-optimizer-v2/types, route points include nodeId, optional RoutingCostPlugin on the
+ * graph and in augmentation. No console.log.
+ *
+ * Typical Planner / Map usage: `plugins` is omitted or empty — that is the supported “no-plugin”
+ * path (haversine edges, reciprocal makeEulerian, TURN_COSTS + chooseBest() for turns). Passing
+ * FuelAwarePlugin / TurnPenaltyPlugin is optional; those need elevation-aware coords (e.g. z on
+ * GeoJSON) and a caller that constructs the plugin list. Do not assume most v2 runs use plugins.
  */
 
 import type {
@@ -23,9 +30,9 @@ interface EdgeData {
   dualCarriageway?: boolean;
 }
 
-// Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2 (used when no plugins)
+// Turn cost penalties (meters equivalent) when no user plugins — align with route-optimizer-mobile-v2 when porting
 const TURN_COSTS = {
-  U_TURN: 800,
+  U_TURN: 5_000,
   SHARP_LEFT: 150,
   LEFT_TURN: 50,
   STRAIGHT: 0,
@@ -192,6 +199,11 @@ export class RouteOptimizerSimpleV2 {
     }
   }
 
+  /**
+   * Balance the graph for Hierholzer. With plugins: directed deficit/surplus augmentation via
+   * Dijkstra + transition costs. Without plugins: insert missing reverse edges only (same as
+   * route-optimizer-mobile-v2) — preserves stable road-graph walks; U-turn tuning is in chooseBest.
+   */
   private makeEulerian(): void {
     if (this.plugins.length > 0) {
       this.makeEulerianDirected();
@@ -238,7 +250,10 @@ export class RouteOptimizerSimpleV2 {
 
     const pairs: Array<{ from: string; to: string; cost: number; path: string[] }> = [];
     for (const from of deficitList) {
-      const { lengths, paths } = this.dijkstraWithTransitionCosts(from, this.plugins);
+      const { lengths, paths } = this.dijkstraWithTransitionCosts(
+        from,
+        this.plugins,
+      );
       for (const to of surplusList) {
         const cost = lengths[to];
         const path = paths[to];
@@ -378,14 +393,24 @@ export class RouteOptimizerSimpleV2 {
     if (keys.length === 1) return keys[0]!;
     if (!prev) return keys[0]!;
 
+    const isUTurnEdge = (next: string): boolean => {
+      const inBearing = this.bearing(prev, current);
+      const outBearing = this.bearing(current, next);
+      const turn = this.normalizeTurn(outBearing - inBearing);
+      return Math.abs(turn) > 150;
+    };
+    const nonUTurnKeys = keys.filter((k) => !isUTurnEdge(k));
+    const candidateKeys =
+      nonUTurnKeys.length > 0 ? nonUTurnKeys : keys;
+
     const useTransition = this.plugins.length > 0;
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
 
-    let best = keys[0]!;
+    let best = candidateKeys[0]!;
     let bestScore = Infinity;
 
-    for (const next of keys) {
+    for (const next of candidateKeys) {
       const edgeData = edges.get(next)!;
       let score: number;
 
@@ -401,8 +426,9 @@ export class RouteOptimizerSimpleV2 {
         const inBearing = this.bearing(prev, current);
         const turn = this.normalizeTurn(outBearing - inBearing);
         let cost: number;
-        if (Math.abs(turn) > 150) cost = TURN_COSTS.U_TURN;
-        else if (turn > 120) cost = TURN_COSTS.SHARP_LEFT;
+        if (Math.abs(turn) > 150) {
+          cost = Math.max(TURN_COSTS.U_TURN, edgeData.length * 8);
+        } else if (turn > 120) cost = TURN_COSTS.SHARP_LEFT;
         else if (turn > 30) cost = TURN_COSTS.LEFT_TURN;
         else if (turn >= -30) cost = TURN_COSTS.STRAIGHT;
         else if (turn >= -120) cost = TURN_COSTS.RIGHT_TURN;

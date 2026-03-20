@@ -1,9 +1,13 @@
 /**
- * Offline optimizer from route-optimizer-mobile-v2 (Videos app).
+ * Offline Eulerian optimizer (Videos-app lineage). May diverge from mobile until changes are ported.
  * Use via "Use offline optimizer (v2)" on the Planner page.
  *
  * Supports both OSM (nodes + ways) and GeoJSON input.
- * Optional routing plugins (FuelAwarePlugin, TurnPenaltyPlugin) when GeoJSON has [lon, lat, z].
+ *
+ * Most flows use RouteOptimizerSimpleV2 **without** plugins: built-in turn costs and reciprocal
+ * balancing only. Optional RoutingCostPlugin (FuelAware, TurnPenalty, etc.) requires the caller to
+ * pass them and appropriate data (e.g. [lon, lat, z] for fuel). See the file header in
+ * `./routeOptimizerSimple.ts`.
  */
 
 export { RouteOptimizerSimpleV2 } from "./routeOptimizerSimple";
