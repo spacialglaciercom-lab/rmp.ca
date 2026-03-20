@@ -174,7 +174,9 @@ export async function assignUserToOrg(
 ): Promise<void> {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot assign user to org: database not available");
+    console.warn(
+      "[Database] Cannot assign user to org: database not available",
+    );
     return;
   }
   await db
@@ -266,7 +268,9 @@ export async function setRolePermissions(
   if (permissionKeys.length > 0) {
     await db
       .insert(rolePermissions)
-      .values(permissionKeys.map((permissionKey) => ({ roleId, permissionKey })));
+      .values(
+        permissionKeys.map((permissionKey) => ({ roleId, permissionKey })),
+      );
   }
 }
 
@@ -398,7 +402,9 @@ async function findRoleWithExactPermissions(
       .where(eq(rolePermissions.roleId, role.id));
     const sortedCurrent = perms.map((p) => p.permissionKey).sort();
     if (sortedCurrent.length !== sortedTarget.length) continue;
-    const isSame = sortedCurrent.every((perm, idx) => perm === sortedTarget[idx]);
+    const isSame = sortedCurrent.every(
+      (perm, idx) => perm === sortedTarget[idx],
+    );
     if (isSame) return role;
   }
   return null;
@@ -411,7 +417,10 @@ export async function createOrReuseRequestedRole(
   requestId: number,
 ): Promise<Role | null> {
   if (approvedPermissions.length === 0) return null;
-  const existing = await findRoleWithExactPermissions(orgId, approvedPermissions);
+  const existing = await findRoleWithExactPermissions(
+    orgId,
+    approvedPermissions,
+  );
   if (existing) return existing;
 
   const role = await createRole(
@@ -449,12 +458,12 @@ export async function resolvePermissionRequest(params: {
   if (request.status !== "pending") {
     const existingRoleId =
       request.status === "approved" && request.approvedPermissions?.length
-        ? (
+        ? ((
             await findRoleWithExactPermissions(
               request.orgId,
               request.approvedPermissions as PermissionKey[],
             )
-          )?.id ?? null
+          )?.id ?? null)
         : null;
     return {
       request,
@@ -467,20 +476,9 @@ export async function resolvePermissionRequest(params: {
     params.status === "approved"
       ? [...new Set(params.approvedPermissions)]
       : ([] as PermissionKey[]);
-  let assignedRoleId: number | null = null;
-  if (params.status === "approved" && approvedPermissions.length > 0) {
-    const role = await createOrReuseRequestedRole(
-      request.orgId,
-      request.requesterId,
-      approvedPermissions,
-      request.id,
-    );
-    if (role) {
-      assignedRoleId = role.id;
-      await assignRoleToUser(request.requesterId, role.id, request.orgId);
-    }
-  }
 
+  // Perform the conditional update FIRST to claim the request atomically.
+  // Only if this succeeds (we won any potential race) do we create side effects.
   const resolvedRows = await db
     .update(permissionRequests)
     .set({
@@ -501,11 +499,35 @@ export async function resolvePermissionRequest(params: {
   if (resolvedRows.length === 0) {
     const latest = await getPermissionRequestByToken(params.token);
     if (!latest) throw new Error("Permission request not found");
+    const existingRoleId =
+      latest.status === "approved" && latest.approvedPermissions?.length
+        ? ((
+            await findRoleWithExactPermissions(
+              latest.orgId,
+              latest.approvedPermissions as PermissionKey[],
+            )
+          )?.id ?? null)
+        : null;
     return {
       request: latest,
       status: latest.status as "approved" | "denied",
-      assignedRoleId,
+      assignedRoleId: existingRoleId,
     };
+  }
+
+  // We successfully claimed the request - now perform side effects.
+  let assignedRoleId: number | null = null;
+  if (params.status === "approved" && approvedPermissions.length > 0) {
+    const role = await createOrReuseRequestedRole(
+      request.orgId,
+      request.requesterId,
+      approvedPermissions,
+      request.id,
+    );
+    if (role) {
+      assignedRoleId = role.id;
+      await assignRoleToUser(request.requesterId, role.id, request.orgId);
+    }
   }
 
   return {
@@ -514,4 +536,3 @@ export async function resolvePermissionRequest(params: {
     assignedRoleId,
   };
 }
-
