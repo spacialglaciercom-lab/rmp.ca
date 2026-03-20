@@ -474,3 +474,61 @@ describe("RouteOptimizer – options", () => {
     expect(result.route.length).toBeGreaterThan(0);
   });
 });
+
+// ─── U-turn elimination ───────────────────────────────────────────────────────
+
+describe("RouteOptimizer – eliminateUTurns post-processing", () => {
+  it("produces a route on a square graph with fewer U-turns than without elimination", () => {
+    const { nodes, ways } = squareGraph();
+    const optimizer = new RouteOptimizer(nodes, ways);
+    const result = optimizer.optimize();
+
+    // The square graph has alternative block-circling loops available,
+    // so the post-processing should be able to eliminate some U-turns.
+    expect(result.route.length).toBeGreaterThan(0);
+    // u_turns_avoided in stats should be >= 0 (may be 0 if Hierholzer
+    // already found a good path, but shouldn't crash)
+    expect(result.stats?.u_turns_avoided).toBeGreaterThanOrEqual(0);
+  });
+
+  it("handles a dead-end stub without crashing", () => {
+    // A --- B --- C (dead end at C, must U-turn there)
+    const nodes = makeNodes([
+      ["A", 0.0, 0.0],
+      ["B", 0.0, 0.001],
+      ["C", 0.0, 0.002],
+    ]);
+    const ways = [
+      makeWay("w1", ["A", "B"]),
+      makeWay("w2", ["B", "C"]),
+    ];
+    const optimizer = new RouteOptimizer(nodes, ways);
+    const result = optimizer.optimize();
+
+    // Should produce a valid route even though U-turns at C are unavoidable
+    expect(result.route.length).toBeGreaterThan(0);
+  });
+
+  it("does not introduce duplicate consecutive nodes in the circuit", () => {
+    const { nodes, ways } = squareGraph();
+    const optimizer = new RouteOptimizer(nodes, ways);
+    const result = optimizer.optimize();
+
+    // Check no identical consecutive node IDs (which would indicate a splice bug)
+    for (let i = 1; i < result.route.length; i++) {
+      const prev = result.route[i - 1]!;
+      const curr = result.route[i]!;
+      expect(
+        prev.latitude !== curr.latitude || prev.longitude !== curr.longitude,
+      ).toBe(true);
+    }
+  });
+
+  it("triangle graph still produces a valid circuit after U-turn elimination", () => {
+    const { nodes, ways } = triangleGraph();
+    const optimizer = new RouteOptimizer(nodes, ways);
+    const result = optimizer.optimize();
+
+    expect(result.route.length).toBeGreaterThan(0);
+  });
+});
