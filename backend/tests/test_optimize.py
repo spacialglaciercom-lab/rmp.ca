@@ -371,9 +371,50 @@ def test_optimize_oneway_ignore_treats_as_bidirectional() -> None:
     assert stats["odd_degree_vertices"] == 0
 
 
+def test_optimize_oneway_respect_two_way_triangle() -> None:
+    """oneway_mode='respect' with no one-way tags → two directed arcs per segment."""
+    fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
+    resp = _optimize(fc, oneway_mode="respect")
+    stats = resp["stats"]
+    assert stats["edges_in_graph"] == 6
+    assert len(resp["route"]) >= 2
+
+
+def test_optimize_oneway_respect_client_sends_b() -> None:
+    """Mobile/web clients send oneway_mode='B' for respect — normalize and solve."""
+    fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
+    resp = _optimize(fc, oneway_mode="B")
+    assert resp["stats"]["edges_in_graph"] == 6
+
+
 def test_optimize_start_location_hint_accepted() -> None:
     """Providing start_lat/start_lon should not crash the solver."""
     fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
     lat, lon = A[1], A[0]
     resp = _optimize(fc, start_lat=lat, start_lon=lon)
     assert resp["stats"]["edges_in_graph"] == 3
+
+
+# ===========================================================================
+# Extractor bounding box verification (optimizer vs input GeoJSON extent)
+# ===========================================================================
+
+
+def test_optimize_sync_route_inside_extractor_coord_bbox() -> None:
+    """Route samples must lie in the axis-aligned bbox of input road coordinates."""
+    fc = _fc(
+        _seg(*A, *B),
+        _seg(*B, *C),
+        _seg(*C, *A),
+    )
+    r = client.post(
+        "/api/optimize/sync",
+        json={"geojson": fc, "clean_before_optimize": False},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    m = data.get("metrics") or {}
+    assert m.get("route_inside_extractor_coord_bbox") is True
+    assert m.get("extractor_coord_bbox_violation_count") == 0
+    bbox = m.get("extractor_input_bbox_lon_lat")
+    assert isinstance(bbox, list) and len(bbox) == 4
