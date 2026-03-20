@@ -22,7 +22,164 @@ export interface GeoJSONConvertOptions {
   allowClasses?: string[];
   /** Blocklist of classes to exclude. */
   denyClasses?: string[];
+  /**
+   * Snap LineString endpoints that are within this distance (metres) of each other
+   * to a single shared coordinate. Fixes topology gaps in imperfect GeoJSON/OSM
+   * exports where two roads that should connect are off by a small rounding error.
+   * Only endpoints (first/last coord) are snapped — interior shape points are
+   * untouched so road geometry is preserved.
+   * Recommended: 1.5 (catches sub-metre rounding noise without merging separate roads).
+   * Default: 0 (disabled).
+   */
+  snapToleranceM?: number;
 }
+
+// ─── Endpoint snapping ──────────────────────────────────────────────────────
+
+function haversineMetersGeo(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Snap LineString/MultiLineString endpoints that are within `toleranceM` metres
+ * of each other to a single shared coordinate. Only the first and last coordinate
+ * of each ring are candidates — interior shape points are left unchanged so road
+ * geometry is preserved.
+ *
+ * Uses a grid-based spatial index for O(n) performance. Each grid cell is
+ * 2× the tolerance wide so that any pair within tolerance is guaranteed to be
+ * in the same or a directly adjacent cell.
+ */
+export function snapGeoJSONEndpoints(
+  features: GeoJSONFeature[],
+  toleranceM: number,
+): GeoJSONFeature[] {
+  if (toleranceM <= 0) return features;
+
+  // 1 degree of latitude ≈ 111 000 m; longitude varies but we use the same
+  // approximation (conservative — slightly over-snaps at equator, fine).
+  const cellDeg = (toleranceM * 2) / 111_000;
+
+  type EP = [number, number]; // [lat, lon]
+  const grid = new Map<string, EP>(); // one representative per cell
+  // coordKey → canonical [lat, lon]
+  const canonical = new Map<string, EP>();
+
+  function cellKey(lat: number, lon: number): string {
+    return `${Math.floor(lat / cellDeg)},${Math.floor(lon / cellDeg)}`;
+  }
+  function epKey(lat: number, lon: number): string {
+    // 7 decimal places ≈ 1 cm precision, same as geojsonToOsmData
+    return `${lat.toFixed(7)},${lon.toFixed(7)}`;
+  }
+
+  function register(rawLon: number, rawLat: number): void {
+    const k = epKey(rawLat, rawLon);
+    if (canonical.has(k)) return; // already processed
+
+    // Search the 3×3 neighbourhood of cells for an existing representative
+    const ci = Math.floor(rawLat / cellDeg);
+    const cj = Math.floor(rawLon / cellDeg);
+    let found: EP | null = null;
+    outer: for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        const rep = grid.get(`${ci + di},${cj + dj}`);
+        if (
+          rep &&
+          haversineMetersGeo(rawLat, rawLon, rep[0], rep[1]) <= toleranceM
+        ) {
+          found = rep;
+          break outer;
+        }
+      }
+    }
+
+    if (found) {
+      canonical.set(k, found);
+    } else {
+      const ep: EP = [rawLat, rawLon];
+      canonical.set(k, ep);
+      grid.set(cellKey(rawLat, rawLon), ep);
+    }
+  }
+
+  function snap(c: number[]): number[] {
+    const rawLon = Number(c[0]);
+    const rawLat = Number(c[1]);
+    const rep = canonical.get(epKey(rawLat, rawLon));
+    if (!rep || (rep[0] === rawLat && rep[1] === rawLon)) return c;
+    return c.length > 2 ? [rep[1], rep[0], ...c.slice(2)] : [rep[1], rep[0]];
+  }
+
+  // Pass 1: register all endpoints so every coordinate knows its canonical home
+  for (const f of features) {
+    if (!f?.geometry) continue;
+    if (f.geometry.type === "LineString") {
+      const cs = f.geometry.coordinates;
+      if (cs.length >= 2) {
+        register(Number(cs[0]![0]), Number(cs[0]![1]));
+        register(Number(cs[cs.length - 1]![0]), Number(cs[cs.length - 1]![1]));
+      }
+    } else if (f.geometry.type === "MultiLineString") {
+      for (const line of f.geometry.coordinates) {
+        if (line.length >= 2) {
+          register(Number(line[0]![0]), Number(line[0]![1]));
+          register(
+            Number(line[line.length - 1]![0]),
+            Number(line[line.length - 1]![1]),
+          );
+        }
+      }
+    }
+  }
+
+  // Pass 2: rewrite only the endpoint coordinates that moved
+  return features.map((f) => {
+    if (!f?.geometry) return f;
+    if (f.geometry.type === "LineString") {
+      const cs = f.geometry.coordinates;
+      if (cs.length < 2) return f;
+      const s0 = snap(cs[0]!);
+      const sN = snap(cs[cs.length - 1]!);
+      if (s0 === cs[0] && sN === cs[cs.length - 1]) return f; // nothing changed
+      const next = [...cs];
+      next[0] = s0;
+      next[cs.length - 1] = sN;
+      return { ...f, geometry: { ...f.geometry, coordinates: next } };
+    } else if (f.geometry.type === "MultiLineString") {
+      let changed = false;
+      const nextLines = f.geometry.coordinates.map((line) => {
+        if (line.length < 2) return line;
+        const s0 = snap(line[0]!);
+        const sN = snap(line[line.length - 1]!);
+        if (s0 === line[0] && sN === line[line.length - 1]) return line;
+        changed = true;
+        const nl = [...line];
+        nl[0] = s0;
+        nl[line.length - 1] = sN;
+        return nl;
+      });
+      if (!changed) return f;
+      return { ...f, geometry: { ...f.geometry, coordinates: nextLines } };
+    }
+    return f;
+  });
+}
+
+// ─── Main converter ──────────────────────────────────────────────────────────
 
 /** Convert GeoJSON roads (LineString/MultiLineString) to optimizer Nodes/Ways. */
 export function geojsonToOsmData(
@@ -77,6 +234,12 @@ export function geojsonToOsmData(
     }
     return true;
   }
+  const snapM = opts.snapToleranceM ?? 0;
+  const features =
+    snapM > 0
+      ? snapGeoJSONEndpoints(fc.features ?? [], snapM)
+      : (fc.features ?? []);
+
   const nodes = new Map<string, Node>();
   const coordToNodeId = new Map<string, string>();
   let nextNodeId = 1;
@@ -117,7 +280,10 @@ export function geojsonToOsmData(
       nodeIds.push(ensureNode(lat, lon, z));
     }
     if (nodeIds.length < 2) return;
-    const id = props?.id ? String(props.id) : `g${nextWayId++}`;
+    // Always use a unique auto-generated ID to ensure each Way has a distinct wayId.
+    // This prevents false mid-block classification in routeOptimizerSimple when
+    // multiple sub-segments of a MultiLineString share a node.
+    const id = `g${nextWayId++}`;
 
     // Infer tags from GeoJSON properties (common keys from OSM/Overture)
     const tags: Record<string, string> = {};
@@ -140,7 +306,7 @@ export function geojsonToOsmData(
     ways.push({ id, nodes: nodeIds, tags });
   }
 
-  for (const f of fc.features ?? []) {
+  for (const f of features) {
     if (!f || f.type !== "Feature" || !f.geometry) continue;
     if (f.geometry.type === "LineString") {
       pushWay(f.geometry.coordinates, f.properties);
