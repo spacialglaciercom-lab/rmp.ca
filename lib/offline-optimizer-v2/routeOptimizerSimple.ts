@@ -168,13 +168,12 @@ export class RouteOptimizerSimpleV2 {
         const toNode = this.nodes.get(to);
         if (!fromNode || !toNode) continue;
 
-        const distanceM =
-          haversineMeters(
-            Number(fromNode.lon),
-            Number(fromNode.lat),
-            Number(toNode.lon),
-            Number(toNode.lat),
-          );
+        const distanceM = haversineMeters(
+          Number(fromNode.lon),
+          Number(fromNode.lat),
+          Number(toNode.lon),
+          Number(toNode.lat),
+        );
 
         if (usePlugins) {
           const coordsU: Coord = this.getCoords(from);
@@ -198,17 +197,41 @@ export class RouteOptimizerSimpleV2 {
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
+          this.graph
+            .get(from)!
+            .set(to, {
+              length: costUV,
+              oneway: isOneway,
+              dualCarriageway: isDualCarriageway || undefined,
+            });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined });
+            this.graph
+              .get(to)!
+              .set(from, {
+                length: costVU,
+                oneway: false,
+                dualCarriageway: isDualCarriageway || undefined,
+              });
           }
         } else {
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
+          this.graph
+            .get(from)!
+            .set(to, {
+              length: distanceM,
+              oneway: isOneway,
+              dualCarriageway: isDualCarriageway || undefined,
+            });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined });
+            this.graph
+              .get(to)!
+              .set(from, {
+                length: distanceM,
+                oneway: false,
+                dualCarriageway: isDualCarriageway || undefined,
+              });
           }
         }
       }
@@ -229,11 +252,9 @@ export class RouteOptimizerSimpleV2 {
    * to take long cross-town detours, producing chaotic diagonal lines.
    */
   private makeEulerian(): void {
-    if (this.plugins.length > 0) {
-      this.makeEulerianDirected();
-      return;
-    }
-
+    // First, ensure reciprocal edges exist (bidirectional completion) for both
+    // plugins and non-plugins paths. This balances the graph before any
+    // directed augmentation is attempted.
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
@@ -245,6 +266,12 @@ export class RouteOptimizerSimpleV2 {
     for (const [from, to, data] of toAdd) {
       if (!this.graph.has(from)) this.graph.set(from, new Map());
       this.graph.get(from)!.set(to, data);
+    }
+
+    // For plugins path, also run directed balancing (though with reciprocals
+    // already added, the graph should be balanced and this becomes a no-op).
+    if (this.plugins.length > 0) {
+      this.makeEulerianDirected();
     }
   }
 
@@ -272,9 +299,17 @@ export class RouteOptimizerSimpleV2 {
     const surplusList = [...surplusCount.keys()];
     if (deficitList.length === 0 || surplusList.length === 0) return;
 
-    const pairs: Array<{ from: string; to: string; cost: number; path: string[] }> = [];
+    const pairs: Array<{
+      from: string;
+      to: string;
+      cost: number;
+      path: string[];
+    }> = [];
     for (const from of deficitList) {
-      const { lengths, paths } = this.dijkstraWithTransitionCosts(from, this.plugins);
+      const { lengths, paths } = this.dijkstraWithTransitionCosts(
+        from,
+        this.plugins,
+      );
       for (const to of surplusList) {
         const cost = lengths[to];
         const path = paths[to];
@@ -478,7 +513,11 @@ export class RouteOptimizerSimpleV2 {
         const coordsV = this.getCoords(next);
         let mult = 1;
         for (const plugin of this.plugins) {
-          mult *= plugin.calculateTransitionMultiplier(coordsT, coordsU, coordsV);
+          mult *= plugin.calculateTransitionMultiplier(
+            coordsT,
+            coordsU,
+            coordsV,
+          );
         }
         score = edgeData.length * mult;
       } else {
@@ -556,8 +595,10 @@ export class RouteOptimizerSimpleV2 {
           const b = this.nodes.get(loop[k + 1]!);
           if (a && b) {
             detourM += haversineMeters(
-              Number(a.lon), Number(a.lat),
-              Number(b.lon), Number(b.lat),
+              Number(a.lon),
+              Number(a.lat),
+              Number(b.lon),
+              Number(b.lat),
             );
           }
         }
@@ -603,7 +644,7 @@ export class RouteOptimizerSimpleV2 {
         result = [
           ...result.slice(0, i + 1), // ...prev, curr
           ...loopMiddle.slice(0, -1), // loop interior nodes (excl. trailing curr)
-          ...result.slice(i),         // curr, next, ...
+          ...result.slice(i), // curr, next, ...
         ];
 
         improved = true;
@@ -657,18 +698,19 @@ export class RouteOptimizerSimpleV2 {
       if (!edges) continue;
 
       for (const [next] of edges) {
+        // Avoid immediate reversal within the BFS itself (must check before
+        // loop-closure to reject degenerate 2-edge loops like [node, N1, node])
+        if (path.length >= 2) {
+          const bfsPrev = path[path.length - 2]!;
+          if (next === bfsPrev) continue;
+        }
+
         // Found a loop back to start
         if (next === node) {
           return [...path, node];
         }
 
         if (visited.has(next)) continue;
-
-        // Avoid immediate reversal within the BFS itself
-        if (path.length >= 2) {
-          const bfsPrev = path[path.length - 2]!;
-          if (next === bfsPrev) continue;
-        }
 
         visited.add(next);
         queue.push([next, [...path, next]]);
