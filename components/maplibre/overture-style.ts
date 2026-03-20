@@ -32,6 +32,16 @@ export const PMTILES_CITIES: string[] = [
   "edmonton",
   "quebec_city",
   "halifax",
+  "winnipeg",
+  "saskatoon",
+  "regina",
+  "victoria",
+  "hamilton",
+  "kitchener",
+  "london_on",
+  "st_johns",
+  "fredericton",
+  "charlottetown",
 ];
 
 /** Overture road layers (for overlay on web and for dynamic layers on native). Exported for MapLibreRouteMap. */

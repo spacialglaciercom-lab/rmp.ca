@@ -6,6 +6,11 @@
  * Only adaptations: class name RouteOptimizerSimpleV2, types from @/lib/route-optimizer-v2/types,
  * route points include nodeId for rmp.ca compatibility, and optional RoutingCostPlugin support
  * (directed edges, transition costs). No console.log.
+ *
+ * Two-pass vs backend: for each bidirectional OSM segment this builds both directed arcs
+ * (A→B and B→A). Hierholzer then uses each arc once → you drive each street in both directions
+ * (centerline out-and-back), similar to “service both sides” / two-pass. The Python backend
+ * defaults to one undirected edge per street (single pass) unless service_both_sides is true.
  */
 
 import type {
@@ -25,9 +30,11 @@ interface EdgeData {
   wayId?: string;
 }
 
-// Turn cost penalties (meters equivalent) — must match route-optimizer-mobile-v2 (used when no plugins)
+// Turn cost penalties (meters equivalent) — used when no plugins are active.
+// U_TURN raised from 800 → 5000 so the optimizer prefers circling a block
+// (~400-1200 m) over reversing direction. Test range: 2000 / 5000 / 10000.
 const TURN_COSTS = {
-  U_TURN: 800,
+  U_TURN: 5_000,
   SHARP_LEFT: 150,
   LEFT_TURN: 50,
   STRAIGHT: 0,
@@ -41,6 +48,16 @@ const TURN_COSTS = {
  * (physical median divider). 500 km equivalent makes them effectively forbidden.
  */
 const DUAL_CARRIAGEWAY_UTURN_METERS = 500_000;
+
+/** Maximum detour (metres) allowed when inserting a block-circling loop to
+ *  eliminate a U-turn in the post-circuit repair pass. */
+const MAX_UTURN_DETOUR_M = 2_000;
+
+/** Maximum BFS depth (edges) when searching for a non-reversal loop. */
+const MAX_LOOP_BFS_DEPTH = 8;
+
+/** Maximum number of repair iterations to prevent runaway loops. */
+const MAX_REPAIR_ITERATIONS = 50;
 
 export class RouteOptimizerSimpleV2 {
   private nodes: Map<string, Node>;
@@ -113,6 +130,12 @@ export class RouteOptimizerSimpleV2 {
       };
     }
 
+    // Post-circuit U-turn elimination: repair each component circuit
+    // individually so BFS loops stay within the correct connected component.
+    for (let c = 0; c < circuits.length; c++) {
+      circuits[c] = this.eliminateUTurns(circuits[c]!);
+    }
+
     const circuit = circuits.flat();
 
     const routePoints = circuit
@@ -156,13 +179,12 @@ export class RouteOptimizerSimpleV2 {
         const toNode = this.nodes.get(to);
         if (!fromNode || !toNode) continue;
 
-        const distanceM =
-          haversineMeters(
-            Number(fromNode.lon),
-            Number(fromNode.lat),
-            Number(toNode.lon),
-            Number(toNode.lat),
-          );
+        const distanceM = haversineMeters(
+          Number(fromNode.lon),
+          Number(fromNode.lat),
+          Number(toNode.lon),
+          Number(toNode.lat),
+        );
 
         if (usePlugins) {
           const coordsU: Coord = this.getCoords(from);
@@ -224,14 +246,13 @@ export class RouteOptimizerSimpleV2 {
   }
 
   private makeEulerian(): void {
-    if (this.plugins.length > 0) {
-      this.makeEulerianDirected();
-      return;
-    }
-
+    // First, ensure reciprocal edges exist (bidirectional completion) for both
+    // plugins and non-plugins paths. This balances the graph before any
+    // directed augmentation is attempted.
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
+        if (data.oneway) continue;
         if (!this.graph.get(to)?.has(from)) {
           toAdd.push([to, from, { length: data.length, oneway: false }]);
         }
@@ -240,6 +261,12 @@ export class RouteOptimizerSimpleV2 {
     for (const [from, to, data] of toAdd) {
       if (!this.graph.has(from)) this.graph.set(from, new Map());
       this.graph.get(from)!.set(to, data);
+    }
+
+    // For plugins path, also run directed balancing (though with reciprocals
+    // already added, the graph should be balanced and this becomes a no-op).
+    if (this.plugins.length > 0) {
+      this.makeEulerianDirected();
     }
   }
 
@@ -267,9 +294,17 @@ export class RouteOptimizerSimpleV2 {
     const surplusList = [...surplusCount.keys()];
     if (deficitList.length === 0 || surplusList.length === 0) return;
 
-    const pairs: Array<{ from: string; to: string; cost: number; path: string[] }> = [];
+    const pairs: Array<{
+      from: string;
+      to: string;
+      cost: number;
+      path: string[];
+    }> = [];
     for (const from of deficitList) {
-      const { lengths, paths } = this.dijkstraWithTransitionCosts(from, this.plugins);
+      const { lengths, paths } = this.dijkstraWithTransitionCosts(
+        from,
+        this.plugins,
+      );
       for (const to of surplusList) {
         const cost = lengths[to];
         const path = paths[to];
@@ -294,37 +329,40 @@ export class RouteOptimizerSimpleV2 {
       for (let k = 0; k < path.length - 1; k++) {
         const u = path[k]!;
         const v = path[k + 1]!;
-        const data = this.graph.get(u)?.get(v);
-        if (!data) continue;
-        if (!this.graph.has(u)) this.graph.set(u, new Map());
-        this.graph.get(u)!.set(v, { ...data });
+        const existing = this.graph.get(u)?.get(v);
+        if (!existing) continue;
+        // Increment traversal count so Hierholzer covers this edge twice
+        existing.count = (existing.count ?? 1) + 1;
       }
     }
   }
 
+  /**
+   * Shortest paths with transition costs (UPS-style turn penalties, etc.).
+   * Cost to reach node v depends on the previous node (incoming edge), so we use
+   * state (node, predecessor) — not a single distance per v, which was wrong and
+   * produced huge augmenting paths when pairing for the directed Eulerian circuit.
+   */
   private dijkstraWithTransitionCosts(
     source: string,
     plugins: RoutingCostPlugin[],
   ): { lengths: Record<string, number>; paths: Record<string, string[]> } {
-    const lengths: Record<string, number> = { [source]: 0 };
-    const paths: Record<string, string[]> = { [source]: [source] };
-    type State = [string, string | null];
-    const pathToState = new Map<string, string[]>();
-    pathToState.set(`${source},`, [source]);
-    const heap: Array<[number, State]> = [[0, [source, null]]];
-    const expanded = new Set<string>();
+    const stateKey = (node: string, pred: string | null) =>
+      `${node},${pred ?? ""}`;
 
-    const stateKey = (u: string, t: string | null) => `${u},${t ?? ""}`;
+    const sk0 = stateKey(source, null);
+    const dist: Record<string, number> = { [sk0]: 0 };
+    const pathsByState: Record<string, string[]> = { [sk0]: [source] };
+    type State = [string, string | null];
+    const heap: Array<[number, State]> = [[0, [source, null]]];
 
     while (heap.length > 0) {
       heap.sort((a, b) => a[0] - b[0]);
       const entry = heap.shift()!;
       const [d, [u, t]] = entry;
       const key = stateKey(u, t);
-      if (expanded.has(key)) continue;
-      expanded.add(key);
+      if (d > (dist[key] ?? Infinity)) continue;
 
-      const coordsU = this.getCoords(u);
       const edges = this.graph.get(u);
       if (!edges) continue;
 
@@ -332,6 +370,7 @@ export class RouteOptimizerSimpleV2 {
         let transitionMult = 1;
         if (t !== null && plugins.length > 0) {
           const coordsT = this.getCoords(t);
+          const coordsU = this.getCoords(u);
           const coordsV = this.getCoords(v);
           for (const plugin of plugins) {
             transitionMult *= plugin.calculateTransitionMultiplier(
@@ -343,24 +382,41 @@ export class RouteOptimizerSimpleV2 {
         }
         let cost = edgeData.length * transitionMult;
 
-        // Dual-carriageway U-turn: physically impossible — treat as forbidden.
-        if (t !== null && edgeData.dualCarriageway) {
+        // Additive U-turn penalty during balancing — ensures augmentation
+        // paths route around blocks instead of through U-turns, even when
+        // no plugins are active. Applied on top of any plugin multiplier.
+        if (t !== null) {
           const inBearing = this.bearing(t, u);
           const outBearing = this.bearing(u, v);
-          if (Math.abs(this.normalizeTurn(outBearing - inBearing)) > 150) {
-            cost += DUAL_CARRIAGEWAY_UTURN_METERS;
+          const turnAngle = this.normalizeTurn(outBearing - inBearing);
+          if (Math.abs(turnAngle) > 150) {
+            cost += edgeData.dualCarriageway
+              ? DUAL_CARRIAGEWAY_UTURN_METERS
+              : TURN_COSTS.U_TURN;
           }
         }
 
+        const newKey = stateKey(v, u);
         const newD = d + cost;
-        if (newD < (lengths[v] ?? Infinity)) {
-          lengths[v] = newD;
-          const prevPath = pathToState.get(key) ?? [];
-          const newPath = [...prevPath, v];
-          paths[v] = newPath;
-          pathToState.set(stateKey(v, u), newPath);
+        const prevPath = pathsByState[key] ?? [];
+        const newPath = [...prevPath, v];
+        if (newD < (dist[newKey] ?? Infinity)) {
+          dist[newKey] = newD;
+          pathsByState[newKey] = newPath;
           heap.push([newD, [v, u]]);
         }
+      }
+    }
+
+    const lengths: Record<string, number> = {};
+    const paths: Record<string, string[]> = {};
+    for (const key of Object.keys(dist)) {
+      const lastComma = key.lastIndexOf(",");
+      const node = lastComma >= 0 ? key.slice(0, lastComma) : key;
+      const c = dist[key]!;
+      if (lengths[node] === undefined || c < lengths[node]!) {
+        lengths[node] = c;
+        paths[node] = pathsByState[key]!;
       }
     }
     return { lengths, paths };
@@ -370,9 +426,13 @@ export class RouteOptimizerSimpleV2 {
     const g = new Map<string, Map<string, EdgeData>>();
     let totalEdges = 0;
     for (const [node, edges] of this.graph) {
-      const copy = new Map(edges);
+      const copy = new Map<string, EdgeData>();
+      for (const [v, data] of edges) {
+        // Deep-copy each EdgeData so count changes don't affect this.graph
+        copy.set(v, { ...data });
+        totalEdges += data.count ?? 1;
+      }
       g.set(node, copy);
-      totalEdges += copy.size;
     }
     const maxIterations = Math.max(3 * totalEdges, 500_000);
 
@@ -389,8 +449,15 @@ export class RouteOptimizerSimpleV2 {
         const prev = stack.length > 1 ? stack[stack.length - 2]! : null;
         const next = this.chooseBest(prev, current, edges);
 
+        // Decrement traversal count; only remove the edge when fully consumed
+        const edgeData = edges.get(next)!;
+        const remaining = (edgeData.count ?? 1) - 1;
+        if (remaining > 0) {
+          edgeData.count = remaining;
+        } else {
+          edges.delete(next);
+        }
         stack.push(next);
-        edges.delete(next);
       } else {
         circuit.push(stack.pop()!);
       }
@@ -400,6 +467,14 @@ export class RouteOptimizerSimpleV2 {
     return circuit;
   }
 
+  /**
+   * Pick the best successor edge during Hierholzer traversal.
+   *
+   * Hard-partition: non-U-turn candidates are always preferred over U-turns.
+   * U-turns are only taken when they are the *only* remaining edges (forced
+   * reversal on dead-end stubs). Within each partition, edges are scored by
+   * the usual plugin or built-in turn-cost system.
+   */
   private chooseBest(
     prev: string | null,
     current: string,
@@ -421,10 +496,10 @@ export class RouteOptimizerSimpleV2 {
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
 
-    let best = keys[0]!;
+    let best = candidates[0]!;
     let bestScore = Infinity;
 
-    for (const next of keys) {
+    for (const next of candidates) {
       const edgeData = edges.get(next)!;
       let score: number;
 
@@ -432,27 +507,28 @@ export class RouteOptimizerSimpleV2 {
         const coordsV = this.getCoords(next);
         let mult = 1;
         for (const plugin of this.plugins) {
-          mult *= plugin.calculateTransitionMultiplier(coordsT, coordsU, coordsV);
+          mult *= plugin.calculateTransitionMultiplier(
+            coordsT,
+            coordsU,
+            coordsV,
+          );
         }
         score = edgeData.length * mult;
       } else {
         const outBearing = this.bearing(current, next);
-        const inBearing = this.bearing(prev, current);
         const turn = this.normalizeTurn(outBearing - inBearing);
         let cost: number;
         if (Math.abs(turn) > 150) cost = TURN_COSTS.U_TURN;
-        else if (turn > 120) cost = TURN_COSTS.SHARP_LEFT;
-        else if (turn > 30) cost = TURN_COSTS.LEFT_TURN;
+        else if (turn > 120) cost = TURN_COSTS.SHARP_RIGHT;
+        else if (turn > 30) cost = TURN_COSTS.RIGHT_TURN;
         else if (turn >= -30) cost = TURN_COSTS.STRAIGHT;
-        else if (turn >= -120) cost = TURN_COSTS.RIGHT_TURN;
-        else cost = TURN_COSTS.SHARP_RIGHT;
+        else if (turn >= -120) cost = TURN_COSTS.LEFT_TURN;
+        else cost = TURN_COSTS.SHARP_LEFT;
         score = edgeData.length + cost;
       }
 
       // Dual-carriageway U-turn penalty (physically impossible manoeuvre).
-      // Applied on top of any plugin or built-in turn cost.
       if (edgeData.dualCarriageway) {
-        const inBearing = this.bearing(prev, current);
         const outBearing = this.bearing(current, next);
         const turn = this.normalizeTurn(outBearing - inBearing);
         if (Math.abs(turn) > 150) score += DUAL_CARRIAGEWAY_UTURN_METERS;
@@ -465,6 +541,177 @@ export class RouteOptimizerSimpleV2 {
     }
 
     return best;
+  }
+
+  // ─── Post-circuit U-turn elimination ──────────────────────────────────────
+
+  /**
+   * Post-circuit repair pass that scans the completed Hierholzer circuit for
+   * U-turns (>150° reversals) and attempts to replace each one with a short
+   * block-circling loop found via BFS on the original graph.
+   *
+   * The pass runs in a `while(improved)` loop because inserting a loop may
+   * occasionally create a new U-turn at the splice boundaries (rare, but
+   * handled). It preserves all original traversals — loops are pure deadhead
+   * additions that only add distance.
+   */
+  private eliminateUTurns(circuit: string[]): string[] {
+    if (circuit.length < 3) return circuit;
+
+    let result = circuit;
+    let improved = true;
+    let iterations = 0;
+
+    while (improved && iterations < MAX_REPAIR_ITERATIONS) {
+      improved = false;
+      iterations++;
+
+      for (let i = 1; i < result.length - 1; i++) {
+        const prev = result[i - 1]!;
+        const curr = result[i]!;
+        const next = result[i + 1]!;
+
+        const inB = this.bearing(prev, curr);
+        const outB = this.bearing(curr, next);
+        const turn = this.normalizeTurn(outB - inB);
+
+        if (Math.abs(turn) <= 150) continue;
+
+        // Found a U-turn at index i (triple prev→curr→next).
+        // Try to find a short loop curr→...→curr that avoids going to prev.
+        const loop = this.findNonReversalLoop(curr, prev, inB);
+        if (!loop) continue;
+
+        // Compute the total detour distance of the loop
+        let detourM = 0;
+        for (let k = 0; k < loop.length - 1; k++) {
+          const a = this.nodes.get(loop[k]!);
+          const b = this.nodes.get(loop[k + 1]!);
+          if (a && b) {
+            detourM += haversineMeters(
+              Number(a.lon),
+              Number(a.lat),
+              Number(b.lon),
+              Number(b.lat),
+            );
+          }
+        }
+        if (detourM > MAX_UTURN_DETOUR_M) continue;
+
+        // Verify the repair actually reduces U-turns at the splice site.
+        // The loop is: curr → loop[1] → ... → loop[n-1] → curr
+        // After splice the sequence becomes: ...prev, curr, loop[1], ..., loop[n-1], curr, next...
+        // Check the two new junctions: prev→curr→loop[1] and loop[n-1]→curr→next
+        const loopFirst = loop[1]!;
+        const loopLast = loop[loop.length - 2]!; // node before final curr
+
+        const newTurn1 = this.normalizeTurn(
+          this.bearing(curr, loopFirst) - inB,
+        );
+        const newTurn2 = this.normalizeTurn(
+          this.bearing(curr, next) - this.bearing(loopLast, curr),
+        );
+
+        // Count U-turns before and after
+        const oldUTurns = 1; // the one we're fixing
+        let newUTurns = 0;
+        if (Math.abs(newTurn1) > 150) newUTurns++;
+        if (Math.abs(newTurn2) > 150) newUTurns++;
+
+        // Also check internal U-turns within the loop itself
+        for (let k = 1; k < loop.length - 1; k++) {
+          const lPrev = loop[k - 1]!;
+          const lCurr = loop[k]!;
+          const lNext = loop[k + 1]!;
+          const lIn = this.bearing(lPrev, lCurr);
+          const lOut = this.bearing(lCurr, lNext);
+          if (Math.abs(this.normalizeTurn(lOut - lIn)) > 150) newUTurns++;
+        }
+
+        if (newUTurns >= oldUTurns) continue;
+
+        // Splice the loop into the circuit at position i.
+        // result[i] === curr, loop = [curr, ..., curr]
+        // Replace the single curr at i with the full loop (minus trailing curr
+        // since result[i] is followed by next which remains).
+        const loopMiddle = loop.slice(1); // drop leading curr (already at result[i])
+        result = [
+          ...result.slice(0, i + 1), // ...prev, curr
+          ...loopMiddle.slice(0, -1), // loop interior nodes (excl. trailing curr)
+          ...result.slice(i), // curr, next, ...
+        ];
+
+        improved = true;
+        break; // restart scan from the beginning
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * BFS to find a short loop from `node` back to `node` that does NOT
+   * immediately traverse the edge to `avoidPred` (which would just be
+   * the same U-turn). The first edge must also not be a U-turn relative
+   * to `inBearing` (the direction we arrived from).
+   *
+   * Returns the loop as [node, ..., node] (starts and ends at `node`),
+   * or null if no loop is found within depth/distance limits.
+   */
+  private findNonReversalLoop(
+    node: string,
+    avoidPred: string,
+    inBearing: number,
+  ): string[] | null {
+    // BFS state: [currentNode, path-from-start]
+    type BFSState = [string, string[]];
+    const queue: BFSState[] = [];
+
+    // Seed with all neighbours except the avoided predecessor,
+    // and skip first-step U-turns.
+    const startEdges = this.graph.get(node);
+    if (!startEdges) return null;
+
+    for (const [neighbour] of startEdges) {
+      if (neighbour === avoidPred) continue;
+      const firstBearing = this.bearing(node, neighbour);
+      const firstTurn = this.normalizeTurn(firstBearing - inBearing);
+      if (Math.abs(firstTurn) > 150) continue; // would be another U-turn
+      queue.push([neighbour, [node, neighbour]]);
+    }
+
+    const visited = new Set<string>();
+    visited.add(node); // don't revisit start until we close the loop
+
+    while (queue.length > 0) {
+      const [current, path] = queue.shift()!;
+
+      if (path.length > MAX_LOOP_BFS_DEPTH + 1) continue; // depth limit
+
+      const edges = this.graph.get(current);
+      if (!edges) continue;
+
+      for (const [next] of edges) {
+        // Avoid immediate reversal within the BFS itself (must check before
+        // loop-closure to reject degenerate 2-edge loops like [node, N1, node])
+        if (path.length >= 2) {
+          const bfsPrev = path[path.length - 2]!;
+          if (next === bfsPrev) continue;
+        }
+
+        // Found a loop back to start
+        if (next === node) {
+          return [...path, node];
+        }
+
+        if (visited.has(next)) continue;
+
+        visited.add(next);
+        queue.push([next, [...path, next]]);
+      }
+    }
+
+    return null;
   }
 
   /** Find the best start node within a specific component. */
@@ -571,8 +818,8 @@ export class RouteOptimizerSimpleV2 {
         const turn = this.normalizeTurn(outB - inB);
 
         if (Math.abs(turn) > 150) uturns++;
-        else if (turn > 30) left++;
-        else if (turn < -30) right++;
+        else if (turn > 30) right++;
+        else if (turn < -30) left++;
         else straight++;
       }
     }
