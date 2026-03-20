@@ -687,7 +687,7 @@ export class RouteOptimizerSimpleV2 {
   private findNonReversalLoop(
     node: string,
     prevNode: string,
-    maxDepth: number = 15,
+    maxDepth: number = 8,
   ): string[] | null {
     const queue: Array<{ path: string[]; visited: Set<string> }> = [];
 
@@ -745,11 +745,17 @@ export class RouteOptimizerSimpleV2 {
     let result = [...circuit];
     let improved = true;
     let passes = 0;
-    const maxPasses = 5;
+    const maxPasses = 3; // cap iteration — more passes compound block-circling detours
+    const originalLength = circuit.length;
+    // Cap total circuit growth to 40% to prevent runaway loop accumulation
+    const maxGrowth = Math.ceil(originalLength * 0.4);
 
     while (improved && passes < maxPasses) {
       improved = false;
       passes++;
+
+      // Bail out if circuit has grown too much from accumulated splices
+      if (result.length - originalLength > maxGrowth) break;
 
       for (let i = 1; i < result.length - 1; i++) {
         const prev = result[i - 1]!;
