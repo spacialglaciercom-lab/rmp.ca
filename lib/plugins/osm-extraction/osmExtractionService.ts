@@ -37,6 +37,9 @@
  *   proposed / construction    Incomplete or planned roads
  */
 
+import type { BBox } from "geojson";
+import { bbox, bboxClip } from "@turf/turf";
+
 import type { ExtractResult } from "../types";
 import {
   OVERPASS_API_ENDPOINTS,
@@ -171,6 +174,125 @@ function elementsToGeoJSON(
   return { features, roadCount };
 }
 
+/**
+ * Overpass `(poly:...)` returns full ways if any node is inside the polygon, so
+ * LineStrings often extend past the drawn bounds. Clip each segment to the
+ * axis-aligned bbox of the extraction polygon so nothing sticks out past the box.
+ */
+export function clipLineFeaturesToExtractBbox(
+  polygon: GeoJSON.Feature<GeoJSON.Polygon>,
+  features: GeoJSON.Feature[],
+): GeoJSON.Feature[] {
+  const extent = bbox(polygon) as BBox;
+  const out: GeoJSON.Feature[] = [];
+
+  for (const f of features) {
+    if (f.geometry.type !== "LineString") continue;
+    const line = f as GeoJSON.Feature<GeoJSON.LineString>;
+    const clipped = bboxClip(line, extent);
+    const g = clipped.geometry;
+    if (g.type === "LineString") {
+      if (g.coordinates.length < 2) continue;
+      out.push({ ...line, geometry: g });
+    } else if (g.type === "MultiLineString") {
+      g.coordinates.forEach((coords, i) => {
+        if (coords.length < 2) return;
+        out.push({
+          ...line,
+          id: line.id != null ? `${String(line.id)}_${i}` : undefined,
+          geometry: { type: "LineString", coordinates: coords },
+        });
+      });
+    }
+  }
+
+  return out;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Build minimal OSM XML from clipped LineString features (synthetic node/way ids).
+ * Aligns with {@link clipLineFeaturesToExtractBbox} so exports match the map.
+ */
+function buildOSMXmlFromClippedLineFeatures(features: GeoJSON.Feature[]): string {
+  if (features.length === 0) {
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="RouteMasterPro OSM Extractor"></osm>`;
+  }
+
+  let minLat = Infinity;
+  let minLon = Infinity;
+  let maxLat = -Infinity;
+  let maxLon = -Infinity;
+
+  let nextNodeId = 1;
+  const nodeLines: string[] = [];
+  const wayBlocks: string[] = [];
+
+  for (let wi = 0; wi < features.length; wi++) {
+    const f = features[wi];
+    if (f.geometry.type !== "LineString") continue;
+    const coords = f.geometry.coordinates;
+    if (coords.length < 2) continue;
+
+    const wayId = 1_000_000 + wi;
+    const ndRefs: number[] = [];
+
+    for (const [lon, lat] of coords) {
+      if (lat < minLat) minLat = lat;
+      if (lon < minLon) minLon = lon;
+      if (lat > maxLat) maxLat = lat;
+      if (lon > maxLon) maxLon = lon;
+
+      const id = nextNodeId++;
+      ndRefs.push(id);
+      nodeLines.push(`  <node id="${id}" lat="${lat.toFixed(7)}" lon="${lon.toFixed(7)}"/>`);
+    }
+
+    const wayLines = [`  <way id="${wayId}">`];
+    for (const ref of ndRefs) {
+      wayLines.push(`    <nd ref="${ref}"/>`);
+    }
+    const props = (f.properties ?? {}) as Record<string, string | number | boolean>;
+    for (const [k, v] of Object.entries(props)) {
+      if (v == null) continue;
+      wayLines.push(`    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`);
+    }
+    wayLines.push(`  </way>`);
+    wayBlocks.push(wayLines.join("\n"));
+  }
+
+  if (nodeLines.length === 0) {
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="RouteMasterPro OSM Extractor"></osm>`;
+  }
+
+  let boundsLine = "";
+  if (
+    Number.isFinite(minLat) &&
+    Number.isFinite(minLon) &&
+    Number.isFinite(maxLat) &&
+    Number.isFinite(maxLon)
+  ) {
+    boundsLine = `  <bounds minlat="${minLat.toFixed(7)}" minlon="${minLon.toFixed(7)}" maxlat="${maxLat.toFixed(7)}" maxlon="${maxLon.toFixed(7)}"/>\n`;
+  }
+
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<osm version="0.6" generator="RouteMasterPro OSM Extractor">`,
+    boundsLine,
+    ...nodeLines,
+    ...wayBlocks,
+    `</osm>`,
+  ].join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -186,24 +308,34 @@ export async function extractOSM(
   const query = buildRoutableRoadsQuery(points);
   const elements = await fetchOverpass(query);
   const { features, roadCount } = elementsToGeoJSON(elements);
+  const clipped = clipLineFeaturesToExtractBbox(polygon, features);
+  const clippedCount = clipped.length;
 
   const geojson: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
-    features,
+    features: clipped,
   };
 
   return {
     geojson,
     rawElements: elements,
     stats: {
-      roads: roadCount,
-      points: features.length,
-      nodes: elements.filter((e) => e.type === "node").length,
-      edges: roadCount,
+      roads: clippedCount,
+      points: clippedCount,
+      nodes: clipped.reduce((sum, f) => {
+        if (f.geometry.type === "LineString") return sum + f.geometry.coordinates.length;
+        return sum;
+      }, 0),
+      edges: clippedCount,
     },
-    warnings:
-      roadCount === 0
-        ? ["No routable road features returned from Overpass API for this area."]
-        : [],
+    warnings: (() => {
+      if (roadCount === 0) {
+        return ["No routable road features returned from Overpass API for this area."];
+      }
+      if (clippedCount === 0) {
+        return ["All road geometry lay outside the extraction bounding box after clipping."];
+      }
+      return [];
+    })(),
   };
 }

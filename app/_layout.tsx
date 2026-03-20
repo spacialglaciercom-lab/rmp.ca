@@ -315,6 +315,7 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="oauth/callback" />
       <Stack.Screen name="contribution" />
+      <Stack.Screen name="iam/approve" />
     </Stack>
   );
 
