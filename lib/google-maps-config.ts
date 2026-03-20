@@ -10,6 +10,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 const GOOGLE_MAPS_API_KEY_STORAGE_KEY = "@trashroute:google_maps_api_key";
@@ -92,6 +93,22 @@ export async function ensureServerConfigFetched(): Promise<void> {
     serverConfigCache = data;
   } catch {
     // ignore
+  }
+}
+
+/**
+ * Use /api/maps/* on our server (same as web) for Directions + Roads.
+ * Web: always. Native: when EXPO_PUBLIC_API_BASE_URL points at a non-localhost API the device can reach.
+ */
+export function shouldUseMapsServerProxy(): boolean {
+  if (Platform.OS === "web") return true;
+  const explicit = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (!explicit) return false;
+  try {
+    const u = new URL(explicit);
+    return u.hostname !== "localhost" && u.hostname !== "127.0.0.1";
+  } catch {
+    return false;
   }
 }
 

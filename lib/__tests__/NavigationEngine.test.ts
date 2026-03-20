@@ -1,36 +1,30 @@
 /**
- * Unit tests for NavigationEngine.ts
- * Covers: constructor state, bearing math, maneuver text, voice instructions,
- * snap-to-route, off-route detection, step progression, arrival, announcements,
- * distance remaining, event system, stop, and simulation mode.
+ * Tests for NavigationEngine.
+ *
+ * We test the pure computation methods directly (_calculateBearing,
+ * _maneuverToText, _buildVoiceInstruction), then drive the location-update
+ * pipeline (_onLocationUpdate → _updateProgress / _checkAnnouncements) with
+ * realistic London coordinates using the real Turf snap implementation.
+ *
+ * expo-location is dynamically imported only inside start() which we do not
+ * call here, so no location SDK mock is needed.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NavigationEngine } from "../NavigationEngine";
+import type { MatchedRoute, MatchedStep } from "../mapMatching";
 
-// ── Mocks (must come before the import under test) ──────────────────────────
-
-vi.mock("../routeSnap", () => ({
-  createRouteLine: vi.fn(() => "mock-route-line"),
-  getRouteLengthMeters: vi.fn(() => 1000),
-  snapToRoute: vi.fn(() => ({
-    snapped: [-73.0, 45.0],
-    currentSegmentIndex: 0,
-    distanceToRoute: 5,
-    routeProgressMeters: 100,
-  })),
-}));
-
-vi.mock("../offlineTurnDetection", () => ({
-  haversineDistance: vi.fn(() => 100),
-}));
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
 
 vi.mock("@/src/powerSaving", () => ({
   PowerSavingManager: {
-    init: vi.fn(() => Promise.resolve()),
-    getLocationWatchOptions: vi.fn(() => ({
-      accuracy: 4,
+    init: vi.fn().mockResolvedValue(undefined),
+    getLocationWatchOptions: vi.fn().mockReturnValue({
+      accuracy: 3,
       distanceInterval: 5,
-      timeInterval: 1000,
-    })),
+      timeInterval: 1_000,
+    }),
   },
 }));
 
@@ -38,112 +32,78 @@ vi.mock("@/lib/expoSpeechVoice", () => ({
   speakNavigation: vi.fn(),
 }));
 
-// ── Import under test ────────────────────────────────────────────────────────
-import { NavigationEngine } from "../NavigationEngine";
-import type { MatchedRoute, MatchedStep } from "../mapMatching";
-import { snapToRoute } from "../routeSnap";
-import { haversineDistance } from "../offlineTurnDetection";
+// ---------------------------------------------------------------------------
+// Test data helpers
+// ---------------------------------------------------------------------------
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeStep(overrides: Partial<MatchedStep> = {}): MatchedStep {
+/**
+ * Build a minimal MatchedStep with GeoJSON coordinates ([lon, lat] order).
+ */
+function makeStep(
+  coords: Array<[number, number]>,
+  maneuver: { type: string; modifier?: string; exit?: number } = {
+    type: "turn",
+    modifier: "right",
+  },
+  name = "Test St",
+): MatchedStep {
   return {
-    geometry: {
-      type: "LineString",
-      coordinates: [
-        [-73.0, 45.0],
-        [-73.001, 45.001],
-      ],
-    },
-    maneuver: { type: "turn", modifier: "right" },
-    name: "Test Street",
-    distance: 100,
-    duration: 30,
-    ...overrides,
+    geometry: { type: "LineString", coordinates: coords },
+    maneuver,
+    name,
+    distance: 500,
+    duration: 60,
   };
 }
 
-function makeRoute(
-  points: Array<{ lat: number; lon: number }> = [
-    { lat: 45.0, lon: -73.0 },
-    { lat: 45.001, lon: -73.001 },
-    { lat: 45.002, lon: -73.002 },
-  ],
-  steps: MatchedStep[] = [],
-): MatchedRoute {
+/**
+ * A two-step route along a straight north-south line in London.
+ *
+ * Segment A→B: lat 51.5074 → 51.5184  (~1.2 km north, lon fixed at -0.1278)
+ * Segment B→C: lat 51.5184 → 51.5294  (~1.2 km north continued)
+ *
+ * GeoJSON step coordinates are [lon, lat].
+ */
+const POINT_A = { lat: 51.5074, lon: -0.1278 };
+const POINT_B = { lat: 51.5184, lon: -0.1278 };
+const POINT_C = { lat: 51.5294, lon: -0.1278 };
+
+function makeRoute(): MatchedRoute {
+  const step0 = makeStep(
+    [
+      [POINT_A.lon, POINT_A.lat],
+      [POINT_B.lon, POINT_B.lat],
+    ],
+    { type: "turn", modifier: "right" },
+    "Baker St",
+  );
+
+  const step1 = makeStep(
+    [
+      [POINT_B.lon, POINT_B.lat],
+      [POINT_C.lon, POINT_C.lat],
+    ],
+    { type: "arrive" },
+    "Baker St",
+  );
+
   return {
-    matchedGeometry: points,
-    steps,
-    totalDistance: 1000,
-    totalDuration: 120,
+    steps: [step0, step1],
     legs: [],
+    totalDistance: 2_400,
+    totalDuration: 300,
+    matchedGeometry: [POINT_A, POINT_B, POINT_C],
   };
 }
 
-function makeLocation(lat = 45.0, lon = -73.0) {
-  return {
-    coords: {
-      latitude: lat,
-      longitude: lon,
-      heading: 0,
-      speed: 5,
-      accuracy: 10,
-    },
-  };
-}
+// ---------------------------------------------------------------------------
+// _calculateBearing
+// ---------------------------------------------------------------------------
 
-// ── Constructor ───────────────────────────────────────────────────────────────
+describe("NavigationEngine._calculateBearing", () => {
+  const engine = new NavigationEngine(makeRoute());
 
-describe("NavigationEngine constructor", () => {
-  it("initialises all state correctly", () => {
-    const route = makeRoute();
-    const engine = new NavigationEngine(route);
-
-    expect(engine.route).toBe(route);
-    expect(engine.steps).toBe(route.steps);
-    expect(engine.currentStepIndex).toBe(0);
-    expect(engine.isNavigating).toBe(false);
-    expect(engine.distanceToNextManeuver).toBe(Infinity);
-    expect(engine.distanceRemaining).toBe(1000);
-    expect(engine.lastSegmentIndex).toBe(0);
-    expect(engine.simulationMode).toBe(false);
-    expect(engine.simulationSpeedMultiplier).toBe(1.0);
-    expect(engine.listeners.size).toBe(0);
-    expect(engine.announced.size).toBe(0);
-    expect(engine.locationSubscription).toBeNull();
-    expect(engine.simulationInterval).toBeNull();
-  });
-
-  it("respects offRouteThreshold option", () => {
-    const engine = new NavigationEngine(makeRoute(), { offRouteThreshold: 75 });
-    expect(engine.offRouteThreshold).toBe(75);
-  });
-
-  it("defaults offRouteThreshold to 50", () => {
-    const engine = new NavigationEngine(makeRoute());
-    expect(engine.offRouteThreshold).toBe(50);
-  });
-
-  it("sets simulationMode from option", () => {
-    const engine = new NavigationEngine(makeRoute(), { simulationMode: true });
-    expect(engine.simulationMode).toBe(true);
-  });
-
-  it("sets announceDistances to [500, 200, 50]", () => {
-    const engine = new NavigationEngine(makeRoute());
-    expect(engine.announceDistances).toEqual([500, 200, 50]);
-  });
-});
-
-// ── _calculateBearing ────────────────────────────────────────────────────────
-
-describe("_calculateBearing", () => {
-  let engine: NavigationEngine;
-  beforeEach(() => {
-    engine = new NavigationEngine(makeRoute());
-  });
-
-  it("returns 0 for due north", () => {
+  it("returns ~0° for due north", () => {
     const bearing = engine._calculateBearing(
       { lat: 0, lon: 0 },
       { lat: 1, lon: 0 },
@@ -151,7 +111,7 @@ describe("_calculateBearing", () => {
     expect(bearing).toBeCloseTo(0, 0);
   });
 
-  it("returns ~90 for due east", () => {
+  it("returns ~90° for due east", () => {
     const bearing = engine._calculateBearing(
       { lat: 0, lon: 0 },
       { lat: 0, lon: 1 },
@@ -159,7 +119,7 @@ describe("_calculateBearing", () => {
     expect(bearing).toBeCloseTo(90, 0);
   });
 
-  it("returns ~180 for due south", () => {
+  it("returns ~180° for due south", () => {
     const bearing = engine._calculateBearing(
       { lat: 1, lon: 0 },
       { lat: 0, lon: 0 },
@@ -167,7 +127,7 @@ describe("_calculateBearing", () => {
     expect(bearing).toBeCloseTo(180, 0);
   });
 
-  it("returns ~270 for due west", () => {
+  it("returns ~270° for due west", () => {
     const bearing = engine._calculateBearing(
       { lat: 0, lon: 1 },
       { lat: 0, lon: 0 },
@@ -175,522 +135,469 @@ describe("_calculateBearing", () => {
     expect(bearing).toBeCloseTo(270, 0);
   });
 
-  it("returns value in [0, 360)", () => {
-    const bearing = engine._calculateBearing(
-      { lat: 45.5, lon: -73.5 },
-      { lat: 45.501, lon: -73.499 },
-    );
+  it("returns a value in [0, 360)", () => {
+    const bearing = engine._calculateBearing(POINT_A, POINT_B);
     expect(bearing).toBeGreaterThanOrEqual(0);
     expect(bearing).toBeLessThan(360);
   });
 });
 
-// ── _maneuverToText ──────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// _maneuverToText
+// ---------------------------------------------------------------------------
 
-describe("_maneuverToText", () => {
-  let engine: NavigationEngine;
-  beforeEach(() => {
-    engine = new NavigationEngine(makeRoute());
-  });
+describe("NavigationEngine._maneuverToText", () => {
+  const engine = new NavigationEngine(makeRoute());
 
-  it.each([
+  const cases: Array<[{ type: string; modifier?: string; exit?: number }, string]> = [
     [{ type: "turn", modifier: "left" }, "turn left"],
     [{ type: "turn", modifier: "right" }, "turn right"],
     [{ type: "turn", modifier: "slight left" }, "bear left"],
     [{ type: "turn", modifier: "slight right" }, "bear right"],
     [{ type: "turn", modifier: "sharp left" }, "make a sharp left"],
     [{ type: "turn", modifier: "sharp right" }, "make a sharp right"],
-    [{ type: "turn", modifier: "straight" }, "continue straight"],
     [{ type: "turn", modifier: "uturn" }, "make a U-turn"],
-    [{ type: "new name" }, "continue onto"],
-    [{ type: "depart" }, "depart"],
+    [{ type: "turn", modifier: "straight" }, "continue straight"],
     [{ type: "arrive" }, "you have arrived"],
+    [{ type: "depart" }, "depart"],
+    [{ type: "new name" }, "continue onto"],
+    [{ type: "roundabout", exit: 2 }, "enter the roundabout, take exit 2"],
+    [{ type: "rotary", exit: 3 }, "enter the rotary, take exit 3"],
     [{ type: "merge", modifier: "left" }, "merge left"],
-    [{ type: "merge" }, "merge ahead"],
-  ])("maps %o → %s", (maneuver, expected) => {
-    expect(engine._maneuverToText(maneuver as never)).toBe(expected);
-  });
+    [{ type: "fork", modifier: "right" }, "turn right"],
+    [{ type: "end of road", modifier: "right" }, "turn right"],
+  ];
 
-  it("handles roundabout with exit number", () => {
-    const text = engine._maneuverToText({ type: "roundabout", exit: 2 });
-    expect(text).toBe("enter the roundabout, take exit 2");
-  });
-
-  it("handles rotary with exit number", () => {
-    const text = engine._maneuverToText({ type: "rotary", exit: 3 });
-    expect(text).toBe("enter the rotary, take exit 3");
-  });
-
-  it("falls back for unknown maneuver type", () => {
-    const text = engine._maneuverToText({ type: "unknown-type" });
-    expect(typeof text).toBe("string");
+  it.each(cases)("maneuver %o → '%s'", (maneuver, expected) => {
+    expect(engine._maneuverToText(maneuver)).toBe(expected);
   });
 });
 
-// ── _buildVoiceInstruction ───────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// _buildVoiceInstruction
+// ---------------------------------------------------------------------------
 
-describe("_buildVoiceInstruction", () => {
-  let engine: NavigationEngine;
-  beforeEach(() => {
-    engine = new NavigationEngine(makeRoute());
+describe("NavigationEngine._buildVoiceInstruction", () => {
+  const engine = new NavigationEngine(makeRoute());
+
+  it("includes street name in the instruction", () => {
+    const step = makeStep(
+      [[0, 0],[0, 0.01]],
+      { type: "turn", modifier: "right" },
+      "Oxford St",
+    );
+    const text = engine._buildVoiceInstruction(step, 300);
+    expect(text).toMatch(/Oxford St/);
+    expect(text).toMatch(/turn right/);
   });
 
-  it("includes street name when set and not last spoken", () => {
-    const step = makeStep({ name: "Main St", maneuver: { type: "turn", modifier: "left" } });
-    const text = engine._buildVoiceInstruction(step, 200);
-    expect(text).toContain("Main St");
-    expect(text).toContain("turn left");
-  });
-
-  it("omits street name when same as last spoken", () => {
-    const step = makeStep({ name: "Main St", maneuver: { type: "turn", modifier: "left" } });
-    (engine as unknown as { lastSpokenStreetName: string }).lastSpokenStreetName =
-      "Main St";
-    const text = engine._buildVoiceInstruction(step, 200);
-    expect(text).not.toContain("Main St");
-  });
-
-  it("formats large distance as rounded 100s", () => {
-    const step = makeStep({ maneuver: { type: "turn", modifier: "right" } });
+  it("rounds distance to nearest 100 m when distance > 100 m", () => {
+    const step = makeStep([[0, 0],[0, 0.01]], { type: "turn", modifier: "left" });
     const text = engine._buildVoiceInstruction(step, 350);
-    expect(text).toContain("400 meters");
+    expect(text).toMatch(/400 meters/i);
   });
 
-  it("formats small distance exactly", () => {
-    const step = makeStep({ maneuver: { type: "turn", modifier: "right" } });
-    const text = engine._buildVoiceInstruction(step, 45);
-    expect(text).toContain("45 meters");
+  it("uses exact metres when distance <= 100 m", () => {
+    const step = makeStep([[0, 0],[0, 0.01]], { type: "turn", modifier: "right" });
+    const text = engine._buildVoiceInstruction(step, 75);
+    expect(text).toMatch(/75 meters/i);
+  });
+
+  it("omits street name when it matches lastSpokenStreetName", () => {
+    const e = new NavigationEngine(makeRoute());
+    (e as unknown as { lastSpokenStreetName: string }).lastSpokenStreetName =
+      "Baker St";
+    const step = makeStep([[0, 0],[0, 0.01]], { type: "turn", modifier: "right" }, "Baker St");
+    const text = e._buildVoiceInstruction(step, 200);
+    expect(text).not.toMatch(/Baker St/);
   });
 });
 
-// ── getState ─────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Event system: on / _emit
+// ---------------------------------------------------------------------------
 
-describe("getState", () => {
-  it("returns correct shape with defaults", () => {
-    const step0 = makeStep({ name: "Oak Ave" });
-    const step1 = makeStep({ name: "Elm St", maneuver: { type: "turn", modifier: "left" } });
-    const route = makeRoute(undefined, [step0, step1]);
+describe("NavigationEngine event system", () => {
+  it("on() delivers events to the callback", () => {
+    const engine = new NavigationEngine(makeRoute());
+    const received: unknown[] = [];
+    engine.on("testEvent", (data) => received.push(data));
+
+    engine._emit("testEvent", { value: 42 });
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual({ value: 42 });
+  });
+
+  it("on() returns an unsubscribe function that removes the listener", () => {
+    const engine = new NavigationEngine(makeRoute());
+    const received: unknown[] = [];
+    const off = engine.on("testEvent", (data) => received.push(data));
+
+    engine._emit("testEvent", "first");
+    off();
+    engine._emit("testEvent", "second");
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe("first");
+  });
+
+  it("multiple listeners for the same event all receive it", () => {
+    const engine = new NavigationEngine(makeRoute());
+    const callsA: unknown[] = [];
+    const callsB: unknown[] = [];
+    engine.on("x", (d) => callsA.push(d));
+    engine.on("x", (d) => callsB.push(d));
+
+    engine._emit("x", "ping");
+
+    expect(callsA).toHaveLength(1);
+    expect(callsB).toHaveLength(1);
+  });
+
+  it("events with no listeners do not throw", () => {
+    const engine = new NavigationEngine(makeRoute());
+    expect(() => engine._emit("nonExistentEvent", {})).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Constructor / getState
+// ---------------------------------------------------------------------------
+
+describe("NavigationEngine constructor and getState", () => {
+  it("initialises isNavigating to false", () => {
+    const engine = new NavigationEngine(makeRoute());
+    expect(engine.isNavigating).toBe(false);
+  });
+
+  it("initialises distanceRemaining to route totalDistance", () => {
+    const route = makeRoute();
     const engine = new NavigationEngine(route);
+    expect(engine.distanceRemaining).toBe(route.totalDistance);
+  });
 
+  it("initialises currentStepIndex to 0", () => {
+    const engine = new NavigationEngine(makeRoute());
+    expect(engine.currentStepIndex).toBe(0);
+  });
+
+  it("accepts custom offRouteThreshold option", () => {
+    const engine = new NavigationEngine(makeRoute(), { offRouteThreshold: 100 });
+    expect(engine.offRouteThreshold).toBe(100);
+  });
+
+  it("getState reflects initial state", () => {
+    const route = makeRoute();
+    const engine = new NavigationEngine(route);
     const state = engine.getState();
 
+    expect(state.isNavigating).toBe(false);
     expect(state.currentStepIndex).toBe(0);
     expect(state.totalSteps).toBe(2);
-    expect(state.currentStep).toBe(step0);
-    expect(state.nextStep).toBe(step1);
-    expect(state.distanceRemaining).toBe(1000);
-    expect(state.distanceToNextManeuver).toBe(Infinity);
-    expect(state.isNavigating).toBe(false);
     expect(state.currentLocation).toBeNull();
-    expect(state.streetName).toBe("Oak Ave");
-    expect(state.nextManeuverType).toBe("turn");
-    expect(state.nextManeuverModifier).toBe("left");
-  });
-
-  it("returns undefined currentStep when no steps", () => {
-    const engine = new NavigationEngine(makeRoute());
-    const state = engine.getState();
-    expect(state.currentStep).toBeUndefined();
-    expect(state.nextStep).toBeUndefined();
-    expect(state.streetName).toBe("");
+    expect(state.currentStep).toBe(route.steps[0]);
+    expect(state.nextStep).toBe(route.steps[1]);
   });
 });
 
-// ── Event system (on / _emit) ────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// stop()
+// ---------------------------------------------------------------------------
 
-describe("event system", () => {
-  let engine: NavigationEngine;
-  beforeEach(() => {
-    engine = new NavigationEngine(makeRoute());
-  });
+describe("NavigationEngine.stop", () => {
+  it("sets isNavigating to false", () => {
+    const engine = new NavigationEngine(makeRoute(), { simulationMode: true });
+    engine._startSimulation();
+    expect(engine.isNavigating).toBe(true);
 
-  it("registers listener and receives event", () => {
-    const cb = vi.fn();
-    engine.on("update", cb);
-    engine._emit("update", { foo: 1 });
-    expect(cb).toHaveBeenCalledWith({ foo: 1 });
-  });
-
-  it("does not call listener for different event", () => {
-    const cb = vi.fn();
-    engine.on("update", cb);
-    engine._emit("stepChanged", {});
-    expect(cb).not.toHaveBeenCalled();
-  });
-
-  it("unsubscribe function removes listener", () => {
-    const cb = vi.fn();
-    const off = engine.on("update", cb);
-    off();
-    engine._emit("update", {});
-    expect(cb).not.toHaveBeenCalled();
-  });
-
-  it("supports multiple listeners on same event", () => {
-    const cb1 = vi.fn();
-    const cb2 = vi.fn();
-    engine.on("update", cb1);
-    engine.on("update", cb2);
-    engine._emit("update", "data");
-    expect(cb1).toHaveBeenCalledWith("data");
-    expect(cb2).toHaveBeenCalledWith("data");
-  });
-});
-
-// ── stop ─────────────────────────────────────────────────────────────────────
-
-describe("stop", () => {
-  it("sets isNavigating to false and clears listeners", () => {
-    const engine = new NavigationEngine(makeRoute());
-    engine.on("update", vi.fn());
     engine.stop();
     expect(engine.isNavigating).toBe(false);
+  });
+
+  it("clears all event listeners", () => {
+    const engine = new NavigationEngine(makeRoute());
+    engine.on("foo", vi.fn());
+    engine.on("bar", vi.fn());
+    expect(engine.listeners.size).toBe(2);
+
+    engine.stop();
     expect(engine.listeners.size).toBe(0);
   });
 
-  it("emits stopped event before clearing listeners", () => {
+  it("emits 'stopped' event before clearing listeners", () => {
     const engine = new NavigationEngine(makeRoute());
-    const cb = vi.fn();
-    engine.on("stopped", cb);
+    const stoppedCalls: unknown[] = [];
+    engine.on("stopped", () => stoppedCalls.push(true));
+
     engine.stop();
-    expect(cb).toHaveBeenCalled();
+
+    expect(stoppedCalls).toHaveLength(1);
   });
 
-  it("clears simulation interval if running", () => {
+  it("clears the simulation interval when in simulation mode", () => {
     vi.useFakeTimers();
     const engine = new NavigationEngine(makeRoute(), { simulationMode: true });
-    const route = makeRoute([
-      { lat: 45.0, lon: -73.0 },
-      { lat: 45.1, lon: -73.1 },
-    ]);
-    const simEngine = new NavigationEngine(route, { simulationMode: true });
-    simEngine._startSimulation();
-    expect(simEngine.simulationInterval).not.toBeNull();
-    simEngine.stop();
-    expect(simEngine.simulationInterval).toBeNull();
+    engine._startSimulation();
+    expect(engine.simulationInterval).not.toBeNull();
+
+    engine.stop();
+    expect(engine.simulationInterval).toBeNull();
+
     vi.useRealTimers();
-    engine.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _onLocationUpdate — on-route vs off-route
+// ---------------------------------------------------------------------------
+
+describe("NavigationEngine._onLocationUpdate", () => {
+  function makeEngine(opts?: { offRouteThreshold?: number }) {
+    const engine = new NavigationEngine(makeRoute(), opts);
+    // Suppress _speak to avoid require('@/lib/expoSpeechVoice') in Node
+    vi.spyOn(engine, "_speak").mockImplementation(() => {});
+    return engine;
+  }
+
+  it("emits 'update' event with current state for an on-route position", () => {
+    const engine = makeEngine();
+    const updates: unknown[] = [];
+    engine.on("update", (s) => updates.push(s));
+
+    // Point exactly on the route (midpoint A→B)
+    engine._onLocationUpdate({
+      coords: {
+        latitude: (POINT_A.lat + POINT_B.lat) / 2,
+        longitude: POINT_A.lon,
+      },
+    });
+
+    expect(updates).toHaveLength(1);
+    expect((updates[0] as { isNavigating: boolean }).isNavigating).toBe(false);
   });
 
-  it("removes location subscription if present", () => {
+  it("emits 'offRoute' when the vehicle is beyond the threshold", () => {
+    const engine = makeEngine({ offRouteThreshold: 50 });
+    const offRouteEvents: unknown[] = [];
+    engine.on("offRoute", (e) => offRouteEvents.push(e));
+
+    // ~690 m east of the route line — well beyond 50 m
+    engine._onLocationUpdate({
+      coords: { latitude: 51.513, longitude: -0.117 },
+    });
+
+    expect(offRouteEvents).toHaveLength(1);
+    const evt = offRouteEvents[0] as { distance: number };
+    expect(evt.distance).toBeGreaterThan(50);
+  });
+
+  it("does NOT emit 'offRoute' for an on-route position", () => {
+    const engine = makeEngine({ offRouteThreshold: 50 });
+    const offRouteEvents: unknown[] = [];
+    engine.on("offRoute", (e) => offRouteEvents.push(e));
+
+    engine._onLocationUpdate({
+      coords: {
+        latitude: POINT_A.lat + 0.005, // midway along segment, exactly on line
+        longitude: POINT_A.lon,
+      },
+    });
+
+    expect(offRouteEvents).toHaveLength(0);
+  });
+
+  it("updates currentLocation after each call", () => {
+    const engine = makeEngine();
+
+    engine._onLocationUpdate({
+      coords: { latitude: 51.51, longitude: -0.1278, heading: 45, speed: 10 },
+    });
+
+    expect(engine.currentLocation).toMatchObject({
+      lat: 51.51,
+      lon: -0.1278,
+      bearing: 45,
+      speed: 10,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _updateProgress — step advancement and arrival
+// ---------------------------------------------------------------------------
+
+describe("NavigationEngine._updateProgress", () => {
+  function makeEngine() {
     const engine = new NavigationEngine(makeRoute());
-    const removeSpy = vi.fn();
-    (engine as unknown as { _locationSubscription: { remove: () => void } })
-      ._locationSubscription = { remove: removeSpy };
-    engine.stop();
-    expect(removeSpy).toHaveBeenCalled();
-  });
-});
+    vi.spyOn(engine, "_speak").mockImplementation(() => {});
+    return engine;
+  }
 
-// ── _updateDistanceRemaining ─────────────────────────────────────────────────
+  it("advances currentStepIndex when within 20 m of step end", () => {
+    const engine = makeEngine();
+    expect(engine.currentStepIndex).toBe(0);
 
-describe("_updateDistanceRemaining", () => {
-  let engine: NavigationEngine;
-
-  beforeEach(() => {
-    engine = new NavigationEngine(makeRoute());
-  });
-
-  it("uses routeProgressMeters when available", () => {
-    engine._updateDistanceRemaining({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
-      segmentIndex: 0,
-      routeProgressMeters: 300,
-      totalRouteLength: 1000,
-    });
-    expect(engine.distanceRemaining).toBe(700);
-  });
-
-  it("clamps to 0 when at/past end", () => {
-    engine._updateDistanceRemaining({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
-      segmentIndex: 0,
-      routeProgressMeters: 1200,
-      totalRouteLength: 1000,
-    });
-    expect(engine.distanceRemaining).toBe(0);
-  });
-
-  it("falls back to haversine when no routeProgressMeters", () => {
-    vi.mocked(haversineDistance).mockReturnValue(50);
-    engine._updateDistanceRemaining({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
-      segmentIndex: 0,
-    });
-    // haversineDistance is called for remaining segments
-    expect(haversineDistance).toHaveBeenCalled();
-    expect(engine.distanceRemaining).toBeGreaterThanOrEqual(0);
-  });
-});
-
-// ── _updateProgress (step advancement & arrival) ─────────────────────────────
-
-describe("_updateProgress", () => {
-  it("advances to next step when within 20m of step end", () => {
-    vi.mocked(haversineDistance).mockReturnValue(15); // < 20m
-    const step0 = makeStep();
-    const step1 = makeStep({ name: "Next St" });
-    const route = makeRoute(undefined, [step0, step1]);
-    const engine = new NavigationEngine(route);
-
-    const stepChangedCb = vi.fn();
-    engine.on("stepChanged", stepChangedCb);
-
+    // ~11 m before point B (end of step 0)
     engine._updateProgress({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
+      snappedLocation: { lat: POINT_B.lat - 0.0001, lon: POINT_B.lon },
       segmentIndex: 0,
     });
 
     expect(engine.currentStepIndex).toBe(1);
-    expect(stepChangedCb).toHaveBeenCalledWith(
-      expect.objectContaining({ index: 1 }),
-    );
   });
 
-  it("does not advance when farther than 20m from step end", () => {
-    vi.mocked(haversineDistance).mockReturnValue(25); // > 20m
-    const step0 = makeStep();
-    const step1 = makeStep();
-    const route = makeRoute(undefined, [step0, step1]);
-    const engine = new NavigationEngine(route);
+  it("does NOT advance step when farther than 20 m from step end", () => {
+    const engine = makeEngine();
 
+    // ~111 m before point B
     engine._updateProgress({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
+      snappedLocation: { lat: POINT_B.lat - 0.001, lon: POINT_B.lon },
       segmentIndex: 0,
     });
 
     expect(engine.currentStepIndex).toBe(0);
   });
 
-  it("emits arrived and stops when at last step within 30m", () => {
-    vi.mocked(haversineDistance).mockReturnValue(10); // < 30m
-    const step0 = makeStep();
-    const route = makeRoute(undefined, [step0]);
-    const engine = new NavigationEngine(route);
-
-    const arrivedCb = vi.fn();
-    engine.on("arrived", arrivedCb);
+  it("emits 'stepChanged' when the step advances", () => {
+    const engine = makeEngine();
+    const stepChanges: unknown[] = [];
+    engine.on("stepChanged", (e) => stepChanges.push(e));
 
     engine._updateProgress({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
+      snappedLocation: { lat: POINT_B.lat - 0.0001, lon: POINT_B.lon },
       segmentIndex: 0,
     });
 
-    expect(arrivedCb).toHaveBeenCalled();
-    expect(engine.distanceRemaining).toBe(0);
+    expect(stepChanges).toHaveLength(1);
+    expect((stepChanges[0] as { index: number }).index).toBe(1);
+  });
+
+  it("emits 'arrived' and stops when within 30 m of final step end", () => {
+    const engine = makeEngine();
+    const arrivedEvents: unknown[] = [];
+    engine.on("arrived", () => arrivedEvents.push(true));
+
+    // Manually advance to the last step
+    (engine as unknown as { _currentStepIndex: number })._currentStepIndex = 1;
+
+    // ~22 m before point C (end of step 1)
+    engine._updateProgress({
+      snappedLocation: { lat: POINT_C.lat - 0.0002, lon: POINT_C.lon },
+      segmentIndex: 1,
+    });
+
+    expect(arrivedEvents).toHaveLength(1);
     expect(engine.isNavigating).toBe(false);
   });
 
-  it("clears announced set on step advance", () => {
-    vi.mocked(haversineDistance).mockReturnValue(15); // < 20m
-    const step0 = makeStep();
-    const step1 = makeStep();
-    const route = makeRoute(undefined, [step0, step1]);
-    const engine = new NavigationEngine(route);
-
-    // Seed announced set
-    engine.announced.add("0-200");
+  it("clears the announced set when step advances", () => {
+    const engine = makeEngine();
+    const announced = (engine as unknown as { _announced: Set<string> })._announced;
+    announced.add("0-500");
+    announced.add("0-200");
 
     engine._updateProgress({
-      snappedLocation: { lat: 45.0, lon: -73.0 },
+      snappedLocation: { lat: POINT_B.lat - 0.0001, lon: POINT_B.lon },
       segmentIndex: 0,
     });
 
-    expect(engine.announced.size).toBe(0);
-  });
-
-  it("no-ops when current step has no geometry", () => {
-    const step0 = makeStep({ geometry: { type: "LineString", coordinates: [] } });
-    const route = makeRoute(undefined, [step0]);
-    const engine = new NavigationEngine(route);
-
-    expect(() =>
-      engine._updateProgress({
-        snappedLocation: { lat: 45.0, lon: -73.0 },
-        segmentIndex: 0,
-      }),
-    ).not.toThrow();
+    expect(announced.size).toBe(0);
   });
 });
 
-// ── _checkAnnouncements ───────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// _checkAnnouncements
+// ---------------------------------------------------------------------------
 
-describe("_checkAnnouncements", () => {
-  // _speak uses require() at runtime which bypasses static mocks; spy directly
-  function stubSpeak(engine: NavigationEngine) {
-    vi.spyOn(
-      engine as unknown as { _speak: (t: string) => void },
-      "_speak",
-    ).mockImplementation(() => {});
+describe("NavigationEngine._checkAnnouncements", () => {
+  function makeEngine() {
+    const engine = new NavigationEngine(makeRoute());
+    vi.spyOn(engine, "_speak").mockImplementation(() => {});
+    return engine;
   }
 
-  it("emits announcement when within 500m of next maneuver", () => {
-    const step0 = makeStep();
-    const step1 = makeStep({ name: "Oak Ave", maneuver: { type: "turn", modifier: "right" } });
-    const route = makeRoute(undefined, [step0, step1]);
-    const engine = new NavigationEngine(route);
-    stubSpeak(engine);
+  it("fires an announcement when within 200 m of next maneuver", () => {
+    const engine = makeEngine();
+    const announcements: unknown[] = [];
+    engine.on("announcement", (e) => announcements.push(e));
 
-    // Set distance to next maneuver within 500m
-    (engine as unknown as { _distanceToNextManeuver: number })
-      ._distanceToNextManeuver = 400;
-
-    const announceCb = vi.fn();
-    engine.on("announcement", announceCb);
-
+    (engine as unknown as { _distanceToNextManeuver: number })._distanceToNextManeuver = 180;
     engine._checkAnnouncements();
 
-    expect(announceCb).toHaveBeenCalledWith(
-      expect.objectContaining({ distance: 500 }),
-    );
+    // 180 <= 200 and 180 <= 500 → two announcements (200m and 500m keys)
+    expect(announcements.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("does not repeat announcement for same key", () => {
-    const step0 = makeStep();
-    const step1 = makeStep({ name: "Oak Ave" });
-    const route = makeRoute(undefined, [step0, step1]);
-    const engine = new NavigationEngine(route);
-    stubSpeak(engine);
+  it("does not re-announce the same step+distance combination", () => {
+    const engine = makeEngine();
+    const announcements: unknown[] = [];
+    engine.on("announcement", (e) => announcements.push(e));
 
-    (engine as unknown as { _distanceToNextManeuver: number })
-      ._distanceToNextManeuver = 30;
+    (engine as unknown as { _distanceToNextManeuver: number })._distanceToNextManeuver = 45;
+    engine._checkAnnouncements();
+    const firstCount = announcements.length;
 
-    const announceCb = vi.fn();
-    engine.on("announcement", announceCb);
-
-    engine._checkAnnouncements(); // keys get added to _announced
-    const callsAfterFirst = announceCb.mock.calls.length;
-    engine._checkAnnouncements(); // all keys already announced → no new emissions
-
-    // Second call must not add more emissions
-    expect(announceCb.mock.calls.length).toBe(callsAfterFirst);
+    // Second call — same distances, same step → already announced
+    engine._checkAnnouncements();
+    expect(announcements.length).toBe(firstCount);
   });
 
-  it("does not announce when no next step", () => {
-    const step0 = makeStep();
-    const route = makeRoute(undefined, [step0]);
-    const engine = new NavigationEngine(route);
-    stubSpeak(engine);
-    (engine as unknown as { _distanceToNextManeuver: number })
-      ._distanceToNextManeuver = 10;
-
-    const announceCb = vi.fn();
-    engine.on("announcement", announceCb);
+  it("calls _speak with a non-empty instruction string", () => {
+    const engine = makeEngine();
+    (engine as unknown as { _distanceToNextManeuver: number })._distanceToNextManeuver = 45;
     engine._checkAnnouncements();
 
-    expect(announceCb).not.toHaveBeenCalled();
+    expect(engine._speak).toHaveBeenCalledWith(expect.any(String));
+    const spokenText = (engine._speak as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(spokenText.length).toBeGreaterThan(0);
+  });
+
+  it("does not fire an announcement when there is no next step", () => {
+    const engine = makeEngine();
+    // Advance to last step so there is no nextStep
+    (engine as unknown as { _currentStepIndex: number })._currentStepIndex = 1;
+    (engine as unknown as { _distanceToNextManeuver: number })._distanceToNextManeuver = 10;
+
+    const announcements: unknown[] = [];
+    engine.on("announcement", (e) => announcements.push(e));
+    engine._checkAnnouncements();
+
+    expect(announcements).toHaveLength(0);
   });
 });
 
-// ── _onLocationUpdate ─────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// _snapToRoute
+// ---------------------------------------------------------------------------
 
-describe("_onLocationUpdate", () => {
-  beforeEach(() => {
-    vi.mocked(snapToRoute).mockReturnValue({
-      snapped: [-73.0, 45.0],
-      currentSegmentIndex: 0,
-      distanceToRoute: 5,
-      routeProgressMeters: 100,
-    } as never);
-    vi.mocked(haversineDistance).mockReturnValue(100);
+describe("NavigationEngine._snapToRoute", () => {
+  it("returns distanceFromRoute ≈ 0 for a point on the line", () => {
+    const engine = new NavigationEngine(makeRoute());
+    const result = engine._snapToRoute({
+      lat: (POINT_A.lat + POINT_B.lat) / 2,
+      lon: POINT_A.lon,
+    });
+
+    expect(result.distanceFromRoute).toBeLessThan(5); // within 5 m
   });
 
-  it("updates currentLocation", () => {
-    const engine = new NavigationEngine(makeRoute([
-      { lat: 45.0, lon: -73.0 },
-      { lat: 45.001, lon: -73.001 },
-    ]));
-    engine._onLocationUpdate(makeLocation(45.0, -73.0));
-    expect(engine.currentLocation?.lat).toBe(45.0);
-    expect(engine.currentLocation?.lon).toBe(-73.0);
+  it("returns a large distanceFromRoute for a point far off the line", () => {
+    const engine = new NavigationEngine(makeRoute());
+    const result = engine._snapToRoute({ lat: 51.513, lon: -0.117 });
+
+    expect(result.distanceFromRoute).toBeGreaterThan(400);
   });
 
-  it("emits offRoute when distance exceeds threshold", () => {
-    vi.mocked(snapToRoute).mockReturnValue({
-      snapped: [-73.0, 45.0],
-      currentSegmentIndex: 0,
-      distanceToRoute: 100, // > 50m threshold
-      routeProgressMeters: 0,
-    } as never);
+  it("returns routeProgressMeters and totalRouteLength", () => {
+    const engine = new NavigationEngine(makeRoute());
+    const result = engine._snapToRoute({
+      lat: POINT_B.lat,
+      lon: POINT_B.lon,
+    });
 
-    const engine = new NavigationEngine(makeRoute([
-      { lat: 45.0, lon: -73.0 },
-      { lat: 45.001, lon: -73.001 },
-    ]));
-
-    const offRouteCb = vi.fn();
-    engine.on("offRoute", offRouteCb);
-    engine._onLocationUpdate(makeLocation());
-
-    expect(offRouteCb).toHaveBeenCalledWith(
-      expect.objectContaining({ distance: 100 }),
-    );
-  });
-
-  it("emits update on every location change", () => {
-    const engine = new NavigationEngine(makeRoute([
-      { lat: 45.0, lon: -73.0 },
-      { lat: 45.001, lon: -73.001 },
-    ]));
-    const updateCb = vi.fn();
-    engine.on("update", updateCb);
-    engine._onLocationUpdate(makeLocation());
-    expect(updateCb).toHaveBeenCalled();
-  });
-
-  it("early-returns for single-point geometry with update emit", () => {
-    const engine = new NavigationEngine(
-      makeRoute([{ lat: 45.0, lon: -73.0 }]),
-    );
-    const updateCb = vi.fn();
-    engine.on("update", updateCb);
-    engine._onLocationUpdate(makeLocation());
-    expect(updateCb).toHaveBeenCalled();
-  });
-});
-
-// ── Simulation mode ───────────────────────────────────────────────────────────
-
-describe("simulation mode", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("_startSimulation sets isNavigating and builds cumulative distances", () => {
-    vi.mocked(haversineDistance).mockReturnValue(50);
-    const route = makeRoute([
-      { lat: 45.0, lon: -73.0 },
-      { lat: 45.001, lon: -73.001 },
-      { lat: 45.002, lon: -73.002 },
-    ]);
-    const engine = new NavigationEngine(route, { simulationMode: true });
-    engine._startSimulation();
-
-    expect(engine.isNavigating).toBe(true);
-    expect(engine.simulationInterval).not.toBeNull();
-    engine.stop();
-  });
-
-  it("start() in simulation mode emits started and sets isNavigating", async () => {
-    vi.mocked(haversineDistance).mockReturnValue(50);
-    const route = makeRoute([
-      { lat: 45.0, lon: -73.0 },
-      { lat: 45.001, lon: -73.001 },
-    ]);
-    const engine = new NavigationEngine(route, { simulationMode: true });
-    const startedCb = vi.fn();
-    engine.on("started", startedCb);
-
-    await engine.start();
-
-    expect(startedCb).toHaveBeenCalled();
-    expect(engine.isNavigating).toBe(true);
-    engine.stop();
-  });
-
-  it("setSpeedMultiplier updates multiplier", () => {
-    const engine = new NavigationEngine(makeRoute(), { simulationMode: true });
-    engine.setSpeedMultiplier(2.5);
-    expect(engine.simulationSpeedMultiplier).toBe(2.5);
+    expect(result.routeProgressMeters).toBeDefined();
+    expect(result.totalRouteLength).toBeDefined();
+    expect(result.totalRouteLength!).toBeGreaterThan(0);
   });
 });

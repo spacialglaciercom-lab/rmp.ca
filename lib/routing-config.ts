@@ -2,14 +2,13 @@
  * Routing API configuration: OSRM (default) or Google Maps when selected / available.
  */
 
-import { Platform } from "react-native";
-
 import {
   getCachedServerGoogleMapsKey,
   getCachedServerOsrmUrl,
   getGoogleMapsApiKey,
   getNavigationProvider,
   ensureServerConfigFetched,
+  shouldUseMapsServerProxy,
 } from "./google-maps-config";
 import { getApiBaseUrl } from "@/shared/oauth";
 

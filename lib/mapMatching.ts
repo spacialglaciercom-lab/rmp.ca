@@ -5,6 +5,7 @@
 
 import { Platform } from "react-native";
 import polyline from "@mapbox/polyline";
+import { shouldUseMapsServerProxy } from "./google-maps-config";
 import type { RoutingConfig } from "./routing-config";
 import {
   detectTurnsFromGPX,
@@ -12,7 +13,7 @@ import {
   type TurnInstruction,
 } from "./offlineTurnDetection";
 
-/** Get the API base URL for server proxy (web only). Never returns empty on web so proxy is used. */
+/** Get the API base URL for /api/maps/* server proxies (directions, snap-to-roads). */
 function getProxyBaseUrl(): string {
   try {
     const oauth = require("@/shared/oauth") as {
@@ -243,12 +244,12 @@ async function fetchGoogleDirections(
     departureTime,
   };
 
-  if (Platform.OS === "web") {
+  if (shouldUseMapsServerProxy()) {
     const base = getProxyBaseUrl();
     const url = `${base}/api/maps/directions`;
     if (!base)
       console.warn(
-        "[Google Directions] Web proxy base URL is empty; request may fail.",
+        "[Google Directions] Proxy base URL is empty; request may fail.",
       );
     const response = await fetch(url, {
       method: "POST",
@@ -329,8 +330,7 @@ async function googleSnapToRoads(
 
     try {
       let data: any;
-      if (Platform.OS === "web") {
-        // Web: proxy through our server to avoid CORS
+      if (shouldUseMapsServerProxy()) {
         const base = getProxyBaseUrl();
         const response = await fetch(`${base}/api/maps/snap-to-roads`, {
           method: "POST",
@@ -339,7 +339,6 @@ async function googleSnapToRoads(
         });
         data = await response.json();
       } else {
-        // Native: call Google directly
         const url = `https://roads.googleapis.com/v1/snapToRoads?interpolate=true&path=${encodeURIComponent(path)}&key=${apiKey}`;
         const response = await fetch(url);
         data = await response.json();
@@ -521,10 +520,10 @@ export async function routeBetweenPoints(
   config: RoutingConfig,
   options?: RouteOptions,
 ): Promise<MatchedRoute | null> {
-  // On web the server proxy adds the API key, so use Google when provider is google even without client key
+  // Server proxy adds the API key; use Google without a client-side key when we hit /api/maps/* (web or native + remote API URL).
   if (
     config.provider === "google" &&
-    (config.googleApiKey || Platform.OS === "web")
+    (config.googleApiKey || shouldUseMapsServerProxy())
   ) {
     return googleRouteBetweenPoints(
       from,
@@ -597,10 +596,9 @@ export async function routeThroughWaypoints(
     "[Route] waypoints=" + points.length + ", provider=" + config.provider,
   );
 
-  // On web the server proxy adds the API key, so use Google when provider is google even without client key
   if (
     config.provider === "google" &&
-    (config.googleApiKey || Platform.OS === "web")
+    (config.googleApiKey || shouldUseMapsServerProxy())
   ) {
     return googleRouteThroughWaypoints(
       points,
@@ -692,10 +690,9 @@ export async function matchGPXToRoads(
     `[MapMatch] Starting: ${points.length} points, provider=${config.provider}, hasApiKey=${!!config.googleApiKey}, baseUrl=${config.baseUrl}`,
   );
 
-  // On web the server proxy adds the API key, so allow Google path even without a client-side key
   const useGoogle =
     config.provider === "google" &&
-    (config.googleApiKey || Platform.OS === "web");
+    (config.googleApiKey || shouldUseMapsServerProxy());
   if (useGoogle) {
     const result = await googleMatchGPXToRoads(
       points,
@@ -709,9 +706,14 @@ export async function matchGPXToRoads(
     `[MapMatch] Falling through to OSRM (provider=${config.provider}, apiKey=${config.googleApiKey ? "present" : "missing"})`,
   );
 
-  const usePoints = isPublicDemoServer(config.baseUrl)
+  const isPublic = isPublicDemoServer(config.baseUrl);
+  const usePoints = isPublic
     ? downsamplePoints(points, MAX_POINTS_PUBLIC_DEMO)
     : points;
+  // Public demo: small batches + 1s delay to respect rate limits.
+  // Private server: large batches (OSRM handles 500+ points) and no delay.
+  const batchSize = isPublic ? BATCH_SIZE : 500;
+  const batchDelay = isPublic ? BATCH_DELAY_MS : 0;
 
   const allLegs: Array<{
     steps?: MatchedStep[];
@@ -724,11 +726,11 @@ export async function matchGPXToRoads(
   let totalDistance = 0;
   let totalDuration = 0;
 
-  for (let i = 0; i < usePoints.length; i += BATCH_SIZE - 1) {
-    if (i > 0) {
-      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+  for (let i = 0; i < usePoints.length; i += batchSize - 1) {
+    if (i > 0 && batchDelay > 0) {
+      await new Promise((r) => setTimeout(r, batchDelay));
     }
-    const batch = usePoints.slice(i, i + BATCH_SIZE);
+    const batch = usePoints.slice(i, i + batchSize);
     const coords = batch.map((p) => `${p.lon},${p.lat}`).join(";");
     const radiuses = batch.map(() => "25").join(";");
 

@@ -9,7 +9,7 @@ export const fuelAwareRoutingPlugin: Plugin = {
   id: "fuel-aware-routing",
   name: "Fuel-aware routing",
   description:
-    "Use DEM elevation for fuel-cost optimization when the backend has a DEM configured",
+    "Backend route optimizer only: use DEM elevation for fuel-cost optimization when the server has a DEM configured. Not used by offline optimizer (v2).",
   version: "1.0.0",
   initialize() {},
   destroy() {},

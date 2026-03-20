@@ -8,6 +8,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Switch,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
@@ -1115,6 +1116,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   newExtractionBtnText: { fontSize: 14, fontWeight: "600" },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 12,
+  },
+  toggleLabelGroup: { flex: 1 },
+  toggleLabel: { fontSize: 14, fontWeight: "600" },
+  toggleSub: { fontSize: 12, marginTop: 2 },
 });
 
 OvertureExtractorContent.displayName = "OvertureExtractorContent";

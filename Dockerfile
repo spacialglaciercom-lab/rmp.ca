@@ -13,10 +13,8 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
 
-# Stub shared-logic so pnpm install can resolve file:./shared-logic/build/js/packages/shared-logic (Kotlin/JS build not run in Docker; server bundle does not use it).
-RUN mkdir -p shared-logic/build/js/packages/shared-logic/kotlin && \
-  printf '%s\n' '{"name":"shared-logic","version":"0.0.1","main":"kotlin/rmp-ca-shared-logic.js","description":"KMP shared-logic stub for Docker"}' > shared-logic/build/js/packages/shared-logic/package.json && \
-  echo "module.exports = {};" > shared-logic/build/js/packages/shared-logic/kotlin/rmp-ca-shared-logic.js
+# Local file: dependency (package.json uses file:./shared-logic/pnpm-stub; KMP not built in Docker).
+COPY shared-logic/pnpm-stub ./shared-logic/pnpm-stub
 
 # Install dependencies (include dev for build). Skip postinstall: patch scripts are for mobile/React Native, not the API.
 # Use --no-frozen-lockfile so patchedDependencies hash matches the patch file in this environment (avoids ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
@@ -37,10 +35,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
-# Stub shared-logic so pnpm install can resolve file: dependency (same as builder).
-RUN mkdir -p shared-logic/build/js/packages/shared-logic/kotlin && \
-  printf '%s\n' '{"name":"shared-logic","version":"0.0.1","main":"kotlin/rmp-ca-shared-logic.js","description":"KMP shared-logic stub for Docker"}' > shared-logic/build/js/packages/shared-logic/package.json && \
-  echo "module.exports = {};" > shared-logic/build/js/packages/shared-logic/kotlin/rmp-ca-shared-logic.js
+COPY shared-logic/pnpm-stub ./shared-logic/pnpm-stub
 # Production install only (skip postinstall – not needed for API runtime). --no-frozen-lockfile so patchedDependencies hash matches.
 RUN pnpm install --no-frozen-lockfile --prod --ignore-scripts
 
