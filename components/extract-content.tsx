@@ -87,17 +87,17 @@ async function initDuckDB() {
   try {
     const duckdb = await import("@duckdb/duckdb-wasm");
     const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-    
+
     // Default to MVP bundle immediately to avoid waiting for network if offline
     let bundle: any = JSDELIVR_BUNDLES.mvp;
 
     try {
-        const selected = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-        if (selected && selected.mainWorker) {
-            bundle = selected;
-        }
+      const selected = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+      if (selected && selected.mainWorker) {
+        bundle = selected;
+      }
     } catch (e) {
-        console.warn("[DuckDB] Bundle selection failed, using MVP bundle:", e);
+      console.warn("[DuckDB] Bundle selection failed, using MVP bundle:", e);
     }
 
     const worker = new Worker(bundle.mainWorker!);
@@ -213,7 +213,9 @@ export default function ExtractContent() {
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
 
   // Extract source: "overture" (default) or "osm" (Overpass API, requires osm-extraction plugin)
-  const [extractSource, setExtractSource] = useState<"overture" | "osm">("overture");
+  const [extractSource, setExtractSource] = useState<"overture" | "osm">(
+    "overture",
+  );
   const osmExtractionEnabled = usePluginStore((s) =>
     s.isPluginEnabled("osm-extraction", false),
   );
@@ -462,18 +464,31 @@ export default function ExtractContent() {
           const map = mapRef.current;
           if (map && count > 0) {
             clearPreviewLayer();
-            map.addSource("preview-roads", { type: "geojson", data: result.geojson });
+            map.addSource("preview-roads", {
+              type: "geojson",
+              data: result.geojson,
+            });
             map.addLayer({
               id: "preview-roads",
               type: "line",
               source: "preview-roads",
-              paint: { "line-color": "#ef4444", "line-width": 1.5, "line-opacity": 0.7 },
+              paint: {
+                "line-color": "#ef4444",
+                "line-width": 1.5,
+                "line-opacity": 0.7,
+              },
             });
           }
-          setProgress({ stage: "complete", message: `OSM preview: ${count} road segments` });
+          setProgress({
+            stage: "complete",
+            message: `OSM preview: ${count} road segments`,
+          });
         })
         .catch((err) => {
-          setProgress({ stage: "error", message: `OSM preview failed: ${err instanceof Error ? err.message : String(err)}` });
+          setProgress({
+            stage: "error",
+            message: `OSM preview failed: ${err instanceof Error ? err.message : String(err)}`,
+          });
         })
         .finally(() => {
           setExtracting(false);
@@ -495,12 +510,20 @@ export default function ExtractContent() {
         // Fetch GeoJSON from backend and draw on map
         fetch(httpGeoJSONUrl(hash))
           .then((res) => {
-            if (!res.ok) throw new Error(`GeoJSON fetch failed: ${res.status} ${res.statusText}`);
+            if (!res.ok)
+              throw new Error(
+                `GeoJSON fetch failed: ${res.status} ${res.statusText}`,
+              );
             return res.json();
           })
           .then((geojson: GeoJSON.FeatureCollection) => {
             const count = geojson?.features?.length ?? 0;
-            console.log("[Preview] GeoJSON loaded:", count, "features from", httpGeoJSONUrl(hash));
+            console.log(
+              "[Preview] GeoJSON loaded:",
+              count,
+              "features from",
+              httpGeoJSONUrl(hash),
+            );
             const map = mapRef.current;
             if (map && count > 0) {
               clearPreviewLayer();
@@ -519,11 +542,18 @@ export default function ExtractContent() {
                 },
               });
             } else if (count === 0) {
-              console.warn("[Preview] Extract returned 0 features — nothing to draw. Rebuild extract image if using Docker.");
+              console.warn(
+                "[Preview] Extract returned 0 features — nothing to draw. Rebuild extract image if using Docker.",
+              );
             }
           })
           .catch((e) => {
-            console.error("[Preview] Fetch/draw failed:", e, "URL:", httpGeoJSONUrl(hash));
+            console.error(
+              "[Preview] Fetch/draw failed:",
+              e,
+              "URL:",
+              httpGeoJSONUrl(hash),
+            );
           })
           .finally(() => setPreviewLoading(false));
       },
@@ -555,7 +585,10 @@ export default function ExtractContent() {
         .then((result) => {
           const count = result.geojson.features.length;
           if (count === 0) {
-            setProgress({ stage: "error", message: "OSM returned no road features for this area." });
+            setProgress({
+              stage: "error",
+              message: "OSM returned no road features for this area.",
+            });
             return;
           }
           offlineGeoJSONRef.current = result.geojson;
@@ -570,18 +603,32 @@ export default function ExtractContent() {
           const map = mapRef.current;
           if (map && Platform.OS === "web") {
             clearPreviewLayer();
-            map.addSource("preview-roads", { type: "geojson", data: result.geojson });
+            map.addSource("preview-roads", {
+              type: "geojson",
+              data: result.geojson,
+            });
             map.addLayer({
               id: "preview-roads",
               type: "line",
               source: "preview-roads",
-              paint: { "line-color": "#8b5cf6", "line-width": 2, "line-opacity": 0.8 },
+              paint: {
+                "line-color": "#8b5cf6",
+                "line-width": 2,
+                "line-opacity": 0.8,
+              },
             });
           }
-          setProgress({ stage: "complete", message: `OSM: ${count} road segments`, percent: 100 });
+          setProgress({
+            stage: "complete",
+            message: `OSM: ${count} road segments`,
+            percent: 100,
+          });
         })
         .catch((err) => {
-          setProgress({ stage: "error", message: `OSM extraction failed: ${err instanceof Error ? err.message : String(err)}` });
+          setProgress({
+            stage: "error",
+            message: `OSM extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+          });
         })
         .finally(() => setExtracting(false));
       return;
@@ -590,7 +637,9 @@ export default function ExtractContent() {
     const handle = connectAndExtract(
       polygon,
       (p) => {
-        console.log(`[Extract] Progress: ${p.stage} ${p.percent}% - ${p.message}`);
+        console.log(
+          `[Extract] Progress: ${p.stage} ${p.percent}% - ${p.message}`,
+        );
         setProgress(p);
       },
       (hash, stats) => {
@@ -604,7 +653,9 @@ export default function ExtractContent() {
         fetch(geoUrl)
           .then((res) => {
             if (!res.ok) {
-              throw new Error(`GeoJSON fetch failed: ${res.status} ${res.statusText}`);
+              throw new Error(
+                `GeoJSON fetch failed: ${res.status} ${res.statusText}`,
+              );
             }
             return res.json();
           })
@@ -642,7 +693,12 @@ export default function ExtractContent() {
           })
           .catch((e) => {
             const msg = e instanceof Error ? e.message : String(e);
-            console.error("[Extract] GeoJSON fetch failed:", msg, "URL:", geoUrl);
+            console.error(
+              "[Extract] GeoJSON fetch failed:",
+              msg,
+              "URL:",
+              geoUrl,
+            );
             setProgress({
               stage: "error",
               message: `Could not load result: ${msg}. Check backend proxy and extract service (see console for URL).`,
@@ -656,13 +712,15 @@ export default function ExtractContent() {
 
         // On web, offline extraction is not supported/mocked. Show error immediately.
         if (Platform.OS === "web") {
-          console.error("[Extract] Web extraction failed. Check console for WS connection details.");
+          console.error(
+            "[Extract] Web extraction failed. Check console for WS connection details.",
+          );
           setProgress({
-             stage: "error",
-             message: `Extraction failed: ${err}\n(See browser console for details)`,
-           });
-           setExtracting(false);
-           return;
+            stage: "error",
+            message: `Extraction failed: ${err}\n(See browser console for details)`,
+          });
+          setExtracting(false);
+          return;
         }
 
         setProgress({
@@ -736,7 +794,10 @@ export default function ExtractContent() {
   // -------------------------------------------------------------------------
   const downloadGeoJSON = useCallback(() => {
     if (!resultHash) return;
-    if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
+    if (
+      (resultHash === "__offline__" || resultHash === "__osm__") &&
+      offlineGeoJSONRef.current
+    ) {
       try {
         const blob = new Blob([JSON.stringify(offlineGeoJSONRef.current)], {
           type: "application/json",
@@ -744,7 +805,10 @@ export default function ExtractContent() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = resultHash === "__osm__" ? "osm-extract.geojson" : "offline-extract.geojson";
+        a.download =
+          resultHash === "__osm__"
+            ? "osm-extract.geojson"
+            : "offline-extract.geojson";
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch {}
@@ -758,7 +822,8 @@ export default function ExtractContent() {
   }, [resultHash]);
 
   const downloadOSM = useCallback(() => {
-    if (!osmRawElementsRef.current || osmRawElementsRef.current.length === 0) return;
+    if (!osmRawElementsRef.current || osmRawElementsRef.current.length === 0)
+      return;
     if (!polygon) return;
     try {
       const ring = polygon.geometry.coordinates[0];
@@ -789,10 +854,7 @@ export default function ExtractContent() {
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      alertUser(
-        "Zone partitioning",
-        "Polygon must have at least 3 vertices.",
-      );
+      alertUser("Zone partitioning", "Polygon must have at least 3 vertices.");
       return;
     }
     if (!resultHash) {
@@ -814,7 +876,10 @@ export default function ExtractContent() {
     ]);
     try {
       let geojson: { type: string; features: unknown[] };
-      if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
+      if (
+        (resultHash === "__offline__" || resultHash === "__osm__") &&
+        offlineGeoJSONRef.current
+      ) {
         geojson = offlineGeoJSONRef.current as {
           type: string;
           features: unknown[];
@@ -879,7 +944,6 @@ export default function ExtractContent() {
     setPreviewPointCount(null);
     setResultHash(null);
     setResultStats(null);
-    offlineOSMXmlRef.current = null;
     setProgress(null);
     osmRawElementsRef.current = null;
   }, [clearPreviewLayer]);
@@ -1151,7 +1215,8 @@ export default function ExtractContent() {
                 >
                   <Text
                     style={{
-                      color: extractSource === "overture" ? "#fff" : colors.text,
+                      color:
+                        extractSource === "overture" ? "#fff" : colors.text,
                       fontSize: 12,
                       fontWeight: "600",
                     }}
@@ -1624,7 +1689,8 @@ function NativeExtractFallback({
             if (count === 0) {
               setProgress({
                 stage: "error",
-                message: "Extract returned no data (0 features). Rebuild extract image if using Docker.",
+                message:
+                  "Extract returned no data (0 features). Rebuild extract image if using Docker.",
               });
             } else {
               setProgress({
@@ -1704,10 +1770,7 @@ function NativeExtractFallback({
     if (!polygon) return;
     const ring = polygon.geometry.coordinates[0];
     if (!ring || ring.length < 3) {
-      alertUser(
-        "Zone partitioning",
-        "Polygon must have at least 3 vertices.",
-      );
+      alertUser("Zone partitioning", "Polygon must have at least 3 vertices.");
       return;
     }
     if (!resultHash) {
@@ -1728,7 +1791,10 @@ function NativeExtractFallback({
     setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };
-      if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
+      if (
+        (resultHash === "__offline__" || resultHash === "__osm__") &&
+        offlineGeoJSONRef.current
+      ) {
         geojson = offlineGeoJSONRef.current as {
           type: string;
           features: unknown[];
@@ -2306,10 +2372,16 @@ function NativeExtractFallback({
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
               onPress={() => {
-                if ((resultHash === "__offline__" || resultHash === "__osm__") && offlineGeoJSONRef.current) {
+                if (
+                  (resultHash === "__offline__" || resultHash === "__osm__") &&
+                  offlineGeoJSONRef.current
+                ) {
                   Share.share({
                     message: JSON.stringify(offlineGeoJSONRef.current),
-                    title: resultHash === "__osm__" ? "osm-extract.geojson" : "offline-extract.geojson",
+                    title:
+                      resultHash === "__osm__"
+                        ? "osm-extract.geojson"
+                        : "offline-extract.geojson",
                   }).catch(() =>
                     Alert.alert(
                       "Share failed",
@@ -2338,14 +2410,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     ...(Platform.OS === "web" && {
-      minHeight: typeof window !== "undefined" ? Math.max(400, window.innerHeight - 120) : 400,
+      minHeight:
+        typeof window !== "undefined"
+          ? Math.max(400, window.innerHeight - 120)
+          : 400,
     }),
   },
   mapContainer: {
     flex: 1,
     position: "relative" as any,
     ...(Platform.OS === "web" && {
-      minHeight: typeof window !== "undefined" ? Math.max(300, window.innerHeight - 180) : 300,
+      minHeight:
+        typeof window !== "undefined"
+          ? Math.max(300, window.innerHeight - 180)
+          : 300,
     }),
   },
 

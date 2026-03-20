@@ -124,7 +124,8 @@ async function fetchOverpass(query: string): Promise<OverpassElement[]> {
         body: `data=${encoded}`,
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "Mozilla/5.0 (compatible; RouteMasterPro/1.0; OSM Extractor)",
+          "User-Agent":
+            "Mozilla/5.0 (compatible; RouteMasterPro/1.0; OSM Extractor)",
         },
       });
       const text = await res.text();
@@ -142,9 +143,10 @@ async function fetchOverpass(query: string): Promise<OverpassElement[]> {
 // GeoJSON conversion
 // ---------------------------------------------------------------------------
 
-function elementsToGeoJSON(
-  elements: OverpassElement[],
-): { features: GeoJSON.Feature[]; roadCount: number } {
+function elementsToGeoJSON(elements: OverpassElement[]): {
+  features: GeoJSON.Feature[];
+  roadCount: number;
+} {
   const nodes = new Map<number, [number, number]>();
   for (const el of elements) {
     if (el.type === "node" && el.lon != null && el.lat != null) {
@@ -209,90 +211,6 @@ export function clipLineFeaturesToExtractBbox(
   return out;
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-/**
- * Build minimal OSM XML from clipped LineString features (synthetic node/way ids).
- * Aligns with {@link clipLineFeaturesToExtractBbox} so exports match the map.
- */
-function buildOSMXmlFromClippedLineFeatures(features: GeoJSON.Feature[]): string {
-  if (features.length === 0) {
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="RouteMasterPro OSM Extractor"></osm>`;
-  }
-
-  let minLat = Infinity;
-  let minLon = Infinity;
-  let maxLat = -Infinity;
-  let maxLon = -Infinity;
-
-  let nextNodeId = 1;
-  const nodeLines: string[] = [];
-  const wayBlocks: string[] = [];
-
-  for (let wi = 0; wi < features.length; wi++) {
-    const f = features[wi];
-    if (f.geometry.type !== "LineString") continue;
-    const coords = f.geometry.coordinates;
-    if (coords.length < 2) continue;
-
-    const wayId = 1_000_000 + wi;
-    const ndRefs: number[] = [];
-
-    for (const [lon, lat] of coords) {
-      if (lat < minLat) minLat = lat;
-      if (lon < minLon) minLon = lon;
-      if (lat > maxLat) maxLat = lat;
-      if (lon > maxLon) maxLon = lon;
-
-      const id = nextNodeId++;
-      ndRefs.push(id);
-      nodeLines.push(`  <node id="${id}" lat="${lat.toFixed(7)}" lon="${lon.toFixed(7)}"/>`);
-    }
-
-    const wayLines = [`  <way id="${wayId}">`];
-    for (const ref of ndRefs) {
-      wayLines.push(`    <nd ref="${ref}"/>`);
-    }
-    const props = (f.properties ?? {}) as Record<string, string | number | boolean>;
-    for (const [k, v] of Object.entries(props)) {
-      if (v == null) continue;
-      wayLines.push(`    <tag k="${escapeXml(k)}" v="${escapeXml(String(v))}"/>`);
-    }
-    wayLines.push(`  </way>`);
-    wayBlocks.push(wayLines.join("\n"));
-  }
-
-  if (nodeLines.length === 0) {
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="RouteMasterPro OSM Extractor"></osm>`;
-  }
-
-  let boundsLine = "";
-  if (
-    Number.isFinite(minLat) &&
-    Number.isFinite(minLon) &&
-    Number.isFinite(maxLat) &&
-    Number.isFinite(maxLon)
-  ) {
-    boundsLine = `  <bounds minlat="${minLat.toFixed(7)}" minlon="${minLon.toFixed(7)}" maxlat="${maxLat.toFixed(7)}" maxlon="${maxLon.toFixed(7)}"/>\n`;
-  }
-
-  return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<osm version="0.6" generator="RouteMasterPro OSM Extractor">`,
-    boundsLine,
-    ...nodeLines,
-    ...wayBlocks,
-    `</osm>`,
-  ].join("\n");
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -323,17 +241,22 @@ export async function extractOSM(
       roads: clippedCount,
       points: clippedCount,
       nodes: clipped.reduce((sum, f) => {
-        if (f.geometry.type === "LineString") return sum + f.geometry.coordinates.length;
+        if (f.geometry.type === "LineString")
+          return sum + f.geometry.coordinates.length;
         return sum;
       }, 0),
       edges: clippedCount,
     },
     warnings: (() => {
       if (roadCount === 0) {
-        return ["No routable road features returned from Overpass API for this area."];
+        return [
+          "No routable road features returned from Overpass API for this area.",
+        ];
       }
       if (clippedCount === 0) {
-        return ["All road geometry lay outside the extraction bounding box after clipping."];
+        return [
+          "All road geometry lay outside the extraction bounding box after clipping.",
+        ];
       }
       return [];
     })(),
