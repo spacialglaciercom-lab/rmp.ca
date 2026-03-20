@@ -2327,8 +2327,19 @@ function NativeExtractFallback({
 // Styles
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  mapContainer: { flex: 1, position: "relative" as any },
+  container: {
+    flex: 1,
+    ...(Platform.OS === "web" && {
+      minHeight: typeof window !== "undefined" ? Math.max(400, window.innerHeight - 120) : 400,
+    }),
+  },
+  mapContainer: {
+    flex: 1,
+    position: "relative" as any,
+    ...(Platform.OS === "web" && {
+      minHeight: typeof window !== "undefined" ? Math.max(300, window.innerHeight - 180) : 300,
+    }),
+  },
 
   // Metrics card (legacy)
   metricsCard: {
