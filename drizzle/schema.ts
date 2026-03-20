@@ -28,6 +28,12 @@ export const orgTierEnum = pgEnum("org_tier", [
   "enterprise",
 ]);
 
+export const permissionRequestStatusEnum = pgEnum("permission_request_status", [
+  "pending",
+  "approved",
+  "denied",
+]);
+
 /**
  * Organizations table — one row per municipality, company, or team.
  * Users are assigned to an org via the orgId FK on the users table.
@@ -186,6 +192,35 @@ export const userRoles = pgTable(
 
 export type UserRole = typeof userRoles.$inferSelect;
 
+export const permissionRequests = pgTable("permission_requests", {
+  id: serial("id").primaryKey(),
+  orgId: integer("orgId")
+    .references(() => organizations.id, { onDelete: "cascade" })
+    .notNull(),
+  requesterId: integer("requesterId")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  reason: text("reason").notNull(),
+  requestedPermissions: text("requestedPermissions")
+    .array()
+    .$type<PermissionKey[]>()
+    .notNull(),
+  status: permissionRequestStatusEnum("status").default("pending").notNull(),
+  approvedPermissions: text("approvedPermissions")
+    .array()
+    .$type<PermissionKey[]>(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+  resolvedBy: integer("resolvedBy").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});
+
+export type PermissionRequest = typeof permissionRequests.$inferSelect;
+export type InsertPermissionRequest = typeof permissionRequests.$inferInsert;
+
 // ── RBAC Relations ────────────────────────────────────────────────────────
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   organization: one(organizations, {
@@ -217,3 +252,21 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
     references: [organizations.id],
   }),
 }));
+
+export const permissionRequestsRelations = relations(
+  permissionRequests,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [permissionRequests.orgId],
+      references: [organizations.id],
+    }),
+    requester: one(users, {
+      fields: [permissionRequests.requesterId],
+      references: [users.id],
+    }),
+    resolver: one(users, {
+      fields: [permissionRequests.resolvedBy],
+      references: [users.id],
+    }),
+  }),
+);

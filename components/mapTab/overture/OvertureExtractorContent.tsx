@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Switch,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -170,6 +171,8 @@ export interface OvertureExtractorContentProps {
       startLon?: number;
       roadClasses?: string[];
       serviceBothSides?: boolean;
+      /** Passed through to optimizer; usually synced from routing config (A/B). */
+      onewayMode?: string;
     },
   ) => void;
   optimizing?: boolean;
@@ -189,6 +192,7 @@ export function OvertureExtractorContent({
   const colors = useColors();
   const primaryBlue = colors.primary ?? "#3b82f6";
   const { state: routingState, dispatch: routingDispatch } = useRouting();
+  const followOneways = routingState.configuration.onewayMode !== "A";
 
   const [selectedRoadClasses, setSelectedRoadClasses] = useState<string[]>([
     "residential",
@@ -533,6 +537,7 @@ export function OvertureExtractorContent({
 
     onOptimizeRoute(loadedGeoJSON, {
       roadClasses: effectiveRoadClasses,
+      onewayMode: routingState.configuration.onewayMode,
     });
     setShowResults(true);
   }, [
@@ -540,6 +545,7 @@ export function OvertureExtractorContent({
     effectiveRoadClasses,
     onOptimizeRoute,
     checkBackend,
+    routingState.configuration.onewayMode,
   ]);
 
   const handleExportRoute = useCallback(async () => {
@@ -779,25 +785,30 @@ export function OvertureExtractorContent({
         </View>
       </View>
 
-      {/* One-way toggle */}
-      <View style={[styles.toggleRow, { backgroundColor: colors.surface }]}>
-        <View style={styles.toggleLabelGroup}>
-          <Text style={[styles.toggleLabel, { color: colors.text }]}>
+      <View
+        style={[
+          styles.followOnewayRow,
+          { backgroundColor: colors.surfaceElevated },
+        ]}
+      >
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={[styles.followOnewayTitle, { color: colors.text }]}>
             Follow one-ways
           </Text>
-          <Text style={[styles.toggleSub, { color: colors.muted }]}>
-            {routingState.configuration.onewayMode === "B"
-              ? "Respects one-way streets"
-              : "Traverses both directions"}
+          <Text style={[styles.followOnewaySub, { color: colors.muted }]}>
+            Respects one-way streets
           </Text>
         </View>
         <Switch
-          value={routingState.configuration.onewayMode === "B"}
-          onValueChange={(val) =>
-            routingDispatch({ type: "SET_ONEWAY_MODE", payload: val ? "B" : "A" })
-          }
-          trackColor={{ false: colors.surfaceElevated, true: primaryBlue }}
-          thumbColor="#fff"
+          value={followOneways}
+          onValueChange={(v) => {
+            routingDispatch({ type: "SET_ONEWAY_MODE", payload: v ? "B" : "A" });
+          }}
+          trackColor={{
+            false: colors.border,
+            true: "#22c55e80",
+          }}
+          thumbColor={followOneways ? "#22c55e" : colors.muted}
         />
       </View>
 
@@ -1048,6 +1059,16 @@ const styles = StyleSheet.create({
   },
   classChipText: { fontSize: 13, fontWeight: "500" },
   warningText: { fontSize: 12, marginTop: 4, fontStyle: "italic" },
+  followOnewayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  followOnewayTitle: { fontSize: 16, fontWeight: "600" },
+  followOnewaySub: { fontSize: 12, marginTop: 2 },
   optimizeBtn: {
     paddingVertical: 14,
     borderRadius: 10,
