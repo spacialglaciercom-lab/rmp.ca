@@ -1,0 +1,63 @@
+# OSRM routing service. Start only after osrm-preprocess Job has completed
+# and the osrm-data PVC is populated.
+#
+# The backend (Node BFF) must have OSRM_URL set in backend-secret to
+# http://osrm.rmpca.svc.cluster.local:5000 so the app uses this instance.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: osrm
+  namespace: rmpca
+  labels:
+    app: osrm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: osrm
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: osrm
+    spec:
+      containers:
+        - name: osrm
+          image: osrm/osrm-backend:latest
+          args:
+            - osrm-routed
+            - --algorithm
+            - mld
+            - /data/region.osrm
+            - --max-table-size
+            - "10000"
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: osrm-data
