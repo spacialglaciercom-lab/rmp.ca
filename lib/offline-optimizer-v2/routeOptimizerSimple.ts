@@ -612,7 +612,6 @@ export class RouteOptimizerSimpleV2 {
     let improved = true;
     let passes = 0;
     const maxPasses = 5;
-    let totalEliminated = 0;
 
     while (improved && passes < maxPasses) {
       improved = false;
@@ -644,7 +643,6 @@ export class RouteOptimizerSimpleV2 {
 
         const loopMiddle = loop.slice(1);
         result.splice(i + 1, 0, ...loopMiddle);
-        totalEliminated++;
         improved = true;
         i += loopMiddle.length;
       }
