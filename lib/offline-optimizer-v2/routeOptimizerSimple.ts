@@ -26,6 +26,8 @@ interface EdgeData {
   oneway: boolean;
   /** True when the OSM way has dual_carriageway=yes. U-turns are physically impossible. */
   dualCarriageway?: boolean;
+  /** Extra traversal count added by Chinese Postman augmentation (default 1). */
+  count?: number;
 }
 
 // Turn cost penalties (meters equivalent) — used when no plugins are active.
@@ -313,10 +315,10 @@ export class RouteOptimizerSimpleV2 {
       for (let k = 0; k < path.length - 1; k++) {
         const u = path[k]!;
         const v = path[k + 1]!;
-        const data = this.graph.get(u)?.get(v);
-        if (!data) continue;
-        if (!this.graph.has(u)) this.graph.set(u, new Map());
-        this.graph.get(u)!.set(v, { ...data });
+        const existing = this.graph.get(u)?.get(v);
+        if (!existing) continue;
+        // Increment traversal count so Hierholzer covers this edge twice
+        existing.count = (existing.count ?? 1) + 1;
       }
     }
   }
@@ -410,9 +412,13 @@ export class RouteOptimizerSimpleV2 {
     const g = new Map<string, Map<string, EdgeData>>();
     let totalEdges = 0;
     for (const [node, edges] of this.graph) {
-      const copy = new Map(edges);
+      const copy = new Map<string, EdgeData>();
+      for (const [v, data] of edges) {
+        // Deep-copy each EdgeData so count changes don't affect this.graph
+        copy.set(v, { ...data });
+        totalEdges += data.count ?? 1;
+      }
       g.set(node, copy);
-      totalEdges += copy.size;
     }
     const maxIterations = Math.max(3 * totalEdges, 500_000);
 
@@ -429,8 +435,15 @@ export class RouteOptimizerSimpleV2 {
         const prev = stack.length > 1 ? stack[stack.length - 2]! : null;
         const next = this.chooseBest(prev, current, edges);
 
+        // Decrement traversal count; only remove the edge when fully consumed
+        const edgeData = edges.get(next)!;
+        const remaining = (edgeData.count ?? 1) - 1;
+        if (remaining > 0) {
+          edgeData.count = remaining;
+        } else {
+          edges.delete(next);
+        }
         stack.push(next);
-        edges.delete(next);
       } else {
         circuit.push(stack.pop()!);
       }
@@ -504,11 +517,11 @@ export class RouteOptimizerSimpleV2 {
         const turn = this.normalizeTurn(outBearing - inBearing);
         let cost: number;
         if (Math.abs(turn) > 150) cost = TURN_COSTS.U_TURN;
-        else if (turn > 120) cost = TURN_COSTS.SHARP_LEFT;
-        else if (turn > 30) cost = TURN_COSTS.LEFT_TURN;
+        else if (turn > 120) cost = TURN_COSTS.SHARP_RIGHT;
+        else if (turn > 30) cost = TURN_COSTS.RIGHT_TURN;
         else if (turn >= -30) cost = TURN_COSTS.STRAIGHT;
-        else if (turn >= -120) cost = TURN_COSTS.RIGHT_TURN;
-        else cost = TURN_COSTS.SHARP_RIGHT;
+        else if (turn >= -120) cost = TURN_COSTS.LEFT_TURN;
+        else cost = TURN_COSTS.SHARP_LEFT;
         score = edgeData.length + cost;
       }
 
@@ -632,8 +645,8 @@ export class RouteOptimizerSimpleV2 {
         const turn = this.normalizeTurn(outB - inB);
 
         if (Math.abs(turn) > 150) uturns++;
-        else if (turn > 30) left++;
-        else if (turn < -30) right++;
+        else if (turn > 30) right++;
+        else if (turn < -30) left++;
         else straight++;
       }
     }
