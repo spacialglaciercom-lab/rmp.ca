@@ -26,8 +26,8 @@ interface EdgeData {
   oneway: boolean;
   /** True when the OSM way has dual_carriageway=yes. U-turns are physically impossible. */
   dualCarriageway?: boolean;
-  /** Extra traversal count added by Chinese Postman augmentation (default 1). */
-  count?: number;
+  /** OSM way ID — used to detect mid-block nodes (not intersections). */
+  wayId?: string;
 }
 
 // Turn cost penalties (meters equivalent) — used when no plugins are active.
@@ -64,6 +64,12 @@ export class RouteOptimizerSimpleV2 {
   private ways: Way[];
   private graph: Map<string, Map<string, EdgeData>> = new Map();
   private plugins: RoutingCostPlugin[];
+  /**
+   * Nodes that are NOT intersections — they lie between two intersections on the
+   * same OSM way. U-turns at these nodes are physically impossible in real life
+   * and must be hard-blocked (not merely penalized).
+   */
+  private midBlockNodes = new Set<string>();
 
   constructor(
     nodes: Map<string, Node>,
@@ -81,6 +87,8 @@ export class RouteOptimizerSimpleV2 {
       return { route: [], totalDistance: 0, message: "No valid roads found" };
     }
 
+    // Must be built before makeEulerian so augmentation edges don't pollute the detection.
+    this.buildMidBlockNodes();
     this.makeEulerian();
 
     // Run Hierholzer on ALL connected components so disconnected residential
@@ -161,6 +169,7 @@ export class RouteOptimizerSimpleV2 {
     for (const way of this.ways) {
       const isOneway = way.tags?.oneway === "yes";
       const isDualCarriageway = way.tags?.dual_carriageway === "yes";
+      const wayId = way.id ?? undefined;
 
       for (let i = 0; i < way.nodes.length - 1; i++) {
         const from = way.nodes[i]!;
@@ -199,41 +208,17 @@ export class RouteOptimizerSimpleV2 {
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph
-            .get(from)!
-            .set(to, {
-              length: costUV,
-              oneway: isOneway,
-              dualCarriageway: isDualCarriageway || undefined,
-            });
+          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph
-              .get(to)!
-              .set(from, {
-                length: costVU,
-                oneway: false,
-                dualCarriageway: isDualCarriageway || undefined,
-              });
+            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
           }
         } else {
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph
-            .get(from)!
-            .set(to, {
-              length: distanceM,
-              oneway: isOneway,
-              dualCarriageway: isDualCarriageway || undefined,
-            });
+          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph
-              .get(to)!
-              .set(from, {
-                length: distanceM,
-                oneway: false,
-                dualCarriageway: isDualCarriageway || undefined,
-              });
+            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
           }
         }
       }
@@ -241,18 +226,25 @@ export class RouteOptimizerSimpleV2 {
   }
 
   /**
-   * Balance the graph for an Eulerian circuit.
-   *
-   * When plugins are active, uses directed balancing with turn-aware Dijkstra
-   * so augmentation paths respect transition costs. Without plugins, simply
-   * ensures reciprocal edges exist (bidirectional completion) — this is
-   * sufficient because buildGraph() already creates both A→B and B→A for
-   * every bidirectional street, making the graph naturally balanced.
-   *
-   * Note: forcing directed balancing without plugins was tried but broke
-   * routes — the 5000m U-turn penalty in Dijkstra caused augmentation paths
-   * to take long cross-town detours, producing chaotic diagonal lines.
+   * Identify mid-block nodes: nodes with exactly 2 outgoing edges that both
+   * belong to the same OSM way. These are shape-point nodes between intersections.
+   * U-turns at these nodes are physically impossible in real life.
    */
+  private buildMidBlockNodes(): void {
+    this.midBlockNodes.clear();
+    for (const [nodeId, edges] of this.graph) {
+      if (edges.size !== 2) continue;
+      const wayIds = new Set<string>();
+      for (const data of edges.values()) {
+        if (data.wayId) wayIds.add(data.wayId);
+      }
+      // All edges on the same single way → mid-block node, no U-turn allowed.
+      if (wayIds.size === 1) {
+        this.midBlockNodes.add(nodeId);
+      }
+    }
+  }
+
   private makeEulerian(): void {
     // First, ensure reciprocal edges exist (bidirectional completion) for both
     // plugins and non-plugins paths. This balances the graph before any
@@ -488,30 +480,18 @@ export class RouteOptimizerSimpleV2 {
     current: string,
     edges: Map<string, EdgeData>,
   ): string {
-    const keys = Array.from(edges.keys());
+    let keys = Array.from(edges.keys());
     if (keys.length === 1) return keys[0]!;
     if (!prev) return keys[0]!;
 
-    // --- Partition into U-turn vs non-U-turn candidates ---
-    const nonUTurn: string[] = [];
-    const uTurn: string[] = [];
-    const inBearing = this.bearing(prev, current);
-
-    for (const next of keys) {
-      const outBearing = this.bearing(current, next);
-      const turn = this.normalizeTurn(outBearing - inBearing);
-      if (Math.abs(turn) > 150) {
-        uTurn.push(next);
-      } else {
-        nonUTurn.push(next);
-      }
+    // Hard-block U-turns at mid-block (non-intersection) nodes.
+    // A vehicle cannot reverse direction between two intersections in real life.
+    if (this.midBlockNodes.has(current)) {
+      const nonUturn = keys.filter((k) => k !== prev);
+      if (nonUturn.length > 0) keys = nonUturn;
     }
+    if (keys.length === 1) return keys[0]!;
 
-    // Prefer non-U-turn candidates; fall back to U-turns only when forced
-    const candidates = nonUTurn.length > 0 ? nonUTurn : uTurn;
-    if (candidates.length === 1) return candidates[0]!;
-
-    // --- Score within the chosen partition ---
     const useTransition = this.plugins.length > 0;
     const coordsT = this.getCoords(prev);
     const coordsU = this.getCoords(current);
