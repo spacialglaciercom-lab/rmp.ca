@@ -45,9 +45,8 @@ import { OSM_DATA_STORAGE_KEY, storedToOsmData } from "@/lib/osm-storage";
 import type { StoredOSMData } from "@/lib/osm-storage";
 import { storage } from "@/lib/storage";
 import { generateRouteId } from "@/lib/utils";
-import { matchGPXToRoads, routeThroughWaypoints } from "@/lib/mapMatching";
+import { routeThroughWaypoints } from "@/lib/mapMatching";
 import { repairRouteGaps, countGaps } from "@/lib/routeGapFilter";
-import { stitchRouteSegmentsWithRouting } from "@/lib/stitchRouteSegments";
 import { getRoutingConfigAsync } from "@/lib/routing-config";
 import { getRouteOptionsForRouting } from "@/stores/routeParametersStore";
 import { useMapStateStore } from "@/stores/mapStateStore";
@@ -55,6 +54,9 @@ import { RouteOptimizer } from "@/lib/route-optimizer-v2";
 import { debug } from "@/lib/route-optimizer-v2/debug";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
 import { RouteOptimizerSimpleV2 } from "@/lib/offline-optimizer-v2";
+import { FuelAwarePlugin, TurnPenaltyPlugin } from "@/lib/routing_plugins";
+import type { RoutingCostPlugin } from "@/lib/routing_plugins";
+import { enrichNodesWithElevation } from "@/lib/elevationEnrichment";
 import { useRouteOptimization } from "@/hooks/useRouteOptimization";
 import {
   optimizeRoute as backendOptimizeRoute,
@@ -92,9 +94,6 @@ export default function PlannerContent() {
   const { optimizeRoute: optimizeRouteTurnAware } = useRouteOptimization();
   const useTurnPenaltyPlugin = usePluginStore((s) =>
     s.isPluginEnabled("turn-penalty", false),
-  );
-  const routePostProcessingOn = usePluginStore((s) =>
-    s.isPluginEnabled("route-post-processing", true),
   );
   const fuelAwareRoutingOn = usePluginStore((s) =>
     s.isPluginEnabled("fuel-aware-routing", false),
@@ -300,7 +299,6 @@ export default function PlannerContent() {
     let optimizerDistanceKm: number | undefined;
     let gpxWasSet = false;
     let optResult: any = undefined;
-    let v2SegmentsStitched = false;
     let optimizerSource: "backend" | "local" | "offline-v2" | undefined;
     try {
       // Re-optimize with current start point if we have OSM data
@@ -319,8 +317,17 @@ export default function PlannerContent() {
         // When v2 is on, we never use the backend (Overture); we only try v2 then local fallback.
         if (useOfflineOptimizerV2) {
           try {
-            // Plugins (fuel-aware, UPS turn penalty) apply to the backend optimizer only; v2 uses fixed graph + built-in turn costs.
-            const v2 = new RouteOptimizerSimpleV2(nodes, ways, undefined);
+            const v2Plugins: RoutingCostPlugin[] = [];
+            if (fuelAwareRoutingOn) {
+              await enrichNodesWithElevation(nodes);
+              v2Plugins.push(FuelAwarePlugin);
+            }
+            if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
+            const v2 = new RouteOptimizerSimpleV2(
+              nodes,
+              ways,
+              v2Plugins.length ? v2Plugins : undefined,
+            );
             optResult = v2.optimize(
               startCoords?.latitude,
               startCoords?.longitude,
@@ -589,10 +596,8 @@ export default function PlannerContent() {
         });
       }
 
-      // Build initial geometry from optimizer output.
-      // When backend (Overture) or v2 is used, the optimizer already emits edge geometry
-      // (intermediate road-shape points), so we skip OSRM re-routing which would guess
-      // different streets than the Hierholzer circuit actually traversed.
+      // Build initial geometry from optimizer. When backend (Overture) or v2 is used, skip map-matching
+      // and use the optimizer's points directly — same as Map's Overture extractor and the Videos app.
       let gpxPoints = optimizedPoints.map((p) => ({
         lat: p.latitude,
         lon: p.longitude,
@@ -600,93 +605,29 @@ export default function PlannerContent() {
       let pointsForStorage: CollectionPoint[] = optimizedPoints;
       const skipSnapToRoads =
         optimizerSource === "offline-v2" || optimizerSource === "backend";
-      let snappedToRoads = skipSnapToRoads;
+      let snappedToRoads = skipSnapToRoads; // true when we intentionally skip (backend/v2); false when we tried and may have failed
       try {
-        const routingConfig = await getRoutingConfigAsync();
-        const routeOptions = getRouteOptionsForRouting();
-
-        // Offline v2 can legitimately return multiple disconnected component tours.
-        // Stitch component boundaries with routed connectors so the final route is one continuous drive.
-        if (
-          routePostProcessingOn &&
-          optimizerSource === "offline-v2" &&
-          optResult?.routeSegments &&
-          Array.isArray(optResult.routeSegments) &&
-          optResult.routeSegments.length > 1 &&
-          routingConfig.baseUrl
-        ) {
-          const segments = optResult.routeSegments
-            .map((seg: Array<{ latitude: number; longitude: number }>) =>
-              seg.map((p) => ({ lat: p.latitude, lon: p.longitude })),
-            )
-            .filter((seg: Array<{ lat: number; lon: number }>) => seg.length > 0);
-
-          if (segments.length > 1) {
-            const stitchedResult = await stitchRouteSegmentsWithRouting(
-              segments,
-              routingConfig,
-              routeOptions,
-            );
-            if (
-              stitchedResult &&
-              stitchedResult.points.length >= 2
-            ) {
-              gpxPoints = stitchedResult.points;
-              pointsForStorage = stitchedResult.points.map((p, i) => ({
-                id: `route-${i}`,
-                address: `Stop ${i + 1}`,
-                latitude: p.lat,
-                longitude: p.lon,
-                collectionType: "residential" as const,
-                status: "pending" as const,
-              }));
-              if (
-                optimizerDistanceKm != null &&
-                optimizerDistanceKm > 0 &&
-                stitchedResult.connectorDistanceM > 0
-              ) {
-                optimizerDistanceKm +=
-                  stitchedResult.connectorDistanceM / 1000;
-              }
-              v2SegmentsStitched = true;
-              snappedToRoads = true;
-              debug("Planner.generateRoute.v2Stitch", {
-                stitched: true,
-                segments: segments.length,
-                points: stitchedResult.points.length,
-                connectorKm:
-                  stitchedResult.connectorDistanceM / 1000,
-              });
-            } else {
-              debug("Planner.generateRoute.v2Stitch", {
-                stitched: false,
-                reason: "stitchRouteSegmentsWithRouting failed",
-                segments: segments.length,
-              });
-            }
-          }
-        }
-
         if (!skipSnapToRoads) {
+          const routingConfig = await getRoutingConfigAsync();
           if (routingConfig.baseUrl && gpxPoints.length >= 2) {
             const matched = await routeThroughWaypoints(
               gpxPoints,
               routingConfig,
-              routeOptions,
+              getRouteOptionsForRouting(),
             );
             if (matched && matched.matchedGeometry.length >= 2) {
               gpxPoints = matched.matchedGeometry;
               optimizerDistanceKm = matched.totalDistance / 1000;
               snappedToRoads = true;
               const gapsBefore = countGaps(gpxPoints);
-              if (routePostProcessingOn && gapsBefore > 0) {
+              if (gapsBefore > 0) {
                 debug("Planner.generateRoute", {
                   teleportingGapsDetected: gapsBefore,
                 });
                 gpxPoints = await repairRouteGaps(
                   gpxPoints,
                   routingConfig,
-                  routeOptions,
+                  getRouteOptionsForRouting(),
                 );
                 debug("Planner.generateRoute", {
                   teleportingGapsAfterRepair: countGaps(gpxPoints),
@@ -722,7 +663,7 @@ export default function PlannerContent() {
         } else {
           debug("Planner.generateRoute", {
             snappedToRoads: false,
-            reason: "optimizer-v2/backend-use-edge-geometry",
+            reason: "optimizer-v2-use-raw-points",
           });
         }
       } catch (e) {
@@ -751,8 +692,7 @@ export default function PlannerContent() {
       const sanitized = sanitizeRouteStatistics(stats);
       const report = generateSampleReport(sanitized);
 
-      const { generateGPXString, generateMultiTrackGPXString } =
-        await import("@/lib/routing-context");
+      const { generateGPXString } = await import("@/lib/routing-context");
       debug("Planner.generateRoute", {
         collectionPointsLength: pointsForStorage.length,
         gpxPointsLength: gpxPoints.length,
@@ -762,22 +702,7 @@ export default function PlannerContent() {
         state.configuration.outputFileName?.trim() ||
         outputFileName?.trim() ||
         "trash_route";
-      const gpxData =
-        optimizerSource === "offline-v2" &&
-        optResult?.routeSegments &&
-        optResult.routeSegments.length > 1 &&
-        !v2SegmentsStitched
-          ? generateMultiTrackGPXString(
-              fileName,
-              optResult.routeSegments.map((seg, i) => ({
-                name: `${fileName} — part ${i + 1}`,
-                points: seg.map((p) => ({
-                  lat: p.latitude,
-                  lon: p.longitude,
-                })),
-              })),
-            )
-          : generateGPXString(fileName, gpxPoints);
+      const gpxData = generateGPXString(fileName, gpxPoints);
 
       // Set GPX + stats so buttons enable without waiting for log animation
       dispatch({ type: "SET_STATISTICS", payload: sanitized });
@@ -854,7 +779,7 @@ export default function PlannerContent() {
           msg: `Applying turn penalties: Left=${state.configuration.turnPenalties.leftTurn}, U-Turn=${state.configuration.turnPenalties.uTurn}`,
           type: "info" as const,
         },
-        ...(fuelAwareRoutingOn && !useOfflineOptimizerV2
+        ...(fuelAwareRoutingOn
           ? [
               {
                 msg: "Fuel-aware routing: on",
@@ -862,7 +787,7 @@ export default function PlannerContent() {
               },
             ]
           : []),
-        ...(useTurnPenaltyPlugin && !useOfflineOptimizerV2
+        ...(useTurnPenaltyPlugin
           ? [
               {
                 msg: "Turn penalty (UPS-style): on",
@@ -1072,10 +997,16 @@ export default function PlannerContent() {
                 | undefined;
               if (useOfflineOptimizerV2) {
                 try {
+                  const v2Plugins: RoutingCostPlugin[] = [];
+                  if (fuelAwareRoutingOn) {
+                    await enrichNodesWithElevation(nodes);
+                    v2Plugins.push(FuelAwarePlugin);
+                  }
+                  if (useTurnPenaltyPlugin) v2Plugins.push(TurnPenaltyPlugin);
                   const v2 = new RouteOptimizerSimpleV2(
                     nodes,
                     ways,
-                    undefined,
+                    v2Plugins.length ? v2Plugins : undefined,
                   );
                   optResult = v2.optimize(
                     startCoords?.latitude,
@@ -1274,21 +1205,11 @@ export default function PlannerContent() {
             Optimization
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Offline v2 builds forward and reverse on bidirectional streets, so
-            the tour covers each direction (two-pass along the centerline — same
-            idea as “both sides”). The backend optimizer defaults to one pass
-            per street unless you enable “Service both sides” in routing
-            settings. Turn v2 off to match that default, or enable “Service both
-            sides” when comparing to v2. Fuel-aware and Turn-penalty plugins
-            apply to the backend optimizer only, not v2. Off: Overture/backend
-            optimizer (Map Extractor path), then local fallback.
-          </Text>
-          <Text className="text-xs text-muted mb-3">
-            Debug: Post-processing {routePostProcessingOn ? "ON" : "OFF"}
-            {" — "}
-            {routePostProcessingOn
-              ? "v2 stitch + gap repair when routing runs"
-              : "no v2 stitch, no gap repair (raw optimizer path to GPX)"}
+            Use offline optimizer (v2): same optimizer as
+            route-optimizer-mobile-v2 (Videos app). When v2 is on, route is
+            always two-pass; one-pass applies only when v2 is off. Off: use
+            Overture route optimizer (same as Map Extractor), then fall back to
+            local if unavailable.
           </Text>
           <View className="flex-row items-center justify-between">
             <Text className="text-base text-foreground">
