@@ -2,273 +2,357 @@
 
 _Updated: 2026-03-19_
 
+## Executive Summary
+
+The codebase has solid unit tests for its core route-optimization algorithms, but large swaths of the application — VRP solvers, geospatial utilities, export/import helpers, React hooks, and all server-side routers — have no test coverage at all. This document maps the gaps and proposes specific, high-value tests to add.
+
+---
+
 ## Current State
 
-The codebase has **22 JS/TS test files** and **12 Python test files** covering a small
-fraction of the total source:
+| Layer | Source Files | Test Files | Coverage |
+|-------|-------------|------------|----------|
+| `lib/` core algorithms | ~165 | 10 | Partial |
+| `lib/plugins/` | ~20 | 7 | Good |
+| `server/` | ~42 | 6 (integration only) | Minimal |
+| `backend/` Python | ~23 | 8 | Partial |
+| `components/` | ~97 | 0 | None |
+| `hooks/` | ~18 | 0 | None |
+| `services/` | ~18 | 0 | None |
+| `stores/` | ~18 | 0 | None |
+| `app/` screens | ~20 | 0 | None |
 
-| Layer | Source Files | Test Files | Approx. Coverage |
-|---|---|---|---|
-| `lib/` | ~178 TS files | 8 test files | ~5% |
-| `lib/plugins/` | ~28 TS files | 7 test files | ~25% |
-| `server/` | ~42 TS files | 5 test files | ~12% |
-| `stores/` | 18 TS files | 0 | 0% |
-| `hooks/` | 18 TS files | 0 | 0% |
-| `components/` | ~30 TSX files | 0 | 0% |
-| `backend/` (Python) | ~14 py files | 7 test files | ~50% |
+**Testing framework:** Vitest 4.x with jsdom; Python pytest for the FastAPI backend.
 
-The Python backend is reasonably well covered. The TypeScript library and server layers
-are severely under-tested, and there is no coverage reporting infrastructure at all.
-
----
-
-## What Is Well Covered
-
-These areas have solid, maintained tests and do not need immediate attention:
-
-- **`NavigationEngine`** (`lib/__tests__/NavigationEngine.test.ts`, 696 lines) — bearing
-  math, maneuver generation, voice instructions, snap-to-route, off-route detection, step
-  progression, arrival detection.
-- **Route optimiser (Chinese Postman)** (`lib/__tests__/routeOptimizer.test.ts`, 477 lines)
-  — empty/degenerate graphs, circuit correctness, one-way streets, disconnected components,
-  turn-penalty weights.
-- **GeoJSON utilities** (`lib/__tests__/geojson-utils.test.ts`) — round-trip conversion,
-  multi-vehicle coloring, matched routes.
-- **Cycle detection** (`lib/__tests__/cycleDetector.test.ts`) — oscillation, stagnation,
-  tabu list management.
-- **Turn-aware CPP** (`lib/__tests__/turnAwareCpp.test.ts`) — turn-penalty integration.
-- **Plugin system** (`lib/plugins/__tests__/`) — registry, config, gating, weather plugin,
-  VRP solver plugin interface.
-- **Backend algorithms** (`backend/tests/`) — Hierholzer circuit, CPP optimizer, VRP with
-  TSPLIB benchmarks, GPX export API, vector cleaning, analytics.
+### What is already well-tested
+- Core Chinese Postman / Eulerian circuit solver (`routeOptimizer.test.ts`)
+- Turn-aware CPP solver (`turnAwareCpp.test.ts`)
+- Cost-correction and cost-aware optimizer
+- Coordinate utilities and GeoJSON helpers
+- Plugin registry, config, and gate system
+- Server proxy endpoints (smoke-level integration tests)
 
 ---
 
-## Priority 1 — Pure Functions with Zero Tests (Easy, High ROI)
+## Priority Areas for Improvement
 
-These modules contain only deterministic functions with no I/O or platform dependencies.
-They can be unit-tested with no mocking and no infrastructure setup.
-
-### 1a. `lib/export-utils.ts`
-
-**Risk:** Bugs silently corrupt route reports sent to fleet operators (CSV with wrong data,
-JSON with un-sanitized invalid times, fleet management files with bad stop ordering).
-
-Functions to add tests for:
-
-| Function | Key test cases |
-|---|---|
-| `sanitizeEstimatedTime` | Speed < 10 km/h triggers recalculation to 25 km/h baseline; valid speeds pass through unchanged; zero/negative distance returns input |
-| `formatDateCanadaTime` | Correct Eastern offset (UTC-5/UTC-4 DST); output format matches `YYYY-MM-DDTHH:MM:SS TZ`; known timestamp produces expected string |
-| `formatDateDeviceLocal` | Uses device timezone; format shape consistent with Canada variant |
-| `exportToCSV` | Header comment lines present; row count = point count; address with commas is double-quoted; address with embedded `"` is escaped |
-| `exportToJSON` | Output is valid JSON; `statistics.estimatedTime` is sanitized; `metadata.exportedAt` is present |
-| `exportStatisticsToCSV` | All metric rows present; correct unit suffixes; penalties included |
-| `exportForFleetManagement` | `version: "1.0"` present; stops are 1-indexed; null notes written as `null` not `""` |
-| `getExportExtension` / `getExportMimeType` | All four format branches (`json`, `csv`, `fleet`, `gpx`) return correct values |
-
-### 1b. `lib/douglas-peucker.ts`
-
-**Risk:** Incorrect simplification silently drops collection points before GPX export,
-causing drivers to miss stops.
-
-| Function | Key test cases |
-|---|---|
-| `douglasPeucker` | ≤2 points returned unchanged; perfectly collinear points reduce to 2 endpoints; tolerance=0 preserves all points; right-angle bend kept at correct position; default 10m tolerance |
-| `simplifyRouteByReduction` | Output ratio ≤ `targetReduction`; ≤2 points returned as-is; binary search converges within 20 iterations |
-| `calculateCompressionMetrics` | `pointsRemoved = original − simplified`; `reductionPercentage` is 1 d.p.; zero-removal gives 0% |
-| `estimateGPXFileSize` | Scales linearly with point count; 0 points returns header-only size (≈ 1 KB) |
-
-### 1c. `lib/osm-filter.ts`
-
-**Risk:** Incorrect filtering lets footways/private driveways into the truck route or
-excludes valid residential streets, corrupting the entire road graph.
-
-| Function | Key test cases |
-|---|---|
-| `shouldIncludeHighway` | Each of the 7 allowed types returns `true`; `footway`, `motorway`, `primary` return `false`; `service` only included when `service=alley` |
-| `shouldExcludeWay` | Each excluded highway type returns `true`; `parking_aisle`, `driveway` excluded; `access=private` excluded; `area=yes` excluded; combined tag wins (exclude takes priority) |
-| `filterOSMWays` | Exclude logic wins over include; empty array returns empty; mixed array filters correctly |
-| `isOneWay` | `"yes"`, `"1"`, `"true"` → `true`; `"no"`, `"-1"`, `undefined` → `false` |
-| `getStreetName` | Fallback chain: `name` → `addr:street` → `name:en` → `undefined` |
-
-### 1d. `lib/weather-utils.ts`
-
-| Function | Key test cases |
-|---|---|
-| `cardinalToAbbrev` | All 16 named directions; case-insensitive input (`"north"` = `"NORTH"`); unknown string echoed back unchanged; `undefined` → `""` |
+The following areas are ordered by risk: **business-critical logic first**, then data-correctness utilities, then infrastructure.
 
 ---
 
-## Priority 2 — Algorithmic Modules Missing Unit Tests
+### 1. VRP Solvers — `lib/vrp-solvers/`
 
-### 2a. `lib/route-loop-pruner.ts` — `pruneRouteLoops`
+**Files:** `clarke-wright.ts`, `two-opt.ts`, `sweep.ts`, `or-opt.ts`, `kmp.ts`
 
-A post-processing algorithm that removes repeated directed segments from the computed
-route. A bug here causes the driver to traverse the same street excessively without
-the optimizer knowing.
+**Why critical:** These algorithms directly determine driver routes. An off-by-one in savings ranking or a broken 2-opt swap silently produces suboptimal — or illegal — routes that drivers follow in the field.
 
-Suggested test cases:
+**Only existing coverage:** `lib/plugins/__tests__/vrp-solvers.test.ts` tests plugin *registration*, not the algorithms themselves.
 
-- **No loops** — route with all unique segments returns `changed: false`.
-- **Simple loop** — A→B→C→A→B with `maxSegmentVisits=1` collapses to A→B→C→A.
-- **Allowed two-pass** — a segment visited exactly `maxSegmentVisits` times is kept intact.
-- **Three-visit pruning** — third traversal of a segment is removed.
-- **Too short to prune** — 2-point route returns original unchanged.
-- **`changed` flag** — `true` when points removed, `false` otherwise.
-- **`stats` consistency** — `beforePoints − removedPoints = afterPoints`.
-- **`maxIterations` cap** — deeply looped route stops after cap (no infinite loop).
-- **Consecutive deduplication** — identical adjacent coordinates are collapsed before pruning.
+**Recommended tests:**
 
-### 2b. `lib/vrp-solvers/clarke-wright.ts`
+```ts
+describe('clarkeWrightSolver', () => {
+  it('respects vehicle count (output routes <= numVehicles)')
+  it('route savings are sorted descending before merging')
+  it('each route starts and ends at the depot (index 0)')
+  it('no stop appears in more than one route')
+  it('all stops are covered across all routes')
+  it('handles single vehicle — all stops in one route')
+  it('handles single stop gracefully')
+  it('applies max-stops-per-route capacity cap')
+})
 
-The Clarke-Wright savings algorithm is a core VRP heuristic. The existing plugin-level
-test in `lib/plugins/__tests__/vrp-solvers.test.ts` only exercises the plugin interface,
-not the algorithm's correctness.
-
-Suggested test cases:
-
-- **Single stop** — depot + 1 stop produces one route covering that stop and returning.
-- **Two stops, one vehicle** — both stops in a single route.
-- **`numVehicles` enforced** — 4 stops and 2 vehicles → exactly 2 routes.
-- **Balanced distribution** — stops spread approximately evenly (cap enforced).
-- **All stops visited** — union of all route stops equals the full input stop list.
-- **Depot at start and end** — every route begins and ends at index 0.
-- **`totalDistanceKm`** — matches manual sum of segment distances.
-
-### 2c. `lib/vrp-solvers/two-opt.ts`
-
-The 2-opt improvement step and sweep construction likewise have no dedicated algorithm
-tests. The same categories as Clarke-Wright apply, with an additional check:
-
-- **2-opt never increases distance** — running improvement on a known sub-optimal route
-  returns a route with distance ≤ the input.
+describe('twoOptSolver', () => {
+  it('sweep phase clusters stops by angle from depot')
+  it('2-opt never increases total route distance')
+  it('2-opt converges (no improvement on second pass)')
+  it('filters empty routes (length <= 2 nodes)')
+  it('floating-point epsilon avoids infinite swap loops')
+  it('all stops are covered across all routes')
+})
+```
 
 ---
 
-## Priority 3 — Server-Side Route Coverage
+### 2. OSM / GeoJSON Data Pipeline — `lib/osm-filter.ts`, `lib/osmToStreetEdges.ts`, `lib/geojsonToOsmData.ts`
 
-The server has 42 TypeScript source files but tests for only 5 of them. Business-logic
-routers have **zero tests**:
+**Why critical:** Bad filtering lets footways or private driveways into the routing graph, producing routes the truck cannot legally drive. Node deduplication bugs create duplicate graph nodes that break the Eulerian solver.
 
-| File | What to test |
-|---|---|
-| `server/costHistoryRouter.ts` | CRUD operations; auth guard rejects unauthenticated; response shape |
-| `server/orgRouter.ts` | Org creation; member addition; role enforcement (non-admin cannot manage members) |
-| `server/navigationRouter.ts` | Route save and load; ownership check (user A cannot read user B's routes) |
-| `server/optimizerRouter.ts` | Request forwarding to backend; error propagation when backend is down |
-| `server/gpxTrainingRouter.ts` | File parsing; training data persisted correctly |
-| `server/rag/ragService.ts` | Document chunking; retrieval returns correct top-k; empty corpus returns empty |
-| `server/rbac/rbacRouter.ts` | Role grants/revocations; non-admin cannot elevate privileges |
+**Recommended tests:**
 
-The existing `auth.logout.test.ts` is the right pattern — lightweight tRPC context mock
-with no live database. The same approach works for all of the above.
+```ts
+describe('osm-filter', () => {
+  // shouldIncludeHighway
+  it('includes: residential, unclassified, tertiary, secondary, living_street')
+  it('excludes: footway, cycleway, steps, path, track, bridleway, pedestrian, corridor')
+  it('includes service=alley, excludes service=driveway|parking_aisle|parking')
+  it('excludes access=private regardless of highway type')
+  it('excludes area=yes and area=parking')
+  it('returns false for missing highway tag')
 
-The existing auth tests also have gaps:
+  // isOneWay
+  it('recognises oneway=yes, oneway=1, oneway=true')
+  it('recognises oneway=-1 as reverse-oneway')
+  it('returns false for oneway=no and missing tag')
 
-- Token revocation: subsequent requests after logout should fail.
-- Org-scoped access: `orgProcedure` should reject users from a different org.
-- Admin guard: admin-only procedures should return 403 for regular users.
+  // getStreetName
+  it('prefers name over addr:street over name:en')
+  it('returns undefined when no name tag present')
+})
 
----
+describe('osmToStreetEdges', () => {
+  it('dead-end nodes are detected as intersections')
+  it('nodes shared by two+ ways are detected as intersections')
+  it('self-intersecting ways split at revisited node')
+  it('intermediate shape-points are preserved in edge coordinates')
+  it('haversineMeters returns expected distance for known coordinate pairs')
+  it('oneway tag is propagated to StreetEdge')
+  it('produces no edges when nodes array contains unknown IDs')
+})
 
-## Priority 4 — Crash Recovery (`lib/crash-recovery.ts`)
-
-This module saves and restores application state across crashes using AsyncStorage.
-A bug here means users lose their planned routes after an app crash.
-
-AsyncStorage is already stubbed in the Vitest environment via the react-native stub,
-making these tests straightforward.
-
-Suggested test cases:
-
-- **`saveRecoveryData`** — partial data (only `collectionPoints`) saves only that field;
-  timestamp is always updated.
-- **`loadRecoveryData`** — returns `null` when no timestamp; parses all fields correctly.
-- **24-hour expiry** — data older than 24 h returns `null` and clears storage.
-- **Corrupt JSON** — malformed stored string returns `null` without throwing.
-- **`clearRecoveryData`** — all keys removed from storage.
-- **`checkForCrash`** — `true` when recovery data exists; `true` when last error exists;
-  `false` when both empty.
-- **`initializeCrashRecovery`** — assembles all three return fields correctly.
-
----
-
-## Priority 5 — Zustand Stores (State Management)
-
-All 18 stores in `stores/` have zero tests. Store bugs cause cascading UI failures that
-are hard to reproduce and debug.
-
-The highest-risk stores:
-
-- **`circuitStore`** — Persists the active `TurnEdge[]` circuit after optimization and is
-  used by re-optimization (`rerouteFromBreakdown`, `insertEmergencyStopAt`). Corruption
-  here produces silently wrong re-routes.
-- **`collectionNavigationStore`** — Navigation step, progress, arrival. Bugs leave the
-  driver stuck on a wrong step.
-- **`routeParametersStore`** — Turn penalties and fuel mode directly affect route quality.
-
-What to test for each store:
-
-- Initial state matches expected defaults.
-- State transitions are correct (advance step, mark collected, etc.).
-- Actions are immutable (previous state reference not mutated).
-- Derived selectors return correct computed values.
+describe('geojsonToOsmData', () => {
+  it('excludes footway/cycleway/pedestrian features by default')
+  it('includes residential/tertiary/secondary by default')
+  it('allowClasses override adds types not in default list')
+  it('denyClasses override removes types from default list')
+  it('coordinates within 1e-7 degrees share the same node')
+  it('MultiLineString produces one OSMWay per sub-array')
+  it('infers oneway from GeoJSON oneway/direction properties')
+  it('round-trips: osmDataToGeoJSON(geojsonToOsmData(fc)) preserves all coordinates')
+})
+```
 
 ---
 
-## Priority 6 — Coverage Infrastructure
+### 3. Export / Import Utilities — `lib/exportService.ts`, `lib/gpxLoader.ts`
 
-The project has **no coverage reporting configured**. Without it, regressions are
-invisible and it is impossible to measure whether the improvements above make an impact.
+**Why important:** Data exports are the primary deliverable users share with city GIS teams. A malformed OSM XML or broken CSV escape corrupts that hand-off.
 
-**Add to `vitest.config.ts`:**
+**Recommended tests:**
 
-```typescript
+```ts
+describe('exportService', () => {
+  describe('toCSV', () => {
+    it('escapes commas in property values')
+    it('escapes double-quotes by doubling them')
+    it('extracts first coordinate from Point geometry')
+    it('extracts first coordinate from LineString geometry')
+    it('emits all unique property keys as headers')
+    it('handles features with different property sets (union of keys)')
+    it('handles empty FeatureCollection')
+  })
+
+  describe('toOSMXML', () => {
+    it('escapes & < > " \' in tag values')
+    it('all node IDs referenced in way appear in nodes section')
+    it('output parses as valid XML (DOMParser roundtrip)')
+    it('bounds element contains correct min/max lat/lon')
+    it('coordinate precision is 7 decimal places')
+  })
+
+  describe('generateSummary', () => {
+    it('counts roads, buildings, amenities correctly')
+    it('returns zero counts for empty input')
+  })
+})
+
+describe('gpxLoader', () => {
+  it('detects http/https strings and fetches them')
+  it('reads File objects via .text()')
+  it('parses raw GPX XML strings directly')
+  it('falls back to waypoints when no track/route found')
+  it('throws when GPX has no points at all')
+  it('returns coordinates in [lon, lat] order')
+  it('rejects non-200 HTTP responses with a descriptive error')
+})
+```
+
+---
+
+### 4. Weather Analysis — `services/weatherAnalysis.ts`
+
+**Why important:** Weather penalties feed directly into edge cost calculations and driver recommendations. Wrong thresholds produce bad scheduling advice that may cause unsafe driving conditions.
+
+**Recommended tests:**
+
+```ts
+describe('scoreWeather', () => {
+  it('returns 0 for clear-sky conditions')
+  it('returns 30 for light snow (0 < snow <= 2 mm/h)')
+  it('returns 50 for heavy snow (> 2 mm/h)')
+  it('returns 20 for light rain (1-5 mm/h)')
+  it('returns 35 for heavy rain (> 5 mm/h)')
+  it('returns 40 for visibility < 500 m')
+  it('returns 35 for wind >= 15 m/s')
+  it('caps combined score at 100')
+  it('thunderstorm adds 30')
+})
+
+describe('getWeatherPenaltyMultiplier', () => {
+  it('returns 0 for clear conditions')
+  it('returns a value in [0, 0.2] range for all inputs')
+  it('increases monotonically with risk score')
+})
+
+describe('analyzeRouteWeather', () => {
+  it('produces one SegmentWeatherRisk per input segment')
+  it('overallRiskScore is average of segment risks')
+  it('totalDelayMinutes aggregates correctly')
+  it('generates alert when any segment risk >= 70')
+  it('generates rule-based recommendation when Leap AI is disabled')
+  it('handles empty segments array without throwing')
+})
+```
+
+---
+
+### 5. Map Matching — `lib/mapMatching.ts`
+
+**Why important:** This is the bridge between optimized abstract routes and actual navigation instructions. Bugs here cause wrong turn-by-turn guidance.
+
+**Recommended tests** (unit-level with fetch mocking):
+
+```ts
+describe('mapMatching', () => {
+  it('delegates to OSRM when no Google API key is configured')
+  it('delegates to Google when API key is present')
+  it('downsamples traces to <= 100 points before calling Google Roads')
+  it('preserves first and last point when downsampling')
+  it('batches > 25 waypoints into chunks with overlap deduplication')
+  it('parses OSRM route response into MatchedRoute steps')
+  it('parses Google Directions response including encoded polyline')
+  it('maps Google maneuver types to OSRM equivalents')
+  it('falls back to offline matching on OSRM network failure')
+  it('aggregates totalDistance and totalDuration across legs')
+  it('rejects single-point input with a descriptive error')
+  it('handles empty waypoint array')
+})
+```
+
+---
+
+### 6. Zustand Stores — `stores/`
+
+**Why important:** Stores are the single source of truth for driver state (active circuit, navigation position, zones). Untested mutations can corrupt runtime state silently and are hard to debug in production.
+
+**Recommended tests** (using `@testing-library/react` `renderHook`):
+
+```ts
+describe('circuitStore', () => {
+  it('initialises with empty circuit and streetEdges')
+  it('setCircuit atomically updates both circuit and streetEdges')
+  it('clearCircuit resets both fields to empty arrays')
+  it('multiple setCircuit calls override, not append')
+  it('subscribers receive updated state after setCircuit')
+})
+
+describe('routeParametersStore', () => {
+  it('default values match expected production defaults')
+  it('setNumVehicles updates numVehicles')
+  it('setTurnPenalty clamps value to valid range')
+})
+
+describe('zonesStore', () => {
+  it('addZone appends a new zone with a unique ID')
+  it('removeZone deletes by ID without affecting others')
+  it('updateZone mutates only the target zone')
+})
+```
+
+---
+
+### 7. Server Routers — `server/optimizerRouter.ts`, `server/navigationRouter.ts`, `server/orgRouter.ts`, `server/rbac/rbacRouter.ts`
+
+**Why important:** tRPC router logic (auth guards, input validation, DB queries) is completely uncovered. Auth bypass bugs in `rbacRouter` or `orgRouter` are high-severity security issues.
+
+**Recommended tests** (using tRPC `createCaller` for unit tests):
+
+```ts
+describe('rbacRouter', () => {
+  it('rejects unauthenticated callers on protected procedures')
+  it('returns 403 when caller lacks required role')
+  it('grants access when caller has correct role')
+  it('assignRole validates that role is a known enum value')
+})
+
+describe('optimizerRouter', () => {
+  it('rejects malformed GeoJSON input (zod validation error)')
+  it('proxies valid request to Python backend')
+  it('returns structured error on backend timeout')
+})
+
+describe('orgRouter', () => {
+  it('createOrg requires authenticated user')
+  it('getOrg returns 404 for unknown org ID')
+  it('members can only access their own org data')
+})
+```
+
+---
+
+### 8. React Hooks — `hooks/useRouteOptimization.ts`, `hooks/useOsmOptimizeRoute.ts`
+
+**Why important:** These hooks orchestrate the full optimization pipeline including parallel network calls, timeouts, and error recovery. Untested async edge cases surface as silent route failures in production.
+
+**Recommended tests** (using `@testing-library/react` `renderHook` + `vi.mock`):
+
+```ts
+describe('useRouteOptimization', () => {
+  it('selects turn-aware mode when isTurnAware is true')
+  it('selects standard mode when isTurnAware is false')
+  it('falls back to standard mode when turn-aware pipeline throws')
+  it('merges weather + ML + traffic penalties before graph construction')
+  it('parallel penalty fetches are abandoned after 8s timeout')
+  it('coverage percentage = edgesTraversed / totalEdges')
+  it('circuit includes all StreetEdges at least once')
+  it('emits analytics events on success and failure')
+})
+```
+
+---
+
+## Quick Wins (Low Effort, High Value)
+
+These can be added in a single PR with minimal setup:
+
+| Test | Effort | Risk Mitigated |
+|------|--------|----------------|
+| `osm-filter` inclusion/exclusion rules | Low | Illegal roads in routing graph |
+| `weatherAnalysis.scoreWeather` | Low | Wrong driver recommendations |
+| `exportService.toCSV` CSV escaping | Low | Corrupted data exports |
+| `circuitStore` state mutations | Low | Corrupted navigation state |
+| `geojsonToOsmData` road-class filtering | Low | Same as osm-filter |
+| `osmToStreetEdges` Haversine accuracy | Low | Wrong distance/speed calculations |
+
+---
+
+## Suggested Incremental Rollout
+
+1. **Sprint 1 — Algorithms:** VRP solvers (clarke-wright, two-opt) + geospatial pipeline (osm-filter, osmToStreetEdges, geojsonToOsmData)
+2. **Sprint 2 — Data integrity:** exportService, gpxLoader, weatherAnalysis
+3. **Sprint 3 — State & hooks:** Zustand stores + core hooks (useRouteOptimization)
+4. **Sprint 4 — Server:** tRPC router unit tests + RBAC security tests
+5. **Sprint 5 — Components:** Integration/snapshot tests for highest-traffic screens (map, planner, route)
+
+---
+
+## Coverage Tooling Recommendation
+
+Add `@vitest/coverage-v8` to generate HTML coverage reports:
+
+```bash
+pnpm add -D @vitest/coverage-v8
+```
+
+```ts
+// vitest.config.ts — add coverage block
 coverage: {
   provider: 'v8',
-  reporter: ['text', 'lcov'],
-  include: ['lib/**/*.ts', 'server/**/*.ts'],
-  exclude: ['lib/__tests__/**', 'server/tests/**', '**/*.d.ts'],
-  thresholds: {
-    lines: 40,      // achievable today
-    functions: 35,
-    branches: 30,
-  },
+  reporter: ['text', 'html', 'lcov'],
+  include: ['lib/**', 'services/**', 'hooks/**', 'stores/**', 'server/**'],
+  exclude: ['**/__tests__/**', '**/tests/**', '**/*.d.ts'],
+  thresholds: { lines: 60, functions: 60 },   // raise incrementally over time
 },
 ```
 
-**Add to `package.json`:**
-
-```json
-"test:coverage": "vitest run --coverage"
-```
-
-Start with low thresholds and raise them as new tests land. Failing CI on coverage
-regression prevents new code from shipping untested.
-
----
-
-## Effort / Impact Summary
-
-| Priority | Module(s) | Effort | Impact |
-|---|---|---|---|
-| 1a | `lib/export-utils.ts` | Low | High — data correctness in exported reports |
-| 1b | `lib/douglas-peucker.ts` | Low | High — silent point loss in GPX exports |
-| 1c | `lib/osm-filter.ts` | Low | High — road inclusion/exclusion logic |
-| 1d | `lib/weather-utils.ts` | Very low | Low |
-| 2a | `lib/route-loop-pruner.ts` | Medium | High — excessive segment traversal |
-| 2b | `lib/vrp-solvers/clarke-wright.ts` | Medium | High — fleet route correctness |
-| 2c | `lib/vrp-solvers/two-opt.ts` | Medium | Medium |
-| 3 | Server routers (7 files) | High | High — business logic with no safety net |
-| 4 | `lib/crash-recovery.ts` | Low | Medium — data loss on crash |
-| 5 | Zustand stores (`circuitStore` first) | Medium | Medium — cascading UI failures |
-| 6 | Coverage infrastructure | Very low | High — makes all regressions visible |
-
-## Recommended Rollout
-
-1. **Immediate:** Coverage infrastructure (Priority 6) — one config change, no code.
-2. **Next sprint:** Priority 1a–1d — pure functions, no mocking, high confidence gain fast.
-3. **Following sprint:** Priority 2a–2c — algorithmic correctness for pruning and VRP solvers.
-4. **Medium term:** Priority 3 — server router tests using the existing auth test pattern.
-5. **Ongoing:** Priority 4–5 alongside feature work; add store tests when stores are modified.
+Run with: `vitest run --coverage`
