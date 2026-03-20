@@ -84,6 +84,7 @@ export interface RouteVariant {
  */
 export class CostAwareRouteOptimizer {
   private optimizer: RouteOptimizer;
+  private readonly ways: Way[];
   private costWeights: CostOptimizationConfig["costWeights"];
   private learningEnabled: boolean;
 
@@ -94,6 +95,7 @@ export class CostAwareRouteOptimizer {
     turnRestrictions: any[] = [],
     config: CostOptimizationConfig = {},
   ) {
+    this.ways = ways;
     this.costWeights = config.costWeights || {
       fuel: 0.3,
       labor: 0.4,
@@ -126,7 +128,7 @@ export class CostAwareRouteOptimizer {
 
       // Step 1: Get ML-enhanced edge penalties for problematic ways
       console.log("🤖 Getting ML edge penalties...");
-      const edgePenalties = await this.getMLEdgePenalties(ways, weatherData);
+      const edgePenalties = await this.getMLEdgePenalties(this.ways, weatherData);
 
       // Step 2: Get cost-aware route recommendations
       console.log("💰 Analyzing cost factors...");
@@ -144,7 +146,13 @@ export class CostAwareRouteOptimizer {
         console.warn(
           "⚠️ Cost-aware recommendation failed, using standard optimization",
         );
-        return this.getStandardCostOptimizedRoute(
+        const standard = await this.getStandardCostOptimizedRoute(
+          routeStats,
+          weatherData,
+          operationalContext,
+        );
+        if (standard) return standard;
+        return this.getFallbackOptimizedRoute(
           routeStats,
           weatherData,
           operationalContext,
@@ -662,21 +670,27 @@ export class CostAwareRouteOptimizer {
   > {
     const routeAnalyses = await Promise.all(
       routeOptions.map(async (option) => {
-        const costAnalysis = await this.optimizeWithCostAwareness(
-          option.routeStats,
-          weatherData,
-          operationalContext,
-          config,
-        );
+        const costAnalysis =
+          (await this.optimizeWithCostAwareness(
+            option.routeStats,
+            weatherData,
+            operationalContext,
+            config,
+          )) ??
+          this.getFallbackOptimizedRoute(
+            option.routeStats,
+            weatherData,
+            operationalContext,
+          );
 
         return {
           name: option.name,
           description: option.description,
-          costAnalysis: costAnalysis!,
+          costAnalysis,
           ranking: {
             costRank: 0, // Will be calculated
             efficiencyRank: 0, // Will be calculated
-            overallScore: costAnalysis?.costEfficiencyScore || 0,
+            overallScore: costAnalysis.costEfficiencyScore,
           },
         };
       }),

@@ -636,6 +636,11 @@ export interface RouteMapProps {
   routePoints?: { lat: number; lon: number; label?: string }[];
   /** When set (e.g. VRP multi-vehicle), one polyline per vehicle with distinct colors. */
   routePointsByVehicle?: { lat: number; lon: number; label?: string }[][];
+  /**
+   * When true, every `routePointsByVehicle` polyline uses the main route orange instead of
+   * rotating the multi-vehicle palette (used for gap-split fragments of a single route).
+   */
+  unifyRouteVehicleStrokeColor?: boolean;
   /** When set with routePoints, draws route in segment colors by risk (weather overlay). */
   segmentRisks?: SegmentRisk[];
   height?: number;
@@ -877,6 +882,7 @@ export const RouteMap = React.memo(
       collectionPoints,
       routePoints: routePointsProp,
       routePointsByVehicle,
+      unifyRouteVehicleStrokeColor = false,
       segmentRisks,
       height = 400,
       width,
@@ -1506,10 +1512,11 @@ export const RouteMap = React.memo(
                     const positions = vehiclePoints.map(
                       (p) => [p.lat, p.lon] as [number, number],
                     );
-                    const color =
-                      ROUTE_COLORS_BY_VEHICLE[
-                        vIdx % ROUTE_COLORS_BY_VEHICLE.length
-                      ];
+                    const color = unifyRouteVehicleStrokeColor
+                      ? "#F97316"
+                      : ROUTE_COLORS_BY_VEHICLE[
+                          vIdx % ROUTE_COLORS_BY_VEHICLE.length
+                        ];
                     return (
                       <Polyline
                         key={`vehicle-${vIdx}`}

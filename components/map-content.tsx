@@ -37,6 +37,7 @@ import {
   routeBetweenPoints,
   routeThroughWaypoints,
 } from "@/lib/mapMatching";
+import { countGaps, repairRouteGaps } from "@/lib/routeGapFilter";
 import { buildMatchedRouteFromHierholzer } from "@/lib/hierholzerInstructions";
 import { getRoutingConfigAsync, getRoutingConfig } from "@/lib/routing-config";
 import type { MatchedRoute } from "@/lib/mapMatching";
@@ -102,7 +103,12 @@ import { Fonts, glassStyle } from "@/lib/_core/theme";
 
 // --- Optimized store selectors ---
 import { useMapStateStore, useMapActions } from "@/stores/mapStateStore";
-import { sanitizeLatLonArray, sanitizeByVehicle } from "@/lib/coord-utils";
+import {
+  sanitizeLatLonArray,
+  sanitizeByVehicle,
+  splitRouteAtTeleportGaps,
+} from "@/lib/coord-utils";
+import { stitchRouteSegmentsWithRouting } from "@/lib/stitchRouteSegments";
 import { projectOntoLine } from "@/lib/turfProjection";
 
 /** Max pins to show for a route; avoids treating every track node as a marker. */
@@ -428,6 +434,9 @@ export default function MapContent() {
   const navigationEnabled = usePluginStore((s) =>
     s.isPluginEnabled("navigation", true),
   );
+  const routePostProcessingEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("route-post-processing", true),
+  );
   const overturePluginEnabled = usePluginStore((s) =>
     s.isPluginEnabled("overture", true),
   );
@@ -487,10 +496,77 @@ export default function MapContent() {
     return routePoints;
   }, [previewRoutePointsByVehicle, previewPoints, routePoints]);
 
+  /**
+   * When post-processing is ON: split long gaps into separate polylines so chords
+   * are not drawn as one misleading line (and auto-stitch can merge them).
+   * When OFF: show one raw polyline so optimizer/matcher output is visible for A/B.
+   */
+  const routeMapPolylines = useMemo(() => {
+    if (
+      previewRoutePointsByVehicle &&
+      previewRoutePointsByVehicle.some((r) => (r?.length ?? 0) > 0)
+    ) {
+      return { kind: "preview" as const, preview: previewRoutePointsByVehicle };
+    }
+    const base = sanitizeLatLonArray(displayRoutePoints);
+    if (!routePostProcessingEnabled) {
+      return { kind: "single" as const, points: base };
+    }
+    const parts = splitRouteAtTeleportGaps(base, 650);
+    if (parts.length > 1) return { kind: "split" as const, parts };
+    return { kind: "single" as const, points: base };
+  }, [
+    previewRoutePointsByVehicle,
+    displayRoutePoints,
+    routePostProcessingEnabled,
+  ]);
+
   const isPreviewMode =
     (!!previewPoints && previewPoints.length > 0) ||
     (!!previewRoutePointsByVehicle &&
       previewRoutePointsByVehicle.some((r) => r.length > 0));
+
+  // Planner may save a flat list with large gaps between disconnected subgraphs.
+  // Stitch those gaps here (same as planner v2) so Map shows one road-following line.
+  useEffect(() => {
+    if (!routePostProcessingEnabled) return;
+    if (isRecActive) return;
+    if (isPreviewMode) return;
+    if (navigationMode) return;
+    if (matchedRoute) return;
+
+    let cancelled = false;
+    (async () => {
+      const sanitized = sanitizeLatLonArray(routePoints);
+      if (sanitized.length < 2) return;
+      const parts = splitRouteAtTeleportGaps(sanitized, 650);
+      if (parts.length <= 1) return;
+
+      const cfg = await getRoutingConfigAsync();
+      if (!cfg.baseUrl || cancelled) return;
+
+      const res = await stitchRouteSegmentsWithRouting(
+        parts,
+        cfg,
+        getRouteOptionsForRouting(),
+      );
+      if (cancelled || !res || res.points.length < 2) return;
+
+      actions.setRoutePoints(res.points);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    routePoints,
+    isRecActive,
+    isPreviewMode,
+    navigationMode,
+    matchedRoute,
+    routePostProcessingEnabled,
+    actions,
+  ]);
 
   const geojsonOverlay: GeoJSONFeatureCollection | null = useMemo(() => {
     const source = cachedMatchedRoute ?? matchedRoute;
@@ -844,6 +920,7 @@ export default function MapContent() {
     try {
       let matched: MatchedRoute | null = null;
       const routingConfig = await getRoutingConfigAsync();
+      const routeOptions = getRouteOptionsForRouting();
       if (routingConfig.baseUrl) {
         // Use map-matching (OSRM /match/ or Google snap-to-roads), NOT shortest-path
         // routing. routeThroughWaypoints finds the shortest path *between* waypoints
@@ -852,7 +929,51 @@ export default function MapContent() {
         matched = await matchGPXToRoads(
           points,
           routingConfig,
-          getRouteOptionsForRouting(),
+          routeOptions,
+        );
+
+        // Optional post-processing plugin: enforce continuity and repair teleports.
+        if (
+          routePostProcessingEnabled &&
+          matched &&
+          matched.matchedGeometry.length >= 2
+        ) {
+          const gapsBefore = countGaps(matched.matchedGeometry);
+          if (gapsBefore > 0) {
+            const repaired = await repairRouteGaps(
+              matched.matchedGeometry,
+              routingConfig,
+              routeOptions,
+            );
+            const gapsAfter = countGaps(repaired);
+            if (gapsAfter === 0 && repaired.length >= 2) {
+              matched = {
+                ...matched,
+                matchedGeometry: repaired,
+              };
+            } else if (gapsAfter > 0) {
+              // Hard fallback: force fully routed geometry between consecutive points.
+              // This may shorten some detours vs pure trace-matching, but keeps the
+              // path on roads when match data is fragmented.
+              const forced = await routeThroughWaypoints(
+                points,
+                routingConfig,
+                routeOptions,
+              );
+              if (forced && forced.matchedGeometry.length >= 2) {
+                matched = forced;
+              }
+            }
+          }
+        }
+      }
+      // If map-matching failed completely, optional post-processing fallback:
+      // force routing between waypoints before giving up to raw geometry.
+      if (!matched && routingConfig.baseUrl && routePostProcessingEnabled) {
+        matched = await routeThroughWaypoints(
+          points,
+          routingConfig,
+          routeOptions,
         );
       }
       if (!matched) {
@@ -873,7 +994,7 @@ export default function MapContent() {
       });
       Alert.alert(
         "Fix to roads",
-        "Route snapped to roads. You can start navigation when ready.",
+        "Route snapped to road geometry. You can start navigation when ready.",
       );
     } catch (e) {
       console.warn("Fix to roads failed:", e);
@@ -881,7 +1002,14 @@ export default function MapContent() {
     } finally {
       actions.setFixToRoadsLoading(false);
     }
-  }, [previewPoints, displayRoutePoints, state?.gpxData, actions, dispatch]);
+  }, [
+    previewPoints,
+    displayRoutePoints,
+    state?.gpxData,
+    actions,
+    dispatch,
+    routePostProcessingEnabled,
+  ]);
 
   const handleRecalculate = useCallback(
     async (payload: OffRoutePayload) => {
@@ -1561,21 +1689,25 @@ export default function MapContent() {
         routePoints={
           isRecActive
             ? recorder.points.map((p) => ({ lat: p.lat, lon: p.lon }))
-            : sanitizeLatLonArray(
-                previewRoutePointsByVehicle &&
-                  previewRoutePointsByVehicle.length === 1
-                  ? previewRoutePointsByVehicle[0]
-                  : previewRoutePointsByVehicle &&
-                      previewRoutePointsByVehicle.length > 1
-                    ? undefined
-                    : displayRoutePoints,
-              )
+            : routeMapPolylines.kind === "preview" &&
+                routeMapPolylines.preview.length === 1
+              ? sanitizeLatLonArray(routeMapPolylines.preview[0])
+              : routeMapPolylines.kind === "preview" &&
+                  routeMapPolylines.preview.length > 1
+                ? undefined
+                : routeMapPolylines.kind === "split"
+                  ? undefined
+                  : routeMapPolylines.points
         }
         routePointsByVehicle={
-          previewRoutePointsByVehicle && previewRoutePointsByVehicle.length > 1
-            ? sanitizeByVehicle(previewRoutePointsByVehicle)
-            : undefined
+          routeMapPolylines.kind === "preview" &&
+          routeMapPolylines.preview.length > 1
+            ? sanitizeByVehicle(routeMapPolylines.preview)
+            : routeMapPolylines.kind === "split"
+              ? routeMapPolylines.parts
+              : undefined
         }
+        unifyRouteVehicleStrokeColor={routeMapPolylines.kind === "split"}
         segmentRisks={state.weatherAnalysis?.segmentRisks}
         height={height}
         width={width}
@@ -1695,6 +1827,27 @@ export default function MapContent() {
       </View>
 
       <HelpPrompt />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: insets.top + 8,
+          right: 12,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          zIndex: 5000,
+        }}
+      >
+        <Text style={{ color: "#fff", fontSize: 11 }}>
+          Post-processing: {routePostProcessingEnabled ? "ON" : "OFF"}
+          {"\n"}
+          {routePostProcessingEnabled
+            ? "gap-split + auto-stitch + fix-to-roads repair"
+            : "raw polyline (no split / no auto-stitch / fix minimal)"}
+        </Text>
+      </View>
 
       {/* GPS Recording controls — compact overlay */}
       <RecordingOverlay

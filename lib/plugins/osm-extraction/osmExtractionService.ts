@@ -37,7 +37,6 @@
  *   proposed / construction    Incomplete or planned roads
  */
 
-import type { BBox } from "geojson";
 import { bbox, bboxClip } from "@turf/turf";
 
 import type { ExtractResult } from "../types";
@@ -185,7 +184,7 @@ export function clipLineFeaturesToExtractBbox(
   polygon: GeoJSON.Feature<GeoJSON.Polygon>,
   features: GeoJSON.Feature[],
 ): GeoJSON.Feature[] {
-  const extent = bbox(polygon) as BBox;
+  const extent = bbox(polygon) as [number, number, number, number];
   const out: GeoJSON.Feature[] = [];
 
   for (const f of features) {

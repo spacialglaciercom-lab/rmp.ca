@@ -280,10 +280,12 @@ export function geojsonToOsmData(
       nodeIds.push(ensureNode(lat, lon, z));
     }
     if (nodeIds.length < 2) return;
-    // Always use a unique auto-generated ID to ensure each Way has a distinct wayId.
-    // This prevents false mid-block classification in routeOptimizerSimple when
-    // multiple sub-segments of a MultiLineString share a node.
-    const id = `g${nextWayId++}`;
+    // Distinct way id per segment: use GeoJSON feature / sub-segment id when set
+    // (e.g. MultiLineString → road42_0, road42_1), else auto g1, g2, …
+    const id =
+      props?.id != null && String(props.id).trim() !== ""
+        ? String(props.id)
+        : `g${nextWayId++}`;
 
     // Infer tags from GeoJSON properties (common keys from OSM/Overture)
     const tags: Record<string, string> = {};
