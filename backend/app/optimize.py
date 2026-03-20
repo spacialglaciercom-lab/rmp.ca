@@ -5,6 +5,14 @@ Route optimization endpoint:
 Given a GeoJSON FeatureCollection of LineString road segments, builds a graph,
 solves the Chinese Postman Problem (traverse every edge at least once with
 minimum total distance), and returns an ordered route with turn statistics.
+
+Route geometry uses only coordinates from the input graph (and straight chords
+between disconnected components). Those points lie inside the axis-aligned
+bounding box of all input coordinates; we verify this and expose
+``extractor_input_bbox_lon_lat`` / ``route_inside_extractor_coord_bbox`` in
+``metrics``. (This is the extract GeoJSON extent, not the user-drawn polygon
+unless they match.) For polygon-tight clipping, filter roads with
+``/api/geojson/filter`` before optimizing.
 """
 from __future__ import annotations
 
@@ -158,6 +166,113 @@ class OptimizeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Extractor bounding box verification (same GeoJSON fed to the graph)
+# ---------------------------------------------------------------------------
+
+
+def _coordinate_bbox_from_geojson_features(
+    features: list[GeoJSONFeature],
+) -> tuple[float, float, float, float] | None:
+    """Axis-aligned lon/lat bbox over all LineString / MultiLineString coordinates."""
+    min_lon = min_lat = math.inf
+    max_lon = max_lat = -math.inf
+    for feat in features:
+        geom = feat.geometry
+        gtype = geom.get("type", "")
+        lines: list[list[list[float]]] = []
+        if gtype == "LineString":
+            lines = [geom.get("coordinates", [])]
+        elif gtype == "MultiLineString":
+            lines = geom.get("coordinates", [])
+        else:
+            continue
+        for line in lines:
+            for pt in line:
+                if len(pt) < 2:
+                    continue
+                lon, lat = float(pt[0]), float(pt[1])
+                if not math.isfinite(lon) or not math.isfinite(lat):
+                    continue
+                min_lon = min(min_lon, lon)
+                min_lat = min(min_lat, lat)
+                max_lon = max(max_lon, lon)
+                max_lat = max(max_lat, lat)
+    if min_lon == math.inf:
+        return None
+    return (min_lon, min_lat, max_lon, max_lat)
+
+
+def _count_route_samples_outside_lon_lat_bbox(
+    route_coords: list[list[float]],
+    bbox: tuple[float, float, float, float],
+    *,
+    pad_deg: float = 1e-5,
+    interior_samples_per_segment: int = 4,
+) -> int:
+    """Count vertices + interior samples per segment outside the bbox.
+
+    For an axis-aligned lon/lat rectangle, a straight segment between two in-bbox
+    endpoints stays inside the box; violations indicate bad floats or solver bugs.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+    min_lon -= pad_deg
+    min_lat -= pad_deg
+    max_lon += pad_deg
+    max_lat += pad_deg
+
+    def inside(lon: float, lat: float) -> bool:
+        return (
+            math.isfinite(lon)
+            and math.isfinite(lat)
+            and min_lon <= lon <= max_lon
+            and min_lat <= lat <= max_lat
+        )
+
+    violations = 0
+    for c in route_coords:
+        if len(c) < 2:
+            continue
+        if not inside(float(c[0]), float(c[1])):
+            violations += 1
+
+    for i in range(len(route_coords) - 1):
+        a, b = route_coords[i], route_coords[i + 1]
+        if len(a) < 2 or len(b) < 2:
+            continue
+        for k in range(1, interior_samples_per_segment + 1):
+            t = k / (interior_samples_per_segment + 1)
+            lon = float(a[0]) + t * (float(b[0]) - float(a[0]))
+            lat = float(a[1]) + t * (float(b[1]) - float(a[1]))
+            if not inside(lon, lat):
+                violations += 1
+
+    return violations
+
+
+def _merge_extractor_bbox_verification(
+    features: list[GeoJSONFeature],
+    route_coords: list[list[float]],
+    route_metrics: dict[str, Any],
+    message: str,
+) -> tuple[dict[str, Any], str]:
+    """Attach bbox verification fields; extend message if samples fall outside input bbox."""
+    bbox = _coordinate_bbox_from_geojson_features(features)
+    violations = 0
+    if bbox is not None and route_coords:
+        violations = _count_route_samples_outside_lon_lat_bbox(route_coords, bbox)
+    out: dict[str, Any] = dict(route_metrics)
+    out["extractor_input_bbox_lon_lat"] = list(bbox) if bbox is not None else None
+    out["route_inside_extractor_coord_bbox"] = violations == 0
+    out["extractor_coord_bbox_violation_count"] = violations
+    msg = message
+    if violations > 0:
+        msg += (
+            f" — warning: {violations} route sample(s) outside GeoJSON coordinate bounding box"
+        )
+    return out, msg
+
+
+# ---------------------------------------------------------------------------
 # Graph construction
 # ---------------------------------------------------------------------------
 
@@ -171,6 +286,42 @@ def _node_id(lon: float, lat: float) -> str:
     return f"{_round_coord(lon)},{_round_coord(lat)}"
 
 
+def _normalize_oneway_mode(raw: str | None) -> str:
+    """Map client / legacy values to ``ignore`` or ``respect``.
+
+    Accepts: ignore, respect, A/B (planner), yes/no, booleans as strings.
+    """
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return "ignore"
+    s = str(raw).strip().lower()
+    if s in ("a", "ignore", "no", "false", "0", "off"):
+        return "ignore"
+    if s in ("b", "respect", "yes", "true", "1", "on"):
+        return "respect"
+    if s in ("reverse", "-1"):
+        return "respect"
+    return "ignore"
+
+
+def _oneway_allowed_directions(props: dict[str, Any]) -> tuple[bool, bool]:
+    """For a segment stored along GeoJSON vertex order (u → v).
+
+    Returns (allow_u_to_v, allow_v_to_u). OSM ``oneway=-1`` is opposite to digitization.
+    """
+    ow = props.get("oneway")
+    if ow is True or ow == 1:
+        return (True, False)
+    if isinstance(ow, str):
+        osl = ow.strip().lower()
+        if osl in ("yes", "true", "1"):
+            return (True, False)
+        if osl in ("-1", "reverse"):
+            return (False, True)
+    if ow == -1:
+        return (False, True)
+    return (True, True)
+
+
 def _build_graph(
     features: list[GeoJSONFeature],
     oneway_mode: str = "ignore",
@@ -178,9 +329,13 @@ def _build_graph(
 ) -> nx.MultiGraph | nx.MultiDiGraph:
     """Build a MultiGraph (or MultiDiGraph when plugins are set) from LineString features.
 
-    When plugins is None or empty: undirected MultiGraph, edge weight = geometric length_km.
-    When plugins is non-empty: directed MultiDiGraph with two edges per segment (u->v and v->u),
+    When plugins is None or empty: ``oneway_mode`` controls the graph:
+      - ``ignore``: undirected ``MultiGraph`` (one edge per split segment).
+      - ``respect``: directed ``MultiDiGraph``; ``properties.oneway`` selects traversable directions.
+
+    When plugins is non-empty: directed ``MultiDiGraph`` with two edges per segment (u->v and v->u);
     edge weight = compounded cost (distance_m * product of each plugin's multiplier) / 1000.
+    One-way tagging is **not** applied on the plugin path (both directions remain available for costing).
 
     Splitting at shared intersection nodes is unchanged.
     """
@@ -309,9 +464,61 @@ def _build_graph(
         return G
 
     # ------------------------------------------------------------------ #
-    # Standard path (no plugins): undirected MultiGraph, geometric length_km #
+    # Standard path (no plugins): undirected or directed by oneway_mode   #
     # ------------------------------------------------------------------ #
-    G = nx.MultiGraph()
+    norm = _normalize_oneway_mode(oneway_mode)
+
+    if norm == "ignore":
+        G = nx.MultiGraph()
+        edge_idx = 0
+        for line_coords, feat_idx in all_lines:
+            feat = features[feat_idx]
+            run_start = 0
+            for i in range(1, len(line_coords)):
+                nid = _node_id(line_coords[i][0], line_coords[i][1])
+                if nid not in split_nodes and i != len(line_coords) - 1:
+                    continue
+
+                segment = line_coords[run_start : i + 1]
+                if len(segment) < 2:
+                    run_start = i
+                    continue
+
+                length_km = sum(
+                    _haversine_km(segment[j - 1][0], segment[j - 1][1], segment[j][0], segment[j][1])
+                    for j in range(1, len(segment))
+                )
+                start = segment[0]
+                end = segment[-1]
+                u = _node_id(start[0], start[1])
+                v = _node_id(end[0], end[1])
+
+                if u not in G:
+                    G.add_node(u, lon=_round_coord(start[0]), lat=_round_coord(start[1]))
+                if v not in G:
+                    G.add_node(v, lon=_round_coord(end[0]), lat=_round_coord(end[1]))
+
+                props = feat.properties or {}
+                dc = props.get("dual_carriageway") == "yes" or props.get("is_dual_carriageway") is True
+                G.add_edge(
+                    u,
+                    v,
+                    key=edge_idx,
+                    length_km=length_km,
+                    coords=segment,
+                    feature_idx=feat_idx,
+                    road_class=_get_road_class(feat),
+                    name=props.get("name"),
+                    osm_id=props.get("osm_id"),
+                    dual_carriageway=dc,
+                )
+                edge_idx += 1
+                run_start = i
+
+        return G
+
+    # respect: MultiDiGraph — one-way segments are traversable in one direction only
+    G = nx.MultiDiGraph()
     edge_idx = 0
     for line_coords, feat_idx in all_lines:
         feat = features[feat_idx]
@@ -342,19 +549,22 @@ def _build_graph(
 
             props = feat.properties or {}
             dc = props.get("dual_carriageway") == "yes" or props.get("is_dual_carriageway") is True
-            G.add_edge(
-                u,
-                v,
-                key=edge_idx,
+            allow_uv, allow_vu = _oneway_allowed_directions(props)
+            base_attrs = dict(
                 length_km=length_km,
-                coords=segment,
                 feature_idx=feat_idx,
                 road_class=_get_road_class(feat),
                 name=props.get("name"),
                 osm_id=props.get("osm_id"),
                 dual_carriageway=dc,
             )
-            edge_idx += 1
+            if allow_uv:
+                G.add_edge(u, v, key=edge_idx, coords=segment, **base_attrs)
+                edge_idx += 1
+            if allow_vu:
+                rev_seg = list(reversed(segment))
+                G.add_edge(v, u, key=edge_idx, coords=rev_seg, **base_attrs)
+                edge_idx += 1
             run_start = i
 
     return G
@@ -815,7 +1025,7 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
     if not features:
         raise ValueError("No LineString/MultiLineString features found in the GeoJSON")
 
-    oneway_mode = body.oneway_mode or "ignore"
+    oneway_mode = _normalize_oneway_mode(body.oneway_mode)
     resolved_dem_path = body.dem_path or os.getenv("DEM_PATH")
     plugins: list[RoutingCostPlugin] | None = None
     if resolved_dem_path or body.use_turn_penalty_plugin:
@@ -1039,6 +1249,9 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
     path_for_analytics: list[tuple[float, float]] = [(c[0], c[1]) for c in route_coords]
     active_plugins: list[RoutingCostPlugin] = plugins or []
     route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
+    route_metrics, msg = _merge_extractor_bbox_verification(
+        features, route_coords, route_metrics, msg
+    )
     _t_after_analytics = time.perf_counter()
 
     route_geojson = GeoJSONFeatureCollection(
@@ -1229,8 +1442,8 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
             detail="No LineString/MultiLineString features found in the GeoJSON",
         )
 
-    # Build graph (directed with plugin costs when dem_path or turn penalty plugin set, else undirected)
-    oneway_mode = body.oneway_mode or "ignore"
+    # Build graph (directed with plugin costs when dem_path or turn penalty plugin set, else undirected / oneway-aware)
+    oneway_mode = _normalize_oneway_mode(body.oneway_mode)
     resolved_dem_path = body.dem_path or os.getenv("DEM_PATH")
     plugins: list[RoutingCostPlugin] | None = None
     if resolved_dem_path or body.use_turn_penalty_plugin:
@@ -1504,6 +1717,9 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     ]
     active_plugins: list[RoutingCostPlugin] = plugins or []
     route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
+    route_metrics, msg = _merge_extractor_bbox_verification(
+        features, route_coords, route_metrics, msg
+    )
     _t_after_analytics = time.perf_counter()
 
     # Build route GeoJSON
