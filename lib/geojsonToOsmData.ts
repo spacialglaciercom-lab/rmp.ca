@@ -145,7 +145,13 @@ export function geojsonToOsmData(
     if (f.geometry.type === "LineString") {
       pushWay(f.geometry.coordinates, f.properties);
     } else if (f.geometry.type === "MultiLineString") {
-      for (const line of f.geometry.coordinates) pushWay(line, f.properties);
+      f.geometry.coordinates.forEach((line, i) => {
+        const subProps =
+          f.properties && f.properties.id != null
+            ? { ...f.properties, id: `${f.properties.id}_${i}` }
+            : f.properties;
+        pushWay(line, subProps);
+      });
     }
   }
 

@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from "vitest";
 import { optimizeFromGeoJSON } from "../offline-optimizer-v2/optimizeFromGeoJSON";
+import { geojsonToOsmData } from "../geojsonToOsmData";
 import {
   FuelAwarePlugin,
   TurnPenaltyPlugin,
@@ -158,6 +159,35 @@ describe("optimizeFromGeoJSON – MultiLineString", () => {
 
     const result = optimizeFromGeoJSON(fc);
     expect(result.route.length).toBeGreaterThan(0);
+  });
+
+  it("assigns unique wayIds to each sub-segment of a named MultiLineString feature", () => {
+    // A Y-fork: two branches share node A=[0,0]. Without the fix all sub-segments
+    // would carry the same wayId ("road42"), causing the shared node to be
+    // classified as mid-block and U-turns hard-blocked there.
+    const fc = {
+      type: "FeatureCollection" as const,
+      features: [
+        makeMultiLineFeature(
+          [
+            [
+              [0.0, 0.0],
+              [0.0, 0.001],
+            ],
+            [
+              [0.0, 0.0],
+              [0.001, 0.0],
+            ],
+          ],
+          { id: "road42" },
+        ) as any,
+      ],
+    };
+
+    const { ways } = geojsonToOsmData(fc);
+    expect(ways).toHaveLength(2);
+    expect(ways[0]!.id).toBe("road42_0");
+    expect(ways[1]!.id).toBe("road42_1");
   });
 
   it("mixes LineString and MultiLineString in the same collection", () => {
