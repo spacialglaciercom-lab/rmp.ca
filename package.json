@@ -94,6 +94,7 @@
     "@turf/length": "^7.3.4",
     "@turf/nearest-point-on-line": "^7.3.4",
     "@turf/turf": "^7.3.4",
+    "@vercel/analytics": "^2.0.1",
     "@xmldom/xmldom": "^0.8.11",
     "ai": "^6.0.86",
     "apache-arrow": "^18.1.0",

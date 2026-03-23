@@ -536,3 +536,105 @@ def test_vrp_deterministic_repeated_calls() -> None:
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r1.json()["total_distance"] == r2.json()["total_distance"]
+
+
+def test_vrp_zero_distance_route() -> None:
+    """All stops at depot location -> 0 total distance, but all assigned."""
+    depot = {"lat": 45.50, "lon": -73.57}
+    stops = [
+        {"id": i, "location": depot, "demand": [10]}
+        for i in range(1, 5)
+    ]
+    vehicles = [{"id": 0, "start_location": depot, "capacity": [100]}]
+    r = client.post("/api/vrp/solve", json={"stops": stops, "vehicles": vehicles})
+    assert r.status_code == 200
+    resp = r.json()
+    assert resp["unassigned"] == []
+    assert resp["total_distance"] == 0
+
+
+def test_vrp_massive_distance_outliers() -> None:
+    """Very far away stops (intercontinental) should be handled by Haversine."""
+    # Montreal to Tokyo (~10,000 km)
+    montreal = {"lat": 45.50, "lon": -73.57}
+    tokyo = {"lat": 35.68, "lon": 139.76}
+    sydney = {"lat": -33.86, "lon": 151.20}
+    
+    stops = [
+        {"id": 1, "location": tokyo, "demand": [1]},
+        {"id": 2, "location": sydney, "demand": [1]},
+    ]
+    vehicles = [{"id": 0, "start_location": montreal, "capacity": [10]}]
+    r = client.post("/api/vrp/solve", json={"stops": stops, "vehicles": vehicles})
+    assert r.status_code == 200
+    resp = r.json()
+    assert resp["unassigned"] == []
+    # Total distance should be massive but calculated.
+    # Montreal -> Tokyo -> Sydney -> Montreal
+    assert resp["total_distance"] > 20_000_000 # in meters (20,000 km)
+
+
+def test_vrp_impossible_demand_unassigned() -> None:
+    """Stop demand exceeds vehicle capacity -> stop should be unassigned."""
+    req = {
+        "stops": [{"id": 1, "location": {"lat": 45.52, "lon": -73.56}, "demand": [500]}],
+        "vehicles": [{"id": 0, "start_location": {"lat": 45.50, "lon": -73.57}, "capacity": [100]}],
+    }
+    r = client.post("/api/vrp/solve/sync", json=req)
+    assert r.status_code == 200
+    assert r.json()["unassigned"] == [1]
+
+
+def test_vrp_invalid_time_window_422() -> None:
+    """Inverted time window [200, 100] should fail Pydantic validation."""
+    req = {
+        "stops": [{"id": 1, "location": {"lat": 45.5, "lon": -73.5}, "time_window": [200, 100]}],
+        "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [100]}],
+    }
+    r = client.post("/api/vrp/solve", json=req)
+    assert r.status_code == 422
+
+
+def test_vrp_nan_coordinates_422() -> None:
+    """NaN coordinates should fail Pydantic validation."""
+    req = {
+        "stops": [{"id": 1, "location": {"lat": float("nan"), "lon": -73.5}}],
+        "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [100]}],
+    }
+    r = client.post("/api/vrp/solve", json=req)
+    assert r.status_code == 422
+
+
+def test_vrp_negative_values_422() -> None:
+    """Negative capacity or service duration should fail Pydantic validation."""
+    req = {
+        "stops": [{"id": 1, "location": {"lat": 45.5, "lon": -73.5}, "service_duration": -10}],
+        "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [-1]}],
+    }
+    r = client.post("/api/vrp/solve", json=req)
+    assert r.status_code == 422
+
+
+def test_vrp_unreachable_time_window_unassigned() -> None:
+    """Tight time window that can't be reached in time -> unassigned."""
+    req = {
+        "use_time_windows": True,
+        "stops": [
+            {
+                "id": 1,
+                "location": {"lat": 45.60, "lon": -73.50}, # ~12km away
+                "time_window": [0, 10], # only 10 seconds to get there
+            }
+        ],
+        "vehicles": [
+            {
+                "id": 0,
+                "start_location": {"lat": 45.50, "lon": -73.57},
+                "capacity": [100],
+                "time_window": [0, 86400],
+            }
+        ],
+    }
+    r = client.post("/api/vrp/solve/sync", json=req)
+    assert r.status_code == 200
+    assert r.json()["unassigned"] == [1]
