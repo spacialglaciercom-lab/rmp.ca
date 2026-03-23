@@ -1,6 +1,9 @@
 import {
   boolean,
+  customType,
+  doublePrecision,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -10,6 +13,17 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+/**
+ * Custom PostGIS geography type for Drizzle.
+ */
+const geography = customType<{
+  data: string;
+  driverData: string;
+  config: { type: string; srid: number };
+}>({
+  dataType: (config) => `geography(${config?.type}, ${config?.srid})`,
+});
 
 /**
  * Core user table backing auth flow.
@@ -270,3 +284,30 @@ export const permissionRequestsRelations = relations(
     }),
   }),
 );
+
+// ── GIS Tables ────────────────────────────────────────────────────────────
+
+export const collectionPoints = pgTable("collection_points", {
+  id: serial("id").primaryKey(),
+  address: text("address"),
+  /** Standard PostGIS geography point using SRID 4326 (WGS 84 standard lat/lng) */
+  location: geography("location", { type: "Point", srid: 4326 }),
+  isCollected: boolean("is_collected").default(false),
+  qrCodeToken: text("qr_code_token"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type CollectionPoint = typeof collectionPoints.$inferSelect;
+export type InsertCollectionPoint = typeof collectionPoints.$inferInsert;
+
+export const optimizedRoutes = pgTable("optimized_routes", {
+  id: serial("id").primaryKey(),
+  routeName: text("route_name"),
+  /** A LineString representing the generated path */
+  path: geography("path", { type: "LineString", srid: 4326 }),
+  totalDistanceMeters: doublePrecision("total_distance_meters"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type OptimizedRoute = typeof optimizedRoutes.$inferSelect;
+export type InsertOptimizedRoute = typeof optimizedRoutes.$inferInsert;

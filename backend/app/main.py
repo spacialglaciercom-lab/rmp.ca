@@ -49,14 +49,18 @@ from .geojson_ops import (
 )
 from .optimize import router as optimize_router
 from .overture import router as overture_router
+from .postgis_cpp import router as postgis_cpp_router
 from .vector_clean import CleanOptions, clean_geojson, router as vector_clean_router
 from .vrp import router as vrp_router
+from .vrp_osrm import router as vrp_osrm_router
 
 app.include_router(geojson_router)
 app.include_router(optimize_router)
 app.include_router(overture_router)
+app.include_router(postgis_cpp_router)
 app.include_router(vector_clean_router)
 app.include_router(vrp_router)
+app.include_router(vrp_osrm_router)
 
 
 # ---------------------------------------------------------------------------

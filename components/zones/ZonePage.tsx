@@ -43,6 +43,7 @@ import {
 import { WasteImportModal } from "@/components/zones/WasteImportModal";
 import { DeliveryZonePartitionSheet } from "@/components/zones/DeliveryZonePartitionSheet";
 import { BottomSheet } from "@/components/shared/BottomSheet";
+import { RouteAnalyticsPanel } from "@/components/zones/RouteAnalyticsPanel";
 
 export type ZonesPageMode = "delivery" | "waste";
 
@@ -1493,6 +1494,10 @@ export function ZonePage() {
                                 )}
                               </View>
                             ))}
+                          {/* AI Route Analytics Panel */}
+                          <RouteAnalyticsPanel
+                            selectedRouteName={selectedResult?.name ?? null}
+                          />
                         </>
                       )}
                     </>
@@ -1774,6 +1779,10 @@ export function ZonePage() {
                             sourcePoints={selectedResult?.sourcePoints}
                           />
                         ))}
+                      {/* AI Route Analytics Panel */}
+                      <RouteAnalyticsPanel
+                        selectedRouteName={selectedResult?.name ?? null}
+                      />
                     </>
                   ) : (
                     <View style={styles.emptySidebar}>

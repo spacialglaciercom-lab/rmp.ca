@@ -418,3 +418,60 @@ def test_optimize_sync_route_inside_extractor_coord_bbox() -> None:
     assert m.get("extractor_coord_bbox_violation_count") == 0
     bbox = m.get("extractor_input_bbox_lon_lat")
     assert isinstance(bbox, list) and len(bbox) == 4
+
+
+def test_optimize_negative_extreme_penalties() -> None:
+    """Negative penalties should be clamped to 0.0, and extreme values to MAX_TURN_PENALTY."""
+    fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
+    # Negative and extreme values
+    resp = _optimize(
+        fc,
+        turn_penalties={"right_turn": -50.0, "left_turn": 1e15, "u_turn": -1.0},
+    )
+    assert resp["stats"]["total_traversals"] == 3
+    # The solver should not crash and the clamp should prevent issues.
+
+
+def test_optimize_zero_length_segment() -> None:
+    """A segment with zero length (identical start/end) should not crash bearing/efficiency calc."""
+    # Degenerate segment: A to A
+    fc = _fc(
+        _seg(*A, *A),
+        _seg(*A, *B),
+        _seg(*B, *C),
+        _seg(*C, *A),
+    )
+    resp = _optimize(fc, clean_before_optimize=False)
+    # Even with clean_before_optimize=False, it should handle the 0-length segment safely.
+    assert resp["stats"]["edges_in_graph"] == 4
+    assert resp["stats"]["total_distance_km"] > 0
+
+
+def test_optimize_disconnected_start_hint() -> None:
+    """Two disconnected components: start hint in component 2 should reorder and rotate it first."""
+    # Component 1: A-B-C
+    # Component 2: D-E-F
+    # Start hint near D. Component 2 should be traversed first.
+    fc = _fc(
+        _seg(*A, *B), _seg(*B, *C), _seg(*C, *A),
+        _seg(*D, *E), _seg(*E, *F), _seg(*F, *D),
+    )
+    # Point D is (-73.570, 45.500)
+    resp = _optimize(fc, start_lat=45.500, start_lon=-73.570)
+    
+    # First node in route should be near D
+    first_node = resp["route"][0]
+    assert abs(first_node["latitude"] - 45.500) < 1e-4
+    assert abs(first_node["longitude"] - (-73.570)) < 1e-4
+
+
+def test_optimize_nan_coordinates_422() -> None:
+    """NaN coordinates in start_lat/lon should fail Pydantic validation."""
+    fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
+    body = {
+        "geojson": fc,
+        "start_lat": float("nan"),
+        "start_lon": -73.57,
+    }
+    r = client.post("/api/optimize", json=body)
+    assert r.status_code == 422
