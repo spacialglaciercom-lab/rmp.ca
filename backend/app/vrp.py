@@ -9,7 +9,7 @@ import sys
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
@@ -27,23 +27,51 @@ ACCEPT_GPX = "application/gpx+xml"
 # ---------------------------------------------------------------------------
 
 class VrpLocation(BaseModel):
-    lat: float
-    lon: float
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
 
 class VrpStop(BaseModel):
     id: int  # Unique ID
     location: VrpLocation
-    demand: list[int] = [0] # List of capacities to match VROOM style
+    demand: list[int] = Field(default_factory=lambda: [0]) # List of capacities to match VROOM style
     time_window: Optional[Tuple[int, int]] = None  # (start, end)
-    service_duration: int = 0
+    service_duration: int = Field(default=0, ge=0)
     label: Optional[str] = None
+
+    @field_validator("time_window")
+    @classmethod
+    def validate_time_window(cls, v: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+        if v and v[0] > v[1]:
+            raise ValueError("time_window start must be <= end")
+        return v
+
+    @field_validator("demand")
+    @classmethod
+    def validate_demand(cls, v: list[int]) -> list[int]:
+        if any(d < 0 for d in v):
+            raise ValueError("demand values must be non-negative")
+        return v
 
 class VrpVehicle(BaseModel):
     id: int
     start_location: VrpLocation
     end_location: Optional[VrpLocation] = None
-    capacity: list[int] = [100]
+    capacity: list[int] = Field(default_factory=lambda: [100])
     time_window: Optional[Tuple[int, int]] = None
+
+    @field_validator("time_window")
+    @classmethod
+    def validate_time_window(cls, v: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+        if v and v[0] > v[1]:
+            raise ValueError("time_window start must be <= end")
+        return v
+
+    @field_validator("capacity")
+    @classmethod
+    def validate_capacity(cls, v: list[int]) -> list[int]:
+        if any(c < 0 for c in v):
+            raise ValueError("capacity values must be non-negative")
+        return v
 
 class VrpRequest(BaseModel):
     stops: List[VrpStop]

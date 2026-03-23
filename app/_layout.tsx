@@ -37,6 +37,7 @@ import { DeliveryInstructionsProvider } from "@/context/DeliveryInstructionsCont
 import { PluginProvider } from "@/context/PluginProvider";
 
 import { FirebaseProvider } from "@/context/FirebaseContext";
+import { Analytics } from "@vercel/analytics/react";
 import { MapTypeProvider } from "@/lib/map-type-preference";
 import { MapOrientationProvider } from "@/lib/map-orientation-preference";
 import { initMapbox } from "@/lib/mapbox-config";
@@ -381,6 +382,7 @@ export default function RootLayout() {
             </SafeAreaInsetsContext.Provider>
           </SafeAreaFrameContext.Provider>
         </SafeAreaProvider>
+        {Platform.OS === "web" && <Analytics />}
       </ThemeProvider>
     );
   }
@@ -390,6 +392,7 @@ export default function RootLayout() {
       <SafeAreaProvider initialMetrics={providerInitialMetrics}>
         {content}
       </SafeAreaProvider>
+      {Platform.OS === "web" && <Analytics />}
     </ThemeProvider>
   );
 }

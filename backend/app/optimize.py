@@ -110,8 +110,8 @@ class TurnPenalties(BaseModel):
 
 class OptimizeRequest(BaseModel):
     geojson: GeoJSONFeatureCollection
-    start_lat: float | None = None
-    start_lon: float | None = None
+    start_lat: float | None = Field(None, ge=-90, le=90)
+    start_lon: float | None = Field(None, ge=-180, le=180)
     oneway_mode: str | None = None  # "ignore", "respect", "reverse"
     service_both_sides: bool | None = None  # when True, traverse each bidirectional segment twice (both curbs)
     road_classes: list[str] | None = None
@@ -123,8 +123,8 @@ class OptimizeRequest(BaseModel):
 
 
 class RoutePoint(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
     node_id: str | None = None
 
 
@@ -662,6 +662,7 @@ def _dijkstra_with_transition_costs(
 def _solve_cpp(
     G: nx.MultiGraph | nx.MultiDiGraph,
     turn_penalties: TurnPenalties | None = None,
+    start_node: str | None = None,
 ) -> list[str]:
     """
     Approximate solution to the Chinese Postman Problem:
@@ -688,16 +689,32 @@ def _solve_cpp(
         components = list(nx.weakly_connected_components(G))
     else:
         components = list(nx.connected_components(G))
+
     if len(components) > 1:
+        # Prioritize the component containing the start_node if it exists
+        comp_with_start = None
+        if start_node:
+            for comp in components:
+                if start_node in comp:
+                    comp_with_start = comp
+                    break
+
+        other_comps = [c for c in components if c != comp_with_start]
+        sorted_comps = sorted(other_comps, key=len, reverse=True)
+        if comp_with_start:
+            sorted_comps.insert(0, comp_with_start)
+
         full_route: list[str] = []
-        for comp_nodes in sorted(components, key=len, reverse=True):
+        for comp_nodes in sorted_comps:
             sub = G.subgraph(comp_nodes).copy()
             if "routing_plugins" in G.graph:
                 sub.graph["routing_plugins"] = G.graph["routing_plugins"]
             # Skip components with no edges (isolated nodes)
             if sub.number_of_edges() == 0:
                 continue
-            sub_route = _solve_cpp(sub, turn_penalties=turn_penalties)
+
+            sub_start = start_node if start_node in comp_nodes else None
+            sub_route = _solve_cpp(sub, turn_penalties=turn_penalties, start_node=sub_start)
             if sub_route:
                 if full_route:
                     full_route.extend(sub_route)
@@ -714,7 +731,7 @@ def _solve_cpp(
     if len(odd_nodes) == 0:
         # Already Eulerian — find circuit directly
         try:
-            circuit = eulerian_circuit_nx(G)
+            circuit = eulerian_circuit_nx(G, start=start_node)
             if circuit:
                 return [circuit[0][0]] + [e[1] for e in circuit]
         except nx.NetworkXError:
@@ -1083,7 +1100,7 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
                 start_node = node
 
     _t_before_cpp = time.perf_counter()
-    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties)
+    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties, start_node=start_node)
     _t_after_cpp = time.perf_counter()
 
     if not route_nodes:
@@ -1519,7 +1536,7 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
 
     # Solve CPP
     _t_before_cpp = time.perf_counter()
-    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties)
+    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties, start_node=start_node)
     _t_after_cpp = time.perf_counter()
 
     if not route_nodes:

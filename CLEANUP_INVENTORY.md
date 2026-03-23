@@ -261,3 +261,4 @@ If you want, next step can be a short **cleanup script** that: (1) creates `docs
 | **App markdown** | Root reports + existing `docs/*` + selected from `markdown/` | **MOVE** to `docs/` (single docs folder) |
 | **Duplicate markdown** | Entire `markdown/` folder (after copying needed bits to `docs/`) | **REMOVE** |
 | **IDE/agent** | `.cursor/`, `.claude/`, `.agents/`, `.abacusai/`, `.zai/` | **KEEP** if you use them; else optional remove |
+i

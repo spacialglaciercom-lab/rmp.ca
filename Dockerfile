@@ -7,7 +7,7 @@ FROM ${BASE_IMAGE} AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
 
 # Copy package files and patches (lockfile references patchedDependencies)
 COPY package.json pnpm-lock.yaml ./
@@ -31,7 +31,7 @@ FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
