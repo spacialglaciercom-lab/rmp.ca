@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "./_core/trpc";
+import { ENV } from "./_core/env";
 import { createLogger } from "./logger";
 
 const log = createLogger("optimizer-router");
@@ -37,16 +38,7 @@ async function fetchWithRetry(
   throw lastError;
 }
 
-const OPTIMIZER_BACKEND_URL = (() => {
-  const raw =
-    process.env.OPTIMIZER_BACKEND_URL ||
-    process.env.EXPO_PUBLIC_OPTIMIZER_URL ||
-    "";
-  if (!raw) return "";
-  return raw.startsWith("http://") || raw.startsWith("https://")
-    ? raw.replace(/\/$/, "")
-    : `https://${raw.replace(/\/$/, "")}`;
-})();
+const OPTIMIZER_BACKEND_URL = ENV.optimizerBackendUrl;
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const PARTITION_TIMEOUT_MS = 120_000;

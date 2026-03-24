@@ -21,6 +21,7 @@
  */
 
 import type { Express, Request, Response } from "express";
+import { ENV } from "./_core/env";
 import { createLogger } from "./logger";
 
 const log = createLogger("optimizer-proxy");
@@ -56,17 +57,7 @@ const POLL_MAX_DELAY_MS = 30_000;
 // URL normalisation
 // ---------------------------------------------------------------------------
 
-const rawOptimizerUrl =
-  process.env.OPTIMIZER_BACKEND_URL ||
-  process.env.EXPO_PUBLIC_OPTIMIZER_URL ||
-  "";
-
-const OPTIMIZER_BACKEND_URL = rawOptimizerUrl
-  ? rawOptimizerUrl.startsWith("http://") ||
-    rawOptimizerUrl.startsWith("https://")
-    ? rawOptimizerUrl.replace(/\/$/, "")
-    : `https://${rawOptimizerUrl.replace(/\/$/, "")}`
-  : "";
+const OPTIMIZER_BACKEND_URL = ENV.optimizerBackendUrl;
 
 const rawVroomUrl = process.env.VROOM_BACKEND_URL ?? "";
 const VROOM_BACKEND_URL = rawVroomUrl
