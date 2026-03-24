@@ -20,7 +20,7 @@ import { createLogger } from "./logger";
 const log = createLogger("ws-extract-proxy");
 
 /** Default extract upstream. Override with EXTRACT_WS_UPSTREAM env var. */
-const DEFAULT_EXTRACT_UPSTREAM = "http://127.0.0.1:9000";
+const DEFAULT_EXTRACT_UPSTREAM = "https://proud-magic-overtureextract.up.railway.app";
 const UPSTREAM_HTTP =
   process.env.EXTRACT_WS_UPSTREAM ||
   process.env.OPTIMIZER_WS_UPSTREAM ||
