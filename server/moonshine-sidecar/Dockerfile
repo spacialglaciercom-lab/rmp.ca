@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Use AWS ECR Public Gallery mirror to avoid Docker Hub TLS timeouts behind VPNs.
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 WORKDIR /app
 

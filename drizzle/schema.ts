@@ -311,3 +311,144 @@ export const optimizedRoutes = pgTable("optimized_routes", {
 
 export type OptimizedRoute = typeof optimizedRoutes.$inferSelect;
 export type InsertOptimizedRoute = typeof optimizedRoutes.$inferInsert;
+
+// ── Offline Sync Tables (WatermelonDB ↔ PostgreSQL) ───────────────────────
+
+/**
+ * Waste points table — bins, dumpsters, and collection points.
+ * Synced to mobile devices for offline access.
+ */
+export const wastePoints = pgTable("waste_points", {
+  id: text("id").primaryKey(), // UUID from mobile
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  externalId: text("external_id"), // Reference to external system
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // bin, dumpster, recycling, etc.
+  condition: varchar("condition", { length: 50 }), // good, fair, poor, unknown
+  address: text("address"),
+  locationName: text("location_name"),
+  notes: text("notes"),
+  photoUri: text("photo_uri"),
+  lastCollectionDate: timestamp("last_collection_date"),
+  collectionCount: integer("collection_count").default(0),
+  isActive: boolean("is_active").default(true),
+  syncedAt: timestamp("synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type WastePoint = typeof wastePoints.$inferSelect;
+export type InsertWastePoint = typeof wastePoints.$inferInsert;
+
+/**
+ * Routes table — collection routes for drivers.
+ * Synced to mobile devices for offline navigation.
+ */
+export const routes = pgTable("routes", {
+  id: text("id").primaryKey(), // UUID from mobile
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  externalId: text("external_id"),
+  name: text("name"),
+  date: timestamp("date"),
+  driverId: integer("driver_id"),
+  vehicleId: text("vehicle_id"),
+  status: varchar("status", { length: 50 }).default("pending"), // pending, active, completed, cancelled
+  totalPoints: integer("total_points").default(0),
+  completedPoints: integer("completed_points").default(0),
+  estimatedDurationMinutes: integer("estimated_duration_minutes"),
+  actualDurationMinutes: integer("actual_duration_minutes"),
+  totalDistanceMeters: doublePrecision("total_distance_meters"),
+  routeSource: varchar("route_source", { length: 50 }), // manual, vrp, imported
+  syncedAt: timestamp("synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Route = typeof routes.$inferSelect;
+export type InsertRoute = typeof routes.$inferInsert;
+
+/**
+ * Route stops — individual collection points within a route.
+ */
+export const routeStops = pgTable("route_stops", {
+  id: text("id").primaryKey(), // UUID from mobile
+  routeId: text("route_id").references(() => routes.id, { onDelete: "cascade" }).notNull(),
+  wastePointId: text("waste_point_id").references(() => wastePoints.id, { onDelete: "set null" }),
+  sequence: integer("sequence").notNull(),
+  address: text("address"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  collectionType: varchar("collection_type", { length: 50 }),
+  status: varchar("status", { length: 50 }).default("pending"), // pending, completed, skipped, issue
+  specialInstructions: text("special_instructions"),
+  notes: text("notes"),
+  photoUri: text("photo_uri"),
+  completedAt: timestamp("completed_at"),
+  skippedReason: text("skipped_reason"),
+  syncedAt: timestamp("synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type RouteStop = typeof routeStops.$inferSelect;
+export type InsertRouteStop = typeof routeStops.$inferInsert;
+
+/**
+ * Zones table — geographic partitions for route planning.
+ */
+export const zones = pgTable("zones", {
+  id: text("id").primaryKey(), // UUID from mobile
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 7 }), // Hex color
+  boundary: geography("boundary", { type: "Polygon", srid: 4326 }),
+  isActive: boolean("is_active").default(true),
+  syncedAt: timestamp("synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Zone = typeof zones.$inferSelect;
+export type InsertZone = typeof zones.$inferInsert;
+
+/**
+ * Favorites table — user saved places.
+ */
+export const favorites = pgTable("favorites", {
+  id: text("id").primaryKey(), // UUID from mobile
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  address: text("address"),
+  category: varchar("category", { length: 50 }), // waypoint, bin, depot, other
+  notes: text("notes"),
+  photoUri: text("photo_uri"),
+  syncedAt: timestamp("synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Favorite = typeof favorites.$inferSelect;
+export type InsertFavorite = typeof favorites.$inferInsert;
+
+/**
+ * Sync status table — tracks last sync state per table.
+ */
+export const syncStatus = pgTable("sync_status", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tableName: varchar("table_name", { length: 100 }).notNull(),
+  lastSyncToken: text("last_sync_token"),
+  lastSyncAt: timestamp("last_sync_at"),
+  pendingCount: integer("pending_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type SyncStatusRecord = typeof syncStatus.$inferSelect;
+export type InsertSyncStatus = typeof syncStatus.$inferInsert;
