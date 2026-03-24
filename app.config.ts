@@ -23,7 +23,7 @@ const bundleId =
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
-const APP_VERSION = "1.1.8";
+const APP_VERSION = "1.1.9";
 
 const env = {
   // App branding - update these values directly (do not use env vars)
@@ -54,7 +54,7 @@ const config = {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
     /** CFBundleVersion; must increment for each App Store submission (EAS Submit). */
-    buildNumber: "14",
+    buildNumber: "15",
     /** Required for Sign in with Apple (expo-apple-authentication) — adds the Apple Sign In entitlement. */
     usesAppleSignIn: true,
     googleServicesFile: "./GoogleService-Info.plist",
@@ -176,7 +176,7 @@ const config = {
     },
   },
   android: {
-    versionCode: 14,
+    versionCode: 15,
     /** Required by @react-native-firebase/app plugin. Replace with your real file from Firebase Console → Project settings → Your apps → Android. */
     googleServicesFile: "./google-services.json",
     /** Uses top-level icon (same as iOS). No separate adaptive layers. */
