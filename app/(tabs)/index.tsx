@@ -25,6 +25,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { VRPPlanner } from "@/components/VRPPlanner";
 import { MinimalCard, MinimalButton, SectionLabel } from "@/components/minimal";
 import { HeaderWeather } from "@/components/HeaderWeather";
+import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
+import { OfflineNotice } from "@/components/OfflineNotice";
 import type { Route, CollectionPoint } from "@/types";
 import { storage } from "@/lib/storage";
 import { isMockRoute } from "@/lib/is-mock-route";
@@ -195,8 +197,13 @@ export default function HomeScreen() {
             </Text>
           ) : null}
         </View>
-        <HeaderWeatherIfPlugin textColor={theme.text} />
+        <View style={styles.headerRight}>
+          <SyncStatusIndicator compact showLabel={false} />
+          <HeaderWeatherIfPlugin textColor={theme.text} />
+        </View>
       </View>
+
+      <OfflineNotice />
 
       <HomeWeatherSectionIfPlugin />
 
@@ -412,6 +419,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerLeft: { flex: 1 },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   title: { fontSize: 28, fontWeight: "400", letterSpacing: -0.02 },
   subtitle: { fontSize: 14, marginTop: 4 },
   primaryCta: { marginTop: 20 },
