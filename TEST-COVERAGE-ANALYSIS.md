@@ -17,7 +17,7 @@
 
 1. **No coverage reporting configured** — Vitest has no `coverage` section; there is no `@vitest/coverage-v8` dependency. We cannot measure line/branch coverage.
 2. **No coverage thresholds** — No minimum coverage enforced, so regressions go unnoticed.
-3. **No CI/CD test step** — `cloudbuild.yaml` builds and deploys without running tests. Broken code can ship to production.
+3. **No CI/CD test step** — CI builds and deploys without running tests. Broken code can ship to production.
 
 ## Priority 1: Cost Optimization Pipeline (5,300+ lines, 0% coverage)
 
@@ -123,7 +123,7 @@ These files form the core business logic for cost-based route optimization and a
 These are small, high-value additions:
 
 1. **Add Vitest coverage reporting** — Install `@vitest/coverage-v8`, configure thresholds
-2. **Add test step to CI/CD** — Add `pnpm test` before build in `cloudbuild.yaml`
+2. **Add test step to CI/CD** — Add `pnpm test` before build in CI.
 3. **Test `douglas-peucker.ts`** — Pure algorithm, no dependencies, easy to test
 4. **Test `geojsonToOsmData.ts`** — Pure data transformation, easy fixtures
 5. **Test `export-utils.ts`** — Already have GPX tests in Python; mirror for TypeScript

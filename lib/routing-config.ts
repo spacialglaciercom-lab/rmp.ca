@@ -72,7 +72,7 @@ export async function getRoutingConfigAsync(): Promise<RoutingConfig> {
     }
   }
 
-  // OSRM: ensure server config is fetched so getRoutingConfig() can use backend OSRM URL when set (e.g. GKE).
+  // OSRM: ensure server config is fetched so getRoutingConfig() can use backend OSRM URL when set.
   if (getApiBaseUrl()) await ensureServerConfigFetched();
   return getRoutingConfig();
 }
