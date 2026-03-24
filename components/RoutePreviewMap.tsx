@@ -146,8 +146,7 @@ export function RoutePreviewMap({
     impactAsync();
 
     try {
-      const allPoints = depot ? [depot, ...points] : points;
-      const result = await solveRoute(allPoints, {
+      const result = await solveRoute(points, {
         algorithm,
         depot,
         returnToDepot: !!depot,
