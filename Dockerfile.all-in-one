@@ -4,7 +4,8 @@
 # Deploy: gcloud run deploy rmp-ca --image ... --port 8080
 
 # ---- Build Node API ----
-FROM node:20-alpine AS nodebuilder
+# Use AWS ECR Public Gallery mirror to avoid Docker Hub TLS timeouts behind VPNs.
+FROM public.ecr.aws/docker/library/node:20-alpine AS nodebuilder
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
 COPY package.json pnpm-lock.yaml ./
