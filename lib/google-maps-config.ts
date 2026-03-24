@@ -39,7 +39,7 @@ function getEnvFallback(): string {
   );
 }
 
-/** Fetch Google Maps key from server (Railway/GKE env GOOGLE_MAPS_API_KEY). Uses public API URL. Also caches osrmUrl when present. */
+/** Fetch Google Maps key from server (Railway env GOOGLE_MAPS_API_KEY). Uses public API URL. Also caches osrmUrl when present. */
 async function fetchServerGoogleMapsKey(): Promise<string> {
   if (serverConfigCache && serverConfigCache.googleMapsApiKey)
     return serverConfigCache.googleMapsApiKey;

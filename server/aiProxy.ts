@@ -33,7 +33,7 @@ const VERCEL_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1";
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1";
 
 /** Build gateway client. Prefer explicit key (e.g. from client); then server AI_GATEWAY_API_KEY; then OPENROUTER_API_KEY. */
-function getGateway(
+export function getGateway(
   overrideApiKey?: string,
 ): ReturnType<typeof createOpenAICompatible> | null {
   const apiKey =

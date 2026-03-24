@@ -23,7 +23,7 @@
 | `tsconfig.json`, `vitest.config.ts` | TypeScript/tests |
 | `Dockerfile`, `Dockerfile.all-in-one` | App Docker |
 | `docker-compose.yml`, `docker-compose.osrm.yml`, `docker-compose.optimizer.yml` | App services |
-| `cloudbuild.yaml`, `vercel.json`, `eas.json` | CI/deploy |
+| `vercel.json`, `eas.json` | CI/deploy |
 | `drizzle/`, `drizzle.config.ts` | DB schema/migrations |
 | `scripts/` | App scripts (dev, tunnel, EAS, etc.) |
 | `services/` | App services layer |

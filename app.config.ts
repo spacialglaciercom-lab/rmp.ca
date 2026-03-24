@@ -23,7 +23,7 @@ const bundleId =
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
-const APP_VERSION = "1.1.6";
+const APP_VERSION = "1.1.8";
 
 const env = {
   // App branding - update these values directly (do not use env vars)
@@ -54,7 +54,7 @@ const config = {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
     /** CFBundleVersion; must increment for each App Store submission (EAS Submit). */
-    buildNumber: "13",
+    buildNumber: "14",
     /** Required for Sign in with Apple (expo-apple-authentication) — adds the Apple Sign In entitlement. */
     usesAppleSignIn: true,
     googleServicesFile: "./GoogleService-Info.plist",
@@ -176,7 +176,7 @@ const config = {
     },
   },
   android: {
-    versionCode: 13,
+    versionCode: 14,
     /** Required by @react-native-firebase/app plugin. Replace with your real file from Firebase Console → Project settings → Your apps → Android. */
     googleServicesFile: "./google-services.json",
     /** Uses top-level icon (same as iOS). No separate adaptive layers. */
@@ -329,7 +329,7 @@ const config = {
   // Set after creating a new Expo project (expo.dev or `eas init`). Required for EAS Build/Submit and OTA updates.
   extra: {
     eas: {
-      projectId: "8477234b-7a0e-4437-8efb-4325e13d0e08",
+      projectId: "084a5609-4b1f-432f-8aa6-435b6e40af11",
     },
     // Baked-in at build time so iOS has a default Google Maps key (EAS sets EXPO_PUBLIC_GOOGLE_MAPS_API_KEY).
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
