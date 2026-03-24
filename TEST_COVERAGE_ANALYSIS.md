@@ -15,7 +15,7 @@
 | **Total** | **~110,000** | **~4,400** | **~4%** |
 
 **Test files:** 14 Vitest + 7 pytest = 21 total
-**CI/CD:** No test step in `cloudbuild.yaml` — tests are never run on deployment.
+**CI/CD:** No test step in CI pipeline — tests are never run on deployment.
 
 ---
 
@@ -104,7 +104,7 @@ The v2 `RouteOptimizer` is largely untested beyond the plugin-level mock tests a
 2. **Add tests for `optimizerProxy.ts`** — mock the Python backend to test the 202-polling loop, backoff timing, and timeout/error paths.
 3. **Add tests for `NavigationEngine.ts`** — mock the location provider; test snap-to-route with known polylines, off-route detection, and step progression.
 4. **Add tests for `cost-data-collector.ts`** — verify fuel and time calculations against hand-computed values.
-5. **Enable tests in CI/CD** — add a test step to `cloudbuild.yaml` before the build/deploy steps.
+5. **Enable tests in CI/CD** — add a test step before the build/deploy steps.
 
 ### Short-Term
 
