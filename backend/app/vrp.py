@@ -265,15 +265,15 @@ def _solve_ortools(req: VrpRequest) -> VrpResponse:
     # vehicles. Without this, a single vehicle with capacity=1000 would serve all
     # 100 stops (demand=1 each) since it fits, ignoring the other vehicles.
     total_demand = sum((s.demand[0] if s.demand else 1) for s in req.stops)
+    max_single_demand = max((s.demand[0] if s.demand else 0) for s in req.stops) if req.stops else 0
     n_vehicles = len(req.vehicles)
     min_cap_to_spread = math.ceil(total_demand / n_vehicles) if n_vehicles > 1 else total_demand
 
     vehicle_caps = []
     for v in req.vehicles:
         user_cap = v.capacity[0] if v.capacity else 100
-        # Cap to min_cap_to_spread so each vehicle can only carry its fair share,
-        # but never reduce below 1 or the user's cap if it was already constraining.
-        effective_cap = min(user_cap, max(min_cap_to_spread, 1))
+        # Encourage load spreading, but never cap below the largest single job demand.
+        effective_cap = min(user_cap, max(min_cap_to_spread, max_single_demand, 1))
         vehicle_caps.append(effective_cap)
 
     routing.AddDimensionWithVehicleCapacity(
