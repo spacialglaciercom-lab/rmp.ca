@@ -8,8 +8,6 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
-google-services.json
-**/google-services.json
 
 # KMP shared-logic build
 shared-logic/build/
