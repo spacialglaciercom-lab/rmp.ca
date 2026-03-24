@@ -249,10 +249,8 @@ def test_vrp_all_stops_assigned_inline(name: str, data: dict, k: int) -> None:
     r = client.post("/api/vrp/solve/sync", json=req)
     assert r.status_code == 200, r.text
     resp = r.json()
-    # Keep this test stable across solver/runtime changes: validate shape and IDs.
-    valid_ids = {s["id"] for s in req["stops"]}
-    assert set(resp["unassigned"]).issubset(valid_ids), (
-        f"{name}: unassigned contains unknown stop ids: {resp['unassigned']}"
+    assert resp["unassigned"] == [], (
+        f"{name}: unassigned stops: {resp['unassigned']}"
     )
 
 
@@ -598,9 +596,9 @@ def test_vrp_invalid_time_window_422() -> None:
 
 
 def test_vrp_nan_coordinates_422() -> None:
-    """Non-numeric coordinates should fail Pydantic validation."""
+    """NaN coordinates should fail Pydantic validation."""
     req = {
-        "stops": [{"id": 1, "location": {"lat": "not-a-number", "lon": -73.5}}],
+        "stops": [{"id": 1, "location": {"lat": float("nan"), "lon": -73.5}}],
         "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [100]}],
     }
     r = client.post("/api/vrp/solve/sync", json=req)
