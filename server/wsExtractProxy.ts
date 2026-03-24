@@ -139,6 +139,18 @@ export function registerWsExtractProxy(server: Server): void {
       socket.destroy();
       return;
     }
+
+    // Prevent unhandled errors on the socket from crashing the server (e.g., EPIPE)
+    socket.on("error", (err) => {
+      log.warn("Socket error during WebSocket upgrade/proxy", {
+        error: err.message,
+        code: (err as NodeJS.ErrnoException).code,
+      });
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
+    });
+
     // Replace incoming headers with a minimal set to avoid HPE_HEADER_OVERFLOW
     // on the upstream (Vercel/Cloud Run add many proxy headers that accumulate).
     req.headers = stripHeaders(req);
