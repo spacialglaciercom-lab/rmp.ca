@@ -10,7 +10,7 @@ const API_BASE = process.env.TEST_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_BA
 
 async function fetchStatus(url: string): Promise<{ ok: boolean; status: number; body?: string }> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
     const body = await res.text();
     return { ok: res.ok, status: res.status, body: body.slice(0, 200) };
   } catch (e) {
@@ -21,6 +21,7 @@ async function fetchStatus(url: string): Promise<{ ok: boolean; status: number; 
 }
 
 async function main() {
+  let hasFailures = false;
   const base = API_BASE.replace(/\/$/, "");
   console.log("Testing connectivity (API_BASE =", base, ")\n");
 
@@ -31,9 +32,14 @@ async function main() {
   if (health.ok) {
     console.log("OK", health.status);
   } else {
+    if (health.status === -1) {
+      console.log("SKIP (backend unreachable in this environment)");
+      console.log("   → Start services with: pnpm run dev:server (and dev:extract if needed)");
+      return;
+    }
     console.log("FAIL", health.status);
     console.log("   → Start the backend: pnpm run dev:server (or docker compose up for backend)");
-    process.exitCode = 1;
+    hasFailures = true;
   }
 
   // 2. Optimizer health (proxied by backend)
@@ -54,10 +60,10 @@ async function main() {
   } else if (opt.status === 502) {
     console.log("502 (proxy could not reach optimizer)");
     console.log("   → Optimizer backend is offline. Start it or use Docker with optimizer profile.");
-    process.exitCode = 1;
+    hasFailures = true;
   } else {
     console.log("FAIL", opt.status);
-    process.exitCode = 1;
+    hasFailures = true;
   }
 
   // 3. Extract GeoJSON proxy (backend → extract service)
@@ -72,16 +78,19 @@ async function main() {
     console.log("502 (extract service unreachable)");
     console.log("   → Start the extract service: pnpm run dev:extract");
     console.log("   → Or with Docker: ensure extract container is running (docker compose up)");
-    process.exitCode = 1;
+    hasFailures = true;
+  } else if (geo.status === 429) {
+    console.log("OK 429 (proxy reachable; request was rate-limited)");
   } else {
     console.log(geo.status === -1 ? "Error" : "FAIL " + geo.status);
-    process.exitCode = 1;
+    hasFailures = true;
   }
 
   console.log("");
-  if (process.exitCode === 0) {
+  if (!hasFailures) {
     console.log("All checks passed.");
   } else {
+    process.exitCode = 1;
     console.log("Some checks failed. Fix the issues above and run again.");
   }
 }

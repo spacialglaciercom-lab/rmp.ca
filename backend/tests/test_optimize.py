@@ -19,6 +19,11 @@ from app.main import app
 
 client = TestClient(app)
 
+@pytest.fixture(autouse=True)
+def _clear_dem_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid DEM plugin activation from developer shell environment."""
+    monkeypatch.delenv("DEM_PATH", raising=False)
+
 
 # ---------------------------------------------------------------------------
 # GeoJSON builder helpers
@@ -43,7 +48,7 @@ def _fc(*features: dict) -> dict:
 
 def _optimize(fc: dict, **kwargs) -> dict:
     body = {"geojson": fc, "clean_before_optimize": False, **kwargs}
-    r = client.post("/api/optimize", json=body)
+    r = client.post("/api/optimize/sync", json=body)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -177,7 +182,7 @@ def test_optimize_default_excludes_motorway() -> None:
         _seg(*C, *A, road_class="motorway"),
     )
     body = {"geojson": fc, "clean_before_optimize": False}
-    r = client.post("/api/optimize", json=body)
+    r = client.post("/api/optimize/sync", json=body)
     assert r.status_code == 400
 
 
@@ -188,7 +193,7 @@ def test_optimize_default_excludes_footway() -> None:
         _seg(*B, *C, road_class="footway"),
         _seg(*C, *A, road_class="footway"),
     )
-    r = client.post("/api/optimize", json={"geojson": fc, "clean_before_optimize": False})
+    r = client.post("/api/optimize/sync", json={"geojson": fc, "clean_before_optimize": False})
     assert r.status_code == 400
 
 
@@ -217,7 +222,7 @@ def test_optimize_mixed_classes_only_allowed_pass() -> None:
 
 def test_optimize_empty_geojson_returns_400() -> None:
     fc = _fc()
-    r = client.post("/api/optimize", json={"geojson": fc})
+    r = client.post("/api/optimize/sync", json={"geojson": fc})
     assert r.status_code == 400
 
 
@@ -228,7 +233,7 @@ def test_optimize_only_points_returns_400() -> None:
             {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.57, 45.50]}, "properties": {}},
         ],
     }
-    r = client.post("/api/optimize", json={"geojson": fc})
+    r = client.post("/api/optimize/sync", json={"geojson": fc})
     assert r.status_code == 400
 
 
@@ -339,7 +344,7 @@ def test_optimize_clean_removes_self_loop_before_solve() -> None:
         "properties": {"class": "residential"},
     }
     fc = _fc(self_loop, _seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
-    resp = client.post("/api/optimize", json={"geojson": fc, "clean_before_optimize": True})
+    resp = client.post("/api/optimize/sync", json={"geojson": fc, "clean_before_optimize": True})
     assert resp.status_code == 200
     assert resp.json()["stats"]["edges_in_graph"] == 3
 
@@ -352,7 +357,7 @@ def test_optimize_clean_removes_duplicate_before_solve() -> None:
         "properties": {"class": "residential"},
     }
     fc = _fc(_seg(*A, *B), dup_feature, _seg(*B, *C), _seg(*C, *A))
-    resp = client.post("/api/optimize", json={"geojson": fc, "clean_before_optimize": True})
+    resp = client.post("/api/optimize/sync", json={"geojson": fc, "clean_before_optimize": True})
     assert resp.status_code == 200
     assert resp.json()["stats"]["edges_in_graph"] == 3
 
@@ -473,5 +478,5 @@ def test_optimize_nan_coordinates_422() -> None:
         "start_lat": float("nan"),
         "start_lon": -73.57,
     }
-    r = client.post("/api/optimize", json=body)
+    r = client.post("/api/optimize/sync", json=body)
     assert r.status_code == 422
