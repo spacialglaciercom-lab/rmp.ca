@@ -37,6 +37,7 @@ import { DeliveryInstructionsProvider } from "@/context/DeliveryInstructionsCont
 import { PluginProvider } from "@/context/PluginProvider";
 
 import { FirebaseProvider } from "@/context/FirebaseContext";
+import { DatabaseProvider } from "@/lib/database/DatabaseProvider";
 import { Analytics } from "@vercel/analytics/react";
 import { MapTypeProvider } from "@/lib/map-type-preference";
 import { MapOrientationProvider } from "@/lib/map-orientation-preference";
@@ -375,24 +376,32 @@ export default function RootLayout() {
   if (shouldOverrideSafeArea) {
     return (
       <ThemeProvider>
-        <SafeAreaProvider initialMetrics={providerInitialMetrics}>
-          <SafeAreaFrameContext.Provider value={frame}>
-            <SafeAreaInsetsContext.Provider value={insets}>
-              {content}
-            </SafeAreaInsetsContext.Provider>
-          </SafeAreaFrameContext.Provider>
-        </SafeAreaProvider>
-        {Platform.OS === "web" && <Analytics />}
+        <DatabaseProvider
+          onError={(err) => console.error("Database error:", err)}
+        >
+          <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+            <SafeAreaFrameContext.Provider value={frame}>
+              <SafeAreaInsetsContext.Provider value={insets}>
+                {content}
+              </SafeAreaInsetsContext.Provider>
+            </SafeAreaFrameContext.Provider>
+          </SafeAreaProvider>
+          {Platform.OS === "web" && <Analytics />}
+        </DatabaseProvider>
       </ThemeProvider>
     );
   }
 
   return (
     <ThemeProvider>
-      <SafeAreaProvider initialMetrics={providerInitialMetrics}>
-        {content}
-      </SafeAreaProvider>
-      {Platform.OS === "web" && <Analytics />}
+      <DatabaseProvider
+        onError={(err) => console.error("Database error:", err)}
+      >
+        <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+          {content}
+        </SafeAreaProvider>
+        {Platform.OS === "web" && <Analytics />}
+      </DatabaseProvider>
     </ThemeProvider>
   );
 }
