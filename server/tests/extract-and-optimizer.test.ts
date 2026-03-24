@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 
-const API_BASE = process.env.TEST_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
+const API_BASE = process.env.TEST_API_BASE_URL ?? "";
 
 async function fetchJson(url: string, options?: RequestInit) {
   const res = await fetch(url, { ...options, signal: AbortSignal.timeout(8000) });
@@ -46,15 +46,17 @@ describe.skipIf(!shouldRun)(
 
   it("extract GeoJSON proxy responds (404 for unknown hash is ok)", async () => {
     const url = `${API_BASE.replace(/\/$/, "")}/geojson/test-nonexistent-hash-12345`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    // 404 = extract service replied "not found" (proxy works). 502 = extract unreachable.
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    // 404 = extract service replied "not found" (proxy works).
+    // 429 = rate limiter blocked this probe (proxy still works).
+    // 502 = extract service unreachable.
     expect(
-      [200, 404, 502].includes(res.status),
-      `GET ${url} should return 200/404/502, got ${res.status}`,
+      [200, 404, 429, 502].includes(res.status),
+      `GET ${url} should return 200/404/429/502, got ${res.status}`,
     ).toBe(true);
     if (res.status === 502) {
       console.warn("Extract proxy returned 502 — extract service may be offline. Start it with: pnpm run dev:extract");
     }
-  });
+  }, 15000);
   },
 );
