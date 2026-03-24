@@ -17,7 +17,7 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 import { useColors } from "@/hooks/use-colors";
-import { useFavoritesStore, type Favorite } from "@/stores/favoritesStore";
+import { useFavoritesStore, type FavoriteItem } from "@/stores/favoritesStore";
 import { useRouting } from "@/lib/routing-context";
 import { trackStorage, type SavedTrack } from "@/lib/track-storage";
 import { impactAsync } from "@/lib/safe-haptics";
@@ -149,7 +149,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
   );
 
   const handleRemove = useCallback(
-    (fav: Favorite) => {
+    (fav: FavoriteItem) => {
       if (Platform.OS === "web") {
         if (
           typeof window !== "undefined" &&
@@ -199,7 +199,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
   }, [plannerPoints.length, favorites.length, clearAllFavorites, dispatch]);
 
   const handleExportGPX = useCallback(
-    async (fav: Favorite) => {
+    async (fav: FavoriteItem) => {
       try {
         if (Platform.OS !== "web") {
           try {
@@ -372,7 +372,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
                     styles.actionBtn,
                     { backgroundColor: (colors.primary ?? "#3b82f6") + "22" },
                   ]}
-                  onPress={() => handleExportGPX(item as Favorite)}
+                  onPress={() => handleExportGPX(item as FavoriteItem)}
                 >
                   <MaterialCommunityIcons
                     name="export-variant"
@@ -385,7 +385,7 @@ export function FavoritesTab({ onShowOnMap }: FavoritesTabProps) {
                     styles.actionBtn,
                     { backgroundColor: (colors.error ?? "#ef4444") + "22" },
                   ]}
-                  onPress={() => handleRemove(item as Favorite)}
+                  onPress={() => handleRemove(item as FavoriteItem)}
                 >
                   <MaterialCommunityIcons
                     name="delete-outline"

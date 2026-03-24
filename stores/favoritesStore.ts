@@ -1,29 +1,42 @@
 /**
  * Favorites store — saved places with Zustand + persist.
+ * Now integrated with WatermelonDB for offline-first storage.
  * See Master Plan Section 12, AGENT_HANDOFF Phase 4.
  */
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-export interface Favorite {
+import { database } from "@/lib/database";
+
+/**
+ * Favorite item for UI state
+ * This is separate from the WatermelonDB Favorite model
+ */
+export interface FavoriteItem {
   id: string;
   name: string;
   lat: number;
   lon: number;
   category?: string;
   createdAt: string;
+  isPendingSync?: boolean;
 }
 
 interface FavoritesState {
-  favorites: Favorite[];
-  addFavorite: (fav: Omit<Favorite, "id" | "createdAt">) => void;
-  removeFavorite: (id: string) => void;
+  favorites: FavoriteItem[];
+  isLoaded: boolean;
+  addFavorite: (fav: Omit<FavoriteItem, "id" | "createdAt">) => Promise<string>;
+  removeFavorite: (id: string) => Promise<void>;
   /** Remove all favorites at once. Use for "Clear all" in UI. */
-  clearAllFavorites: () => void;
-  importFromGPX: (gpxData: string) => number;
+  clearAllFavorites: () => Promise<void>;
+  /** Load favorites from WatermelonDB into store */
+  loadFromDatabase: () => Promise<void>;
+  /** Sync store changes to WatermelonDB */
+  syncToDatabase: () => Promise<void>;
+  importFromGPX: (gpxData: string) => Promise<number>;
   /** Export a single favorite as a GPX file (one waypoint). */
-  exportFavoriteToGPX: (fav: Favorite) => string;
+  exportFavoriteToGPX: (fav: FavoriteItem) => string;
 }
 
 function generateId(): string {
@@ -125,52 +138,190 @@ export const useFavoritesStore = create<FavoritesState>()(
   persist(
     (set, get) => ({
       favorites: [],
+      isLoaded: false,
 
-      addFavorite: (fav) => {
+      /**
+       * Load favorites from WatermelonDB into the store
+       */
+      loadFromDatabase: async () => {
+        try {
+          const records = await database.get("favorites").query().fetch();
+          const favorites: FavoriteItem[] = records.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            lat: r.latitude,
+            lon: r.longitude,
+            category: r.category,
+            createdAt: new Date(r.createdAt).toISOString(),
+            isPendingSync: r.isPendingSync,
+          }));
+          set({ favorites, isLoaded: true });
+        } catch (error) {
+          console.error("Failed to load favorites from database:", error);
+          set({ isLoaded: true });
+        }
+      },
+
+      /**
+       * Sync all pending changes to WatermelonDB
+       */
+      syncToDatabase: async () => {
+        // This is now handled by individual operations
+        // Kept for compatibility
+      },
+
+      /**
+       * Add a favorite - persists to WatermelonDB
+       */
+      addFavorite: async (fav) => {
         const now = new Date().toISOString();
+        const tempId = generateId();
+
+        // Optimistic update to store
         set((state) => ({
           favorites: [
             ...state.favorites,
             {
               ...fav,
-              id: generateId(),
+              id: tempId,
               createdAt: now,
+              isPendingSync: true,
             },
           ],
         }));
+
+        try {
+          // Persist to WatermelonDB
+          const record = await database.write(async () => {
+            return database.get("favorites").create((f: any) => {
+              f.name = fav.name;
+              f.latitude = fav.lat;
+              f.longitude = fav.lon;
+              f.category = fav.category || "waypoint";
+              f.notes = "";
+              f.isPendingSync = true;
+              f.createdAt = Date.now();
+              f.updatedAt = Date.now();
+            });
+          });
+
+          // Update store with real ID from database
+          set((state) => ({
+            favorites: state.favorites.map((f) =>
+              f.id === tempId
+                ? {
+                    ...f,
+                    id: record.id,
+                  }
+                : f
+            ),
+          }));
+
+          return record.id;
+        } catch (error) {
+          console.error("Failed to add favorite to database:", error);
+          // Revert optimistic update on failure
+          set((state) => ({
+            favorites: state.favorites.filter((f) => f.id !== tempId),
+          }));
+          throw error;
+        }
       },
 
-      removeFavorite: (id) => {
+      /**
+       * Remove a favorite - deletes from WatermelonDB
+       */
+      removeFavorite: async (id) => {
+        // Optimistic update
+        const previous = get().favorites;
         set((state) => ({
           favorites: state.favorites.filter((f) => f.id !== id),
         }));
+
+        try {
+          await database.write(async () => {
+            const record = await database.get("favorites").find(id);
+            await record.destroyPermanently();
+          });
+        } catch (error) {
+          console.error("Failed to remove favorite from database:", error);
+          // Revert on failure
+          set({ favorites: previous });
+          throw error;
+        }
       },
 
-      clearAllFavorites: () => {
+      /**
+       * Clear all favorites - removes all from WatermelonDB
+       */
+      clearAllFavorites: async () => {
+        const previous = get().favorites;
         set({ favorites: [] });
-        // Purge persisted key so a huge stored blob (e.g. 1000+ items) is fully removed.
-        // Otherwise only in-memory slice may have been cleared and rehydration can bring back stale data.
-        const PERSIST_KEY = "trashroute-favorites";
-        AsyncStorage.removeItem(PERSIST_KEY).catch(() => {});
+
+        try {
+          await database.write(async () => {
+            const records = await database.get("favorites").query().fetch();
+            await Promise.all(records.map((r: any) => r.destroyPermanently()));
+          });
+
+          // Also clear AsyncStorage persistence
+          const PERSIST_KEY = "trashroute-favorites";
+          await AsyncStorage.removeItem(PERSIST_KEY);
+        } catch (error) {
+          console.error("Failed to clear favorites from database:", error);
+          set({ favorites: previous });
+          throw error;
+        }
       },
 
-      importFromGPX: (gpxData) => {
+      /**
+       * Import from GPX - creates records in WatermelonDB
+       */
+      importFromGPX: async (gpxData) => {
         const points = parsePointsFromFile(gpxData);
         if (points.length === 0) return 0;
+
         const now = new Date().toISOString();
-        const newFavs: Favorite[] = points.map((p, i) => ({
-          id: generateId(),
-          name: p.name,
-          lat: p.lat,
-          lon: p.lon,
-          createdAt: now,
-        }));
-        set((state) => ({
-          favorites: [...state.favorites, ...newFavs],
-        }));
-        return newFavs.length;
+        const newFavs: FavoriteItem[] = [];
+
+        try {
+          await database.write(async () => {
+            for (const p of points) {
+              const record = await database.get("favorites").create((f: any) => {
+                f.name = p.name;
+                f.latitude = p.lat;
+                f.longitude = p.lon;
+                f.category = "waypoint";
+                f.notes = "";
+                f.isPendingSync = true;
+                f.createdAt = Date.now();
+                f.updatedAt = Date.now();
+              });
+              newFavs.push({
+                id: record.id,
+                name: p.name,
+                lat: p.lat,
+                lon: p.lon,
+                createdAt: now,
+                isPendingSync: true,
+              });
+            }
+          });
+
+          set((state) => ({
+            favorites: [...state.favorites, ...newFavs],
+          }));
+
+          return newFavs.length;
+        } catch (error) {
+          console.error("Failed to import GPX to database:", error);
+          throw error;
+        }
       },
 
+      /**
+       * Export a favorite to GPX format
+       */
       exportFavoriteToGPX: (fav) => {
         const timestamp = new Date().toISOString();
         const safeName = escapeXml(fav.name);
