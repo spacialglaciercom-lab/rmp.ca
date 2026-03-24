@@ -1,167 +1,522 @@
-# TrashRoute (RouteMaster Pro)
+# RouteMaster Pro (Route OS)
 
-**TrashRoute** (also known as **RouteMaster Pro** / [rmp.ca](https://rmp.ca)) is a cross-platform application for **waste collection route planning and optimization**. It leverages the Chinese Postman problem, zone partitioning, and map-based data extraction from OpenStreetMap (OSM) and Overture to build efficient routes.
+**RouteMaster Pro** — also known as **Route OS** and branded as **[rmp.ca](https://rmp.ca)** — is an enterprise-grade, cross-platform system for **high-performance collection route optimization** with an **offline-first** data architecture. Field crews can import stops, preview and solve routes, sync with a central spatial database, and run navigation-style workflows without losing work when connectivity drops.
 
----
-
-## 🚀 Overview
-
-- **Map** — View and edit routes on MapLibre (native) or Leaflet (web). Features include polygon drawing, road network extraction (Overture/OSM), and layer management.
-- **Planner** — Build routes from extracted or imported GeoJSON; run optimization (Chinese Postman / VRP) and spectral zone partitioning.
-- **Route** — View optimized routes, export to GPX, and manage collection points.
-- **Record** — Real-time route recording and collection point logging in the field (mobile).
-- **Home** — Dashboard with weather updates, processing queue, and quick access to planning.
-- **Settings** — Personalization (theme, maps), OSM/Mapillary authentication, and global app configuration.
+The mobile and web client is built on **React Native (Expo)** with **TypeScript**. The API layer is **Node.js** with **tRPC** for type-safe RPC. Authoritative spatial data and enterprise sync run against **PostgreSQL + PostGIS** (often referenced operationally as **db01**). Local persistence on device uses **WatermelonDB**; heavy routing may use **pgRouting** and **VROOM** alongside a **Python** optimizer service for advanced partitioning and VRP.
 
 ---
 
-## 🛠 Tech Stack
+## Table of Contents
 
-| Layer            | Technologies                                                                                                                                                               |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **App**          | [Expo](https://expo.dev/) (SDK 54), React Native, [expo-router](https://docs.expo.dev/router/introduction/), [NativeWind](https://www.nativewind.dev/) (Tailwind), Zustand |
-| **Maps**         | MapLibre GL, Leaflet, react-leaflet, OSM, Overture, PMTiles, DuckDB-WASM                                                                                                   |
-| **API/Backend**  | **tRPC**, Express, TanStack Query, [Firebase](https://firebase.google.com/) (Auth, Firestore, Storage, Analytics)                                                          |
-| **Database**     | [Drizzle ORM](https://orm.drizzle.team/), MySQL/TiDB, MongoDB                                                                                                              |
-| **Optimization** | Custom optimizer (Chinese Postman); Python FastAPI backend for spectral partitioning                                                                                       |
-| **AI/Voice**     | OpenAI-compatible AI SDK, Genkit, ElevenLabs, Moonshine (transcription)                                                                                                    |
-
----
-
-## 📋 Requirements
-
-- **Node.js**: 18.x or higher
-- **Package Manager**: [pnpm](https://pnpm.io/) (v10.0.0 specified in `package.json`)
-- **Python**: 3.x (for the zone partition backend)
-- **Mobile Development**:
-  - **iOS**: Xcode & CocoaPods
-  - **Android**: Android Studio & SDK
-- **Optional Services**: Firebase project, MySQL/TiDB instance, API keys (Maps, Weather, OSM OAuth).
+- [Architecture Overview](#architecture-overview)
+- [Coordinate Lifecycle](#coordinate-lifecycle)
+- [Five-Step Route Planning Lifecycle](#five-step-route-planning-lifecycle)
+- [Technical Differentiators](#technical-differentiators)
+- [API Surface](#api-surface)
+- [Getting Started](#getting-started)
+- [Testing Strategy](#testing-strategy)
+- [Repository Layout](#repository-layout)
+- [Additional Documentation](#additional-documentation)
+- [License](#license)
 
 ---
 
-## ⚙️ Setup & Installation
+## Architecture Overview
 
-1.  **Clone the Repository**
+| Concern | Implementation |
+|--------|----------------|
+| **Edge (device)** | SQLite via WatermelonDB, optimistic UI, queue of mutations for later replay |
+| **Transport** | tRPC over HTTPS to `/api/trpc` (batched RPC, type-safe contract shared with the app) |
+| **Authority** | PostgreSQL + PostGIS: geography types, `ST_DWithin`, cluster/progress analytics, sync tables (`waste_points`, `routes`, `route_stops`, `zones`, `favorites`, …) |
+| **Routing math** | In-process heuristics (e.g. \(O(n^2)\) nearest-neighbor on device), optional **pgRouting** / **VROOM** on the server when configured |
+| **Offline ↔ online** | `sync.push` / `sync.pull` reconcile client IDs with server IDs; conflict resolution via `sync.resolveConflict` |
 
-    ```bash
-    git clone <repo-url> rmp.ca
-    cd rmp.ca
-    ```
+Higher-level flow: **the app treats the local database as primary for UX**, then **converges with PostGIS** when the network and auth session allow. Spatial queries and verification checks execute where the data is authoritative (server) or replicated (device) depending on the operation.
 
-2.  **Install Dependencies**
+## Coordinate Lifecycle
 
-    ```bash
-    pnpm install
-    ```
+The following sequence diagram illustrates the complete data flow from file import through PostGIS persistence and optional road-network optimization:
 
-3.  **Configure Environment Variables**
-    Copy `.env.example` to `.env` and set the required values:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CSV as CSV / GPX / GeoJSON
+    participant Hook as useRouteImport.ts
+    participant WDB as WatermelonDB (SQLite)
+    participant App as RoutePreviewMap.tsx
+    participant Solver as routeSolver.ts
+    participant API as Node tRPC (sync.*)
+    participant PG as PostgreSQL + PostGIS
+    participant RT as pgRouting / VROOM
 
-    ```bash
-    cp .env.example .env
-    ```
+    CSV->>Hook: pick file, read, parse
+    Hook->>Hook: normalize to ImportPoint[]
+    Hook->>App: ImportPoint[] for preview
+    App->>WDB: persist draft route / stops (offline-capable)
+    App->>Solver: solveRoute(points, options)
+    
+    alt Local Heuristic
+        Solver->>Solver: solveLocal (nearest-neighbor, 2-opt)
+        Solver-->>App: SolverResult (ordered points)
+    else Server TSP
+        Solver->>API: spatial.solveTSP
+        API->>RT: road network / VROOM TSP
+        RT-->>API: ordered legs / metrics
+        API-->>Solver: ordered stops, distances
+        Solver-->>App: SolverResult
+    end
 
-    Key variables to set:
-    - `EXPO_PUBLIC_API_BASE_URL`: Your Node/Express + tRPC server.
-    - `EXPO_PUBLIC_OPTIMIZER_URL`: Optimizer API endpoint.
-    - `EXPO_PUBLIC_OVERTURE_EXTRACT_URL`: Overture extract service (WebSocket). The extract service is **included in this repo** under `extract/`; see `extract/README.md` and `docs/DOCKER.md`.
-    - `NGROK_AUTHTOKEN`: Required for mobile tunneling (`pnpm mobile:tunnel`).
-
-4.  **Database Migration (if using MySQL)**
-    ```bash
-    pnpm db:push
-    ```
-
----
-
-## 🏃 Commands & Scripts
-
-### Development
-
-- `pnpm dev` — Start Expo for web (port 19007).
-- `pnpm dev:server` — Start Node.js tRPC server with `tsx watch`.
-- `pnpm dev:all` — Run both the app and the server concurrently.
-- `pnpm mobile` — Start Expo with a clear cache (for mobile testing).
-- `pnpm mobile:ios` / `pnpm mobile:android` — Run directly on a simulator/emulator.
-
-### Build & Production
-
-- `pnpm build` — Export Expo app for web production.
-- `pnpm build:server` — Bundle the Node server using `esbuild` to `dist/`.
-- `pnpm start` — Run the bundled server from `dist/index.js`.
-- `pnpm build:android` — Trigger an EAS build for Android.
-
-### Utilities
-
-- `pnpm lint` / `pnpm format` — Code quality and formatting.
-- `pnpm check` — Type-check using TypeScript.
-- `pnpm test` — Run unit tests with Vitest.
-- `pnpm cache:clear` — Comprehensive cache cleanup script.
-- `pnpm mobile:tunnel` — Start a tunnel via ngrok for remote mobile testing.
-
-### Docker (local stack)
-
-The full dev stack (MySQL, backend, optimizer, Overture) runs via **Docker Compose from the parent folder** of this repo (where `docker-compose.yml` lives). This repo provides the app and backend images. See [docs/DOCKER.md](docs/DOCKER.md) for how to run `docker compose up --build`.
+    App->>API: sync.push (changes batch)
+    API->>PG: upsert rows (org-scoped)
+    API->>PG: store optimized route metadata
+    API-->>App: mappedIds, timestamps
+    
+    App->>API: sync.pull (reconcile)
+    PG-->>API: authoritative rows since lastSync
+    API-->>WDB: merged server state
+```
 
 ---
 
-## 📁 Project Structure
+## Five-Step Route Planning Lifecycle
 
-- `app/` — **Entry Point (App):** Expo Router screens and tab definitions.
-- `server/` — **Entry Point (API):** Express server, tRPC routers, and backend logic.
-- `backend/` — Python FastAPI service for advanced optimization (spectral partitioning).
-- `components/` — Shared React components and map logic.
-- `lib/` — core libraries, plugin system, and Firebase/tRPC configurations.
-- `services/` — Business logic: optimizers, instruction managers, etc.
-- `stores/` — State management via Zustand.
-- `drizzle/` — Database schema definitions and migrations.
-- `hooks/` — Custom React hooks (auth, theme, etc.).
-- `scripts/` — Utility scripts for dev-ops, patching, and automation.
+### 1. Import — Multi-Format Ingestion
 
----
+**Primary Hook:** [`hooks/useRouteImport.ts`](hooks/useRouteImport.ts)
 
-## 🌍 Environment Variables
+The import stage drives file pick → read → parse using **`expo-document-picker`** and **`expo-file-system`**. Supported formats align with field reality:
 
-Refer to `.env.example` for a full list. Primary categories include:
+| Format | Parser | Notes |
+|--------|--------|-------|
+| **CSV** | `parseRouteCSV()` | Flexible headers (`lat`/`latitude`, `lon`/`lng`/`longitude`, names, time windows, demand, service times) |
+| **GPX** | `parseGPXForNavigation()` | Routed through GPX navigation parsing with track/segment support |
+| **GeoJSON** | `parseGeoJSON()`, `importGeoJSONRoute()` | Feature collections / route geometry via GeoJSON import helpers |
+| **JSON** | `parseRouteJSON()` | CVRP format (`{ type: "CVRP", capacity, depot_id, nodes }`) or simple array format |
 
-- **Base URLs**: API, Optimizer, Overture Extract.
-- **Authentication**: Firebase, OSM OAuth, Mapillary.
-- **API Keys**: Google Maps, Mapbox, OpenWeatherMap.
-- **AI/LLM**: OpenRouter, ElevenLabs, Mistral.
-- **Database**: `DATABASE_URL`, `MONGODB_URI`.
+Output is normalized **`ImportPoint[]`** with optional depot, warnings, and progress state for UI:
 
----
-
-## 🧪 Testing
-
-- **Unit/Integration**: Run `pnpm test` (Vitest).
-- **Type Safety**: Run `pnpm check` (tsc).
-- **Spatial Tests**: Run `pnpm test:spatial` (Custom script).
-- **E2E (optional)**: For end-to-end tests on the Expo/React Native app, consider [Maestro](https://maestro.mobile.dev/) (cross-platform, no app code changes) or [Detox](https://wix.github.io/Detox/) (native integration, good for CI). Configure and run E2E flows (e.g. login, open map, run optimization) as needed.
+```typescript
+interface ImportResult {
+  points: ImportPoint[];
+  fileName: string;
+  fileType: 'csv' | 'geojson' | 'gpx' | 'json';
+  totalPoints: number;
+  warnings: string[];
+  depot?: ImportPoint;
+}
+```
 
 ---
 
-## 🔌 Plugins
+### 2. Preview — Map Visualization
 
-The app features an OsmAnd-inspired plugin system. Plugins can be toggled in **Settings → Plugins**.
+**Primary Component:** [`components/RoutePreviewMap.tsx`](components/RoutePreviewMap.tsx)
 
-- Configured via `lib/plugins/default-config.json`.
-- See `docs/PLUGIN-DEVELOPMENT.md` for details on creating and deploying plugins.
+The Preview step renders draft pins, optional solve controls, and platform-specific maps:
+
+- **Native:** `react-native-maps` with Mapbox / Google Maps providers
+- **Web:** Fallback implementations for cross-platform consistency
+
+Key features:
+- Color-coded pins: **Orange** for draft waypoints, **Green** for depot
+- Interactive reordering and editing before solve
+- Route line preview after optimization (**Blue** for standard, **Purple** for optimized)
+- Region fitting and initial viewport configuration
+
+```typescript
+interface RoutePreviewMapProps {
+  points: RoutePreviewPoint[];
+  depot?: RoutePreviewPoint;
+  onPointsChange?: (points: RoutePreviewPoint[]) => void;
+  onSolve?: (result: SolverResult) => void;
+  onSave?: (points: RoutePreviewPoint[], result?: SolverResult) => Promise<void>;
+  showSolveButton?: boolean;
+  showSaveButton?: boolean;
+}
+```
 
 ---
 
-## 📜 License
+### 3. Solve — Hybrid Strategy
+
+**Primary Module:** [`lib/routeSolver.ts`](lib/routeSolver.ts)  
+**Server Endpoint:** `spatial.solveTSP` in [`server/spatialRouter.ts`](server/spatialRouter.ts)
+
+The solve stage implements **local** heuristics for fast, offline-capable sequencing, with optional **server-side** road-network optimization:
+
+#### Local Solvers (`solveLocal`)
+
+| Algorithm | Complexity | Use Case |
+|-----------|------------|----------|
+| **nearest-neighbor** | \(O(n^2)\) | Fast initial solution, offline-first |
+| **2-opt** | \(O(n^2)\) per iteration | Local improvement, good for < 100 points |
+| **Or-opt** | \(O(n^3)\) | Relocate 1-3 consecutive nodes |
+| **Christofides** | \(O(n^3)\) | Theoretical guarantee (≤ 1.5× optimal) |
+
+#### Server Solvers (`solveServer`)
+
+| Algorithm | Backend | Use Case |
+|-----------|---------|----------|
+| **pgrouting** | PostGIS/pgRouting | Road-network TSP with turn costs |
+| **vroom** | VROOM HTTP service | Fleet VRP, capacity constraints, time windows |
+| **nearest-neighbor / 2-opt** | Server-side fallback | Consistent with local when road network unavailable |
+
+```typescript
+// Local-first with server fallback
+export async function solveRoute(
+  points: SolverPoint[],
+  options: SolverOptions = { algorithm: "2-opt" },
+): Promise<SolverResult> {
+  if (options.algorithm === "pgrouting" || options.algorithm === "vroom") {
+    return solveServer(points, options);
+  }
+  return solveLocal(points, options);
+}
+```
+
+---
+
+### 4. Sync — tRPC Persistence and WatermelonDB
+
+**Primary Router:** [`server/syncRouter.ts`](server/syncRouter.ts)  
+**Persistence Bridge:** [`lib/routePersistence.ts`](lib/routePersistence.ts)
+
+The sync stage handles **bidirectional synchronization** between mobile SQLite (WatermelonDB) and PostgreSQL:
+
+| Operation | Direction | Purpose |
+|-----------|-----------|---------|
+| `sync.push` | Client → Server | Batch local creates/updates/deletes → PostgreSQL; returns `mappedIds` |
+| `sync.pull` | Server → Client | Incremental server changes for given tables since `lastSync` |
+| `sync.resolveConflict` | Manual | `keep_local` / `keep_server` / `merge` strategies |
+
+All operations assume a signed-in user with an **organization** (`orgId`); the server writes through **Drizzle ORM** to PostgreSQL (see [`server/db.ts`](server/db.ts)).
+
+```typescript
+// Sync change schema
+const SyncChangeSchema = z.object({
+  id: z.string(),           // Local WatermelonDB ID
+  table: z.string(),        // Table name
+  action: z.enum(["create", "update", "delete"]),
+  data: z.record(z.string(), z.unknown()),
+  timestamp: z.number().optional(),
+});
+```
+
+---
+
+### 5. Navigate — Polylines, Progress, and Sequence
+
+**Primary Router:** `navigation` tRPC router
+
+After sync, the run phase emphasizes:
+
+- **Ordered geometry** — Polylines and segments from the solver
+- **Stop status** — `pending` → `completed` / `skipped` / `issue`
+- **Spatial progress** — `spatial.getRouteProgress` for remaining stops and distance
+- **Turn-by-turn UX** — Navigation-style interface building on the shared route model
+
+---
+
+## Technical Differentiators
+
+### Verified Scan (QR + PostGIS Geofence)
+
+**Endpoint:** `spatial.verifyAndCollect` in [`server/spatialRouter.ts`](server/spatialRouter.ts)
+
+This feature binds **digital proof** to **physical proximity**:
+
+```typescript
+// 1. Find bin by QR token
+// 2. Verify driver is within 10 meters using ST_DWithin
+const bin = await db.execute(sql`
+  SELECT id 
+  FROM ${collectionPoints}
+  WHERE qr_code_token = ${input.qrToken}
+  AND ST_DWithin(
+    location, 
+    ST_MakePoint(${input.driverLng}, ${input.driverLat})::geography, 
+    10  -- 10 meter geofence
+  )
+`);
+
+// 3. Mark as collected only if geofence check passes
+if (bin.length > 0) {
+  await db.update(collectionPoints)
+    .set({ isCollected: true })
+    .where(eq(collectionPoints.id, bin[0].id));
+}
+```
+
+This ensures that a driver cannot mark a bin as collected unless they are physically present at the location, verified by PostGIS geography calculations.
+
+---
+
+### Antimeridian Handling (±180°)
+
+**Test Fixture:** [`shared/test-fixtures/spatial/antimeridian_wrap.geojson`](shared/test-fixtures/spatial/antimeridian_wrap.geojson)
+
+Routes that cross the **International Date Line** (±180° longitude) require special handling:
+
+```json
+{
+  "type": "Feature",
+  "id": "am-1",
+  "properties": { "name": "West of antimeridian" },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [179.9, 10.0]  // Just west of ±180°
+  }
+},
+{
+  "type": "Feature",
+  "id": "am-2",
+  "properties": { "name": "East of antimeridian" },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [-179.9, 10.0]  // Just east of ±180°
+  }
+}
+```
+
+The solver and distance calculations must correctly handle the wrap-around distance (approximately 22 km at latitude 10°) rather than the naive 359.8° difference. This is critical for:
+- Pacific island routes (Fiji, Kiribati, Russia's easternmost points)
+- Global logistics spanning the Pacific
+- Accurate ETAs and fuel calculations
+
+---
+
+### Kotlin Multiplatform (`shared-logic`)
+
+**Module:** [`shared-logic/`](shared-logic/README.md)
+
+The **Kotlin Multiplatform** Gradle module contains **CVRP / CPP-style** math for **Android** and optional **Kotlin/JS** consumption from TypeScript:
+
+| Platform | Integration |
+|----------|-------------|
+| **Web / Expo / Vercel** | Default `package.json` uses `file:./shared-logic/pnpm-stub` (empty stub) so `pnpm install` works without Gradle. Enable the bridge by building JS and linking. |
+| **Android** | Add as Gradle dependency: `implementation(project(":shared-logic"))` |
+| **iOS** | Add `iosArm64()` / `iosSimulatorArm64()` targets and XCFramework output |
+
+```bash
+# Build the real thing (requires JDK 17)
+./gradlew :shared-logic:assemble
+# or
+pnpm run build:shared-logic
+```
+
+---
+
+### AI-Assisted Route Analysis (Vercel AI Gateway)
+
+**Router:** [`server/aiRouteAnalysisRouter.ts`](server/aiRouteAnalysisRouter.ts)
+
+Combines **PostGIS-backed logistics reports** with **`chatWithAiGateway`** (see [`server/aiProxy.ts`](server/aiProxy.ts)) to produce **actionable narrative analysis**:
+
+- Efficiency scoring and hotspots
+- Backtracking risk assessment
+- Baseline comparisons (`compareEfficiency`)
+- Natural language explanations of route performance
+
+---
+
+## API Surface
+
+All tRPC procedures are invoked over **`POST /api/trpc`** (and related batch/link conventions per `@trpc/client`). Dot notation below is the **router path** (e.g. `sync.push`).
+
+### `sync` — Offline-First WatermelonDB / Org Data
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `sync.push` | mutation | Batch local creates/updates/deletes → PostgreSQL; returns `mappedIds` |
+| `sync.pull` | query | Incremental server changes for given tables |
+| `sync.nearbyWastePoints` | query | Radius-based fetch for sync windows |
+| `sync.status` | query | Pending counts and last sync per table |
+| `sync.resolveConflict` | mutation | `keep_local` / `keep_server` / `merge` |
+| `sync.createRoute` | mutation | Create route row (org-scoped) |
+| `sync.updateRoute` | mutation | Update route metadata |
+| `sync.deleteRoute` | mutation | Delete route (and related stops) |
+| `sync.getRoute` | query | Fetch route by id |
+| `sync.getRouteStops` | query | Stops for a route |
+| `sync.createRouteStop` | mutation | Insert stop with sequence |
+| `sync.updateRouteStop` | mutation | Status, completion time, notes, photo URI |
+
+### `spatial` — PostGIS Operations and TSP
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `spatial.getNearbyPoints` | query | Bins / points near lng/lat (+ radius) |
+| `spatial.verifyAndCollect` | mutation | **QR + 10 m geofence verification** |
+| `spatial.solveTSP` | mutation | **pgrouting** / **vroom** / local-style algorithms |
+| `spatial.getRouteProgress` | query | Remaining stops / distance aggregate |
+| `spatial.toggleCollectionStatus` | mutation | Flip collected flag |
+| `spatial.resetAllBins` | mutation | Shift reset helper |
+| `spatial.analyzeRoutePerformance` | mutation | Post-route analytics hook |
+
+### `aiRouteAnalysis` — PostGIS + LLM
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `aiRouteAnalysis.getLogisticsReport` | query | Raw spatial logistics report |
+| `aiRouteAnalysis.analyzeRoute` | mutation | Report + Vercel AI Gateway narrative (auth) |
+| `aiRouteAnalysis.getEfficiencyScore` | query | Lightweight efficiency widget |
+| `aiRouteAnalysis.getHotspots` | query | Density hotspots |
+| `aiRouteAnalysis.compareEfficiency` | mutation | Baseline comparison (auth) |
+
+### REST Adjuncts (Same Node Process)
+
+Not exhaustive — see [`server/_core/index.ts`](server/_core/index.ts) for the canonical list:
+
+| Method | Path | Role |
+|--------|------|------|
+| GET | `/api/health` | Liveness |
+| GET | `/api/config` | Maps keys, OSRM proxy hints |
+| POST | `/api/optimize` | Python optimizer proxy |
+| POST | `/api/vroom/optimize` | VROOM proxy |
+| POST | `/api/trpc` | tRPC batch |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Node.js** | 18+ | LTS recommended |
+| **pnpm** | 10 | `packageManager` in [`package.json`](package.json) |
+| **PostgreSQL** | 17+ | With **PostGIS** 3.4+ extension |
+| **pgRouting** | (optional) | For road-network TSP |
+| **JDK** | 17 | Only if building **`shared-logic`** |
+| **Python** | 3.x | For [`backend/`](backend/) FastAPI optimizer |
+
+### Install and Run (Development)
+
+```bash
+# Clone the repository
+git clone <repo-url> rmp.ca
+cd rmp.ca
+
+# Install dependencies
+pnpm install
+
+# Configure environment
+cp .env.example .env
+
+# Set DATABASE_URL=postgres://... pointing at your PostGIS instance (e.g. db01)
+# Set EXPO_PUBLIC_API_BASE_URL (default http://localhost:3000 for local API)
+
+# Start development server (Express + tRPC)
+pnpm dev:server
+
+# In another terminal, start Expo web
+pnpm dev
+
+# Or run both together
+pnpm dev:all
+```
+
+For **mobile on a physical device**, set `EXPO_PUBLIC_API_BASE_URL` to your dev machine **LAN IP** (not `localhost`) and see comments in `.env.example` for `REACT_NATIVE_PACKAGER_HOSTNAME`.
+
+### Database on FreeBSD (`db01`) and Networking
+
+Many teams host **PostgreSQL/PostGIS** on a **FreeBSD** VM or bare-metal box (`db01`). Typical pattern:
+
+1. Expose Postgres only on a **private** VLAN/VPN or SSH tunnel
+2. Set **`DATABASE_URL`** on the Node server to that instance (SSL mode as appropriate)
+3. Run **`pnpm db:push`** (Drizzle migrations) when schema changes land
+
+#### Networking & Troubleshooting (NordVPN + FreeBSD `db01`)
+
+If you are developing on Ubuntu/Kali and syncing against a FreeBSD (`db01`) PostGIS instance, you may hit `ETIMEDOUT` or `ECONNREFUSED` during `pnpm db:push` or tRPC calls.
+
+1. **NordVPN and local discovery**
+   - NordVPN Meshnet/Kill Switch can intercept traffic to your local bridge (`192.168.x.x`, `10.0.x.x`).
+   - Whitelist local DB access in NordVPN CLI:
+
+     ```bash
+     nordvpn whitelist add port 5432
+     nordvpn whitelist add subnet 192.168.1.0/24
+     ```
+
+   - If `db01` is a local hostname, NordVPN DNS can fail to resolve it. Prefer a static IP in `DATABASE_URL` when troubleshooting.
+
+2. **FreeBSD VM (`db01`) connectivity checklist**
+   - In `postgresql.conf`, set `listen_addresses = '*'` (or a specific host-reachable IP).
+   - In `pg_hba.conf`, allow your dev subnet:
+
+     ```conf
+     host    all             all             192.168.1.0/24          md5
+     ```
+
+   - Ensure FreeBSD `pf` rules permit inbound `5432` from your dev subnet.
+   - For device-to-DB development on the same Wi-Fi, use a **Bridged Adapter** instead of NAT in your VM manager.
+
+3. **The "10-meter test" (GPS mocking)**
+   - If Verified Scan/PostGIS geofence checks fail, confirm your device location is fresh (not stale).
+   - Use an Android GPS mocking app and set coordinates within 10 meters of the `waste_point` under test.
+   - Check `spatial.verifyAndCollect` server logs for the computed `ST_Distance`.
+
+Document the team-standard networking rule (VPN mode + subnet policy + hostname/IP conventions) so the local-first sync path is stable for all developers.
+
+### Optional Services
+
+| Service | Configuration | Purpose |
+|---------|---------------|---------|
+| **VROOM** | `VROOM_URL` (default `http://localhost:3100`) | Road-network VRP solver |
+| **Overture Extract** | `EXPO_PUBLIC_OVERTURE_EXTRACT_URL` | Large-scale map data |
+| **Optimizer Backend** | `OPTIMIZER_BACKEND_URL` | Python FastAPI spectral zoning / advanced VRP |
+
+See [`.env.example`](.env.example) and [docs/DOCKER.md](docs/DOCKER.md) for composed stacks.
+
+---
+
+## Testing strategy
+
+| Scope | Command / location |
+|--------|--------------------|
+| Unit / integration | `pnpm test` (Vitest) |
+| Typecheck | `pnpm check` |
+| Spatial scripts | `pnpm test:spatial` |
+| Server integration | `pnpm test:integration` (sets `TEST_API_BASE_URL`) |
+| Shared fixtures | [`shared/test-fixtures/`](shared/test-fixtures/) |
+
+**Solver and parser fixtures**
+
+- [`shared/test-fixtures/algorithms/tsp_z_shape.json`](shared/test-fixtures/algorithms/tsp_z_shape.json) — non-trivial TSP geometry for heuristic regression.
+- [`shared/test-fixtures/perf/load_200_points.json`](shared/test-fixtures/perf/load_200_points.json) — scale smoke for performance-sensitive paths.
+- [`shared/test-fixtures/parsers/malformed_headers.csv`](shared/test-fixtures/parsers/malformed_headers.csv) — CSV edge cases.
+- [`shared/test-fixtures/spatial/antimeridian_wrap.geojson`](shared/test-fixtures/spatial/antimeridian_wrap.geojson) — **±180° / antimeridian** wrap around logic for spatial imports and distance handling.
+
+Use these fixtures in Vitest or SQL harnesses (see [`TESTS/database/postgis-spatial.test.sql`](TESTS/database/postgis-spatial.test.sql) where present) to guard **world-spanning** routes.
+
+---
+
+## Repository layout (abbreviated)
+
+| Path | Role |
+|------|------|
+| `app/` | Expo Router screens |
+| `server/` | Express, tRPC routers, PostGIS services |
+| `backend/` | Python FastAPI optimizer |
+| `lib/` | `routeSolver`, `routePersistence`, database + tRPC client |
+| `hooks/` | `useRouteImport` and app hooks |
+| `components/` | `RoutePreviewMap`, map UI |
+| `drizzle/` | Schema and migrations (PostgreSQL target) |
+| `shared-logic/` | Kotlin Multiplatform math |
+| `shared/test-fixtures/` | Cross-package test payloads |
+
+---
+
+## Additional documentation
+
+- [server/README.md](server/README.md) — backend details
+- [backend/README.md](backend/README.md) — Python optimizer
+- [docs/DOCKER.md](docs/DOCKER.md) — Docker-based local stack
+- [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — plugin system
+- [docs/README_GPX_ANDROID.md](docs/README_GPX_ANDROID.md) — GPX on Android
+
+---
+
+## License
 
 **Proprietary.** All rights reserved. No use, copy, modification, or distribution without prior approval from the copyright holder.
-
----
-
-## 🔗 Additional Documentation
-
-- [server/README.md](server/README.md) — Backend architecture.
-- [backend/README.md](backend/README.md) — Optimization service details.
-- [docs/DOCKER.md](docs/DOCKER.md) — Docker local dev stack (run from parent folder).
-- [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — Plugin system guide.
-- [scripts/README.md](scripts/README.md) — Infrastructure scripts.
-- [backend/docs/](backend/docs/) — Detailed GeoJSON cleaning and pipeline plans.

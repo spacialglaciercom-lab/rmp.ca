@@ -12,6 +12,7 @@ These test the task *functions* directly (not via Celery broker) to validate:
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 from unittest.mock import patch
 
@@ -78,7 +79,9 @@ def _vrp_req(stops: list[dict] | None = None, vehicles: list[dict] | None = None
 class TestOptimizeRouteTask:
     def test_happy_path(self):
         """Valid request → returns dict with route and stats."""
-        result = optimize_route_task.run(_optimize_req())
+        # Keep test deterministic even when DEM_PATH is set in shell env.
+        with patch.dict(os.environ, {"DEM_PATH": ""}, clear=False):
+            result = optimize_route_task.run(_optimize_req())
         assert isinstance(result, dict)
         assert "route" in result
         assert "stats" in result

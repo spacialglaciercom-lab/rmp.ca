@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "name": "antimeridian_wrap",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "am-1",
+      "properties": {
+        "name": "West of antimeridian",
+        "type": "waypoint",
+        "demand": 1,
+        "time_window_start": "08:00",
+        "time_window_end": "12:00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          179.9,
+          10.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "am-2",
+      "properties": {
+        "name": "East of antimeridian",
+        "type": "waypoint",
+        "demand": 1,
+        "time_window_start": "08:15",
+        "time_window_end": "12:15"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -179.9,
+          10.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "am-3",
+      "properties": {
+        "name": "Control point",
+        "type": "waypoint",
+        "demand": 2,
+        "time_window_start": "09:00",
+        "time_window_end": "13:00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          179.8,
+          10.2
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "srid": 4326,
+    "route_should_cross_antimeridian": true,
+    "max_direct_pair_distance_meters": 50000
+  }
+}

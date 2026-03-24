@@ -107,7 +107,7 @@ describe("stripHeaders", () => {
     const server = new EventEmitter() as import("http").Server;
     registerWsExtractProxy(server);
 
-    const socket = { destroy: vi.fn() };
+    const socket = { destroy: vi.fn(), on: vi.fn() };
     const head = Buffer.alloc(0);
 
     const incomingReq = {
@@ -150,7 +150,7 @@ describe("stripHeaders", () => {
     const server = new EventEmitter() as import("http").Server;
     registerWsExtractProxy(server);
 
-    const socket = { destroy: vi.fn() };
+    const socket = { destroy: vi.fn(), on: vi.fn() };
     const head = Buffer.alloc(0);
 
     const incomingReq = {
@@ -268,7 +268,7 @@ describe("EXTRACT_WS_UPSTREAM environment variable", () => {
     const server = new EventEmitter() as import("http").Server;
     registerWsExtractProxy(server);
 
-    const socket = { destroy: vi.fn() };
+    const socket = { destroy: vi.fn(), on: vi.fn() };
     const head = Buffer.alloc(0);
     const incomingReq = {
       url: "/ws/extract",
