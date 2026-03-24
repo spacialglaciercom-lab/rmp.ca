@@ -1,0 +1,52 @@
+{
+  "name": "tsp_z_shape",
+  "description": "Five points arranged in a Z pattern for deterministic solver assertions.",
+  "input_points": [
+    {
+      "id": "z-1",
+      "lat": 45.4215,
+      "lon": -75.6972,
+      "name": "Z1",
+      "demand": 1
+    },
+    {
+      "id": "z-2",
+      "lat": 45.4215,
+      "lon": -75.6872,
+      "name": "Z2",
+      "demand": 1
+    },
+    {
+      "id": "z-3",
+      "lat": 45.4165,
+      "lon": -75.6922,
+      "name": "Z3",
+      "demand": 1
+    },
+    {
+      "id": "z-4",
+      "lat": 45.4115,
+      "lon": -75.6972,
+      "name": "Z4",
+      "demand": 1
+    },
+    {
+      "id": "z-5",
+      "lat": 45.4115,
+      "lon": -75.6872,
+      "name": "Z5",
+      "demand": 1
+    }
+  ],
+  "expected_sequence": [
+    "z-1",
+    "z-2",
+    "z-3",
+    "z-5",
+    "z-4"
+  ],
+  "notes": [
+    "Expected order is pinned to the current solveLocal pipeline (nearest-neighbor seed + 2-opt + Or-opt).",
+    "If heuristic internals change, re-run TESTS/shared/test-fixtures.test.ts and update expected_sequence."
+  ]
+}

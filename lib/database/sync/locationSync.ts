@@ -7,7 +7,7 @@
 import { database } from '../index';
 import { Q } from '@nozbe/watermelondb';
 import * as Location from 'expo-location';
-import * as NetInfo from '@react-native-community/netinfo';
+import NetInfo from '@react-native-community/netinfo';
 
 // Location sync configuration
 interface LocationSyncConfig {
