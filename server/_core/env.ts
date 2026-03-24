@@ -56,5 +56,5 @@ export const ENV = {
   })(),
   resendApiKey: (process.env.RESEND_API_KEY ?? "").trim(),
   emailFrom: (process.env.EMAIL_FROM ?? "RouteMaster Pro <contact@routemasterpro.ca>").trim(),
-  appBaseUrl: (process.env.APP_BASE_URL ?? "https://app.rmp.ca").trim().replace(/\/$/, ""),
+  appBaseUrl: (process.env.APP_BASE_URL ?? "https://rmpca-production.up.railway.app").trim().replace(/\/$/, ""),
 };

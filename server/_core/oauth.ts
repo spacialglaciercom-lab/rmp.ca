@@ -193,7 +193,7 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       // Redirect to the frontend URL after OAuth.
-      // Production (Vercel): set WEB_APP_URL or EXPO_WEB_PREVIEW_URL to your Vercel URL (e.g. https://trashroute-mobile.vercel.app).
+      // Production (Railway): set WEB_APP_URL or EXPO_WEB_PREVIEW_URL to your Railway URL (e.g. https://rmpca-production.up.railway.app).
       // Local: EXPO_PACKAGER_PROXY_URL or fallback to port 19007.
       const frontendUrl =
         process.env.WEB_APP_URL ||

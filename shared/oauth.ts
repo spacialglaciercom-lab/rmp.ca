@@ -36,7 +36,7 @@ export const API_BASE_URL = env.apiBaseUrl;
 
 /**
  * Get the API base URL.
- * - Web: uses same-origin (current site) so Vercel app calls rmp-ca.vercel.app instead of Railway.
+ * - Web: uses same-origin (current site) so deployed app calls rmpca-production.up.railway.app instead of hardcoded backend.
  *   Local dev: Metro on 19007 → API server on 3000.
  *   Override with EXPO_PUBLIC_API_BASE_URL (e.g. http://localhost:3000) to point to your local backend.
  * - Native: uses EXPO_PUBLIC_API_BASE_URL or production default (set for EAS builds).
@@ -48,7 +48,7 @@ export function getApiBaseUrl(): string {
     return explicit.replace(/\/$/, "");
   }
 
-  // Web: same-origin so deployed Vercel app does not hit deleted Railway.
+  // Web: same-origin so deployed app does not hit hardcoded Railway backend if URLs differ.
   // Local dev: Expo/Metro often runs on 8081 or 19007; API/optimizer proxy lives on Node server :3000.
   if (
     ReactNative.Platform.OS === "web" &&
