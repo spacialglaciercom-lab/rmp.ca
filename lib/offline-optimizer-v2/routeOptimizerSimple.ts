@@ -28,6 +28,10 @@ interface EdgeData {
   oneway: boolean;
   /** True when the OSM way has dual_carriageway=yes. U-turns are physically impossible. */
   dualCarriageway?: boolean;
+  /** OSM way ID — used to detect mid-block nodes (not intersections). */
+  wayId?: string;
+  /** Traversal multiplicity after directed Eulerian augmentation (Hierholzer consumes each unit once). */
+  count?: number;
 }
 
 // Turn cost penalties (meters equivalent) when no user plugins — align with route-optimizer-mobile-v2 when porting
@@ -52,6 +56,12 @@ export class RouteOptimizerSimpleV2 {
   private ways: Way[];
   private graph: Map<string, Map<string, EdgeData>> = new Map();
   private plugins: RoutingCostPlugin[];
+  /**
+   * Nodes that are NOT intersections — they lie between two intersections on the
+   * same OSM way. U-turns at these nodes are physically impossible in real life
+   * and must be hard-blocked (not merely penalized).
+   */
+  private midBlockNodes = new Set<string>();
 
   constructor(
     nodes: Map<string, Node>,
@@ -69,6 +79,8 @@ export class RouteOptimizerSimpleV2 {
       return { route: [], totalDistance: 0, message: "No valid roads found" };
     }
 
+    // Must be built before makeEulerian so augmentation edges don't pollute the detection.
+    this.buildMidBlockNodes();
     this.makeEulerian();
 
     // Run Hierholzer on ALL connected components so disconnected residential
@@ -93,7 +105,10 @@ export class RouteOptimizerSimpleV2 {
         customLon,
       );
       if (!startNode) continue;
-      const circuit = this.hierholzer(startNode);
+      let circuit = this.hierholzer(startNode);
+      // Post-circuit U-turn elimination: repair each component circuit
+      // individually so BFS loops stay within the correct connected component.
+      circuit = this.eliminateUTurns(circuit);
       if (circuit.length > 1 && circuit[0] === circuit[circuit.length - 1]) {
         // Hierholzer closes the loop: strip the duplicate end node so each
         // component doesn't draw a straight line back to its own start.
@@ -143,6 +158,7 @@ export class RouteOptimizerSimpleV2 {
     for (const way of this.ways) {
       const isOneway = way.tags?.oneway === "yes";
       const isDualCarriageway = way.tags?.dual_carriageway === "yes";
+      const wayId = way.id;
 
       for (let i = 0; i < way.nodes.length - 1; i++) {
         const from = way.nodes[i]!;
@@ -182,45 +198,69 @@ export class RouteOptimizerSimpleV2 {
             );
           }
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
+          this.graph.get(from)!.set(to, { length: costUV, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined });
+            this.graph.get(to)!.set(from, { length: costVU, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
           }
         } else {
           if (!this.graph.has(from)) this.graph.set(from, new Map());
-          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined });
+          this.graph.get(from)!.set(to, { length: distanceM, oneway: isOneway, dualCarriageway: isDualCarriageway || undefined, wayId });
           if (!isOneway) {
             if (!this.graph.has(to)) this.graph.set(to, new Map());
-            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined });
+            this.graph.get(to)!.set(from, { length: distanceM, oneway: false, dualCarriageway: isDualCarriageway || undefined, wayId });
           }
         }
       }
     }
   }
 
+  /** Build set of mid-block (non-intersection) nodes where U-turns are physically impossible. */
+  private buildMidBlockNodes(): void {
+    this.midBlockNodes.clear();
+    for (const [nodeId, edges] of this.graph) {
+      if (edges.size !== 2) continue;
+      const wayIds = new Set<string>();
+      for (const data of edges.values()) {
+        if (data.wayId) wayIds.add(data.wayId);
+      }
+      // All edges on the same single way → mid-block node, no U-turn allowed.
+      if (wayIds.size === 1) {
+        this.midBlockNodes.add(nodeId);
+      }
+    }
+  }
+
   /**
-   * Balance the graph for Hierholzer. With plugins: directed deficit/surplus augmentation via
-   * Dijkstra + transition costs. Without plugins: insert missing reverse edges only (same as
-   * route-optimizer-mobile-v2) — preserves stable road-graph walks; U-turn tuning is in chooseBest.
+   * Balance the graph for Hierholzer. First, ensure reciprocal edges exist for
+   * bidirectional roads. Then always run directed balancing so one-way streets
+   * are properly handled. Without this, a network with one-way streets leaves
+   * the graph unbalanced: Hierholzer then produces circuits with large teleport-jumps
+   * between disconnected segments, causing the route to not follow road geometry.
    */
   private makeEulerian(): void {
-    if (this.plugins.length > 0) {
-      this.makeEulerianDirected();
-      return;
-    }
-
+    // First, ensure reciprocal edges exist (bidirectional completion) for both
+    // plugins and non-plugins paths. This balances the graph before any
+    // directed augmentation is attempted.
     const toAdd: Array<[string, string, EdgeData]> = [];
     for (const [from, edges] of this.graph) {
       for (const [to, data] of edges) {
+        if (data.oneway) continue;
         if (!this.graph.get(to)?.has(from)) {
-          toAdd.push([to, from, { length: data.length, oneway: false }]);
+          toAdd.push([to, from, { length: data.length, oneway: false, wayId: data.wayId }]);
         }
       }
     }
     for (const [from, to, data] of toAdd) {
       if (!this.graph.has(from)) this.graph.set(from, new Map());
       this.graph.get(from)!.set(to, data);
+    }
+
+    // Always run directed balancing so one-way streets are properly handled.
+    // For fully bidirectional graphs this is a no-op (already balanced by
+    // the reciprocal edges added above).
+    if (this.plugins.length > 0) {
+      this.makeEulerianDirected();
     }
   }
 
@@ -389,9 +429,17 @@ export class RouteOptimizerSimpleV2 {
     current: string,
     edges: Map<string, EdgeData>,
   ): string {
-    const keys = Array.from(edges.keys());
+    let keys = Array.from(edges.keys());
     if (keys.length === 1) return keys[0]!;
     if (!prev) return keys[0]!;
+
+    // Hard-block U-turns at mid-block (non-intersection) nodes.
+    // A vehicle cannot reverse direction between two intersections in real life.
+    if (this.midBlockNodes.has(current)) {
+      const nonUturn = keys.filter((k) => k !== prev);
+      if (nonUturn.length > 0) keys = nonUturn;
+    }
+    if (keys.length === 1) return keys[0]!;
 
     const isUTurnEdge = (next: string): boolean => {
       const inBearing = this.bearing(prev, current);
@@ -607,5 +655,105 @@ export class RouteOptimizerSimpleV2 {
     if (angle > 180) angle -= 360;
     if (angle < -180) angle += 360;
     return angle;
+  }
+
+  /**
+   * Post-process a circuit to eliminate U-turns by finding non-reversal loops.
+   * When a U-turn is detected (A→B→A), try to find a loop from B back to B
+   * that doesn't immediately reverse, and splice it into the circuit.
+   */
+  private eliminateUTurns(circuit: string[]): string[] {
+    if (circuit.length < 3) return circuit;
+
+    let result = [...circuit];
+    let improved = true;
+    let passes = 0;
+    const maxPasses = 3; // cap iteration — more passes compound block-circling detours
+    const originalLength = circuit.length;
+    // Cap total circuit growth to 40% to prevent runaway loop accumulation
+    const maxGrowth = Math.ceil(originalLength * 0.4);
+
+    while (improved && passes < maxPasses) {
+      improved = false;
+      passes++;
+
+      // Bail out if circuit has grown too much from accumulated splices
+      if (result.length - originalLength > maxGrowth) break;
+
+      for (let i = 1; i < result.length - 1; i++) {
+        const prev = result[i - 1]!;
+        const current = result[i]!;
+        const next = result[i + 1]!;
+
+        if (next !== prev) continue;
+
+        // Skip dead-end nodes (degree 1) where U-turn is the only option
+        const edges = this.graph.get(current);
+        if (edges && edges.size === 1) continue;
+
+        const loop = this.findNonReversalLoop(current, prev);
+        if (!loop) continue;
+
+        // Validate all edges exist
+        let valid = true;
+        for (let j = 0; j < loop.length - 1; j++) {
+          if (!this.graph.get(loop[j]!)?.has(loop[j + 1]!)) {
+            valid = false;
+            break;
+          }
+        }
+        if (!valid) continue;
+
+        const loopMiddle = loop.slice(1);
+        result.splice(i + 1, 0, ...loopMiddle);
+        improved = true;
+        i += loopMiddle.length;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Find a loop from `node` back to itself that doesn't immediately reverse
+   * to `exclude` (the previous node in the circuit). Uses BFS with depth limit.
+   */
+  private findNonReversalLoop(
+    node: string,
+    exclude: string,
+  ): string[] | null {
+    const maxDepth = 8; // Limit BFS depth to prevent multi-block detours
+    const queue: Array<{ current: string; path: string[] }> = [
+      { current: node, path: [node] },
+    ];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const { current, path } = queue.shift()!;
+      if (path.length > maxDepth) continue;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const edges = this.graph.get(current);
+      if (!edges) continue;
+
+      for (const next of edges.keys()) {
+        // Don't immediately reverse
+        if (next === exclude && path.length === 1) continue;
+
+        const newPath = [...path, next];
+
+        // Found a loop back to start
+        if (next === node && newPath.length >= 3) {
+          return newPath;
+        }
+
+        if (newPath.length <= maxDepth) {
+          queue.push({ current: next, path: newPath });
+        }
+      }
+    }
+
+    return null;
   }
 }
