@@ -25,7 +25,7 @@ export function OvertureExtractorGlobalSheet() {
   if (!visible) return null;
 
   return (
-    <View pointerEvents="box-none" style={styles.overlay}>
+    <View style={[styles.overlay, { pointerEvents: "box-none" }]}>
       <OvertureExtractorSheet
         visible={visible}
         onClose={onClose}

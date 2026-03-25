@@ -81,8 +81,15 @@ export class SyncEngine {
 
   /**
    * Start periodic sync
+   * Idempotent - safe to call multiple times
    */
   startPeriodicSync(): void {
+    // Guard against duplicate timers/listeners
+    if (this.syncTimer) {
+      console.log('[SyncEngine] startPeriodicSync: already running, skipping');
+      return;
+    }
+
     // Initial sync attempt
     this.attemptSync();
 
@@ -179,7 +186,8 @@ export class SyncEngine {
 
   /**
    * Push pending changes to server
-   * Note: Actual API calls should be implemented based on your tRPC setup
+   * Note: Actual API calls should be implemented based on your tRPC setup.
+   * Records are only marked as synced after a successful server response.
    */
   private async pushChanges(): Promise<{ count: number; errors: Error[] }> {
     const errors: Error[] = [];
@@ -206,19 +214,18 @@ export class SyncEngine {
           }));
 
           // TODO: Replace with actual tRPC call
-          // await trpc.sync.push.mutate({ changes });
+          // const result = await trpc.sync.push.mutate({ changes });
+          // if (!result.success) {
+          //   errors.push(new Error(`Push ${tableName} batch failed: ${result.message}`));
+          //   continue; // Don't mark as synced — retry next time
+          // }
 
-          // Mark as synced locally
-          await database.write(async () => {
-            for (const record of batch) {
-              await record.update((r: any) => {
-                r.isPendingSync = false;
-                r.syncedAt = Date.now();
-              });
-            }
-          });
-
-          count += batch.length;
+          // Only mark as synced AFTER successful server response
+          // Until the TODO above is implemented, skip marking to prevent data loss
+          console.warn(
+            `[SyncEngine] pushChanges: ${batch.length} ${tableName} record(s) pending. ` +
+            `Server push not yet implemented — records remain pending.`
+          );
         }
       } catch (error: any) {
         errors.push(new Error(`Push ${tableName} failed: ${error.message}`));

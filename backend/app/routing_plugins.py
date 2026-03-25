@@ -147,7 +147,7 @@ class RoutingCostPlugin(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Fuel-aware plugin
+# Fuel-aware plugin (file-based DEM)
 # ---------------------------------------------------------------------------
 
 
@@ -184,6 +184,116 @@ class FuelAwarePlugin(RoutingCostPlugin):
         z_v = data_v.get("elevation", 0.0)
         g = grade_percent(z_u, z_v, distance_m)
         return fuel_multiplier(g, min_multiplier=self.min_multiplier)
+
+
+# ---------------------------------------------------------------------------
+# Fuel-aware plugin (PostGIS DEM)
+# ---------------------------------------------------------------------------
+
+try:
+    from .elevation_postgis import dem_is_available, sample_elevation_from_postgis
+except ImportError:
+    dem_is_available = None  # type: ignore[assignment]
+    sample_elevation_from_postgis = None  # type: ignore[assignment]
+
+
+class FuelAwarePostGISPlugin(RoutingCostPlugin):
+    """
+    Plugin that applies fuel cost from DEM elevation stored in PostGIS.
+    
+    This is the preferred approach when DEM data is loaded into the database:
+      - Single source of truth for road network and terrain
+      - Spatial indexing for fast queries (milliseconds)
+      - No file I/O or DEM_PATH configuration needed
+    
+    To load DEM data into PostGIS:
+      raster2pgsql -s 4326 -I -C -M -t 100x100 dem.tif public.dem_elevation | psql -d routemaster
+    """
+
+    def __init__(self, database_url: str | None = None, min_multiplier: float = 0.5) -> None:
+        self.database_url = database_url
+        self.min_multiplier = min_multiplier
+        
+        # Verify PostGIS DEM is available
+        if dem_is_available is None:
+            raise ImportError(
+                "psycopg2 is required for PostGIS elevation; "
+                "install with pip install psycopg2-binary"
+            )
+        
+        if not dem_is_available(database_url):
+            raise ValueError(
+                "DEM data not found in PostGIS. Load it with: "
+                "raster2pgsql -s 4326 -I -C -M -t 100x100 dem.tif public.dem_elevation | psql -d routemaster"
+            )
+
+    def pre_process_nodes(
+        self, coords_list: list[tuple[float, float]]
+    ) -> dict[int, dict[str, Any]]:
+        if sample_elevation_from_postgis is None:
+            raise ImportError("psycopg2 not installed")
+        
+        elevations = sample_elevation_from_postgis(coords_list, self.database_url)
+        return {
+            i: {
+                "elevation": (
+                    elevations[i] if i < len(elevations) and elevations[i] is not None
+                    else 0.0
+                )
+            }
+            for i in range(len(coords_list))
+        }
+
+    def calculate_multiplier(
+        self,
+        coords_u: tuple[float, float],
+        coords_v: tuple[float, float],
+        data_u: dict[str, Any],
+        data_v: dict[str, Any],
+        distance_m: float,
+    ) -> float:
+        z_u = data_u.get("elevation", 0.0)
+        z_v = data_v.get("elevation", 0.0)
+        g = grade_percent(z_u, z_v, distance_m)
+        return fuel_multiplier(g, min_multiplier=self.min_multiplier)
+
+
+def create_fuel_aware_plugin(
+    dem_path: str | None = None,
+    database_url: str | None = None,
+    min_multiplier: float = 0.5,
+) -> FuelAwarePlugin | FuelAwarePostGISPlugin:
+    """
+    Factory function to create the appropriate fuel-aware plugin.
+    
+    Priority:
+      1. If DATABASE_URL is set and PostGIS has DEM data → FuelAwarePostGISPlugin
+      2. If dem_path is provided → FuelAwarePlugin (file-based)
+      3. Raise error if neither available
+    
+    Args:
+        dem_path: Path to GeoTIFF DEM file (fallback if PostGIS unavailable)
+        database_url: PostgreSQL connection string (defaults to DATABASE_URL env var)
+        min_multiplier: Minimum cost multiplier (prevents negative costs on steep downhills)
+    
+    Returns:
+        FuelAwarePlugin or FuelAwarePostGISPlugin instance
+    """
+    # Try PostGIS first (preferred)
+    if dem_is_available is not None and dem_is_available(database_url):
+        return FuelAwarePostGISPlugin(database_url=database_url, min_multiplier=min_multiplier)
+    
+    # Fall back to file-based DEM
+    if dem_path and rasterio is not None:
+        return FuelAwarePlugin(dem_path=dem_path, min_multiplier=min_multiplier)
+    
+    # Neither available
+    raise ValueError(
+        "No DEM data source available. Either:\n"
+        "  1. Load DEM into PostGIS: raster2pgsql -s 4326 -I -C -M -t 100x100 dem.tif public.dem_elevation | psql -d routemaster\n"
+        "  2. Set DEM_PATH environment variable to point to a GeoTIFF file\n"
+        "  3. Install rasterio: pip install rasterio"
+    )
 
 
 # ---------------------------------------------------------------------------

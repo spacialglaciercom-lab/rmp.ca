@@ -43,6 +43,10 @@ export function useDatabase(): UseDatabaseResult {
 
   // Initialize database and run migrations
   useEffect(() => {
+    let cancelled = false;
+    let unsubscribeSync: (() => void) | null = null;
+    let unsubscribeNet: (() => void) | null = null;
+
     const initializeDatabase = async () => {
       try {
         setStatus("initializing");
@@ -50,11 +54,15 @@ export function useDatabase(): UseDatabaseResult {
         // Check if migration is needed
         const needsMigration = await isMigrationNeeded();
 
+        if (cancelled) return;
+
         if (needsMigration) {
           setStatus("migrating");
           console.log("Running AsyncStorage migration...");
 
           const result = await runMigration();
+
+          if (cancelled) return;
 
           if (!result.success) {
             console.error("Migration failed:", result.errors);
@@ -65,7 +73,7 @@ export function useDatabase(): UseDatabaseResult {
         }
 
         // Subscribe to sync status
-        const unsubscribeSync = syncEngine.subscribe((syncStatus) => {
+        unsubscribeSync = syncEngine.subscribe((syncStatus) => {
           setIsSyncing(syncStatus.isSyncing);
           setPendingChanges(syncStatus.pendingCount);
           setLastSyncTime(syncStatus.lastSyncTime);
@@ -75,28 +83,35 @@ export function useDatabase(): UseDatabaseResult {
         });
 
         // Subscribe to network status
-        const unsubscribeNet = NetInfo.addEventListener((state: NetInfoState) => {
+        unsubscribeNet = NetInfo.addEventListener((state: NetInfoState) => {
           setIsOnline(state.isConnected ?? false);
         });
 
-        // Start periodic sync
-        syncEngine.startPeriodicSync();
+        // Note: periodic sync is started by useBackgroundSync() hook in DatabaseProvider
+        // Do not call syncEngine.startPeriodicSync() here to avoid duplicate timers
 
-        setStatus("ready");
-
-        return () => {
-          unsubscribeSync();
-          unsubscribeNet();
-          syncEngine.stopPeriodicSync();
-        };
+        if (!cancelled) {
+          setStatus("ready");
+        }
       } catch (err: any) {
-        console.error("Database initialization failed:", err);
-        setError(err.message);
-        setStatus("error");
+        if (!cancelled) {
+          console.error("Database initialization failed:", err);
+          setError(err.message);
+          setStatus("error");
+        }
       }
     };
 
     initializeDatabase();
+
+    // Cleanup runs synchronously — properly registered as useEffect cleanup
+    return () => {
+      cancelled = true;
+      unsubscribeSync?.();
+      unsubscribeNet?.();
+      // Note: syncEngine.stopPeriodicSync() is called by useBackgroundSync cleanup
+      // Do not call it here to avoid stopping sync for other components
+    };
   }, []);
 
   // Force sync

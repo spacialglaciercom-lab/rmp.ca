@@ -1093,7 +1093,7 @@ export const RouteMap = React.memo(
                 />
               ))}
         </MapView>
-        <View style={styles.attribution} pointerEvents="none">
+        <View style={[styles.attribution, { pointerEvents: "none" }]}>
           <Text style={styles.attributionText}>
             © OpenStreetMap contributors
           </Text>

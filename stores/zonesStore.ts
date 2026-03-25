@@ -19,8 +19,8 @@ export interface SourcePointSnapshot {
 export interface SavedZoneResult {
   id: string;
   name: string;
-  /** Polygon boundary as [lat, lon][] (for future "show on map"). */
-  polygon: Array<[number, number]>;
+  /** Polygon boundary as explicit {lat, lon} objects (avoids [lat, lon] vs [lon, lat] confusion). */
+  polygon: Array<{ lat: number; lon: number }>;
   /** Partition result from POST /api/zones/partition (or partition-by-polygon). */
   zones: ZoneOutput[];
   truck_count: number;
@@ -35,11 +35,13 @@ interface ZonesState {
   savedZones: SavedZoneResult[];
   /** When set, the zone with this id is shown on the map (preview). */
   displayedZoneId: string | null;
+  _hasHydrated: boolean;
   addSavedZone: (item: Omit<SavedZoneResult, "id" | "createdAt">) => void;
   removeSavedZone: (id: string) => void;
   updateSavedZoneName: (id: string, name: string) => void;
   clearAllSavedZones: () => void;
   setDisplayedZoneId: (id: string | null) => void;
+  setHasHydrated: (state: boolean) => void;
 }
 
 function generateId(): string {
@@ -51,6 +53,7 @@ export const useZonesStore = create<ZonesState>()(
     (set) => ({
       savedZones: [],
       displayedZoneId: null,
+      _hasHydrated: false,
 
       addSavedZone: (item) => {
         const now = new Date().toISOString();
@@ -67,6 +70,8 @@ export const useZonesStore = create<ZonesState>()(
       removeSavedZone: (id) => {
         set((state) => ({
           savedZones: state.savedZones.filter((z) => z.id !== id),
+          displayedZoneId:
+            state.displayedZoneId === id ? null : state.displayedZoneId,
         }));
       },
 
@@ -80,13 +85,17 @@ export const useZonesStore = create<ZonesState>()(
         }));
       },
 
-      clearAllSavedZones: () => set({ savedZones: [] }),
+      clearAllSavedZones: () => set({ savedZones: [], displayedZoneId: null }),
       setDisplayedZoneId: (id) => set({ displayedZoneId: id }),
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
     }),
     {
       name: "rmp-zones-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ savedZones: s.savedZones }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     },
   ),
 );
