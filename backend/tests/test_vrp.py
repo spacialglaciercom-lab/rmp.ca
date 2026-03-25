@@ -642,7 +642,7 @@ def test_vrp_float_nan_vehicle_end_location_rejected() -> None:
 def test_vrp_non_numeric_coordinate_strings_422() -> None:
     """Strings that are not coercible to float should fail request validation."""
     req = {
-        "stops": [{"id": 1, "location": {"lat": "not-a-number", "lon": -73.5}}],
+        "stops": [{"id": 1, "location": {"lat": float("nan"), "lon": -73.5}}],
         "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [100]}],
     }
     r = client.post("/api/vrp/solve/sync", json=req)

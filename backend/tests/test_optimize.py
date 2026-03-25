@@ -488,7 +488,7 @@ def test_optimize_nan_coordinates_422() -> None:
     fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
     body = {
         "geojson": fc,
-        "start_lat": "not-a-number",
+        "start_lat": float("nan"),
         "start_lon": -73.57,
     }
     r = client.post("/api/optimize/sync", json=body)
