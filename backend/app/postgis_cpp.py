@@ -538,8 +538,22 @@ def _build_route_from_nodes(
                 edge_dist_km = edata.get("length_km", 0)
                 
                 if raw_coords:
-                    start_nid = f"{raw_coords[0][0]:.6f},{raw_coords[0][1]:.6f}"
-                    reversed_coords = (start_nid != u)
+                    # Compare using node coordinates, not node ID strings.
+                    # PostGIS graphs use integer node IDs ("1234"), so the old
+                    # f"{lon:.6f},{lat:.6f}" string would never equal the node ID,
+                    # causing every edge to be reversed and creating route loops.
+                    u_data = G.nodes.get(u, {})
+                    u_lon = u_data.get("lon")
+                    u_lat = u_data.get("lat")
+                    if u_lon is not None and u_lat is not None:
+                        start_lon = float(raw_coords[0][0])
+                        start_lat = float(raw_coords[0][1])
+                        reversed_coords = not (
+                            abs(start_lon - u_lon) < 1e-5
+                            and abs(start_lat - u_lat) < 1e-5
+                        )
+                    else:
+                        reversed_coords = False
                     edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
                 break
         
