@@ -509,7 +509,9 @@ export default function MapContent() {
       return { kind: "preview" as const, preview: previewRoutePointsByVehicle };
     }
     const base = sanitizeLatLonArray(displayRoutePoints);
-    if (!routePostProcessingEnabled) {
+    const isPreview =
+      (previewPoints && previewPoints.length > 0);
+    if (!routePostProcessingEnabled || isPreview) {
       return { kind: "single" as const, points: base };
     }
     const parts = splitRouteAtTeleportGaps(base, 650);
@@ -517,6 +519,7 @@ export default function MapContent() {
     return { kind: "single" as const, points: base };
   }, [
     previewRoutePointsByVehicle,
+    previewPoints,
     displayRoutePoints,
     routePostProcessingEnabled,
   ]);
@@ -602,9 +605,9 @@ export default function MapContent() {
     }
     if (result.polygon?.length >= 3)
       return {
-        zonesPreviewPolygon: result.polygon.map(([lat, lon]) => ({
-          latitude: lat,
-          longitude: lon,
+        zonesPreviewPolygon: result.polygon.map((p) => ({
+          latitude: p.lat,
+          longitude: p.lon,
         })),
         zonesPreviewPolygons: undefined,
       };
@@ -900,6 +903,48 @@ export default function MapContent() {
     !!state?.gpxData;
 
   const handleFixToRoads = useCallback(async () => {
+    // Multi-vehicle: snap each vehicle's route separately
+    if (
+      previewRoutePointsByVehicle &&
+      previewRoutePointsByVehicle.some((r) => r.length >= 2)
+    ) {
+      actions.setFixToRoadsLoading(true);
+      try {
+        const routingConfig = await getRoutingConfigAsync();
+        const routeOptions = getRouteOptionsForRouting();
+        const snapped: { lat: number; lon: number }[][] = [];
+        for (const vehicleRoute of previewRoutePointsByVehicle) {
+          const pts = vehicleRoute.map((p) => ({ lat: p.lat, lon: p.lon }));
+          if (pts.length < 2) {
+            snapped.push(pts);
+            continue;
+          }
+          const matched = routingConfig.baseUrl
+            ? await routeThroughWaypoints(pts, routingConfig, routeOptions)
+            : null;
+          if (matched && matched.matchedGeometry.length >= 2) {
+            snapped.push(
+              matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+            );
+          } else {
+            snapped.push(pts);
+          }
+        }
+        dispatch({ type: "SET_PREVIEW_ROUTES", payload: snapped });
+        Alert.alert(
+          "Fix to roads",
+          `${snapped.length} vehicle route(s) snapped to roads.`,
+        );
+      } catch (e) {
+        console.warn("Fix to roads (multi-vehicle) failed:", e);
+        Alert.alert("Fix to roads", "Could not snap routes to roads. Try again.");
+      } finally {
+        actions.setFixToRoadsLoading(false);
+      }
+      return;
+    }
+
+    // Single route
     let points: { lat: number; lon: number }[] = [];
     if ((previewPoints?.length ?? 0) >= 2) {
       points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
@@ -922,17 +967,23 @@ export default function MapContent() {
       const routingConfig = await getRoutingConfigAsync();
       const routeOptions = getRouteOptionsForRouting();
       if (routingConfig.baseUrl) {
-        // Use map-matching (OSRM /match/ or Google snap-to-roads), NOT shortest-path
-        // routing. routeThroughWaypoints finds the shortest path *between* waypoints
-        // which shortcuts the collection route; matchGPXToRoads snaps each point to
-        // the nearest road while preserving traversal order.
-        matched = await matchGPXToRoads(
+        matched = await routeThroughWaypoints(
           points,
           routingConfig,
           routeOptions,
         );
 
-        // Optional post-processing plugin: enforce continuity and repair teleports.
+        if (
+          !matched &&
+          routePostProcessingEnabled
+        ) {
+          matched = await matchGPXToRoads(
+            points,
+            routingConfig,
+            routeOptions,
+          );
+        }
+
         if (
           routePostProcessingEnabled &&
           matched &&
@@ -951,26 +1002,12 @@ export default function MapContent() {
                 ...matched,
                 matchedGeometry: repaired,
               };
-            } else if (gapsAfter > 0) {
-              // Hard fallback: force fully routed geometry between consecutive points.
-              // This may shorten some detours vs pure trace-matching, but keeps the
-              // path on roads when match data is fragmented.
-              const forced = await routeThroughWaypoints(
-                points,
-                routingConfig,
-                routeOptions,
-              );
-              if (forced && forced.matchedGeometry.length >= 2) {
-                matched = forced;
-              }
             }
           }
         }
       }
-      // If map-matching failed completely, optional post-processing fallback:
-      // force routing between waypoints before giving up to raw geometry.
       if (!matched && routingConfig.baseUrl && routePostProcessingEnabled) {
-        matched = await routeThroughWaypoints(
+        matched = await matchGPXToRoads(
           points,
           routingConfig,
           routeOptions,
@@ -1003,6 +1040,7 @@ export default function MapContent() {
       actions.setFixToRoadsLoading(false);
     }
   }, [
+    previewRoutePointsByVehicle,
     previewPoints,
     displayRoutePoints,
     state?.gpxData,
@@ -1828,7 +1866,6 @@ export default function MapContent() {
 
       <HelpPrompt />
       <View
-        pointerEvents="none"
         style={{
           position: "absolute",
           top: insets.top + 8,
@@ -1838,6 +1875,7 @@ export default function MapContent() {
           paddingHorizontal: 8,
           paddingVertical: 4,
           zIndex: 5000,
+          pointerEvents: "none",
         }}
       >
         <Text style={{ color: "#fff", fontSize: 11 }}>
@@ -1889,9 +1927,9 @@ export default function MapContent() {
               bottom: undefined,
               width: undefined,
               alignSelf: "flex-start",
+              pointerEvents: "box-none",
             },
           ]}
-          pointerEvents="box-none"
         >
           <PowerSavingIndicator compact />
         </View>

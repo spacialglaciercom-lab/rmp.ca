@@ -99,8 +99,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1.2,
     color: "#00D9FF",
-    textShadowColor: "rgba(0, 217, 255, 0.5)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    ...(Platform.OS === "web"
+      ? { textShadow: "0px 2px 4px rgba(0, 217, 255, 0.5)" }
+      : {
+          textShadowColor: "rgba(0, 217, 255, 0.5)",
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 4,
+        }),
   },
 });

@@ -139,7 +139,7 @@ function MapFloatingControlsInner({
     : undefined;
 
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
+    <View style={[styles.overlay, { pointerEvents: "box-none" }]}>
       {/* Top-left: Hamburger + Search (search only when onSearch provided, e.g. Navigation plugin on) */}
       <View style={[styles.topLeft, { top: topPad, left: leftPad }]}>
         <FloatingIconButton

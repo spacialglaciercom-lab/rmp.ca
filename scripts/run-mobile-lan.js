@@ -53,7 +53,7 @@ const child = spawn(
   ["expo", "start", "--clear"],
   {
     stdio: "inherit",
-    env: { ...process.env, NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=4096" },
+    env: { ...process.env, NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=8192" },
     shell: true,
   }
 );

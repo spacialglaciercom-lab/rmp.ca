@@ -44,6 +44,11 @@ import { WasteImportModal } from "@/components/zones/WasteImportModal";
 import { DeliveryZonePartitionSheet } from "@/components/zones/DeliveryZonePartitionSheet";
 import { BottomSheet } from "@/components/shared/BottomSheet";
 import { RouteAnalyticsPanel } from "@/components/zones/RouteAnalyticsPanel";
+import {
+  ZonesRoutingPanel,
+  type BucketPin,
+  type TspResult,
+} from "@/components/zones/ZonesRoutingPanel";
 
 export type ZonesPageMode = "delivery" | "waste";
 
@@ -58,8 +63,8 @@ const ZONE_COLORS = [
 const SIDEBAR_WIDTH = 320;
 const SIDEBAR_MIN_WIDTH = 280;
 
-/** Build [lat, lon][] polygon (closed ring) from zone polygons (bbox of all points). */
-function polygonFromZoneOutputs(zones: ZoneOutput[]): [number, number][] {
+/** Build {lat, lon}[] polygon (closed ring) from zone polygons (bbox of all points). */
+function polygonFromZoneOutputs(zones: ZoneOutput[]): Array<{ lat: number; lon: number }> {
   let minLat = Infinity,
     maxLat = -Infinity,
     minLon = Infinity,
@@ -75,11 +80,11 @@ function polygonFromZoneOutputs(zones: ZoneOutput[]): [number, number][] {
   }
   if (minLat === Infinity) return [];
   return [
-    [minLat, minLon],
-    [maxLat, minLon],
-    [maxLat, maxLon],
-    [minLat, maxLon],
-    [minLat, minLon],
+    { lat: minLat, lon: minLon },
+    { lat: maxLat, lon: minLon },
+    { lat: maxLat, lon: maxLon },
+    { lat: minLat, lon: maxLon },
+    { lat: minLat, lon: minLon },
   ];
 }
 
@@ -105,8 +110,8 @@ function computeBoundsFromZones(
     if (minLat !== Infinity) return { minLat, maxLat, minLon, maxLon };
   }
   if (result.polygon?.length >= 3) {
-    const lats = result.polygon.map(([lat]) => lat);
-    const lons = result.polygon.map(([, lon]) => lon);
+    const lats = result.polygon.map((p) => p.lat);
+    const lons = result.polygon.map((p) => p.lon);
     return {
       minLat: Math.min(...lats),
       maxLat: Math.max(...lats),
@@ -129,7 +134,7 @@ function zoneToPolygonLatLon(
 
 function zoneResultToGeoJSON(item: SavedZoneResult): string {
   const coords = item.polygon.map(
-    ([lat, lon]) => [lon, lat] as [number, number],
+    (p) => [p.lon, p.lat] as [number, number],
   );
   const ring = coords.length >= 3 ? [...coords, coords[0]] : [];
   const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
@@ -318,14 +323,15 @@ export function ZonePage() {
   const displayedZoneId = useZonesStore((s) => s.displayedZoneId);
   const setDisplayedZoneId = useZonesStore((s) => s.setDisplayedZoneId);
   const addSavedZone = useZonesStore((s) => s.addSavedZone);
+  const clearAllSavedZones = useZonesStore((s) => s.clearAllSavedZones);
 
   const wastePoints = useWastePointsStore((s) => s.points);
   const addWastePoint = useWastePointsStore((s) => s.add);
   const updateWastePoint = useWastePointsStore((s) => s.update);
   const removeWastePoint = useWastePointsStore((s) => s.remove);
 
-  const [pageMode, setPageMode] = useState<ZonesPageMode>("delivery");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [pageMode] = useState<ZonesPageMode>("waste");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [expandedZoneIds, setExpandedZoneIds] = useState<Set<number>>(
     new Set([0]),
   );
@@ -352,6 +358,14 @@ export function ZonePage() {
     string | null
   >(null);
   const [deliverySheetVisible, setDeliverySheetVisible] = useState(false);
+
+  // ── TSP right panel state ────────────────────────────────────────────────
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [tspPinDropMode, setTspPinDropMode] = useState(false);
+  const [tspResult, setTspResult] = useState<TspResult | null>(null);
+  const [tspZonePins, setTspZonePins] = useState<BucketPin[]>([]);
+  const [tspDraftPins, setTspDraftPins] = useState<BucketPin[]>([]);
+  const wasteMapRef = React.useRef<any>(null);
 
   /** Selected result to view: prefer displayedZoneId, else first saved (user can change via sidebar). */
   const selectedId =
@@ -397,16 +411,34 @@ export function ZonePage() {
     return minLat !== Infinity ? { minLat, maxLat, minLon, maxLon } : null;
   }, [wastePoints]);
 
+  const RIGHT_PANEL_WIDTH = 340;
+  const RIGHT_PANEL_COLLAPSED_WIDTH = 28;
+
   const { mapWidth, sidebarWidth } = useMemo(() => {
     if (effectiveCompact) {
       return { mapWidth: winWidth, sidebarWidth: 0 };
     }
     if (sidebarCollapsed) {
-      return { mapWidth: winWidth, sidebarWidth: 0 };
+      const rightW =
+        pageMode === "waste"
+          ? rightPanelCollapsed
+            ? RIGHT_PANEL_COLLAPSED_WIDTH
+            : RIGHT_PANEL_WIDTH
+          : 0;
+      return { mapWidth: winWidth - rightW, sidebarWidth: 0 };
     }
     const sidebarW = Math.min(SIDEBAR_WIDTH, Math.max(0, winWidth - 200));
-    return { mapWidth: winWidth - sidebarW, sidebarWidth: sidebarW };
-  }, [winWidth, sidebarCollapsed, effectiveCompact]);
+    const rightW =
+      pageMode === "waste"
+        ? rightPanelCollapsed
+          ? RIGHT_PANEL_COLLAPSED_WIDTH
+          : RIGHT_PANEL_WIDTH
+        : 0;
+    return {
+      mapWidth: Math.max(200, winWidth - sidebarW - rightW),
+      sidebarWidth: sidebarW,
+    };
+  }, [winWidth, sidebarCollapsed, effectiveCompact, pageMode, rightPanelCollapsed]);
 
   const mapHeight = useMemo(() => {
     const toolbarH = 56 + insets.top;
@@ -432,7 +464,7 @@ export function ZonePage() {
   const handleDeliveryPartitionSuccess = useCallback(
     (
       zones: import("@/services/overtureOptimizerService").ZoneOutput[],
-      polygon: [number, number][],
+      polygon: Array<{ lat: number; lon: number }>,
       name: string,
       truck_count: number,
       balance_metric: "time" | "distance",
@@ -516,6 +548,37 @@ export function ZonePage() {
     setPickWasteLocationMode(false);
     setAddWasteModalVisible(true);
   }, []);
+
+  const handlePreviewTspRoute = useCallback(
+    (_points: { lat: number; lon: number }[]) => {
+      wasteMapRef.current?.fitToRoute?.();
+    },
+    [],
+  );
+
+  const tspDraftIdCounter = React.useRef(0);
+  const handleWasteMapPress = useCallback(
+    (lat: number, lon: number) => {
+      if (tspPinDropMode) {
+        hapticImpact();
+        tspDraftIdCounter.current += 1;
+        const existingNums = tspDraftPins
+          .map((p) => { const m = p.binNumber.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
+        const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+        const pin: BucketPin = {
+          id: `draft_${Date.now()}_${tspDraftIdCounter.current}`,
+          lat,
+          lon,
+          binNumber: `BIN-${String(nextNum).padStart(3, "0")}`,
+          unsaved: true,
+        };
+        setTspDraftPins((prev) => [...prev, pin]);
+        return;
+      }
+      handleMapPressForWastePick(lat, lon);
+    },
+    [tspPinDropMode, tspDraftPins, handleMapPressForWastePick],
+  );
 
   const handleWastePointSave = useCallback(
     (values: WastePointFormValues) => {
@@ -744,54 +807,6 @@ export function ZonePage() {
           <Text style={[styles.toolbarTitle, { color: colors.text }]}>
             Zones
           </Text>
-          <View
-            style={[
-              styles.modeToggle,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={() => {
-                hapticImpact();
-                setPageMode("delivery");
-              }}
-              style={[
-                styles.modeToggleBtn,
-                pageMode === "delivery" && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modeToggleLabel,
-                  { color: pageMode === "delivery" ? "#fff" : colors.muted },
-                ]}
-              >
-                Delivery
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                hapticImpact();
-                setPageMode("waste");
-              }}
-              style={[
-                styles.modeToggleBtn,
-                pageMode === "waste" && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modeToggleLabel,
-                  { color: pageMode === "waste" ? "#fff" : colors.muted },
-                ]}
-              >
-                Waste
-              </Text>
-            </TouchableOpacity>
-          </View>
           {(savedZones.length > 0 || pageMode === "waste") && (
             <TouchableOpacity
               onPress={() => setSidebarCollapsed((c) => !c)}
@@ -874,6 +889,40 @@ export function ZonePage() {
                   {wastePartitionLoading ? "Partitioning…" : "Partition"}
                 </Text>
               </TouchableOpacity>
+              {savedZones.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticImpact();
+                    Alert.alert(
+                      "Clear Partitions",
+                      "Remove all saved zone partitions from the map?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Clear",
+                          style: "destructive",
+                          onPress: () => {
+                            clearAllSavedZones();
+                            setDisplayedZoneId(null);
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                  style={[styles.toolbarButton, { borderColor: colors.border }]}
+                >
+                  <MaterialCommunityIcons
+                    name="layers-off"
+                    size={18}
+                    color="#ef4444"
+                  />
+                  <Text
+                    style={[styles.toolbarButtonLabel, { color: "#ef4444" }]}
+                  >
+                    Clear
+                  </Text>
+                </TouchableOpacity>
+              )}
               {(selectedResult || wastePoints.length > 0) && (
                 <TouchableOpacity
                   onPress={handleExport}
@@ -1520,32 +1569,62 @@ export function ZonePage() {
           </View>
         )}
 
-        <View style={[styles.mapWrap, { width: mapWidth, height: mapHeight }]}>
+        <View style={[styles.mapWrap, { height: mapHeight }]}>
           {pageMode === "waste" ? (
             <>
               <RouteMap
+                ref={wasteMapRef}
                 collectionPoints={[]}
                 height={mapHeight}
                 width={mapWidth}
                 zonesPreviewPolygons={zonesPreviewPolygons ?? undefined}
                 initialBounds={
-                  selectedResult && initialBounds
-                    ? initialBounds
-                    : wasteBounds
-                      ? {
-                          minLat: wasteBounds.minLat,
-                          maxLat: wasteBounds.maxLat,
-                          minLon: wasteBounds.minLon,
-                          maxLon: wasteBounds.maxLon,
+                  tspZonePins.length > 0
+                    ? (() => {
+                        let mnLat = Infinity, mxLat = -Infinity, mnLon = Infinity, mxLon = -Infinity;
+                        for (const p of tspZonePins) {
+                          mnLat = Math.min(mnLat, p.lat);
+                          mxLat = Math.max(mxLat, p.lat);
+                          mnLon = Math.min(mnLon, p.lon);
+                          mxLon = Math.max(mxLon, p.lon);
                         }
-                      : undefined
+                        return { minLat: mnLat, maxLat: mxLat, minLon: mnLon, maxLon: mxLon };
+                      })()
+                    : selectedResult && initialBounds
+                      ? initialBounds
+                      : wasteBounds
+                        ? {
+                            minLat: wasteBounds.minLat,
+                            maxLat: wasteBounds.maxLat,
+                            minLon: wasteBounds.minLon,
+                            maxLon: wasteBounds.maxLon,
+                          }
+                        : undefined
                 }
+                routePoints={tspResult?.roadGeometry ?? tspResult?.orderedPoints}
                 wastePoints={wastePoints}
-                onMapPress={
-                  pageMode === "waste" ? handleMapPressForWastePick : undefined
-                }
+                onMapPress={handleWasteMapPress}
                 onLoad={() => {}}
               />
+              {zonesPreviewPolygons && zonesPreviewPolygons.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticImpact();
+                    clearAllSavedZones();
+                    setDisplayedZoneId(null);
+                  }}
+                  style={[
+                    styles.clearPartitionOverlay,
+                    { backgroundColor: "rgba(15,23,42,0.85)" },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="layers-off" size={16} color="#ef4444" />
+                  <Text style={styles.clearPartitionOverlayText}>
+                    Clear Partitions
+                  </Text>
+                </TouchableOpacity>
+              )}
               {wastePoints.length === 0 &&
                 !(Platform.OS === "web" && pageMode === "waste") && (
                   <View
@@ -1627,6 +1706,23 @@ export function ZonePage() {
             </View>
           )}
         </View>
+
+        {/* Right panel: TSP routing (waste mode only) */}
+        {pageMode === "waste" && !effectiveCompact && (
+          <ZonesRoutingPanel
+            localWastePoints={wastePoints}
+            draftPins={tspDraftPins}
+            onDraftPinsChange={setTspDraftPins}
+            pinDropMode={tspPinDropMode}
+            onPinDropModeChange={setTspPinDropMode}
+            onTspResult={setTspResult}
+            onZonePinsLoaded={setTspZonePins}
+            onPreviewRoute={handlePreviewTspRoute}
+            onDeleteLocalPoint={removeWastePoint}
+            collapsed={rightPanelCollapsed}
+            onCollapsedChange={setRightPanelCollapsed}
+          />
+        )}
 
         {/* Right sidebar: delivery mode only (waste uses left sidebar above) */}
         {!sidebarCollapsed && sidebarWidth > 0 && pageMode !== "waste" && (
@@ -2713,6 +2809,23 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
     minWidth: 0,
+  },
+  clearPartitionOverlay: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  clearPartitionOverlayText: {
+    color: "#ef4444",
+    fontSize: 13,
+    fontWeight: "700",
   },
   mapEmptyHint: {
     position: "absolute",

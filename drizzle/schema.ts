@@ -10,6 +10,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -23,6 +24,30 @@ const geography = customType<{
   config: { type: string; srid: number };
 }>({
   dataType: (config) => `geography(${config?.type}, ${config?.srid})`,
+});
+
+/**
+ * Custom PostGIS raster type for Drizzle.
+ * Used for DEM (Digital Elevation Model) data.
+ */
+const raster = customType<{
+  data: string;
+  driverData: string;
+  config: Record<string, never>;
+}>({
+  dataType: () => "raster",
+});
+
+/**
+ * DEM elevation table for terrain data.
+ * Populated by raster2pgsql from GeoTIFF files.
+ * Used by FuelAwarePostGISPlugin for fuel-aware routing.
+ */
+export const demElevation = pgTable("dem_elevation", {
+  rid: serial("rid").primaryKey(),
+  rast: raster("rast"),
+  sourceFile: text("source_file"),
+  importedAt: timestamp("imported_at").defaultNow(),
 });
 
 /**
@@ -334,6 +359,7 @@ export const wastePoints = pgTable("waste_points", {
   lastCollectionDate: timestamp("last_collection_date"),
   collectionCount: integer("collection_count").default(0),
   isActive: boolean("is_active").default(true),
+  deletedAt: timestamp("deleted_at"),
   syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -362,6 +388,7 @@ export const routes = pgTable("routes", {
   actualDurationMinutes: integer("actual_duration_minutes"),
   totalDistanceMeters: doublePrecision("total_distance_meters"),
   routeSource: varchar("route_source", { length: 50 }), // manual, vrp, imported
+  deletedAt: timestamp("deleted_at"),
   syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -388,6 +415,7 @@ export const routeStops = pgTable("route_stops", {
   photoUri: text("photo_uri"),
   completedAt: timestamp("completed_at"),
   skippedReason: text("skipped_reason"),
+  deletedAt: timestamp("deleted_at"),
   syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -407,6 +435,7 @@ export const zones = pgTable("zones", {
   color: varchar("color", { length: 7 }), // Hex color
   boundary: geography("boundary", { type: "Polygon", srid: 4326 }),
   isActive: boolean("is_active").default(true),
+  deletedAt: timestamp("deleted_at"),
   syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -420,6 +449,7 @@ export type InsertZone = typeof zones.$inferInsert;
  */
 export const favorites = pgTable("favorites", {
   id: text("id").primaryKey(), // UUID from mobile
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
   latitude: doublePrecision("latitude").notNull(),
@@ -428,6 +458,7 @@ export const favorites = pgTable("favorites", {
   category: varchar("category", { length: 50 }), // waypoint, bin, depot, other
   notes: text("notes"),
   photoUri: text("photo_uri"),
+  deletedAt: timestamp("deleted_at"),
   syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -448,7 +479,9 @@ export const syncStatus = pgTable("sync_status", {
   pendingCount: integer("pending_count").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("sync_status_user_table_unique").on(table.userId, table.tableName),
+]);
 
 export type SyncStatusRecord = typeof syncStatus.$inferSelect;
 export type InsertSyncStatus = typeof syncStatus.$inferInsert;

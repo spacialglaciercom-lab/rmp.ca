@@ -6,7 +6,7 @@
 
 import { Platform } from "react-native";
 import { createTimeoutSignal } from "@/lib/abortTimeout";
-import { getExtractConfig } from "@/lib/overtureExtractService";
+import { getExtractConfig } from "@/lib/extractConfig";
 import { getApiBaseUrl } from "@/shared/oauth";
 
 export interface ExtractDiagnostics {
