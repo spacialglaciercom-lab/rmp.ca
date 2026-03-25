@@ -1521,7 +1521,7 @@ export const RouteMap = React.memo(
                       <Polyline
                         key={`vehicle-${vIdx}`}
                         positions={positions}
-                        pathOptions={{ color, weight: 6, opacity: 1 }}
+                        pathOptions={{ color, weight: 6, opacity: 1, interactive: false }}
                       />
                     );
                   })
@@ -1545,9 +1545,7 @@ export const RouteMap = React.memo(
                               [p1.lat, p1.lon],
                               [p2.lat, p2.lon],
                             ]}
-                            color={color}
-                            weight={6}
-                            opacity={0.95}
+                            pathOptions={{ color, weight: 6, opacity: 0.95, interactive: false }}
                           />
                         );
                       });
@@ -1555,9 +1553,7 @@ export const RouteMap = React.memo(
                   ) : (
                     <Polyline
                       positions={routePoints.map((p) => [p.lat, p.lon])}
-                      color="#F97316"
-                      weight={6}
-                      opacity={1}
+                      pathOptions={{ color: "#F97316", weight: 6, opacity: 1, interactive: false }}
                     />
                   )))}
 
