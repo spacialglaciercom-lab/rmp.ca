@@ -62,38 +62,42 @@ export default class CollectionPoint extends Model {
    * Mark as completed with optional photo and notes
    */
   async markCompleted(photoUri?: string, notes?: string) {
-    await this.update((record) => {
-      record.status = 'completed';
-      record.completedAt = Date.now();
-      if (photoUri) record.photoUri = photoUri;
-      if (notes) record.notes = notes;
-      record.updatedAt = Date.now();
-      record.isPendingSync = true;
-    });
+    await this.collection.database.write(async () => {
+      await this.update((record) => {
+        record.status = 'completed';
+        record.completedAt = Date.now();
+        if (photoUri) record.photoUri = photoUri;
+        if (notes) record.notes = notes;
+        record.updatedAt = Date.now();
+        record.isPendingSync = true;
+      });
 
-    // Update parent route's completed count
-    const route = await this.route.fetch();
-    if (route) {
-      await route.incrementCompleted();
-    }
+      // Update parent route's completed count in the same transaction
+      const route = await this.route.fetch();
+      if (route) {
+        await route.incrementCompleted();
+      }
+    });
   }
 
   /**
    * Mark as skipped with reason
    */
   async markSkipped(reason: string) {
-    await this.update((record) => {
-      record.status = 'skipped';
-      record.skippedReason = reason;
-      record.updatedAt = Date.now();
-      record.isPendingSync = true;
-    });
+    await this.collection.database.write(async () => {
+      await this.update((record) => {
+        record.status = 'skipped';
+        record.skippedReason = reason;
+        record.updatedAt = Date.now();
+        record.isPendingSync = true;
+      });
 
-    // Still count as "processed" for route progress
-    const route = await this.route.fetch();
-    if (route) {
-      await route.incrementCompleted();
-    }
+      // Still count as "processed" for route progress — same transaction
+      const route = await this.route.fetch();
+      if (route) {
+        await route.incrementCompleted();
+      }
+    });
   }
 
   /**

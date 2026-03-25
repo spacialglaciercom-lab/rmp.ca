@@ -313,6 +313,19 @@ def test_optimize_turn_penalties_accepted_without_crash() -> None:
     assert resp["stats"]["total_traversals"] == 3
 
 
+def test_optimize_use_turn_penalty_plugin_does_not_double_edges() -> None:
+    """
+    Regression: use_turn_penalty_plugin must not convert an undirected road graph
+    into two directed arcs per segment (which would force covering both directions).
+    """
+    fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
+    r_base = _optimize(fc)
+    r_tp = _optimize(fc, use_turn_penalty_plugin=True)
+    assert r_base["stats"]["edges_in_graph"] == 3
+    assert r_tp["stats"]["edges_in_graph"] == 3
+    assert r_tp["stats"]["total_traversals"] == 3
+
+
 def test_optimize_zero_penalties_same_as_no_penalties() -> None:
     """Zero penalties should produce same traversal count as omitting turn_penalties."""
     fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))

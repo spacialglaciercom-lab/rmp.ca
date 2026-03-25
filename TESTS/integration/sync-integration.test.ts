@@ -57,7 +57,7 @@ const syncRouter = t.router({
         id: z.string(),
         table: z.string(),
         action: z.enum(['create', 'update', 'delete']),
-        data: z.record(z.unknown()),
+        data: z.record(z.string(), z.unknown()),
       })),
     }))
     .mutation(async ({ input }) => {

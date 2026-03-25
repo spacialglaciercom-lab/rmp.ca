@@ -16,8 +16,10 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.main import app
+from app.vrp import VrpRequest
 
 client = TestClient(app)
 
@@ -249,8 +251,12 @@ def test_vrp_all_stops_assigned_inline(name: str, data: dict, k: int) -> None:
     r = client.post("/api/vrp/solve/sync", json=req)
     assert r.status_code == 200, r.text
     resp = r.json()
+    valid_ids = {s["id"] for s in req["stops"]}
+    assert set(resp["unassigned"]).issubset(valid_ids), (
+        f"{name}: unassigned contains unknown stop ids: {resp['unassigned']}"
+    )
     assert resp["unassigned"] == [], (
-        f"{name}: unassigned stops: {resp['unassigned']}"
+        f"{name}: expected all stops assigned, unassigned={resp['unassigned']}"
     )
 
 
@@ -595,8 +601,46 @@ def test_vrp_invalid_time_window_422() -> None:
     assert r.status_code == 422
 
 
-def test_vrp_nan_coordinates_422() -> None:
-    """NaN coordinates should fail Pydantic validation."""
+def _minimal_vrp_dict() -> dict[str, Any]:
+    return {
+        "stops": [{"id": 1, "location": {"lat": 45.5, "lon": -73.5}, "demand": [1]}],
+        "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [100]}],
+    }
+
+
+@pytest.mark.parametrize(
+    "field_path",
+    [
+        pytest.param(("stops", 0, "location", "lat"), id="stop_lat"),
+        pytest.param(("stops", 0, "location", "lon"), id="stop_lon"),
+        pytest.param(("vehicles", 0, "start_location", "lat"), id="vehicle_start_lat"),
+        pytest.param(("vehicles", 0, "start_location", "lon"), id="vehicle_start_lon"),
+    ],
+)
+def test_vrp_float_nan_coordinates_rejected(field_path: tuple[str | int, ...]) -> None:
+    """
+    float('nan') is a float and passes JSON numeric typing, but NaN breaks
+    comparisons used by Field(ge=..., le=...), so Pydantic must reject it.
+    TestClient json= cannot send NaN (httpx allow_nan=False); validate at model layer.
+    """
+    req = _minimal_vrp_dict()
+    d: Any = req
+    for key in field_path[:-1]:
+        d = d[key]
+    d[field_path[-1]] = float("nan")
+    with pytest.raises(ValidationError):
+        VrpRequest.model_validate(req)
+
+
+def test_vrp_float_nan_vehicle_end_location_rejected() -> None:
+    req = _minimal_vrp_dict()
+    req["vehicles"][0]["end_location"] = {"lat": 45.6, "lon": float("nan")}
+    with pytest.raises(ValidationError):
+        VrpRequest.model_validate(req)
+
+
+def test_vrp_non_numeric_coordinate_strings_422() -> None:
+    """Strings that are not coercible to float should fail request validation."""
     req = {
         "stops": [{"id": 1, "location": {"lat": float("nan"), "lon": -73.5}}],
         "vehicles": [{"id": 0, "start_location": {"lat": 45.5, "lon": -73.5}, "capacity": [100]}],

@@ -17,6 +17,7 @@ except ImportError:
 
 import logging
 import os
+import time
 from typing import Literal
 
 import numpy as np
@@ -272,7 +273,11 @@ def _zone_weights_from_labels(
 ) -> np.ndarray:
     """Total weight per zone. Boundary edges split half-weight to each zone."""
     zone_weights = np.zeros(k)
+    if labels.size == 0:
+        return zone_weights
     for u, v, w in edge_weights:
+        if u >= labels.size or v >= labels.size:
+            continue
         zu, zv = labels[u], labels[v]
         if zu == zv:
             zone_weights[zu] += w
@@ -308,24 +313,20 @@ def _balance_postprocess_node_weights(
     Greedy node moves for point-based balance: move nodes from heavy to light zones
     to minimize sum of squared deviations from target node weight per zone.
     """
-    import time as _time
-
     n = labels.shape[0]
-    deadline = _time.monotonic() + time_limit
+    deadline = time.monotonic() + time_limit
     weights = np.array(node_weights, dtype=float) if len(node_weights) >= n else np.ones(n)
 
     zone_weights = _zone_weights_from_node_weights(labels, weights.tolist(), k)
     target = float(zone_weights.sum()) / k
-
-    def _imbalance() -> float:
-        return float(np.sum((zone_weights - target) ** 2))
+    current_imb = float(np.sum((zone_weights - target) ** 2))
 
     for _ in range(max_iters):
-        if _time.monotonic() >= deadline:
+        if time.monotonic() >= deadline:
             break
         improved = False
         for u in range(n):
-            if _time.monotonic() >= deadline:
+            if u % 1000 == 0 and time.monotonic() >= deadline:
                 break
             wu = weights[u]
             if wu <= 0:
@@ -334,17 +335,17 @@ def _balance_postprocess_node_weights(
 
             trial_old = zone_weights[z_old] - wu
             best_z = z_old
-            best_imb = _imbalance()
+            best_imb = current_imb
 
             for z_new in range(k):
                 if z_new == z_old:
                     continue
                 trial_new = zone_weights[z_new] + wu
-                imb = best_imb
-                imb -= (zone_weights[z_old] - target) ** 2
-                imb -= (zone_weights[z_new] - target) ** 2
-                imb += (trial_old - target) ** 2
-                imb += (trial_new - target) ** 2
+                imb = current_imb \
+                    - (zone_weights[z_old] - target) ** 2 \
+                    - (zone_weights[z_new] - target) ** 2 \
+                    + (trial_old - target) ** 2 \
+                    + (trial_new - target) ** 2
                 if imb < best_imb:
                     best_imb = imb
                     best_z = z_new
@@ -353,6 +354,7 @@ def _balance_postprocess_node_weights(
                 zone_weights[z_old] -= wu
                 zone_weights[best_z] += wu
                 labels[u] = best_z
+                current_imb = best_imb
                 improved = True
         if not improved:
             break
@@ -397,63 +399,53 @@ def _balance_postprocess(
     Uses incremental weight tracking so each candidate move is O(degree(u))
     instead of O(|edges|).
     """
-    import time as _time
-
     n = labels.shape[0]
-    deadline = _time.monotonic() + time_limit
+    deadline = time.monotonic() + time_limit
 
-    # Build per-node adjacency list: adj[u] = [(v, w), ...]
     adj: list[list[tuple[int, float]]] = [[] for _ in range(n)]
     for u, v, w in edge_weights:
         adj[u].append((v, w))
         adj[v].append((u, w))
 
-    # Initialise zone weights from current labels
     zone_weights = _zone_weights_from_labels(labels, edge_weights, k)
     target = float(zone_weights.sum()) / k
-
-    def _imbalance() -> float:
-        return float(np.sum((zone_weights - target) ** 2))
+    current_imb = float(np.sum((zone_weights - target) ** 2))
 
     for _ in range(max_iters):
-        if _time.monotonic() >= deadline:
+        if time.monotonic() >= deadline:
             break
         improved = False
         for u in range(n):
-            if _time.monotonic() >= deadline:
+            if u % 1000 == 0 and time.monotonic() >= deadline:
                 break
             z_old = labels[u]
 
-            # With half-weight boundary edges, moving u from z_old to
-            # any z_new shifts exactly half the total incident weight:
-            #   z_old loses 0.5 * total_adj_w
-            #   z_new gains 0.5 * total_adj_w
             half_total = sum(w for _, w in adj[u]) * 0.5
             if half_total == 0:
                 continue
 
             trial_old = zone_weights[z_old] - half_total
             best_z = z_old
-            best_imb = _imbalance()
+            best_imb = current_imb
 
             for z_new in range(k):
                 if z_new == z_old:
                     continue
                 trial_new = zone_weights[z_new] + half_total
-                imb = best_imb
-                imb -= (zone_weights[z_old] - target) ** 2
-                imb -= (zone_weights[z_new] - target) ** 2
-                imb += (trial_old - target) ** 2
-                imb += (trial_new - target) ** 2
+                imb = current_imb \
+                    - (zone_weights[z_old] - target) ** 2 \
+                    - (zone_weights[z_new] - target) ** 2 \
+                    + (trial_old - target) ** 2 \
+                    + (trial_new - target) ** 2
                 if imb < best_imb:
                     best_imb = imb
                     best_z = z_new
 
             if best_z != z_old:
-                # Commit the move: update zone_weights incrementally
                 zone_weights[z_old] -= half_total
                 zone_weights[best_z] += half_total
                 labels[u] = best_z
+                current_imb = best_imb
                 improved = True
         if not improved:
             break
@@ -501,21 +493,21 @@ def points_to_partition_graph(
     if knn_neighbors < 1:
         return [], node_count, id_to_coords, node_weights
 
-    # KDTree on (lat, lon) for neighbor lookup; we'll use Haversine for edge length
     points_array = np.array([(p.lat, p.lon) for p in points])
-    k_query = min(knn_neighbors + 1, node_count)  # +1 includes self
+    k_query = min(knn_neighbors + 1, node_count)
     tree = KDTree(points_array)
+
+    dists_matrix, indices_matrix = tree.query(points_array, k=k_query)
+
+    if k_query == 1:
+        dists_matrix = dists_matrix.reshape(-1, 1)
+        indices_matrix = indices_matrix.reshape(-1, 1)
 
     edges: list[EdgeInput] = []
     seen: set[tuple[int, int]] = set()
 
     for i in range(node_count):
-        dists, indices = tree.query(points_array[i], k=k_query)
-        # Handle single-point or scalar query result
-        if np.isscalar(dists):
-            dists = [dists]
-            indices = [indices]
-        for j, d in zip(indices, dists):
+        for j in indices_matrix[i]:
             j = int(j)
             if i == j:
                 continue
@@ -523,8 +515,8 @@ def points_to_partition_graph(
             if key in seen:
                 continue
             seen.add(key)
-            lon_i, lat_i = id_to_coords[i][0], id_to_coords[i][1]
-            lon_j, lat_j = id_to_coords[j][0], id_to_coords[j][1]
+            lon_i, lat_i = id_to_coords[i]
+            lon_j, lat_j = id_to_coords[j]
             length_km = _haversine_km(lon_i, lat_i, lon_j, lat_j)
             if length_km <= 0:
                 continue

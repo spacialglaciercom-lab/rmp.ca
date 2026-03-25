@@ -13,6 +13,7 @@ import { rbacRouter } from "./rbac/rbacRouter";
 import { voiceRouter } from "./voiceRouter";
 import { spatialRouter } from "./spatialRouter";
 import { syncRouter } from "./syncRouter";
+import { logisticsZonesRouter } from "./logisticsZonesRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -55,6 +56,9 @@ export const appRouter = router({
 
   // Offline-first sync — WatermelonDB synchronization
   sync: syncRouter,
+
+  /** Zones list + waste points inside zone (PostGIS) for Zones TSP panel */
+  logisticsZones: logisticsZonesRouter,
 });
 
 export type AppRouter = typeof appRouter;

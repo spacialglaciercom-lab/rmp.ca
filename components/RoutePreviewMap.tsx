@@ -146,6 +146,7 @@ export function RoutePreviewMap({
     impactAsync();
 
     try {
+      // Pass points without depot prepended - solveLocal/solveServer handle depot internally
       const result = await solveRoute(points, {
         algorithm,
         depot,
