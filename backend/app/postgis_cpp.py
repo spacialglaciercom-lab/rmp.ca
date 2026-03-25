@@ -270,11 +270,39 @@ async def extract_road_network(
     
     # Build graph
     G = nx.MultiGraph()
-    
+
+    # Track already-added two-way street segments to avoid loading both the
+    # forward and reverse rows for the same physical road.  PostGIS/pgRouting
+    # tables typically store bidirectional ways as two rows (A→B and B→A).
+    # Adding both to an undirected MultiGraph doubles every two-way street,
+    # so two parallel two-way streets become 4 edges between the same nodes,
+    # creating an A→B→A→B→A loop in the Eulerian circuit.
+    #
+    # Dual-carriageway roads are genuinely separate physical roads with their
+    # own OSM IDs, so they are exempt from deduplication.
+    seen_bidirectional: set[str] = set()
+
     for row in edges_result:
         source = str(row["source_node"])
         target = str(row["target_node"])
-        
+        is_oneway = bool(row.get("oneway", False))
+        is_dual = bool(row.get("dual_carriageway", False))
+        osm_id_raw = row["osm_id"]
+        osm_id_str = str(osm_id_raw) if osm_id_raw is not None else None
+
+        # Deduplicate reverse direction of two-way streets.
+        # Use the canonical (min, max) node pair + osm_id so that genuinely
+        # parallel streets with different OSM IDs are still kept separate.
+        if not is_oneway and not is_dual:
+            if osm_id_str:
+                dedup_key = osm_id_str
+            else:
+                # No OSM ID: fall back to canonical node-pair string
+                dedup_key = f"{min(source, target)}:{max(source, target)}"
+            if dedup_key in seen_bidirectional:
+                continue
+            seen_bidirectional.add(dedup_key)
+
         # Ensure nodes exist in graph
         if source not in G:
             lon, lat = node_coords.get(source, (0.0, 0.0))
@@ -282,26 +310,26 @@ async def extract_road_network(
         if target not in G:
             lon, lat = node_coords.get(target, (0.0, 0.0))
             G.add_node(target, lon=lon, lat=lat)
-        
+
         # Parse geometry for coordinates
         geom = row["geometry"]
         if isinstance(geom, str):
             import json
             geom = json.loads(geom)
-        
+
         coords = geom.get("coordinates", [])
         length_km = float(row["length_m"]) / 1000.0 if row["length_m"] else 0.0
-        
+
         # Add edge with metadata
         edge_data = {
             "length_km": length_km,
             "coords": coords,
             "road_class": row["road_class"],
             "name": row["name"],
-            "osm_id": str(row["osm_id"]) if row["osm_id"] else None,
-            "dual_carriageway": row.get("dual_carriageway", False),
+            "osm_id": osm_id_str,
+            "dual_carriageway": is_dual,
         }
-        
+
         G.add_edge(source, target, **edge_data)
     
     _t_after_build = time.perf_counter()
