@@ -49,9 +49,9 @@ function DeletedSegmentsPanelInner() {
           borderColor: theme.border,
           shadowColor: theme.text,
           top: topOffset,
+          pointerEvents: "box-none",
         },
       ]}
-      pointerEvents="box-none"
     >
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>

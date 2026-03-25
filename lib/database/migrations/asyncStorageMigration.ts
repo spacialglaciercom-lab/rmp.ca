@@ -230,13 +230,14 @@ async function migrateZones(zones: any[]): Promise<number> {
           await database.get("zones").create((z: any) => {
             z.externalId = zone.id;
             z.name = zone.name || `Zone ${zone.id}`;
-            z.polygon = JSON.stringify(zone.polygon || []);
-            z.zones = JSON.stringify(zone.zones || []);
-            z.truckCount = zone.truck_count || 1;
-            z.balanceMetric = zone.balance_metric || "time";
+            z.geojson = JSON.stringify(zone.polygon || zone.zones || []);
+            z.centerLat = zone.center_lat ?? zone.centerLat ?? 0;
+            z.centerLon = zone.center_lon ?? zone.centerLon ?? 0;
+            z.pointCount = zone.point_count ?? zone.zones?.length ?? 0;
             z.createdAt = zone.createdAt
               ? new Date(zone.createdAt).getTime()
               : Date.now();
+            z.updatedAt = Date.now();
             z.syncedAt = Date.now();
             z.isPendingSync = false;
           });
@@ -276,6 +277,7 @@ async function migrateQuickDestinations(destinations: any[]): Promise<number> {
             f.category = dest.type || "waypoint";
             f.notes = dest.icon || "";
             f.createdAt = Date.now();
+            f.updatedAt = Date.now();
             f.syncedAt = Date.now();
             f.isPendingSync = false;
           });
@@ -317,6 +319,7 @@ async function migrateFavorites(favorites: any[]): Promise<number> {
             f.createdAt = fav.createdAt
               ? new Date(fav.createdAt).getTime()
               : Date.now();
+            f.updatedAt = Date.now();
             f.syncedAt = Date.now();
             f.isPendingSync = false;
           });
@@ -359,11 +362,13 @@ async function migrateWastePoints(
             w.type = point.type || "unknown";
             w.condition = point.condition || "unknown";
             w.address = point.address || "";
-            w.collectionDay = point.collectionDay || point.collection_day || "";
-            w.nextCollection = point.nextCollection
-              ? new Date(point.nextCollection).getTime()
-              : null;
+            w.capacityLiters = point.capacity_liters || point.capacityLiters || 0;
+            w.zoneId = point.zone_id || point.zoneId || "";
+            w.lastServicedAt = point.last_serviced_at
+              ? new Date(point.last_serviced_at).getTime()
+              : 0;
             w.createdAt = Date.now();
+            w.updatedAt = Date.now();
             w.syncedAt = Date.now();
             w.isPendingSync = true; // Needs to sync to server
           });

@@ -84,7 +84,8 @@ class RoutePersistenceService {
 
       // Calculate route statistics
       const totalDistance = solveResult?.totalDistance ?? this.calculateTotalDistance(points, depot);
-      const estimatedDuration = solveResult?.estimatedDuration ?? this.estimateDuration(points);
+      const estimatedDuration =
+        solveResult?.totalDuration ?? this.estimateDuration(points);
 
       // Prepare route data
       const routeData: RouteData = {

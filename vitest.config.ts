@@ -9,6 +9,7 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/.claude/worktrees/**",
+      "**/e2e/**",
     ],
     globals: true,
     // Stable V8 coverage merge (avoids missing coverage/.tmp races with default parallel pool)

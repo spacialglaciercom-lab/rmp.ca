@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Animated,
+  Platform,
 } from "react-native";
 import { useEffect, useRef } from "react";
 
@@ -155,20 +156,28 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: "rgba(0, 217, 255, 0.2)",
-    shadowColor: "#00D9FF",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 4px 12px rgba(0, 217, 255, 0.3)" }
+      : {
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+          elevation: 8,
+        }),
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#00D9FF",
     marginBottom: 8,
-    textShadowColor: "rgba(0, 217, 255, 0.5)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    ...(Platform.OS === "web"
+      ? { textShadow: "0px 2px 4px rgba(0, 217, 255, 0.5)" }
+      : {
+          textShadowColor: "rgba(0, 217, 255, 0.5)",
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 4,
+        }),
   },
   headerSubtitle: {
     fontSize: 16,
@@ -183,11 +192,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: "rgba(0, 217, 255, 0.15)",
-    shadowColor: "#00D9FF",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 8px rgba(0, 217, 255, 0.2)" }
+      : {
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 4,
+        }),
   },
   panelTitle: {
     fontSize: 16,
@@ -205,10 +218,14 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: "#00D9FF",
-    shadowColor: "#00D9FF",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 0px 4px rgba(0, 217, 255, 0.8)" }
+      : {
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: 4,
+        }),
   },
   statusText: {
     color: "rgba(255, 255, 255, 0.9)",
@@ -223,11 +240,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(0, 217, 255, 0.4)",
-    shadowColor: "#00D9FF",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 4px 10px rgba(0, 217, 255, 0.4)" }
+      : {
+          shadowColor: "#00D9FF",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 10,
+          elevation: 6,
+        }),
   },
   glowButtonSecondary: {
     backgroundColor: "rgba(123, 97, 255, 0.2)",
@@ -238,11 +259,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(123, 97, 255, 0.4)",
-    shadowColor: "#7B61FF",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 4px 10px rgba(123, 97, 255, 0.4)" }
+      : {
+          shadowColor: "#7B61FF",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 10,
+          elevation: 6,
+        }),
   },
   buttonText: {
     color: "white",
@@ -317,11 +342,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.2)",
-    shadowColor: "rgba(255, 255, 255, 0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 6px rgba(255, 255, 255, 0.1)" }
+      : {
+          shadowColor: "rgba(255, 255, 255, 0.1)",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 3,
+        }),
   },
 });
 

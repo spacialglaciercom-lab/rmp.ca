@@ -83,7 +83,7 @@ export function GpxDropZone({ onGpxLoaded, children }: GpxDropZoneProps) {
     >
       {children}
       {isDragging && (
-        <View style={styles.overlay} pointerEvents="none">
+        <View style={[styles.overlay, { pointerEvents: "none" }]}>
           <View style={styles.message}>
             <Text style={styles.messageTitle}>Drop GPX file</Text>
             <Text style={styles.messageSub}>

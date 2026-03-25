@@ -563,13 +563,15 @@ export class RouteOptimizer {
           geometry[geometry.length - 1]![1],
           oneway,
         );
-        const waySegKey = `${wayId}:${segKey}`;
-        if (seenSegments.has(waySegKey)) {
+        // Deduplicate across ALL ways (not just within the same way).
+        // Two different OSM ways sharing the same endpoints create parallel
+        // edges that break Eulerian balance. Using segKey alone catches these.
+        if (seenSegments.has(segKey)) {
           duplicatesSkipped++;
           runStart = i;
           continue;
         }
-        seenSegments.add(waySegKey);
+        seenSegments.add(segKey);
 
         const edgeData: EdgeData = { length, oneway, wayId, geometry };
 
@@ -699,10 +701,88 @@ export class RouteOptimizer {
       doubledGraphEdges: edgeCount,
       deadEnds: this.deadEndNodes.size,
     });
+    this.repairBalance();
     this.verifyBalance();
   }
 
   // ─── Balance & degree checks ──────────────────────────────────
+
+  /**
+   * Repair graph balance by adding virtual "dead-head" edges between
+   * unbalanced nodes. For every node with excess out-degree, we pair it
+   * with a node that has excess in-degree and add a virtual edge.
+   * This makes the graph Eulerian so Hierholzer can complete.
+   *
+   * Virtual edges are marked with wayId "__virtual__" so they can be
+   * identified and excluded from turn counting / distance stats.
+   */
+  private repairBalance(): void {
+    const inDegree = new Map<string, number>();
+    for (const node of this.doubledGraph.keys()) inDegree.set(node, 0);
+    this.doubledGraph.forEach((list) => {
+      for (const entry of list) {
+        inDegree.set(entry.target, (inDegree.get(entry.target) || 0) + 1);
+      }
+    });
+
+    const excessOut: string[] = []; // out > in
+    const excessIn: string[] = [];  // in > out
+
+    for (const [node, inDeg] of inDegree.entries()) {
+      const outDeg = outDegree(this.doubledGraph, node);
+      const diff = outDeg - inDeg;
+      if (diff > 0) {
+        for (let i = 0; i < diff; i++) excessOut.push(node);
+      } else if (diff < 0) {
+        for (let i = 0; i < -diff; i++) excessIn.push(node);
+      }
+    }
+
+    if (excessOut.length === 0 && excessIn.length === 0) return;
+
+    // Pair excess-out with excess-in nodes and add virtual edges.
+    // A virtual edge from excessIn → excessOut increases in-degree of the
+    // excess-out node and out-degree of the excess-in node, fixing both.
+    const pairCount = Math.min(excessOut.length, excessIn.length);
+    let virtualEdgesAdded = 0;
+
+    for (let i = 0; i < pairCount; i++) {
+      const from = excessIn[i]!;   // has excess in → needs more out
+      const to = excessOut[i]!;    // has excess out → needs more in
+      const virtualEdgeId = `__virtual__:${from}->${to}:${i}`;
+
+      ensureNode(this.doubledGraph, from).push({
+        target: to,
+        data: {
+          length: 0.01, // minimal length (dead-head)
+          oneway: true,
+          wayId: "__virtual__",
+        },
+        edgeId: virtualEdgeId,
+      });
+      virtualEdgesAdded++;
+    }
+
+    if (virtualEdgesAdded > 0) {
+      debug("repairBalance", {
+        excessOutNodes: excessOut.length,
+        excessInNodes: excessIn.length,
+        virtualEdgesAdded,
+        unpaired: Math.abs(excessOut.length - excessIn.length),
+      });
+    }
+
+    // If counts don't match, the graph has a structural issue (odd total degree sum)
+    // Log a warning but don't crash — Hierholzer will do its best with loop detection
+    if (excessOut.length !== excessIn.length) {
+      warn("repairBalance", {
+        message: "Cannot fully balance graph — excess out/in counts differ",
+        excessOut: excessOut.length,
+        excessIn: excessIn.length,
+        remainingImbalance: Math.abs(excessOut.length - excessIn.length),
+      });
+    }
+  }
 
   private identifyDeadEnds(): void {
     this.deadEndNodes.clear();
