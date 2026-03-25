@@ -101,7 +101,7 @@ interface Props {
   onClose: () => void;
   onSuccess: (
     zones: ZoneOutput[],
-    polygon: [number, number][],
+    polygon: Array<{ lat: number; lon: number }>,
     name: string,
     truck_count: number,
     balance_metric: "time" | "distance",
@@ -150,7 +150,8 @@ export function DeliveryZonePartitionSheet({
       const name =
         zoneName.trim() ||
         `Delivery zones (${new Date().toLocaleDateString()})`;
-      onSuccess(zones, points, name, truckCount, balanceMetric);
+      const polygon = points.map(([lat, lon]) => ({ lat, lon }));
+      onSuccess(zones, polygon, name, truckCount, balanceMetric);
       // Reset form
       setCoordsText("");
       setZoneName("");

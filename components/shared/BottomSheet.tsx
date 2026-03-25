@@ -142,11 +142,10 @@ function SheetContent({
           borderBottomColor: colors.border,
         },
       ]}
-      pointerEvents="box-none"
+      style={[styles.sheet, { pointerEvents: "box-none" }]}
     >
       <View
-        style={[styles.header, { borderBottomColor: colors.border }]}
-        pointerEvents="box-none"
+        style={[styles.header, { borderBottomColor: colors.border, pointerEvents: "box-none" }]}
       >
         <Text
           style={[styles.headerTitle, { color: colors.text }]}
@@ -177,7 +176,7 @@ function SheetContent({
         </View>
       </View>
       {!isCollapsed && (
-        <View style={styles.content} pointerEvents="box-none">
+        <View style={[styles.content, { pointerEvents: "box-none" }]}>
           {children}
         </View>
       )}

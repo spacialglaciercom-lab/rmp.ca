@@ -32,7 +32,7 @@ function AvoidedNodesPanelInner() {
           shadowColor: theme.text,
         },
       ]}
-      pointerEvents="box-none"
+      style={[styles.panel, { pointerEvents: "box-none" }]}
     >
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>

@@ -80,10 +80,12 @@ function parseRouteJSON(content: string): { points: ImportPoint[], warnings: str
       demand: item.demand ?? item.capacity,
       serviceTime: item.serviceTime ?? item.service_time ?? item.duration,
       notes: item.notes,
-      timeWindow: (item.timeWindow ?? item.time_window) ? {
-        start: item.timeWindow?.start ?? item.time_window?.start,
-        end: item.timeWindow?.end ?? item.time_window?.end,
-      } : undefined,
+      timeWindow: (item.timeWindow ?? item.time_window)
+        ? {
+            start: item.timeWindow?.start ?? item.time_window?.start,
+            end: item.timeWindow?.end ?? item.time_window?.end,
+          }
+        : undefined,
     }));
   }
   // GeoJSON FeatureCollection

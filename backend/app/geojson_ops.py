@@ -146,18 +146,28 @@ def filter_geojson(body: FilterRequest):
     # Filter by polygon (point-in-polygon for feature centroids)
     if body.polygon and len(body.polygon) >= 3:
         try:
-            from shapely.geometry import Polygon, Point
+            import shapely
+            from shapely.geometry import Polygon
 
             ring = [(p["lon"], p["lat"]) for p in body.polygon]
             poly = Polygon(ring)
-            filtered = []
+
+            centroids: list[tuple[float, float]] = []
+            valid_feats: list[GeoJSONFeature] = []
             for feat in features:
-                centroid = _feature_centroid(feat)
-                if centroid and poly.contains(Point(centroid)):
-                    filtered.append(feat)
-            features = filtered
-        except ImportError:
-            # Fallback: simple bounding-box filter if shapely not available
+                c = _feature_centroid(feat)
+                if c:
+                    centroids.append(c)
+                    valid_feats.append(feat)
+
+            if centroids:
+                pts = shapely.points(centroids)
+                mask = shapely.contains(poly, pts)
+                features = [valid_feats[i] for i, m in enumerate(mask) if m]
+            else:
+                features = []
+        except (ImportError, AttributeError):
+            # Shapely <2.0 or missing: bounding-box fallback
             lats = [p["lat"] for p in body.polygon]
             lons = [p["lon"] for p in body.polygon]
             min_lat, max_lat = min(lats), max(lats)
@@ -270,13 +280,22 @@ def _extract_coords(geom: dict[str, Any]) -> list[list[float]]:
 
 
 def _feature_centroid(feat: GeoJSONFeature) -> tuple[float, float] | None:
-    """Compute a rough centroid of a feature as (lon, lat)."""
+    """Bounding-box center of a feature as (lon, lat)."""
     coords = _extract_coords(feat.geometry)
     if not coords:
         return None
-    lons = [c[0] for c in coords]
-    lats = [c[1] for c in coords]
-    return (sum(lons) / len(lons), sum(lats) / len(lats))
+    min_lon = min_lat = float("inf")
+    max_lon = max_lat = float("-inf")
+    for lon, lat, *_ in coords:
+        if lon < min_lon:
+            min_lon = lon
+        if lon > max_lon:
+            max_lon = lon
+        if lat < min_lat:
+            min_lat = lat
+        if lat > max_lat:
+            max_lat = lat
+    return ((min_lon + max_lon) / 2.0, (min_lat + max_lat) / 2.0)
 
 
 def _haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
@@ -319,10 +338,13 @@ def _feature_length_km(feat: GeoJSONFeature) -> float:
 
     total = 0.0
     for line_coords in coords_list:
-        for i in range(1, len(line_coords)):
-            c0 = line_coords[i - 1]
-            c1 = line_coords[i]
-            total += _haversine_km(c0[0], c0[1], c1[0], c1[1])
+        if len(line_coords) < 2:
+            continue
+        arr = np.array(line_coords)
+        lons = arr[:, 0]
+        lats = arr[:, 1]
+        dists = _haversine_km_vectorized(lons[:-1], lats[:-1], lons[1:], lats[1:])
+        total += float(np.sum(dists))
 
     return total
 
@@ -399,6 +421,7 @@ def geojson_to_partition_graph(
             "u": u,
             "v": v,
             "length": length_km,
+            "weight": length_km,
             "intersection_density": 1.0,
             "cul_de_sac_penalty": 1.0,
             "width_penalty": 1.0,
@@ -458,12 +481,12 @@ def geojson_to_fuel_aware_partition_graph(
         return [], 0, []
 
     if not plugins:
-        # No plugins: same as geojson_to_partition_graph (undirected)
         edges = [
             {
                 "u": u,
                 "v": v,
                 "length": length_km,
+                "weight": length_km,
                 "intersection_density": 1.0,
                 "cul_de_sac_penalty": 1.0,
                 "width_penalty": 1.0,

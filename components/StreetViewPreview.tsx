@@ -486,7 +486,7 @@ export function StreetViewPreview({
 
         {/* Manual navigation arrows - only show for routes with multiple points */}
         {svReady && !playing && !isSinglePoint && (
-          <View style={styles.arrowOverlay} pointerEvents="box-none">
+          <View style={[styles.arrowOverlay, { pointerEvents: "box-none" }]}>
             <TouchableOpacity
               style={styles.arrowButton}
               onPress={() => handleStep(-1)}

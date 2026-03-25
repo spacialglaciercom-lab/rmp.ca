@@ -766,7 +766,7 @@ export const MapLibreRouteMap = React.memo(
             </PointAnnotation>
           ))}
         </MapView>
-        <View style={styles.attribution} pointerEvents="none">
+        <View style={[styles.attribution, { pointerEvents: "none" }]}>
           <Text style={styles.attributionText}>
             © OpenStreetMap contributors{showOverture ? " | Overture Maps" : ""}
           </Text>

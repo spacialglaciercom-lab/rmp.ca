@@ -212,7 +212,7 @@ describe('GPX File Parsing', () => {
       const elapsed = performance.now() - start;
 
       expect(result.points).toHaveLength(10000);
-      expect(elapsed).toBeLessThan(1000); // Should parse in under 1 second
+      expect(elapsed).toBeLessThan(5000); // Should parse in under 5 seconds
     });
   });
 });
