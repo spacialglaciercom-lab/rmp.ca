@@ -172,13 +172,13 @@ export function getLeafletRouteMapHTML(options?: {
         for (var i = 0; i < routePoints.length - 1; i++) {
           var risk = riskByIndex[i] || 0;
           var color = segmentRiskToColor(risk, colors);
-          var seg = L.polyline([[routePoints[i].lat, routePoints[i].lon], [routePoints[i + 1].lat, routePoints[i + 1].lon]]], { color: color, weight: 4, opacity: 0.9 });
+          var seg = L.polyline([[routePoints[i].lat, routePoints[i].lon], [routePoints[i + 1].lat, routePoints[i + 1].lon]]], { color: color, weight: 4, opacity: 0.9, interactive: false });
           seg.addTo(map);
           segmentLines.push(seg);
         }
       } else {
         var latlngs = routePoints.map(function(p) { return [p.lat, p.lon]; });
-        routeLine = L.polyline(latlngs, { color: colors.primary, weight: 3, opacity: 0.7, dashArray: '5, 5' });
+        routeLine = L.polyline(latlngs, { color: colors.primary, weight: 3, opacity: 0.7, dashArray: '5, 5', interactive: false });
         routeLine.addTo(map);
       }
       routePoints.forEach(function(p, i) {
@@ -287,31 +287,34 @@ export function getLeafletNavigationMapHTML(): string {
     if (routeCoords.length < 2) return;
     var latlngs = routeCoords.map(function(p) { return [p.latitude != null ? p.latitude : p.lat, p.longitude != null ? p.longitude : p.lon]; });
     // Google Maps-like route styling with gradient effect
-    routeLine = L.polyline(latlngs, { 
-      color: primary, 
-      weight: 8, 
+    routeLine = L.polyline(latlngs, {
+      color: primary,
+      weight: 8,
       opacity: 0.9,
       lineCap: 'round',
-      lineJoin: 'round'
+      lineJoin: 'round',
+      interactive: false
     }).addTo(map);
     
     // Add a subtle glow effect behind the main route line
-    var routeGlow = L.polyline(latlngs, { 
-      color: primary, 
-      weight: 12, 
+    var routeGlow = L.polyline(latlngs, {
+      color: primary,
+      weight: 12,
       opacity: 0.3,
       lineCap: 'round',
-      lineJoin: 'round'
+      lineJoin: 'round',
+      interactive: false
     }).addTo(map);
     
     if (traveledIndex >= 0 && traveledIndex < latlngs.length - 1) {
       var traveled = latlngs.slice(0, traveledIndex + 2);
-      traveledLine = L.polyline(traveled, { 
+      traveledLine = L.polyline(traveled, {
         color: '#4CAF50', // Google Maps green for traveled portion
-        weight: 8, 
+        weight: 8,
         opacity: 0.9,
         lineCap: 'round',
-        lineJoin: 'round'
+        lineJoin: 'round',
+        interactive: false
       }).addTo(map);
     }
     var first = latlngs[0];
