@@ -10,8 +10,8 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 const extractDir = __dirname;
-/** Match root `dev:extract` (NODE_OPTIONS=--max-old-space-size=4096) — large GeoJSON / Overture extracts need a bigger heap. */
-const NODE_HEAP_MB = "--max-old-space-size=4096";
+/** Match root `dev:extract` (NODE_OPTIONS=--max-old-space-size=8192) — large GeoJSON / Overture extracts need a bigger heap. */
+const NODE_HEAP_MB = "--max-old-space-size=8192";
 
 cli
   .command('process <input>', 'Read JSON (GeoJSON FeatureCollection or polygon config) and output GeoJSON')

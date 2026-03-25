@@ -11,6 +11,8 @@ export interface WasteImportRow {
   capacityLiters?: number;
   condition?: WastePointCondition;
   address?: string;
+  /** Bin or container number from the source file (e.g. "BIN-042"). */
+  binNumber?: string;
 }
 
 function normalizeType(s: string): WastePointType {
@@ -222,6 +224,23 @@ export function parseWasteCSV(text: string): WasteImportRow[] {
     "name",
     "description",
   );
+  const binNumberIdx = findColumnIndex(
+    header,
+    "bin_number",
+    "bin_no",
+    "bin_id",
+    "bin",
+    "container_number",
+    "container_no",
+    "container_id",
+    "container",
+    "number",
+    "no",
+    "asset_id",
+    "id",
+    "external_id",
+    "#",
+  );
 
   const rows: WasteImportRow[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -257,6 +276,10 @@ export function parseWasteCSV(text: string): WasteImportRow[] {
       addressIdx >= 0 && cells[addressIdx]
         ? cells[addressIdx].replace(/^["']|["']$/g, "")
         : undefined;
+    const binNumber =
+      binNumberIdx >= 0 && cells[binNumberIdx]
+        ? cells[binNumberIdx].replace(/^["']|["']$/g, "").trim()
+        : undefined;
 
     // Accept row if it has valid coordinates OR has an address (for geocoding)
     if (
@@ -270,6 +293,7 @@ export function parseWasteCSV(text: string): WasteImportRow[] {
         capacityLiters: Number.isNaN(capacity!) ? undefined : capacity,
         condition,
         address,
+        binNumber: binNumber || undefined,
       });
     }
   }
@@ -325,6 +349,21 @@ export function parseWasteGeoJSON(text: string): WasteImportRow[] {
       p.description,
       p.Description,
     ].find((a) => typeof a === "string") as string | undefined;
+    const rawBinNumber = [
+      p.bin_number,
+      p.bin_no,
+      p.bin_id,
+      p.container_number,
+      p.container_no,
+      p.container_id,
+      p.number,
+      p.asset_id,
+      p.external_id,
+      p.id,
+      p["#"],
+    ].find((v) => v != null);
+    const binNumber =
+      rawBinNumber != null ? String(rawBinNumber).trim() : undefined;
     rows.push({
       lat: typeof lat === "number" && !Number.isNaN(lat) ? lat : undefined,
       lon: typeof lon === "number" && !Number.isNaN(lon) ? lon : undefined,
@@ -332,6 +371,7 @@ export function parseWasteGeoJSON(text: string): WasteImportRow[] {
       capacityLiters: capacity,
       condition,
       address,
+      binNumber: binNumber || undefined,
     });
   }
   return rows;

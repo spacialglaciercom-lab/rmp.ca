@@ -9,7 +9,7 @@ export default class WastePoint extends Model {
 
   static associations = {
     collection_points: { type: 'has_many' as const, foreignKey: 'waste_point_id' },
-    zones: { type: 'belongs_to' as const, key: 'zone_id' },
+    zones: { type: 'belongs_to' as const, foreignKey: 'zone_id' },
   };
 
   @field('external_id') externalId!: string;

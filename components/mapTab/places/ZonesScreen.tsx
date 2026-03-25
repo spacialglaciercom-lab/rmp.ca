@@ -51,7 +51,7 @@ function formatDate(iso: string): string {
 
 function zoneToGeoJSON(item: SavedZoneResult): string {
   const coords = item.polygon.map(
-    ([lat, lon]) => [lon, lat] as [number, number],
+    (p) => [p.lon, p.lat] as [number, number],
   );
   const ring = coords.length >= 3 ? [...coords, coords[0]] : [];
   const totalTime = item.zones.reduce((s, z) => s + z.estimated_time, 0);
@@ -109,10 +109,9 @@ function ZoneResultRow({
 
   return (
     <View
-      style={[styles.row, { borderBottomColor: colors.border }]}
-      pointerEvents="box-none"
+      style={[styles.row, { borderBottomColor: colors.border, pointerEvents: "box-none" }]}
     >
-      <View style={styles.rowMain} pointerEvents="box-none">
+      <View style={[styles.rowMain, { pointerEvents: "box-none" }]}>
         <Text
           style={[styles.rowName, { color: colors.text }]}
           numberOfLines={1}
@@ -127,7 +126,7 @@ function ZoneResultRow({
           Total estimated time: {totalTime.toFixed(1)} · {item.balance_metric}
         </Text>
       </View>
-      <View style={styles.rowActions} pointerEvents="box-none">
+      <View style={[styles.rowActions, { pointerEvents: "box-none" }]}>
         <Pressable
           onPress={() => {
             hapticImpact();
@@ -559,6 +558,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
     overflow: "hidden",
+    zIndex: 1,
   },
   panelWrapperIphone: {
     position: "absolute",
@@ -569,6 +569,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: "hidden",
+    zIndex: 1,
   },
   panelIpad: {
     flex: 1,

@@ -7,7 +7,6 @@
 import React, { createContext, useContext, ReactNode, useEffect } from "react";
 import { useDatabase, UseDatabaseResult } from "./hooks/useDatabase";
 import { useBackgroundSync } from "@/hooks/useBackgroundSync";
-import { startBackgroundSync, stopBackgroundSync } from "@/hooks/useBackgroundSync";
 
 interface DatabaseContextValue extends UseDatabaseResult {
   isReady: boolean;
@@ -27,7 +26,10 @@ export function DatabaseProvider({
   onError,
 }: DatabaseProviderProps) {
   const dbState = useDatabase();
-  const { isSupported } = useBackgroundSync();
+  // useBackgroundSync manages periodic sync start/stop internally
+  // (subscribes to NetInfo, starts syncEngine.startPeriodicSync on mount,
+  //  stops on unmount). No need for explicit start/stop here.
+  useBackgroundSync();
 
   // Handle errors
   useEffect(() => {
@@ -35,19 +37,6 @@ export function DatabaseProvider({
       onError(dbState.error);
     }
   }, [dbState.error, onError]);
-
-  // Start background sync when database is ready
-  useEffect(() => {
-    if (dbState.status === "ready" && isSupported) {
-      startBackgroundSync();
-    }
-
-    return () => {
-      if (isSupported) {
-        stopBackgroundSync();
-      }
-    };
-  }, [dbState.status, isSupported]);
 
   const value: DatabaseContextValue = {
     ...dbState,

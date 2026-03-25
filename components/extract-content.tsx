@@ -881,10 +881,7 @@ export default function ExtractContent() {
       1,
       Math.min(12, parseInt(zoneTruckCount, 10) || 2),
     );
-    const polygonLatLon: [number, number][] = ring.map(([lng, lat]) => [
-      lat,
-      lng,
-    ]);
+    const polygonLatLon = ring.map(([lng, lat]) => ({ lat, lon: lng }));
     try {
       let geojson: { type: string; features: unknown[] };
       if (
@@ -1810,10 +1807,7 @@ function NativeExtractFallback({
       1,
       Math.min(12, parseInt(zoneTruckCount, 10) || 2),
     );
-    const polygonLatLon: [number, number][] = ring.map(([lng, lat]) => [
-      lat,
-      lng,
-    ]);
+    const polygonLatLon = ring.map(([lng, lat]) => ({ lat, lon: lng }));
     setZonePartitionLoading(true);
     try {
       let geojson: { type: string; features: unknown[] };

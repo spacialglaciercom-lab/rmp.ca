@@ -47,6 +47,7 @@ from .routing_plugins import (
     RoutingCostPlugin,
     TurnPenaltyPlugin,
     calculate_bearing,
+    create_fuel_aware_plugin,
 )
 from .vector_clean import CleanOptions, clean_geojson
 from .analytics import calculate_route_metrics
@@ -200,6 +201,83 @@ def _coordinate_bbox_from_geojson_features(
     if min_lon == math.inf:
         return None
     return (min_lon, min_lat, max_lon, max_lat)
+
+
+def _clip_line_to_bbox(
+    coords: list[list[float]],
+    bbox: tuple[float, float, float, float],
+) -> list[list[float]]:
+    """Clip a LineString to stay within the axis-aligned bbox.
+    
+    Uses Cohen-Sutherland style clipping for the 2D line segment.
+    Returns the original coords if both endpoints are inside, or a clipped segment.
+    If the line is entirely outside, returns an empty list.
+    """
+    if len(coords) < 2:
+        return coords
+    
+    min_lon, min_lat, max_lon, max_lat = bbox
+    
+    def compute_outcode(lon: float, lat: float) -> int:
+        """Cohen-Sutherland outcode: 4-bit code for point position relative to bbox."""
+        code = 0
+        if lat < min_lat:
+            code |= 1  # below
+        elif lat > max_lat:
+            code |= 2  # above
+        if lon < min_lon:
+            code |= 4  # left
+        elif lon > max_lon:
+            code |= 8  # right
+        return code
+    
+    x0, y0 = coords[0][0], coords[0][1]
+    x1, y1 = coords[1][0], coords[1][1]
+    
+    outcode0 = compute_outcode(x0, y0)
+    outcode1 = compute_outcode(x1, y1)
+    
+    # Both points inside - no clipping needed
+    if outcode0 == 0 and outcode1 == 0:
+        return coords
+    
+    # Line entirely outside bbox
+    if outcode0 & outcode1 != 0:
+        return []
+    
+    # Clip the line segment
+    while True:
+        if outcode0 == 0 and outcode1 == 0:
+            break
+        
+        # Pick an endpoint that's outside
+        outcode_out = outcode0 if outcode0 != 0 else outcode1
+        
+        # Find intersection with bbox edge
+        if outcode_out & 1:  # below
+            x = x0 + (x1 - x0) * (min_lat - y0) / (y1 - y0) if y1 != y0 else x0
+            y = min_lat
+        elif outcode_out & 2:  # above
+            x = x0 + (x1 - x0) * (max_lat - y0) / (y1 - y0) if y1 != y0 else x0
+            y = max_lat
+        elif outcode_out & 4:  # left
+            y = y0 + (y1 - y0) * (min_lon - x0) / (x1 - x0) if x1 != x0 else y0
+            x = min_lon
+        elif outcode_out & 8:  # right
+            y = y0 + (y1 - y0) * (max_lon - x0) / (x1 - x0) if x1 != x0 else y0
+            x = max_lon
+        else:
+            break
+        
+        # Update the outside point
+        if outcode_out == outcode0:
+            x0, y0 = x, y
+            outcode0 = compute_outcode(x0, y0)
+        else:
+            x1, y1 = x, y
+            outcode1 = compute_outcode(x1, y1)
+    
+    return [[x0, y0], [x1, y1]]
 
 
 def _count_route_samples_outside_lon_lat_bbox(
@@ -663,6 +741,7 @@ def _solve_cpp(
     G: nx.MultiGraph | nx.MultiDiGraph,
     turn_penalties: TurnPenalties | None = None,
     start_node: str | None = None,
+    transition_plugins: list[RoutingCostPlugin] | None = None,
 ) -> list[str]:
     """
     Approximate solution to the Chinese Postman Problem:
@@ -737,18 +816,19 @@ def _solve_cpp(
         except nx.NetworkXError:
             pass
 
+    transition_plugins = transition_plugins or []
+
     if len(odd_nodes) >= 2:
         # Compute shortest path lengths and paths between all pairs of odd nodes
         odd_pairs_dist: dict[tuple[str, str], float] = {}
         odd_pairs_path: dict[tuple[str, str], list[str]] = {}
 
-        plugins = G.graph.get("routing_plugins", [])
-        use_transition_costs = len(plugins) > 0
+        use_transition_costs = len(transition_plugins) > 0
 
         for i, u in enumerate(odd_nodes):
             try:
                 if use_transition_costs:
-                    lengths, paths = _dijkstra_with_transition_costs(G, u, plugins)
+                    lengths, paths = _dijkstra_with_transition_costs(G, u, transition_plugins)
                     # Path cost already includes transition (turn) multipliers
                     for j in range(i + 1, len(odd_nodes)):
                         v = odd_nodes[j]
@@ -1042,16 +1122,27 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
     if not features:
         raise ValueError("No LineString/MultiLineString features found in the GeoJSON")
 
+    # Compute input bbox for clipping component bridges
+    input_bbox = _coordinate_bbox_from_geojson_features(features)
+
     oneway_mode = _normalize_oneway_mode(body.oneway_mode)
     resolved_dem_path = body.dem_path or os.getenv("DEM_PATH")
-    plugins: list[RoutingCostPlugin] | None = None
-    if resolved_dem_path or body.use_turn_penalty_plugin:
-        plugins = []
-        if resolved_dem_path:
-            plugins.append(FuelAwarePlugin(resolved_dem_path))
-        if body.use_turn_penalty_plugin:
-            plugins.append(TurnPenaltyPlugin())
-    G = _build_graph(features, oneway_mode, plugins=plugins)
+    edge_plugins: list[RoutingCostPlugin] | None = None
+    transition_plugins: list[RoutingCostPlugin] = []
+    if resolved_dem_path:
+        edge_plugins = []
+        # Use factory to prefer PostGIS DEM if available, fall back to file-based
+        try:
+            edge_plugins.append(create_fuel_aware_plugin(dem_path=resolved_dem_path))
+        except ValueError:
+            # PostGIS DEM not available and file-based failed
+            edge_plugins = None
+    if body.use_turn_penalty_plugin:
+        # IMPORTANT: turn penalties should NOT change road coverage requirements.
+        # We apply them as transition costs during shortest-path computations (CPP matching),
+        # not by duplicating every segment into two directed arcs.
+        transition_plugins.append(TurnPenaltyPlugin())
+    G = _build_graph(features, oneway_mode, plugins=edge_plugins)
     _t_after_graph = time.perf_counter()
 
     if body.service_both_sides and not G.is_directed():
@@ -1100,7 +1191,12 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
                 start_node = node
 
     _t_before_cpp = time.perf_counter()
-    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties, start_node=start_node)
+    route_nodes = _solve_cpp(
+        G,
+        turn_penalties=body.turn_penalties,
+        start_node=start_node,
+        transition_plugins=transition_plugins,
+    )
     _t_after_cpp = time.perf_counter()
 
     if not route_nodes:
@@ -1188,6 +1284,12 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
                 [u_data.get("lon", 0), u_data.get("lat", 0)],
                 [v_data.get("lon", 0), v_data.get("lat", 0)],
             ]
+            # Clip component bridge to input GeoJSON bbox to prevent route escaping bounds
+            if input_bbox is not None:
+                clipped = _clip_line_to_bbox(edge_coords, input_bbox)
+                if clipped:
+                    edge_coords = clipped
+                # If clipped is empty, the bridge is entirely outside bbox - skip it
 
         start_k = 0 if i == 0 else 1
         for k, c in enumerate(edge_coords):
@@ -1264,7 +1366,7 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
         msg += f" (disconnected graph: {n_components} components solved independently)"
 
     path_for_analytics: list[tuple[float, float]] = [(c[0], c[1]) for c in route_coords]
-    active_plugins: list[RoutingCostPlugin] = plugins or []
+    active_plugins: list[RoutingCostPlugin] = edge_plugins or []
     route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
     route_metrics, msg = _merge_extractor_bbox_verification(
         features, route_coords, route_metrics, msg
@@ -1462,14 +1564,17 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     # Build graph (directed with plugin costs when dem_path or turn penalty plugin set, else undirected / oneway-aware)
     oneway_mode = _normalize_oneway_mode(body.oneway_mode)
     resolved_dem_path = body.dem_path or os.getenv("DEM_PATH")
-    plugins: list[RoutingCostPlugin] | None = None
-    if resolved_dem_path or body.use_turn_penalty_plugin:
-        plugins = []
-        if resolved_dem_path:
-            plugins.append(FuelAwarePlugin(resolved_dem_path))
-        if body.use_turn_penalty_plugin:
-            plugins.append(TurnPenaltyPlugin())
-    G = _build_graph(features, oneway_mode, plugins=plugins)
+    edge_plugins: list[RoutingCostPlugin] | None = None
+    transition_plugins: list[RoutingCostPlugin] = []
+    if resolved_dem_path:
+        edge_plugins = []
+        try:
+            edge_plugins.append(create_fuel_aware_plugin(dem_path=resolved_dem_path))
+        except ValueError:
+            edge_plugins = None
+    if body.use_turn_penalty_plugin:
+        transition_plugins.append(TurnPenaltyPlugin())
+    G = _build_graph(features, oneway_mode, plugins=edge_plugins)
     _t_after_graph = time.perf_counter()
 
     # When service_both_sides is True and graph is undirected, convert to directed so each
@@ -1536,7 +1641,12 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
 
     # Solve CPP
     _t_before_cpp = time.perf_counter()
-    route_nodes = _solve_cpp(G, turn_penalties=body.turn_penalties, start_node=start_node)
+    route_nodes = _solve_cpp(
+        G,
+        turn_penalties=body.turn_penalties,
+        start_node=start_node,
+        transition_plugins=transition_plugins,
+    )
     _t_after_cpp = time.perf_counter()
 
     if not route_nodes:
@@ -1732,7 +1842,7 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     path_for_analytics: list[tuple[float, float]] = [
         (c[0], c[1]) for c in route_coords
     ]
-    active_plugins: list[RoutingCostPlugin] = plugins or []
+    active_plugins: list[RoutingCostPlugin] = edge_plugins or []
     route_metrics = calculate_route_metrics(path_for_analytics, active_plugins)
     route_metrics, msg = _merge_extractor_bbox_verification(
         features, route_coords, route_metrics, msg
