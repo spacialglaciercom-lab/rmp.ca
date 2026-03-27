@@ -15,12 +15,11 @@ import Zone from './models/Zone';
 import Favorite from './models/Favorite';
 import SyncStatus from './models/SyncStatus';
 
-// SQLite adapter with JSI for better performance
+// SQLite adapter - JSI disabled due to native module availability issues
 const adapter = new SQLiteAdapter({
   schema,
   dbName: 'rmp_offline_db',
-  // Use JSI mode for better performance on supported platforms
-  jsi: true,
+  jsi: false,
   onSetUpError: (error: Error) => {
     console.error('Database setup failed:', error);
   },
