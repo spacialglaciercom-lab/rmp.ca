@@ -16,5 +16,18 @@ const run = (cmd, opts = {}) => {
     throw e;
   }
 };
-run("node scripts/patch-react-native-css-interop.js && node scripts/patch-firestore-ios.js && node scripts/patch-crashlytics-ios.js && node scripts/patch-rnfb-app-check.js && node scripts/patch-rnfb-app-module.js && node scripts/patch-rnfb-app-module-header.js && node scripts/patch-rnfb-simple.js && node scripts/patch-rnfb-app-check-specific.js && node scripts/patch-ngrok-utils.js");
+const patches = [
+  "scripts/patch-react-native-css-interop.js",
+  "scripts/patch-firestore-ios.js",
+  "scripts/patch-crashlytics-ios.js",
+  "scripts/patch-rnfb-app-check.js",
+  "scripts/patch-rnfb-app-module.js",
+  "scripts/patch-rnfb-app-module-header.js",
+  "scripts/patch-rnfb-simple.js",
+  "scripts/patch-rnfb-app-check-specific.js",
+  "scripts/patch-ngrok-utils.js",
+];
+for (const patch of patches) {
+  run(`node ${patch}`, { ignoreFailure: true });
+}
 run("patch-package", { ignoreFailure: true });
