@@ -38,11 +38,11 @@ function patchRNFBAppModuleHeader() {
 
     let content = fs.readFileSync(moduleHeaderPath, "utf8");
 
-    // Check the current content to understand the structure
-    console.log(
-      "[RNFBApp Module Header Patch] Current header content preview:",
-    );
-    console.log(content.substring(0, 500));
+    // Skip if already patched
+    if (content.includes("#import <React/RCTBridgeModule.h>") && content.includes("#import <React/RCTEventEmitter.h>")) {
+      console.log("[RNFBApp Module Header Patch] Already patched, skipping");
+      return;
+    }
 
     // Add forward declarations and imports at the top
     const headerFixes = `
