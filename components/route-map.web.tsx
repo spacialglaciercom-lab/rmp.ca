@@ -1179,9 +1179,7 @@ export const RouteMap = React.memo(
       <View
         style={[
           wrapperStyle,
-          onMapPress
-            ? { pointerEvents: "auto" }
-            : { pointerEvents: "box-none" },
+          { pointerEvents: onMapPress ? "auto" : "none" },
         ]}
       >
         <div
