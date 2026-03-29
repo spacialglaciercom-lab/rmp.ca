@@ -47,7 +47,6 @@ interface MapFloatingControlsProps {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    pointerEvents: "box-none",
   },
   topLeft: {
     position: "absolute",
@@ -139,7 +138,7 @@ function MapFloatingControlsInner({
     : undefined;
 
   return (
-    <View style={[styles.overlay, { pointerEvents: "box-none" }]}>
+    <View pointerEvents="box-none" style={styles.overlay}>
       {/* Top-left: Hamburger + Search (search only when onSearch provided, e.g. Navigation plugin on) */}
       <View style={[styles.topLeft, { top: topPad, left: leftPad }]}>
         <FloatingIconButton
