@@ -220,7 +220,7 @@ const config = {
   },
   web: {
     bundler: "metro",
-    output: "static",
+    output: "single",
     favicon: "./assets/images/favicon.png",
   },
   // Re-add when you have a new Expo project (after running `eas init` or creating project at expo.dev)
