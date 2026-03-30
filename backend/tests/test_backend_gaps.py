@@ -880,16 +880,8 @@ class TestErrorHandlingRobustness:
 
     def test_nan_infinity_handling(self):
         """NaN and Infinity should be rejected by validation."""
-        import math
-        body = {
-            "edges": [
-                {"u": 0, "v": 1, "length": float("nan")},
-            ],
-            "node_count": 2,
-            "truck_count": 2,
-            "balance_metric": "time",
-        }
-        r = client.post("/api/zones/partition", json=body)
+        raw = '{"edges": [{"u": 0, "v": 1, "length": NaN}], "node_count": 2, "truck_count": 2, "balance_metric": "time"}'
+        r = client.post("/api/zones/partition", content=raw, headers={"Content-Type": "application/json"})
         # Should reject NaN due to validation
         assert r.status_code == 422
 
