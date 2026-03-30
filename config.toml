@@ -1,0 +1,5 @@
+[[mcp_servers]]
+name = "brave-search"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-brave-search"]
+env = { BRAVE_SEARCH_API_KEY = "BSAxiHXmVmurUlHNc-Rb1xtCaQ_ULJD" }
