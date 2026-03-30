@@ -9,6 +9,7 @@
 
 import { area as turfArea } from "@turf/area";
 import { length as turfLength } from "@turf/length";
+import { Platform } from "react-native";
 import {
   logExtractDiagnostics,
   formatExtractConnectionError,

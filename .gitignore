@@ -157,3 +157,4 @@ scripts - Copy/
 
 # Leap SDK module (iOS only, causes Android build issues)
 modules/leap-extract/
+/.lake

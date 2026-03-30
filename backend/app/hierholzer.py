@@ -48,8 +48,21 @@ def eulerian_circuit_nx(
     stack: list[Any] = [start]
     circuit_nodes: list[Any] = []
 
+    # Track visited states to prevent infinite loops
+    # State = (current_node, frozenset_of_used_edges)
+    visited_states: set[tuple[Any, frozenset[tuple[Any, Any, int]]]] = set()
+
     while stack:
         u = stack[-1]
+        
+        # Create state key for cycle detection
+        state_key = (u, frozenset(used))
+        if state_key in visited_states:
+            # We've been in this exact state before - break potential infinite loop
+            circuit_nodes.append(stack.pop())
+            continue
+        visited_states.add(state_key)
+
         advanced = False
         while adj[u]:
             v, k = adj[u][-1]
