@@ -17,10 +17,17 @@ module.exports = function (api) {
       "nativewind/babel",
     ],
     plugins: [
-      ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
       ...plugins,
       ["@babel/plugin-proposal-decorators", { legacy: true }],
       ["@babel/plugin-transform-class-properties", { loose: true }],
+    ],
+    overrides: [
+      {
+        exclude: /node_modules/,
+        plugins: [
+          ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
+        ],
+      },
     ],
   };
 };
