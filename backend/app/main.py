@@ -21,7 +21,9 @@ import time
 from typing import Literal
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 
 class _SuppressHealthLogs(logging.Filter):
@@ -33,13 +35,37 @@ class _SuppressHealthLogs(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(_SuppressHealthLogs())
 from shapely.geometry import MultiPoint
-from pydantic import BaseModel, Field
+import math
+
+from pydantic import BaseModel, Field, field_validator
 from scipy import sparse
 from scipy.spatial import KDTree
 from scipy.sparse.linalg import eigsh
 from sklearn.cluster import KMeans
 
 app = FastAPI(title="RouteMasterPro Optimizer API", version="1.1.0")
+
+
+def _sanitize_for_json(obj: object) -> object:
+    """Make validation error details JSON-safe (NaN, Infinity, non-serializable objects)."""
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, Exception):
+        return str(obj)
+    if isinstance(obj, (str, int, bool, type(None))):
+        return obj
+    return str(obj)
+
+
+@app.exception_handler(RequestValidationError)
+async def _nan_safe_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    details = _sanitize_for_json(exc.errors())
+    return JSONResponse(status_code=422, content={"detail": details})
+
 
 # Register sub-routers for other endpoints
 from .geojson_ops import (
@@ -78,6 +104,13 @@ class EdgeInput(BaseModel):
     intersection_density: float = Field(1.0, gt=0, description="Complexity: intersection density factor")
     cul_de_sac_penalty: float = Field(1.0, gt=0, description="Complexity: cul-de-sac penalty factor")
     width_penalty: float = Field(1.0, gt=0, description="Complexity: width penalty factor")
+
+    @field_validator("length", "intersection_density", "cul_de_sac_penalty", "width_penalty", mode="before")
+    @classmethod
+    def _finite_floats(cls, v: object) -> object:
+        if isinstance(v, float) and not math.isfinite(v):
+            raise ValueError("Field must be a finite number")
+        return v
 
 
 class PartitionRequest(BaseModel):
@@ -728,6 +761,14 @@ def post_elevation(body: ElevationRequest):
             elevations=[None] * len(body.points),
             dem_available=False,
         )
+
+    # Auto-download SRTM tile from NASA Earthdata if missing
+    if not os.path.exists(dem_path):
+        try:
+            from .elevation_nasa import ensure_dem_for_path
+            dem_path = ensure_dem_for_path(dem_path)
+        except Exception:
+            pass
 
     try:
         coords = [(float(p[0]), float(p[1])) for p in body.points if len(p) >= 2]

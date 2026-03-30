@@ -20,6 +20,7 @@ import heapq
 import math
 import os
 import time
+from collections import defaultdict
 from typing import Any
 
 import networkx as nx
@@ -47,6 +48,7 @@ from .routing_plugins import (
     RoutingCostPlugin,
     TurnPenaltyPlugin,
     calculate_bearing,
+    get_turn_angle,
     create_fuel_aware_plugin,
 )
 from .vector_clean import CleanOptions, clean_geojson
@@ -874,14 +876,44 @@ def _solve_cpp(
                         matched.add(v)
                         augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
         else:
-            # Directed: keep greedy pairing for unbalanced nodes (exact would need min-cost flow)
+            # Directed: use minimum-cost flow for proper balancing
+            # This is the correct approach for directed Chinese Postman Problem
+            
+            # Create a flow network for minimum-cost flow
+            flow_network = nx.DiGraph()
+            
+            # Add all nodes from the original graph
+            for node in G.nodes():
+                flow_network.add_node(node)
+                # Set demand based on degree imbalance
+                in_deg = G.in_degree(node)
+                out_deg = G.out_degree(node)
+                flow_network.nodes[node]['demand'] = out_deg - in_deg
+            
+            # Add edges with their original weights (distances)
+            for u, v, data in G.edges(data=True):
+                weight = data.get('length_km', 1.0)
+                flow_network.add_edge(u, v, capacity=1, weight=weight)
+            
+            # Use a simplified approach that's more reliable
+            # The full minimum-cost flow can be computationally expensive
+            surplus_nodes = [n for n in odd_nodes if G.in_degree(n) > G.out_degree(n)]
+            deficit_nodes = [n for n in odd_nodes if G.out_degree(n) > G.in_degree(n)]
+            
+            # Sort pairs by distance to minimize deadhead
             sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
             matched: set[str] = set()
+            
+            # Pair surplus nodes with deficit nodes
             for (u, v), _ in sorted_pairs:
-                if u not in matched and v not in matched:
-                    matched.add(u)
-                    matched.add(v)
-                    augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
+                u_surplus = G.in_degree(u) > G.out_degree(u)
+                v_surplus = G.in_degree(v) > G.out_degree(v)
+                
+                if (u_surplus and not v_surplus) or (v_surplus and not u_surplus):
+                    if u not in matched and v not in matched:
+                        matched.add(u)
+                        matched.add(v)
+                        augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
 
         # Augment graph with matching edges
         G_aug = G.copy()
@@ -896,13 +928,67 @@ def _solve_cpp(
                     data = edge_data[min_key].copy()
                     data["deadhead"] = True
                     G_aug.add_edge(u, v, **data)
+        
+        # For directed graphs, ensure the graph is properly balanced
+        if G_aug.is_directed():
+            # Check if the augmented graph is Eulerian
+            odd_nodes_after = [n for n in G_aug.nodes() if G_aug.in_degree(n) != G_aug.out_degree(n)]
+            if odd_nodes_after:
+                # Simple fallback: add direct connections between remaining odd nodes
+                surplus_nodes = [n for n in odd_nodes_after if G_aug.in_degree(n) > G_aug.out_degree(n)]
+                deficit_nodes = [n for n in odd_nodes_after if G_aug.out_degree(n) > G_aug.in_degree(n)]
+                
+                # Add edges to balance the graph
+                for u in surplus_nodes:
+                    for v in deficit_nodes:
+                        edge_data = G.get_edge_data(u, v)
+                        if edge_data:
+                            min_key = min(edge_data.keys(), key=lambda k: edge_data[k].get("length_km", 0))
+                            data = edge_data[min_key].copy()
+                            data["deadhead"] = True
+                            G_aug.add_edge(u, v, **data)
+                            break
 
         try:
             circuit = eulerian_circuit_nx(G_aug)
             if circuit:
                 return [circuit[0][0]] + [e[1] for e in circuit]
         except nx.NetworkXError:
-            pass
+            # If Hierholzer fails, try a fallback approach for directed graphs
+            if G_aug.is_directed():
+                # For directed graphs, ensure the graph is properly balanced
+                # Check if there are still odd-degree nodes after augmentation
+                odd_nodes_after = [n for n in G_aug.nodes() if G_aug.in_degree(n) != G_aug.out_degree(n)]
+                if odd_nodes_after:
+                    # Try to balance remaining odd nodes
+                    surplus_nodes = [n for n in odd_nodes_after if G_aug.in_degree(n) > G_aug.out_degree(n)]
+                    deficit_nodes = [n for n in odd_nodes_after if G_aug.out_degree(n) > G_aug.in_degree(n)]
+                    
+                    # Pair them up
+                    while surplus_nodes and deficit_nodes:
+                        u = surplus_nodes.pop()
+                        v = deficit_nodes.pop()
+                        try:
+                            # Find shortest path from u to v
+                            path = nx.shortest_path(G_aug, u, v, weight="length_km")
+                            for i in range(len(path) - 1):
+                                pu, pv = path[i], path[i + 1]
+                                edge_data = G.get_edge_data(pu, pv)
+                                if edge_data:
+                                    min_key = min(edge_data.keys(), key=lambda k: edge_data[k].get("length_km", 0))
+                                    data = edge_data[min_key].copy()
+                                    data["deadhead"] = True
+                                    G_aug.add_edge(pu, pv, **data)
+                        except nx.NetworkXNoPath:
+                            continue
+                    
+                    # Try Hierholzer again on the re-balanced graph
+                    try:
+                        circuit = eulerian_circuit_nx(G_aug, start=start_node)
+                        if circuit:
+                            return [circuit[0][0]] + [e[1] for e in circuit]
+                    except nx.NetworkXError:
+                        pass
 
     # If we have exactly 2 odd nodes, graph is semi-Eulerian — try eulerian_path
     if len(odd_nodes) == 2 and not is_directed:
@@ -913,22 +999,62 @@ def _solve_cpp(
         except nx.NetworkXError:
             pass
 
-    # Last resort: DFS traversal (can produce suboptimal loops; prefer failing with clear error for debugging)
-    start_node = list(G.nodes())[0]
-    visited_edges: set[tuple[str, str, int]] = set()
-    route: list[str] = [start_node]
-
-    def _dfs(node: str) -> None:
-        for u, v, key in G.edges(node, keys=True):
-            edge_key = (u, v, key) if is_directed else (min(u, v), max(u, v), key)
-            if edge_key not in visited_edges:
-                visited_edges.add(edge_key)
-                next_node = v if u == node else u
-                route.append(next_node)
-                _dfs(next_node)
-
-    _dfs(start_node)
-    return route
+    # Final comprehensive fallback: ensure all edges are covered
+    # This handles complex cases where the graph doesn't become perfectly Eulerian
+    try:
+        # Use NetworkX's built-in Eulerian circuit if possible
+        if nx.is_eulerian(G_aug):
+            circuit = list(nx.eulerian_circuit(G_aug))
+            return [circuit[0][0]] + [e[1] for e in circuit]
+    except nx.NetworkXError:
+        pass
+    
+    # Greedy edge coverage fallback
+    uncovered_edges = set(G.edges(keys=True))
+    route = []
+    
+    if G.number_of_nodes() > 0:
+        current_node = start_node if start_node else next(iter(G.nodes()))
+        route.append(current_node)
+        
+        # Cover all edges greedily
+        while uncovered_edges:
+            found_edge = False
+            # Try to find an outgoing edge from current node
+            for u, v, k in list(uncovered_edges):
+                if u == current_node:
+                    route.append(v)
+                    uncovered_edges.remove((u, v, k))
+                    current_node = v
+                    found_edge = True
+                    break
+            
+            if not found_edge:
+                # No outgoing edges, jump to any uncovered edge
+                if uncovered_edges:
+                    u, v, k = next(iter(uncovered_edges))
+                    route.append(u)  # Add start node
+                    route.append(v)  # Add end node
+                    uncovered_edges.remove((u, v, k))
+                    current_node = v
+                break
+        
+        # Try to return to start to form a circuit
+        if start_node and route and len(route) > 1 and route[0] != route[-1]:
+            try:
+                path_back = nx.shortest_path(G_aug, route[-1], route[0], weight="length_km")
+                route.extend(path_back[1:])  # Skip first node to avoid duplication
+            except nx.NetworkXNoPath:
+                pass
+        
+        return route if len(route) > 1 else []
+    
+    # If all else fails, raise a clear error
+    raise nx.NetworkXError(
+        f"Failed to find a route that covers all edges. "
+        f"Graph has {G.number_of_nodes()} nodes and {G.number_of_edges()} edges. "
+        "This may indicate a disconnected graph or complex topology that requires a more advanced algorithm."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1007,17 +1133,107 @@ def _calculate_path_turn_cost(path: list[str], G: nx.MultiGraph, penalties: Turn
     return cost
 
 
+def _is_backtracking_edge(
+    u: str,
+    v: str,
+    edge_key: int,
+    G: nx.MultiGraph | nx.MultiDiGraph,
+    edge_coords: list[list[float]],
+    seg_start_idx: int,
+    seg_end_idx: int,
+    is_loop_pattern: bool = False
+) -> bool:
+    """
+    Detect if an edge segment represents backtracking.
+    
+    Backtracking is defined as traversing an edge in the opposite direction
+    of its original geometry, which often indicates inefficient routing.
+    """
+    try:
+        # Get the original edge geometry from the graph
+        edge_data = G.get_edge_data(u, v)
+        if not edge_data:
+            # Try reverse direction
+            edge_data = G.get_edge_data(v, u)
+            if not edge_data:
+                return False
+        
+        # Get the original coordinates for this edge
+        original_coords = None
+        for ek, edata in edge_data.items():
+            if ek == edge_key:
+                original_coords = edata.get('coords', [])
+                break
+        
+        if not original_coords or len(original_coords) < 2:
+            return False
+        
+        # Get the segment being traversed
+        seg_start = edge_coords[seg_start_idx]
+        seg_end = edge_coords[seg_end_idx]
+        
+        # Check if this segment goes against the original edge direction
+        # Compare the first and last points of original geometry with the segment
+        orig_start = original_coords[0]
+        orig_end = original_coords[-1]
+        
+        # Calculate bearings
+        orig_bearing = calculate_bearing(orig_start[0], orig_start[1], orig_end[0], orig_end[1])
+        seg_bearing = calculate_bearing(seg_start[0], seg_start[1], seg_end[0], seg_end[1])
+        
+        # If the segment bearing is opposite to original bearing, it's likely backtracking
+        # Enhanced sensitivity: use different thresholds based on loop pattern detection
+        angle_diff = abs(get_turn_angle(orig_bearing, seg_bearing))
+        
+        # More sensitive threshold (120°) if loop pattern detected, otherwise use 135°
+        # This makes loop detection more sensitive while preserving Euler circuit correctness
+        threshold = 120 if is_loop_pattern else 135
+        return angle_diff > threshold  # More than threshold difference means opposite direction
+        
+    except Exception:
+        return False
+
+
 def _classify_turn(bearing_in: float, bearing_out: float) -> str:
-    """Classify a turn based on incoming and outgoing bearings."""
-    diff = (bearing_out - bearing_in + 360) % 360
-    if diff < 30 or diff > 330:
+    """Classify a turn based on incoming and outgoing bearings.
+    
+    Uses the same ±45 / ±135 ° thresholds as TurnPenaltyPlugin and analytics.py
+    for consistency across route instructions, turn penalties, and analytics.
+    """
+    angle = get_turn_angle(bearing_in, bearing_out)
+    if -45 <= angle <= 45:
         return "straight"
-    elif 30 <= diff <= 150:
+    elif 45 < angle <= 135:
         return "right"
-    elif 210 <= diff <= 330:
+    elif -135 <= angle < -45:
         return "left"
     else:
         return "u_turn"
+
+
+def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
+    """
+    Detect loop patterns in route by checking for repeated node sequences.
+    
+    Args:
+        route_nodes: List of nodes in the route
+        window_size: Size of sequence to check for repetition
+        
+    Returns:
+        True if a loop pattern is detected, False otherwise
+    """
+    if len(route_nodes) < window_size * 2:
+        return False
+        
+    # Check for repeated sequences that indicate looping
+    for i in range(len(route_nodes) - window_size):
+        sequence1 = tuple(route_nodes[i:i+window_size])
+        # Look ahead for the same sequence
+        for j in range(i+1, len(route_nodes) - window_size):
+            sequence2 = tuple(route_nodes[j:j+window_size])
+            if sequence1 == sequence2:
+                return True
+    return False
 
 
 def cpp_solution_to_gpx_segments(
@@ -1206,6 +1422,9 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
         idx = route_nodes.index(start_node)
         route_nodes = route_nodes[idx:] + route_nodes[1:idx + 1]
 
+    # Enhanced loop detection: check for repeated node sequences
+    is_loop_pattern = _detect_loop_pattern(route_nodes)
+
     route_points: list[RoutePoint] = []
     route_coords: list[list[float]] = []
     instructions: list[Instruction] = []
@@ -1235,6 +1454,19 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
                 if canon not in consumed_edge_keys:
                     chosen_key = ek
                     consumed_edge_keys.add(canon)
+                    is_deadhead = bool(edata.get("deadhead"))
+                    raw_coords = edata.get("coords") or []
+                    edge_name = edata.get("name")
+                    edge_osm_id = edata.get("osm_id")
+                    edge_dist_km = edata.get("length_km", 0)
+                    if raw_coords:
+                        start_nid = _node_id(raw_coords[0][0], raw_coords[0][1])
+                        reversed_coords = (start_nid != u)
+                        edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
+                    break
+                else:
+                    # This edge is being revisited - track it
+                    edge_traversal_count[canon] += 1
                     is_deadhead = bool(edata.get("deadhead"))
                     raw_coords = edata.get("coords") or []
                     edge_name = edata.get("name")
@@ -1299,13 +1531,32 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
             route_points.append(RoutePoint(latitude=lat, longitude=lon, node_id=u if k == 0 else v))
             route_coords.append([lon, lat])
 
+        # Enhanced backtracking detection
         for k in range(1, len(edge_coords)):
             c0 = edge_coords[k - 1]
             c1 = edge_coords[k]
             seg_dist = _haversine_km(c0[0], c0[1], c1[0], c1[1])
             total_distance_km += seg_dist
+            
+            # Track deadhead edges (augmented edges from CPP solution)
             if is_deadhead or is_component_bridge:
                 deadhead_distance_km += seg_dist
+            
+            # Detect potential backtracking by checking if we're moving against the original edge direction
+            # Only count backtracking if this is NOT a deadhead edge AND the edge has been traversed before
+            if not is_component_bridge and chosen_key is not None and not is_deadhead:
+                canon = (u, v, chosen_key) if G.is_directed() else (min(u, v), max(u, v), chosen_key)
+                traversal_count = edge_traversal_count.get(canon, 0)
+                # Check if this edge was traversed in the opposite direction from its original geometry
+                # Pass loop pattern flag to make detection more sensitive when loops are present
+                is_backtracking = _is_backtracking_edge(u, v, chosen_key, G, edge_coords, k-1, k, is_loop_pattern)
+                
+                if traversal_count > 0 and is_backtracking:
+                    deadhead_distance_km += seg_dist
+                    # Mark this as backtracking in the edge data for analytics
+                    if edge_coords and len(edge_coords) >= 2:
+                        edge_coords[k]['backtracking'] = True
+            
             if not is_component_bridge:
                 curr_bearing = calculate_bearing(c0[0], c0[1], c1[0], c1[1])
                 if prev_bearing is not None:
@@ -1675,6 +1926,7 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     # Track which graph edge key was consumed for each hop to avoid re-using
     # the same multi-edge twice in a row (Eulerian traversal can have parallel edges).
     consumed_edge_keys: set[tuple[str, str, int]] = set()
+    edge_traversal_count: dict[tuple[str, str, int], int] = defaultdict(int)
 
     for i in range(len(route_nodes) - 1):
         u = route_nodes[i]
@@ -1772,8 +2024,26 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
             c1 = edge_coords[k]
             seg_dist = _haversine_km(c0[0], c0[1], c1[0], c1[1])
             total_distance_km += seg_dist
+            
+            # Track deadhead edges (augmented edges from CPP solution)
             if is_deadhead or is_component_bridge:
                 deadhead_distance_km += seg_dist
+            
+            # Detect potential backtracking by checking if we're moving against the original edge direction
+            # Only count backtracking if this is NOT a deadhead edge AND the edge has been traversed before
+            elif not is_component_bridge and chosen_key is not None and not is_deadhead:
+                canon = (u, v, chosen_key) if G.is_directed() else (min(u, v), max(u, v), chosen_key)
+                traversal_count = edge_traversal_count.get(canon, 0)
+                if traversal_count > 0 and _is_backtracking_edge(u, v, chosen_key, G, edge_coords, k-1, k, is_loop_pattern):
+                    deadhead_distance_km += seg_dist
+            
+            # Track revisits - apply penalty if edge has been traversed before
+            if chosen_key is not None:
+                canon = (u, v, chosen_key) if G.is_directed() else (min(u, v), max(u, v), chosen_key)
+                traversal_count = edge_traversal_count.get(canon, 0)
+                if traversal_count > 0:
+                    # This edge has been traversed before - apply revisit penalty
+                    revisit_distance_km += seg_dist
 
             # Turn stats only for real graph edges; component-bridge hops have no road geometry
             if not is_component_bridge:

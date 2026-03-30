@@ -485,11 +485,13 @@ def test_optimize_disconnected_start_hint() -> None:
 
 def test_optimize_nan_coordinates_422() -> None:
     """NaN coordinates in start_lat/lon should fail Pydantic validation."""
+    import json
     fc = _fc(_seg(*A, *B), _seg(*B, *C), _seg(*C, *A))
     body = {
         "geojson": fc,
-        "start_lat": float("nan"),
+        "start_lat": None,  # placeholder
         "start_lon": -73.57,
     }
-    r = client.post("/api/optimize/sync", json=body)
+    raw = json.dumps(body).replace('"start_lat": null', '"start_lat": NaN')
+    r = client.post("/api/optimize/sync", content=raw, headers={"Content-Type": "application/json"})
     assert r.status_code == 422
