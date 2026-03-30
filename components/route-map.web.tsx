@@ -1171,16 +1171,14 @@ export const RouteMap = React.memo(
       borderRadius: 12,
       overflow: "hidden" as const,
       backgroundColor: colors.surface,
+      pointerEvents: onMapPress ? "auto" : "none",
     };
 
     const overtureCity = PMTILES_CITIES[0] ?? "montreal";
 
     return (
-      <View
-        style={[
-          wrapperStyle,
-          { pointerEvents: onMapPress ? "auto" : "none" },
-        ]}
+      <div
+        style={wrapperStyle}
       >
         <div
           style={{
@@ -1665,7 +1663,7 @@ export const RouteMap = React.memo(
           )}
           {/* No overlay on web: map must receive pointer events for pan and click. MapClickHandler inside MapContainer handles onMapPress. */}
         </div>
-      </View>
+      </div>
     );
   }),
 );

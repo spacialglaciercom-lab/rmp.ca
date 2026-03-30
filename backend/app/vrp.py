@@ -30,6 +30,13 @@ class VrpLocation(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
     lon: float = Field(..., ge=-180, le=180)
 
+    @field_validator("lat", "lon", mode="before")
+    @classmethod
+    def _finite_coords(cls, v: object) -> object:
+        if isinstance(v, float) and not math.isfinite(v):
+            raise ValueError("Coordinate must be a finite number")
+        return v
+
 class VrpStop(BaseModel):
     id: int  # Unique ID
     location: VrpLocation
