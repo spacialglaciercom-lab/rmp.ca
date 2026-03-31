@@ -35,6 +35,14 @@ MAX_TURN_PENALTY = 10_000.0
 # Physical median dividers make this manoeuvre essentially impossible in practice.
 DUAL_CARRIAGEWAY_UTURN_KM = 500.0
 
+# Loop prevention configuration
+LOOP_PREVENTION_CONFIG = {
+    'max_allowed_reversals': 3,  # Maximum reversals before warning
+    'geometric_penalty_factor': 0.01,  # Penalty for distant node pairings
+    'loop_detection_sensitivity': 'high',  # low/medium/high
+    'enable_post_processing': True  # Enable reversal removal
+}
+
 from .geojson_ops import (
     GeoJSONFeature,
     GeoJSONFeatureCollection,
@@ -852,14 +860,38 @@ def _solve_cpp(
             except nx.NetworkXError:
                 continue
 
-        # Exact minimum-weight perfect matching (Blossom) to minimize deadhead distance.
-        # Greedy matching can pair distant odd nodes and add unnecessary loops.
+        # Enhanced minimum-weight perfect matching with geometric constraints
+        # to minimize deadhead distance and prevent excessive looping.
         augment_paths: list[list[str]] = []
         if not is_directed:
             # Build complete graph on odd nodes with edge weight = shortest path distance
             odd_G = nx.Graph()
+            
+            # Add geometric constraints to prefer nearby pairings
+            node_coords = {}
+            for node in odd_nodes:
+                if node in G.nodes:
+                    node_data = G.nodes[node]
+                    node_coords[node] = (node_data.get('lon', 0), node_data.get('lat', 0))
+            
             for (u, v), dist in odd_pairs_dist.items():
-                odd_G.add_edge(u, v, weight=dist)
+                # Add base weight (shortest path distance)
+                base_weight = dist
+                
+                # Add geometric penalty for distant nodes to reduce looping
+                if u in node_coords and v in node_coords:
+                    u_lon, u_lat = node_coords[u]
+                    v_lon, v_lat = node_coords[v]
+                    # Euclidean distance as a proxy for geometric proximity
+                    geo_dist = ((u_lon - v_lon) ** 2 + (u_lat - v_lat) ** 2) ** 0.5
+                    # Add geometric penalty to encourage local pairings (configurable)
+                    geometric_penalty = geo_dist * LOOP_PREVENTION_CONFIG['geometric_penalty_factor']
+                    total_weight = base_weight + geometric_penalty
+                else:
+                    total_weight = base_weight
+                
+                odd_G.add_edge(u, v, weight=total_weight)
+            
             try:
                 matching = nx.min_weight_matching(odd_G, weight="weight")
                 for u, v in matching:
@@ -868,7 +900,17 @@ def _solve_cpp(
                     augment_paths.append(path)
             except (nx.NetworkXError, nx.NetworkXPointlessConcept):
                 # Fallback to greedy if Blossom fails (e.g. empty or odd-sized)
-                sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
+                # Use enhanced greedy with geometric constraints
+                def pairing_cost(pair):
+                    (u, v), dist = pair
+                    if u in node_coords and v in node_coords:
+                        u_lon, u_lat = node_coords[u]
+                        v_lon, v_lat = node_coords[v]
+                        geo_dist = ((u_lon - v_lon) ** 2 + (u_lat - v_lat) ** 2) ** 0.5
+                        return dist + geo_dist * 0.01
+                    return dist
+                
+                sorted_pairs = sorted(odd_pairs_dist.items(), key=pairing_cost)
                 matched: set[str] = set()
                 for (u, v), _ in sorted_pairs:
                     if u not in matched and v not in matched:
@@ -1213,7 +1255,7 @@ def _classify_turn(bearing_in: float, bearing_out: float) -> str:
 
 def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
     """
-    Detect loop patterns in route by checking for repeated node sequences.
+    Detect loop patterns in route by checking for repeated node sequences and immediate reversals.
     
     Args:
         route_nodes: List of nodes in the route
@@ -1222,9 +1264,17 @@ def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
     Returns:
         True if a loop pattern is detected, False otherwise
     """
-    if len(route_nodes) < window_size * 2:
+    if len(route_nodes) < 3:
         return False
         
+    # Check for immediate reversals (A->B->A patterns)
+    reversal_count = 0
+    for i in range(1, len(route_nodes) - 1):
+        if route_nodes[i-1] == route_nodes[i+1] and route_nodes[i-1] != route_nodes[i]:
+            reversal_count += 1
+            if reversal_count >= 2:  # More than 1 reversal indicates looping pattern
+                return True
+    
     # Check for repeated sequences that indicate looping
     for i in range(len(route_nodes) - window_size):
         sequence1 = tuple(route_nodes[i:i+window_size])
@@ -1234,6 +1284,47 @@ def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
             if sequence1 == sequence2:
                 return True
     return False
+
+
+def _remove_immediate_reversals(route_nodes: list[str]) -> list[str]:
+    """
+    Remove immediate reversal patterns (A->B->A) from route to reduce unnecessary looping.
+    
+    Args:
+        route_nodes: List of nodes in the route
+        
+    Returns:
+        Route with immediate reversals removed
+    """
+    if len(route_nodes) < 3:
+        return route_nodes
+    
+    cleaned_route = []
+    i = 0
+    
+    while i < len(route_nodes):
+        # Check if current position forms an immediate reversal (A->B->A)
+        if (i + 2 < len(route_nodes) and 
+            route_nodes[i] == route_nodes[i+2] and
+            route_nodes[i] != route_nodes[i+1]):
+            # Found A->B->A pattern, skip the middle node (B)
+            if cleaned_route and cleaned_route[-1] == route_nodes[i]:
+                # Avoid duplicate consecutive nodes
+                cleaned_route.append(route_nodes[i+2])
+            else:
+                cleaned_route.extend([route_nodes[i], route_nodes[i+2]])
+            i += 3
+        else:
+            cleaned_route.append(route_nodes[i])
+            i += 1
+    
+    # Remove consecutive duplicates that might have been created
+    final_route = []
+    for node in cleaned_route:
+        if not final_route or node != final_route[-1]:
+            final_route.append(node)
+    
+    return final_route
 
 
 def cpp_solution_to_gpx_segments(
@@ -1424,6 +1515,35 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
 
     # Enhanced loop detection: check for repeated node sequences
     is_loop_pattern = _detect_loop_pattern(route_nodes)
+    
+    # Real-time monitoring: track loop metrics
+    if is_loop_pattern:
+        # Count reversals for monitoring
+        reversal_count = sum(1 for i in range(1, len(route_nodes)-1) 
+                            if route_nodes[i-1] == route_nodes[i+1] 
+                            and route_nodes[i-1] != route_nodes[i])
+        
+        # Log warning if excessive looping detected (configurable threshold)
+        if reversal_count > LOOP_PREVENTION_CONFIG['max_allowed_reversals']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"High looping detected in route optimization: {reversal_count} reversals")
+        
+        # Post-processing: remove immediate reversal patterns to reduce looping (configurable)
+        if LOOP_PREVENTION_CONFIG['enable_post_processing']:
+            route_nodes = _remove_immediate_reversals(route_nodes)
+        
+        # Store loop information for metrics (will be added later)
+        loop_metrics = {
+            'looping_detected': True,
+            'reversal_count_before_cleanup': reversal_count
+        }
+    else:
+        # No looping detected, initialize empty loop metrics
+        loop_metrics = {
+            'looping_detected': False,
+            'reversal_count_before_cleanup': 0
+        }
 
     route_points: list[RoutePoint] = []
     route_coords: list[list[float]] = []
@@ -1434,6 +1554,7 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
     total_traversals = 0
     prev_bearing: float | None = None
     consumed_edge_keys: set[tuple[str, str, int]] = set()
+    edge_traversal_count: dict[tuple[str, str, int], int] = defaultdict(int)
 
     for i in range(len(route_nodes) - 1):
         u = route_nodes[i]
@@ -1622,6 +1743,8 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
     route_metrics, msg = _merge_extractor_bbox_verification(
         features, route_coords, route_metrics, msg
     )
+    # Add loop metrics to route metrics
+    route_metrics.update(loop_metrics)
     _t_after_analytics = time.perf_counter()
 
     route_geojson = GeoJSONFeatureCollection(
@@ -1903,6 +2026,38 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     if not route_nodes:
         raise HTTPException(status_code=400, detail="Could not compute route — graph may be empty or disconnected")
 
+    # Enhanced loop detection: check for repeated node sequences (sync version)
+    is_loop_pattern = _detect_loop_pattern(route_nodes)
+    
+    # Real-time monitoring: track loop metrics (sync version)
+    if is_loop_pattern:
+        # Count reversals for monitoring
+        reversal_count = sum(1 for i in range(1, len(route_nodes)-1) 
+                            if route_nodes[i-1] == route_nodes[i+1] 
+                            and route_nodes[i-1] != route_nodes[i])
+        
+        # Log warning if excessive looping detected (configurable threshold)
+        if reversal_count > LOOP_PREVENTION_CONFIG['max_allowed_reversals']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"High looping detected in route optimization (sync): {reversal_count} reversals")
+        
+        # Post-processing: remove immediate reversal patterns to reduce looping (configurable)
+        if LOOP_PREVENTION_CONFIG['enable_post_processing']:
+            route_nodes = _remove_immediate_reversals(route_nodes)
+        
+        # Store loop information for metrics (sync version)
+        loop_metrics_sync = {
+            'looping_detected': True,
+            'reversal_count_before_cleanup': reversal_count
+        }
+    else:
+        # No looping detected, initialize empty loop metrics (sync version)
+        loop_metrics_sync = {
+            'looping_detected': False,
+            'reversal_count_before_cleanup': 0
+        }
+
     # If start node specified, rotate circuit to start there.
     # Only apply rotation when the route is circular (first == last), i.e. a single Eulerian circuit.
     # Concatenated multi-component routes are non-circular (e.g. [A,B,C,A, X,Y,Z,X]); using
@@ -2117,6 +2272,8 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     route_metrics, msg = _merge_extractor_bbox_verification(
         features, route_coords, route_metrics, msg
     )
+    # Add loop metrics to route metrics (sync version)
+    route_metrics.update(loop_metrics_sync)
     _t_after_analytics = time.perf_counter()
 
     # Build route GeoJSON
