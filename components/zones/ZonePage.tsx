@@ -327,6 +327,7 @@ export function ZonePage() {
 
   const wastePoints = useWastePointsStore((s) => s.points);
   const addWastePoint = useWastePointsStore((s) => s.add);
+  const addManyWastePoints = useWastePointsStore((s) => s.addMany);
   const updateWastePoint = useWastePointsStore((s) => s.update);
   const removeWastePoint = useWastePointsStore((s) => s.remove);
 
@@ -2557,22 +2558,20 @@ export function ZonePage() {
         visible={importWasteModalVisible}
         onClose={() => setImportWasteModalVisible(false)}
         onImport={(rows) => {
-          let n = 0;
-          rows.forEach((r) => {
-            if (r.lat != null && r.lon != null) {
-              addWastePoint({
-                lat: r.lat,
-                lon: r.lon,
-                type: r.type,
-                capacityLiters: r.capacityLiters,
-                condition: r.condition,
-                address: r.address,
-              });
-              n++;
-            }
-          });
-          if (n > 0)
-            Alert.alert("Import complete", `${n} point(s) added to the map.`);
+          const valid = rows
+            .filter((r) => r.lat != null && r.lon != null)
+            .map((r) => ({
+              lat: r.lat!,
+              lon: r.lon!,
+              type: r.type,
+              capacityLiters: r.capacityLiters,
+              condition: r.condition,
+              address: r.address,
+            }));
+          if (valid.length > 0) {
+            addManyWastePoints(valid);
+            Alert.alert("Import complete", `${valid.length} point(s) added to the map.`);
+          }
         }}
       />
 
