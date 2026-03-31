@@ -14,6 +14,7 @@ function generateId(): string {
 interface WastePointsState {
   points: WastePoint[];
   add: (point: Omit<WastePoint, "id" | "createdAt">) => void;
+  addMany: (points: Omit<WastePoint, "id" | "createdAt">[]) => void;
   update: (
     id: string,
     patch: Partial<Omit<WastePoint, "id" | "createdAt">>,
@@ -36,6 +37,16 @@ export const useWastePointsStore = create<WastePointsState>()(
           createdAt: now,
         };
         set((state) => ({ points: [full, ...state.points] }));
+      },
+
+      addMany: (newPoints) => {
+        const now = new Date().toISOString();
+        const fulls: WastePoint[] = newPoints.map((point) => ({
+          ...point,
+          id: generateId(),
+          createdAt: now,
+        }));
+        set((state) => ({ points: [...fulls, ...state.points] }));
       },
 
       update: (id, patch) => {

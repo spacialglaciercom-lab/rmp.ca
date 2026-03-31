@@ -50,6 +50,8 @@ data class CvrpResult(
     val totalTimeMin: Int,
     val totalDistanceMeters: Double,
     val totalTimeSeconds: Double,
+    /** Non-empty when distances are straight-line estimates (e.g. offline Haversine fallback). */
+    val warnings: List<String> = emptyList(),
 )
 
 // ---------------------------------------------------------------------------
@@ -476,9 +478,43 @@ fun solveCvrpHybrid(
 // ---------------------------------------------------------------------------
 
 /**
+ * Warning surfaced in [CvrpResult.warnings] whenever a Haversine matrix is used.
+ * Callers should display this to the user — straight-line distances can underestimate
+ * real road distances by 20–40%, and will silently cross physical barriers such as
+ * rivers, highways, or restricted areas.
+ */
+const val HAVERSINE_DISTANCE_WARNING =
+    "Distances are straight-line estimates (offline mode). " +
+    "Road distances may be 20–40% longer and physical barriers (rivers, bridges) are not accounted for."
+
+/**
+ * Offline convenience function: generates a Haversine matrix and solves with the hybrid
+ * solver, returning a [CvrpResult] whose [CvrpResult.warnings] is pre-populated so callers
+ * can surface the straight-line distance caveat to the user.
+ *
+ * @param locations List of locations (depot at index 0)
+ * @param numVehicles Number of vehicles available
+ * @param avgSpeedKmh Average speed in km/h for time estimation
+ * @return CvrpResult with [CvrpResult.warnings] set
+ */
+fun solveWithHaversineMatrix(
+    locations: List<CvrpLocation>,
+    numVehicles: Int,
+    avgSpeedKmh: Double = 30.0,
+): CvrpResult {
+    val matrix = generateHaversineMatrix(locations, avgSpeedKmh)
+    val result = solveCvrpHybrid(locations, numVehicles, matrix)
+    return result.copy(warnings = listOf(HAVERSINE_DISTANCE_WARNING))
+}
+
+/**
  * Generate a distance/time matrix using haversine formula.
  * Useful for offline scenarios where OSRM is not available.
- * 
+ *
+ * **Warning:** straight-line distances ignore roads, rivers, and bridges.
+ * Prefer [solveWithHaversineMatrix] so the caveat is surfaced to the user,
+ * or supply a road-network matrix via OSRM when connectivity allows.
+ *
  * @param locations List of locations
  * @param avgSpeedKmh Average speed in km/h for time estimation
  * @return Distance/time matrix
