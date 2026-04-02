@@ -50,7 +50,7 @@ def generate(
 @app.command()
 def compare(input_json: str, baseline_penalties: str = "0,0,0", high_penalties: str = "0.5,1.0,0.2"):
     from app.geojson_ops import GeoJSONFeatureCollection
-    from app.optimize import OptimizeRequest, TurnPenalties, optimize_route
+    from app.optimize import OptimizeRequest, TurnPenalties, _run_optimize as optimize_route
     path = Path(input_json)
     if not path.exists():
         console.print(f"[red]File not found:[/red] {path}"); raise SystemExit(1)
@@ -116,7 +116,7 @@ def stress_partition(
     Records solve time, total distance, efficiency, deadhead; then boundary analysis and verdict.
     """
     from app.geojson_ops import GeoJSONFeatureCollection, geojson_to_partition_graph
-    from app.optimize import OptimizeRequest, optimize_route
+    from app.optimize import OptimizeRequest, _run_optimize as optimize_route
     from app.main import partition_graph, EdgeInput
 
     path = Path(input_json)
