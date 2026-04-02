@@ -4,16 +4,26 @@ Test suite for loop prevention in the route optimizer.
 
 import json
 import sys
-sys.path.insert(0, '/home/drone/Downloads/rmp.ca-main/backend')
+import os
+import pytest
 
 from app.optimize import _run_optimize, OptimizeRequest
 from app.geojson_ops import GeoJSONFeatureCollection
 
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+# Use first available extract fixture
+_fixture_candidates = [
+    os.path.join(FIXTURES_DIR, f)
+    for f in sorted(os.listdir(FIXTURES_DIR)) if f.startswith("extract-") and f.endswith(".geojson")
+] if os.path.isdir(FIXTURES_DIR) else []
+EXTRACT_FIXTURE = _fixture_candidates[0] if _fixture_candidates else None
 
+
+@pytest.mark.skipif(EXTRACT_FIXTURE is None, reason="No extract fixture GeoJSON found in tests/fixtures/")
 def test_no_excessive_looping():
     """Test that routes don't contain excessive backtracking patterns."""
     # Test with known problematic GeoJSON
-    with open('/home/drone/Downloads/extract-f7rbvxfry4.geojson') as f:
+    with open(EXTRACT_FIXTURE) as f:
         geojson_data = json.load(f)
 
     body = OptimizeRequest(geojson=GeoJSONFeatureCollection(**geojson_data))
@@ -67,15 +77,16 @@ def test_loop_detection_functionality():
     print("✅ Loop detection test passed!")
 
 
+@pytest.mark.skipif(EXTRACT_FIXTURE is None, reason="No extract fixture GeoJSON found in tests/fixtures/")
 def test_geometric_constraints():
     """Test that geometric constraints improve matching."""
     # This would require more complex setup with actual geographic data
     # For now, just verify the function exists and runs
     from app.optimize import _solve_cpp, _build_graph
     from app.geojson_ops import _get_road_class
-    
+
     # Load test data
-    with open('/home/drone/Downloads/extract-f7rbvxfry4.geojson') as f:
+    with open(EXTRACT_FIXTURE) as f:
         geojson_data = json.load(f)
     
     # Convert to proper feature objects
