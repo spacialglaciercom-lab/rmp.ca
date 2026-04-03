@@ -1,0 +1,22 @@
+#!/bin/sh
+# PROVIDE: celery
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="celery"
+rcvar="${name}_enable"
+desc="TrashRoute Celery OR-Tools worker"
+
+load_rc_config "${name}"
+
+: ${celery_enable:="NO"}
+: ${celery_user:="www"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -u ${celery_user} -o /var/log/${name}.log \
+    /usr/local/libexec/rmpca-celery"
+
+run_rc_command "$1"
