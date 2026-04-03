@@ -1,0 +1,16 @@
+#!/bin/sh
+# Wrapper for the TrashRoute Celery OR-Tools worker.
+# Sources /usr/local/etc/rmpca/celery.env for environment variables.
+# One worker, solo pool — matches docker-compose.optimizer.yml memory limits.
+
+[ -f /usr/local/etc/rmpca/celery.env ] && . /usr/local/etc/rmpca/celery.env
+
+export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379/0}"
+export DEM_PATH="${DEM_PATH:-}"
+
+cd /app/backend
+exec /app/backend/venv/bin/celery \
+    -A app.celery_app:celery_app worker \
+    --loglevel=info \
+    --concurrency=1 \
+    --pool=solo

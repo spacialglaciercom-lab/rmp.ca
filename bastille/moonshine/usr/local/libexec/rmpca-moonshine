@@ -1,0 +1,14 @@
+#!/bin/sh
+# Wrapper for the Moonshine voice ASR sidecar.
+# Sources /usr/local/etc/rmpca/moonshine.env for environment variables.
+# --workers 1: each worker loads the full model; keep at 1 to conserve RAM.
+
+[ -f /usr/local/etc/rmpca/moonshine.env ] && . /usr/local/etc/rmpca/moonshine.env
+
+export PORT="${PORT:-8090}"
+
+cd /app/moonshine
+exec /app/moonshine/venv/bin/uvicorn main:app \
+    --host 0.0.0.0 \
+    --port "${PORT}" \
+    --workers 1

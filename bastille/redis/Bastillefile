@@ -1,0 +1,16 @@
+# Redis — Celery broker + result backend
+# Replaces: redis:7.2-alpine in docker-compose.optimizer.yml
+# Port: 6379 (internal to jail network only; no host port mapping)
+#
+# Config: /usr/local/etc/redis.conf
+# 256 MB max memory, LRU eviction, no persistence (matches docker-compose).
+
+# ── Packages ────────────────────────────────────────────────────────────────
+PKG redis
+
+# ── Config ───────────────────────────────────────────────────────────────────
+CP usr/local/etc/redis.conf /usr/local/etc/redis.conf
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC redis_enable=YES
+SERVICE redis start

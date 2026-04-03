@@ -1,0 +1,22 @@
+#!/bin/sh
+# PROVIDE: moonshine
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="moonshine"
+rcvar="${name}_enable"
+desc="TrashRoute Moonshine voice ASR sidecar"
+
+load_rc_config "${name}"
+
+: ${moonshine_enable:="NO"}
+: ${moonshine_user:="www"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -u ${moonshine_user} -o /var/log/${name}.log \
+    /usr/local/libexec/rmpca-moonshine"
+
+run_rc_command "$1"

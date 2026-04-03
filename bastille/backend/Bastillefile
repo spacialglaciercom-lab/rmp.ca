@@ -1,0 +1,25 @@
+# TrashRoute Node.js API server (BFF)
+# Replaces: root Dockerfile
+# Port: 3000
+#
+# After applying this template, run deploy.sh to copy source and install deps.
+
+# ── Packages ────────────────────────────────────────────────────────────────
+PKG node20 npm-node20
+
+# Install pnpm globally (no FreeBSD package; install via npm)
+CMD npm install -g pnpm@10.0.0
+
+# ── App directory ────────────────────────────────────────────────────────────
+CMD mkdir -p /app/dist /app/patches /app/shared-logic/pnpm-stub /usr/local/etc/rmpca
+
+# ── Service files ────────────────────────────────────────────────────────────
+CP usr/local/libexec/rmpca-backend /usr/local/libexec/rmpca-backend
+CP usr/local/etc/rc.d/backend /usr/local/etc/rc.d/backend
+CP usr/local/etc/rmpca/backend.env /usr/local/etc/rmpca/backend.env
+
+CMD chmod 755 /usr/local/libexec/rmpca-backend
+CMD chmod 755 /usr/local/etc/rc.d/backend
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC backend_enable=YES
