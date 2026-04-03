@@ -1,0 +1,26 @@
+# TrashRoute Celery worker — OR-Tools route optimization
+# Replaces: celery-worker service in docker-compose.optimizer.yml
+# No port — connects outbound to Redis jail.
+#
+# Uses the same backend/requirements.txt as the optimizer jail.
+# After applying, run deploy.sh to copy backend/ source and pip install.
+
+# ── Packages ────────────────────────────────────────────────────────────────
+PKG python312 py312-pip py312-virtualenv
+
+# ── App directory ────────────────────────────────────────────────────────────
+CMD mkdir -p /app/backend /usr/local/etc/rmpca
+
+# ── Virtualenv (populated by deploy.sh) ─────────────────────────────────────
+CMD python3.12 -m venv /app/backend/venv
+
+# ── Service files ────────────────────────────────────────────────────────────
+CP usr/local/libexec/rmpca-celery /usr/local/libexec/rmpca-celery
+CP usr/local/etc/rc.d/celery /usr/local/etc/rc.d/celery
+CP usr/local/etc/rmpca/celery.env /usr/local/etc/rmpca/celery.env
+
+CMD chmod 755 /usr/local/libexec/rmpca-celery
+CMD chmod 755 /usr/local/etc/rc.d/celery
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC celery_enable=YES
