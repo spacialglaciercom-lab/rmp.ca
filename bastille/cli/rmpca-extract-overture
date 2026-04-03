@@ -1,0 +1,194 @@
+#!/bin/sh
+# rmpca-extract-overture — Extract Overture Maps road data via the extract jail.
+#
+# Sends a polygon or bounding box to the extract WebSocket service running
+# inside the rmpca-extract jail and writes the resulting GeoJSON to a file.
+#
+# Usage:
+#   rmpca extract-overture --bbox MIN_LON,MIN_LAT,MAX_LON,MAX_LAT -o output.geojson
+#   rmpca extract-overture --polygon polygon.json -o output.geojson
+#
+# Options:
+#   --bbox LON1,LAT1,LON2,LAT2   Bounding box (min_lon,min_lat,max_lon,max_lat)
+#   --polygon FILE                GeoJSON Polygon file defining the extract area
+#   -o, --output FILE             Output GeoJSON file (default: extract-output.geojson)
+#   --host HOST                   Extract service host (default: $RMPCA_EXTRACT_HOST or 10.10.0.2)
+#   --port PORT                   Extract service port (default: 4000)
+#   --theme THEME                 Overture theme (default: transportation)
+#   -q, --quiet                   Suppress progress output
+#
+# The extract jail must be running (bastille start rmpca-extract).
+# Requires: python3 (available on FreeBSD host or in any jail).
+
+set -e
+
+EXTRACT_HOST="${RMPCA_EXTRACT_HOST:-10.10.0.2}"
+EXTRACT_PORT="4000"
+OUTPUT="extract-output.geojson"
+BBOX=""
+POLYGON_FILE=""
+THEME="transportation"
+QUIET=0
+
+info()  { [ "$QUIET" -eq 1 ] || printf '\033[1;34m==> %s\033[0m\n' "$*"; }
+warn()  { printf '\033[1;33mWARN: %s\033[0m\n' "$*" >&2; }
+die()   { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+usage() {
+    sed -n '2,/^$/s/^# \?//p' "$0"
+    exit "${1:-0}"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --bbox)        BBOX="$2"; shift 2 ;;
+        --polygon)     POLYGON_FILE="$2"; shift 2 ;;
+        -o|--output)   OUTPUT="$2"; shift 2 ;;
+        --host)        EXTRACT_HOST="$2"; shift 2 ;;
+        --port)        EXTRACT_PORT="$2"; shift 2 ;;
+        --theme)       THEME="$2"; shift 2 ;;
+        -q|--quiet)    QUIET=1; shift ;;
+        -h|--help)     usage 0 ;;
+        *)             die "Unknown option: $1" ;;
+    esac
+done
+
+[ -z "$BBOX" ] && [ -z "$POLYGON_FILE" ] && die "Provide --bbox or --polygon"
+[ -n "$BBOX" ] && [ -n "$POLYGON_FILE" ] && die "Provide --bbox or --polygon, not both"
+
+# Build the polygon JSON from bbox or file
+if [ -n "$BBOX" ]; then
+    # Parse bbox: min_lon,min_lat,max_lon,max_lat
+    IFS=',' read -r MINLON MINLAT MAXLON MAXLAT <<EOF
+$BBOX
+EOF
+    [ -z "$MINLON" ] || [ -z "$MINLAT" ] || [ -z "$MAXLON" ] || [ -z "$MAXLAT" ] && \
+        die "Invalid bbox format. Use: MIN_LON,MIN_LAT,MAX_LON,MAX_LAT"
+
+    POLYGON_JSON=$(cat <<PJSON
+{
+  "type": "Polygon",
+  "coordinates": [[
+    [$MINLON, $MINLAT],
+    [$MAXLON, $MINLAT],
+    [$MAXLON, $MAXLAT],
+    [$MINLON, $MAXLAT],
+    [$MINLON, $MINLAT]
+  ]]
+}
+PJSON
+)
+elif [ -n "$POLYGON_FILE" ]; then
+    [ -f "$POLYGON_FILE" ] || die "Polygon file not found: $POLYGON_FILE"
+    POLYGON_JSON=$(cat "$POLYGON_FILE")
+fi
+
+info "Connecting to extract service at ${EXTRACT_HOST}:${EXTRACT_PORT}"
+info "Theme: ${THEME}"
+
+# Use Python for WebSocket communication (available in jails and host)
+EXTRACT_SCRIPT=$(cat <<'PYEOF'
+import json, sys, os
+
+try:
+    import websocket
+except ImportError:
+    # Fallback: try websockets with asyncio
+    pass
+
+polygon_json = json.loads(sys.argv[1])
+host = sys.argv[2]
+port = sys.argv[3]
+output = sys.argv[4]
+theme = sys.argv[5]
+quiet = sys.argv[6] == "1"
+
+ws_url = f"ws://{host}:{port}/ws/extract"
+
+msg = json.dumps({"polygon": polygon_json, "theme": theme})
+
+def log(s):
+    if not quiet:
+        print(f"\033[1;34m==> {s}\033[0m", file=sys.stderr)
+
+# Try websocket-client first, fall back to asyncio websockets
+try:
+    import websocket as ws_mod
+    log("Sending extraction request...")
+    ws = ws_mod.create_connection(ws_url, timeout=300)
+    ws.send(msg)
+
+    result = None
+    while True:
+        raw = ws.recv()
+        if not raw:
+            break
+        data = json.loads(raw)
+        stage = data.get("stage", "")
+        progress = data.get("progress", "")
+
+        if stage == "complete" or "geojson" in data:
+            result = data
+            break
+        elif stage == "error":
+            print(f"ERROR: {data.get('error', 'unknown')}", file=sys.stderr)
+            sys.exit(1)
+        else:
+            log(f"  {stage}: {progress}%")
+
+    ws.close()
+
+    if result is None:
+        print("ERROR: No result received from extract service", file=sys.stderr)
+        sys.exit(1)
+
+    # Write the GeoJSON output
+    geojson = result.get("geojson", result)
+    with open(output, "w") as f:
+        json.dump(geojson, f, indent=2)
+
+    n_features = len(geojson.get("features", []))
+    log(f"Wrote {n_features} features -> {output}")
+    stats = result.get("stats", {})
+    if stats:
+        log(f"Stats: {json.dumps(stats, indent=2)}")
+
+except ImportError:
+    # Fallback to curl HTTP endpoint if available
+    import subprocess
+    log("websocket-client not available, trying HTTP fallback...")
+    log("Install websocket-client: pip install websocket-client")
+    sys.exit(1)
+
+except Exception as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+)
+
+# Prefer jail python, fall back to host python
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+elif bastille cmd rmpca-optimizer python3.12 --version >/dev/null 2>&1; then
+    # Run from optimizer jail which has python
+    info "Using Python from rmpca-optimizer jail"
+    bastille cmd rmpca-optimizer sh -c "
+        echo '$EXTRACT_SCRIPT' | /app/backend/venv/bin/python3 - \
+            '$(echo "$POLYGON_JSON" | tr -d '\n')' \
+            '$EXTRACT_HOST' '$EXTRACT_PORT' '/tmp/extract-out.geojson' \
+            '$THEME' '$QUIET'
+    "
+    bastille cp rmpca-optimizer /tmp/extract-out.geojson "$OUTPUT"
+    info "Output: $OUTPUT"
+    exit 0
+else
+    die "python3 not found on host or in jails. Install: pkg install python3"
+fi
+
+python3 -c "$EXTRACT_SCRIPT" \
+    "$POLYGON_JSON" \
+    "$EXTRACT_HOST" \
+    "$EXTRACT_PORT" \
+    "$OUTPUT" \
+    "$THEME" \
+    "$QUIET"
