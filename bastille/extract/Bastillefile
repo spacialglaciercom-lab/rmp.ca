@@ -1,0 +1,23 @@
+# TrashRoute GeoJSON extract WebSocket service
+# Replaces: extract/Dockerfile
+# Port: 4000
+#
+# Requires python3 + gmake for native Node modules (node-gyp).
+# After applying, run deploy.sh to copy source and npm install.
+
+# ── Packages ────────────────────────────────────────────────────────────────
+PKG node20 npm-node20 python3 gmake
+
+# ── App directory ────────────────────────────────────────────────────────────
+CMD mkdir -p /app/extract /usr/local/etc/rmpca
+
+# ── Service files ────────────────────────────────────────────────────────────
+CP usr/local/libexec/rmpca-extract /usr/local/libexec/rmpca-extract
+CP usr/local/etc/rc.d/extract /usr/local/etc/rc.d/extract
+CP usr/local/etc/rmpca/extract.env /usr/local/etc/rmpca/extract.env
+
+CMD chmod 755 /usr/local/libexec/rmpca-extract
+CMD chmod 755 /usr/local/etc/rc.d/extract
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC extract_enable=YES
