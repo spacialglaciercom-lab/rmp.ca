@@ -1,0 +1,80 @@
+# RMP.ca System Git Ignore
+
+# OS generated files
+.DS_Store
+.DS_Store?
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node modules
+node_modules/
+.pnpm-store/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+data/
+*.db
+*.sqlite
+
+# Dependency directories
+jail_backups/
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# Build output
+build/
+dist/
+.out/
+
+# Debug
+*.log
+*.swp
+*.swo
+
+# IDE/Editor
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Coverage
+yarn.lock
+pnpm-lock.yaml
+coverage/
+
+# System files
+/core
+proc
+sys
+dev
+etc
+root
+boot
+bin
+lib
+lib64
+sbin
+usr
+var
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Temporary files
+*.tmp
+*.temp
