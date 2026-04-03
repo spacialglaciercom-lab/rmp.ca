@@ -1,0 +1,11 @@
+#!/bin/sh
+# Wrapper for the TrashRoute Node.js API server.
+# Sources /usr/local/etc/rmpca/backend.env for environment variables.
+# Written by bastille template; updated by deploy.sh.
+
+[ -f /usr/local/etc/rmpca/backend.env ] && . /usr/local/etc/rmpca/backend.env
+
+export NODE_ENV="${NODE_ENV:-production}"
+export PORT="${PORT:-3000}"
+
+exec /usr/local/bin/node /app/dist/index.js

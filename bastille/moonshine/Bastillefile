@@ -1,0 +1,28 @@
+# Moonshine voice ASR sidecar (Python / uvicorn)
+# Replaces: server/moonshine-sidecar/Dockerfile
+# Port: 8090
+#
+# ffmpeg is required for audio processing.
+# After applying, run deploy.sh to copy moonshine-sidecar source, pip install,
+# and pre-download the English model (this is slow on first deploy — ~500 MB).
+
+# ── Packages ────────────────────────────────────────────────────────────────
+# python311 matches the 3.11-slim base image used in the Dockerfile.
+PKG python311 py311-pip py311-virtualenv ffmpeg
+
+# ── App directory ────────────────────────────────────────────────────────────
+CMD mkdir -p /app/moonshine /usr/local/etc/rmpca
+
+# ── Virtualenv (populated by deploy.sh) ─────────────────────────────────────
+CMD python3.11 -m venv /app/moonshine/venv
+
+# ── Service files ────────────────────────────────────────────────────────────
+CP usr/local/libexec/rmpca-moonshine /usr/local/libexec/rmpca-moonshine
+CP usr/local/etc/rc.d/moonshine /usr/local/etc/rc.d/moonshine
+CP usr/local/etc/rmpca/moonshine.env /usr/local/etc/rmpca/moonshine.env
+
+CMD chmod 755 /usr/local/libexec/rmpca-moonshine
+CMD chmod 755 /usr/local/etc/rc.d/moonshine
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC moonshine_enable=YES
