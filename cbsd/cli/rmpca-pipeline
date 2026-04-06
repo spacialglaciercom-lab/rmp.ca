@@ -1,0 +1,174 @@
+#!/bin/sh
+# rmpca-pipeline — End-to-end: extract → clean → optimize → export.
+#
+# Runs the full data pipeline from source data extraction through
+# route optimization. Supports both Overture and OSM as data sources.
+#
+# Usage:
+#   rmpca pipeline --bbox MIN_LON,MIN_LAT,MAX_LON,MAX_LAT --source overture -o route.gpx
+#   rmpca pipeline --bbox -73.59,45.49,-73.55,45.52 --source osm -o route.geojson
+#   rmpca pipeline --input existing-roads.geojson -o route.gpx --gpx
+#
+# Options:
+#   --bbox LON1,LAT1,LON2,LAT2   Bounding box for extraction
+#   --polygon FILE                Polygon file for Overture extraction
+#   --source SOURCE               Data source: overture or osm (default: overture)
+#   --input FILE                  Skip extraction, use existing GeoJSON
+#   -o, --output FILE             Final output file (default: pipeline-output.geojson)
+#   --gpx                         Export final result as GPX
+#   --no-clean                    Skip the cleaning step
+#   --clean-min-length M          Min segment length in meters (default: 1.0)
+#   --turn-left P                 Left turn penalty (default: 0)
+#   --turn-right P                Right turn penalty (default: 0)
+#   --turn-u P                    U-turn penalty (default: 0)
+#   --depot LAT,LON               Starting depot for optimization
+#   --keep-intermediates          Keep intermediate files (extract, cleaned)
+#   --workdir DIR                 Working directory for intermediates (default: /tmp/rmpca-pipeline-$$)
+#   -q, --quiet                   Suppress progress output
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+BBOX=""
+POLYGON=""
+SOURCE="overture"
+INPUT=""
+OUTPUT="pipeline-output.geojson"
+GPX=0
+NO_CLEAN=0
+CLEAN_MIN_LENGTH="1.0"
+TURN_LEFT="0"
+TURN_RIGHT="0"
+TURN_U="0"
+DEPOT=""
+KEEP_INTERMEDIATES=0
+WORKDIR="/tmp/rmpca-pipeline-$$"
+QUIET=0
+
+info()  { [ "$QUIET" -eq 1 ] || printf '\033[1;34m==> %s\033[0m\n' "$*"; }
+step()  { printf '\033[1;36m\n━━━ Step %s: %s ━━━\033[0m\n' "$1" "$2"; }
+die()   { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+usage() {
+    sed -n '2,/^$/s/^# \?//p' "$0"
+    exit "${1:-0}"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --bbox)               BBOX="$2"; shift 2 ;;
+        --polygon)            POLYGON="$2"; shift 2 ;;
+        --source)             SOURCE="$2"; shift 2 ;;
+        --input)              INPUT="$2"; shift 2 ;;
+        -o|--output)          OUTPUT="$2"; shift 2 ;;
+        --gpx)                GPX=1; shift ;;
+        --no-clean)           NO_CLEAN=1; shift ;;
+        --clean-min-length)   CLEAN_MIN_LENGTH="$2"; shift 2 ;;
+        --turn-left)          TURN_LEFT="$2"; shift 2 ;;
+        --turn-right)         TURN_RIGHT="$2"; shift 2 ;;
+        --turn-u)             TURN_U="$2"; shift 2 ;;
+        --depot)              DEPOT="$2"; shift 2 ;;
+        --keep-intermediates) KEEP_INTERMEDIATES=1; shift ;;
+        --workdir)            WORKDIR="$2"; shift 2 ;;
+        -q|--quiet)           QUIET=1; shift ;;
+        -h|--help)            usage 0 ;;
+        *)                    die "Unknown option: $1" ;;
+    esac
+done
+
+# Validate inputs
+[ -z "$INPUT" ] && [ -z "$BBOX" ] && [ -z "$POLYGON" ] && \
+    die "Provide --bbox, --polygon, or --input"
+[ "$SOURCE" != "overture" ] && [ "$SOURCE" != "osm" ] && \
+    die "Source must be 'overture' or 'osm'"
+
+mkdir -p "$WORKDIR"
+
+QUIET_FLAG=""
+[ "$QUIET" -eq 1 ] && QUIET_FLAG="-q"
+
+EXTRACTED="$WORKDIR/extracted.geojson"
+CLEANED="$WORKDIR/cleaned.geojson"
+
+T_START=$(date +%s)
+
+# ── Step 1: Extract ──────────────────────────────────────────────────────────
+
+if [ -n "$INPUT" ]; then
+    step 1 "Using existing input: $INPUT"
+    [ -f "$INPUT" ] || die "Input file not found: $INPUT"
+    cp "$INPUT" "$EXTRACTED"
+else
+    step 1 "Extract ($SOURCE)"
+
+    case "$SOURCE" in
+        overture)
+            EXTRACT_ARGS=""
+            [ -n "$BBOX" ] && EXTRACT_ARGS="--bbox $BBOX"
+            [ -n "$POLYGON" ] && EXTRACT_ARGS="--polygon $POLYGON"
+            "${SCRIPT_DIR}/rmpca-extract-overture" $EXTRACT_ARGS -o "$EXTRACTED" $QUIET_FLAG
+            ;;
+        osm)
+            [ -z "$BBOX" ] && die "OSM extraction requires --bbox"
+            "${SCRIPT_DIR}/rmpca-extract-osm" --bbox "$BBOX" -o "$EXTRACTED" $QUIET_FLAG
+            ;;
+    esac
+fi
+
+N_EXTRACTED=$(python3 -c "import json; print(len(json.load(open('$EXTRACTED')).get('features',[])))" 2>/dev/null || echo "?")
+info "Extracted: ${N_EXTRACTED} features"
+
+# ── Step 2: Validate ─────────────────────────────────────────────────────────
+
+step 2 "Validate"
+"${SCRIPT_DIR}/rmpca-validate" "$EXTRACTED" $QUIET_FLAG || die "Validation failed"
+
+# ── Step 3: Clean ────────────────────────────────────────────────────────────
+
+if [ "$NO_CLEAN" -eq 0 ]; then
+    step 3 "Clean"
+    "${SCRIPT_DIR}/rmpca-clean" "$EXTRACTED" -o "$CLEANED" \
+        --min-length "$CLEAN_MIN_LENGTH" --stats $QUIET_FLAG \
+        || {
+            info "API clean unavailable, using extracted data as-is"
+            cp "$EXTRACTED" "$CLEANED"
+        }
+else
+    step 3 "Clean (skipped)"
+    cp "$EXTRACTED" "$CLEANED"
+fi
+
+N_CLEANED=$(python3 -c "import json; print(len(json.load(open('$CLEANED')).get('features',[])))" 2>/dev/null || echo "?")
+info "Cleaned: ${N_CLEANED} features"
+
+# ── Step 4: Optimize ─────────────────────────────────────────────────────────
+
+step 4 "Optimize"
+
+OPT_ARGS="--clean --stats"
+[ "$GPX" -eq 1 ] && OPT_ARGS="$OPT_ARGS --gpx"
+[ -n "$DEPOT" ] && OPT_ARGS="$OPT_ARGS --depot $DEPOT"
+[ "$TURN_LEFT" != "0" ] && OPT_ARGS="$OPT_ARGS --turn-left $TURN_LEFT"
+[ "$TURN_RIGHT" != "0" ] && OPT_ARGS="$OPT_ARGS --turn-right $TURN_RIGHT"
+[ "$TURN_U" != "0" ] && OPT_ARGS="$OPT_ARGS --turn-u $TURN_U"
+
+"${SCRIPT_DIR}/rmpca-optimize" "$CLEANED" -o "$OUTPUT" $OPT_ARGS $QUIET_FLAG
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+
+T_END=$(date +%s)
+T_ELAPSED=$((T_END - T_START))
+
+printf '\n\033[1;32m━━━ Pipeline complete ━━━\033[0m\n'
+info "Source: ${SOURCE}"
+info "Features: ${N_EXTRACTED} extracted → ${N_CLEANED} cleaned"
+info "Output: ${OUTPUT}"
+info "Time: ${T_ELAPSED}s"
+
+# Cleanup
+if [ "$KEEP_INTERMEDIATES" -eq 0 ]; then
+    rm -rf "$WORKDIR"
+else
+    info "Intermediates kept in: ${WORKDIR}"
+fi
