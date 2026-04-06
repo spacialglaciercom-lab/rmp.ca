@@ -1,0 +1,22 @@
+#!/bin/sh
+# PROVIDE: extract
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="extract"
+rcvar="${name}_enable"
+desc="TrashRoute GeoJSON extract WebSocket service"
+
+load_rc_config "${name}"
+
+: ${extract_enable:="NO"}
+: ${extract_user:="www"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -u ${extract_user} -o /var/log/${name}.log \
+    /usr/local/libexec/rmpca-extract"
+
+run_rc_command "$1"
