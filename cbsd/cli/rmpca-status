@@ -1,0 +1,110 @@
+#!/bin/sh
+# rmpca-status — Show health/status of all rmp.ca CBSD jails and services.
+#
+# Usage:
+#   rmpca status              Show all jails and service status
+#   rmpca status --health     Also ping HTTP health endpoints
+#   rmpca status --jail NAME  Show status for a specific jail only
+#
+# Options:
+#   --health          Ping HTTP health/readiness endpoints
+#   --jail NAME       Filter to a specific jail
+#   --json            Output as JSON
+#   -q, --quiet       Minimal output (for scripting)
+
+set -e
+
+HEALTH=0
+JAIL_FILTER=""
+JSON_OUT=0
+QUIET=0
+
+info()  { [ "$QUIET" -eq 1 ] || printf '\033[1;34m==> %s\033[0m\n' "$*"; }
+ok()    { printf '\033[1;32m  %-22s %s\033[0m\n' "$1" "$2"; }
+down()  { printf '\033[1;31m  %-22s %s\033[0m\n' "$1" "$2"; }
+dim()   { printf '\033[0;37m  %-22s %s\033[0m\n' "$1" "$2"; }
+
+usage() {
+    sed -n '2,/^$/s/^# \?//p' "$0"
+    exit "${1:-0}"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --health)    HEALTH=1; shift ;;
+        --jail)      JAIL_FILTER="$2"; shift 2 ;;
+        --json)      JSON_OUT=1; shift ;;
+        -q|--quiet)  QUIET=1; shift ;;
+        -h|--help)   usage 0 ;;
+        *)           die "Unknown option: $1" ;;
+    esac
+done
+
+# All expected jails, their services, and health endpoints
+JAILS="rmpca-extract:extract:10.10.0.2:4000:/
+rmpca-backend:backend:10.10.0.3:3000:/health
+rmpca-redis:redis:10.10.0.4:6379:
+rmpca-optimizer:optimizer:10.10.0.5:8000:/health
+rmpca-celery:celery:10.10.0.6::
+rmpca-nginx-opt:nginx:10.10.0.7:80:/health
+rmpca-moonshine:moonshine:10.10.0.8:8090:/"
+
+[ "$QUIET" -eq 0 ] && [ "$JSON_OUT" -eq 0 ] && printf '\033[1m%-24s %-10s %-10s %-14s %s\033[0m\n' \
+    "JAIL" "JAIL" "SERVICE" "IP:PORT" "HEALTH"
+[ "$QUIET" -eq 0 ] && [ "$JSON_OUT" -eq 0 ] && printf '%.0s─' $(seq 1 78) && echo
+
+JSON_ITEMS=""
+
+echo "$JAILS" | while IFS=':' read -r jail svc ip port health_path; do
+    # Filter
+    [ -n "$JAIL_FILTER" ] && [ "$jail" != "$JAIL_FILTER" ] && [ "$svc" != "$JAIL_FILTER" ] && continue
+
+    # Check jail running
+    JAIL_STATUS="down"
+    if cbsd jls 2>/dev/null | awk '{print $1}' | grep -qx "$jail"; then
+        JAIL_STATUS="up"
+    fi
+
+    # Check service status inside jail
+    SVC_STATUS="–"
+    if [ "$JAIL_STATUS" = "up" ] && [ -n "$svc" ]; then
+        if cbsd jexec jname="$jail" service "$svc" status >/dev/null 2>&1; then
+            SVC_STATUS="running"
+        else
+            SVC_STATUS="stopped"
+        fi
+    fi
+
+    # Health check (HTTP)
+    HEALTH_STATUS="–"
+    if [ "$HEALTH" -eq 1 ] && [ -n "$port" ] && [ -n "$health_path" ] && [ "$JAIL_STATUS" = "up" ]; then
+        HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+            "http://${ip}:${port}${health_path}" 2>/dev/null || echo "000")
+        if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+            HEALTH_STATUS="ok (${HTTP_CODE})"
+        else
+            HEALTH_STATUS="fail (${HTTP_CODE})"
+        fi
+    fi
+
+    ADDR="${ip}:${port}"
+    [ -z "$port" ] && ADDR="${ip}"
+
+    if [ "$JSON_OUT" -eq 1 ]; then
+        ITEM="{\"jail\":\"${jail}\",\"service\":\"${svc}\",\"jail_status\":\"${JAIL_STATUS}\",\"service_status\":\"${SVC_STATUS}\",\"address\":\"${ADDR}\",\"health\":\"${HEALTH_STATUS}\"}"
+        [ -n "$JSON_ITEMS" ] && JSON_ITEMS="${JSON_ITEMS},"
+        JSON_ITEMS="${JSON_ITEMS}${ITEM}"
+    elif [ "$QUIET" -eq 1 ]; then
+        printf '%s %s %s\n' "$jail" "$JAIL_STATUS" "$SVC_STATUS"
+    else
+        if [ "$JAIL_STATUS" = "up" ] && { [ "$SVC_STATUS" = "running" ] || [ "$SVC_STATUS" = "–" ]; }; then
+            ok "$jail" "$(printf '%-10s %-10s %-14s %s' "$JAIL_STATUS" "$SVC_STATUS" "$ADDR" "$HEALTH_STATUS")"
+        elif [ "$JAIL_STATUS" = "up" ]; then
+            down "$jail" "$(printf '%-10s %-10s %-14s %s' "$JAIL_STATUS" "$SVC_STATUS" "$ADDR" "$HEALTH_STATUS")"
+        else
+            down "$jail" "$(printf '%-10s %-10s %-14s %s' "$JAIL_STATUS" "–" "$ADDR" "$HEALTH_STATUS")"
+        fi
+    fi
+done
+
+[ "$JSON_OUT" -eq 1 ] && echo "[${JSON_ITEMS}]"

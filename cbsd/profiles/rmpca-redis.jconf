@@ -1,0 +1,22 @@
+# CBSD jail profile: rmpca-redis
+# Redis — Celery broker + result backend
+# Port: 6379 (internal only)
+
+jname="rmpca-redis"
+host_hostname="rmpca-redis.rmpca.local"
+ver="14.2"
+baserw="0"
+
+# VNET networking
+vnet="1"
+ip4_addr="10.10.0.4/24"
+gw4="10.10.0.1"
+
+# Security
+allow_raw_sockets="1"
+mount_devfs="1"
+devfs_ruleset="5"
+
+# Lifecycle
+exec_start="/bin/sh /etc/rc"
+exec_stop="/bin/sh /etc/rc.shutdown"
