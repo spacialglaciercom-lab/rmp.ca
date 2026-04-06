@@ -1,0 +1,11 @@
+#!/bin/sh
+# Wrapper for the TrashRoute FastAPI optimizer service.
+# Sources /usr/local/etc/rmpca/optimizer.env for environment variables.
+
+[ -f /usr/local/etc/rmpca/optimizer.env ] && . /usr/local/etc/rmpca/optimizer.env
+
+export PORT="${PORT:-8000}"
+export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379/0}"
+
+cd /app/backend
+exec /app/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "${PORT}"
