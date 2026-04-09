@@ -1,0 +1,10 @@
+name = "RmpVerify"
+version = "0.1.0"
+defaultTargets = ["rmpverify"]
+
+[[lean_lib]]
+name = "RmpVerify"
+
+[[lean_exe]]
+name = "rmpverify"
+root = "Main"
