@@ -1289,42 +1289,52 @@ def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
 def _remove_immediate_reversals(route_nodes: list[str]) -> list[str]:
     """
     Remove immediate reversal patterns (A->B->A) from route to reduce unnecessary looping.
-    
+
+    Applies the single-pass removal repeatedly until no more reversals remain
+    (fixpoint iteration).  Each pass that finds a reversal removes at least one
+    node, so the loop terminates in at most ``len(route_nodes)`` iterations.
+
     Args:
         route_nodes: List of nodes in the route
-        
+
     Returns:
-        Route with immediate reversals removed
+        Route with all immediate reversals removed
     """
-    if len(route_nodes) < 3:
-        return route_nodes
-    
-    cleaned_route = []
-    i = 0
-    
-    while i < len(route_nodes):
-        # Check if current position forms an immediate reversal (A->B->A)
-        if (i + 2 < len(route_nodes) and 
-            route_nodes[i] == route_nodes[i+2] and
-            route_nodes[i] != route_nodes[i+1]):
-            # Found A->B->A pattern, skip the middle node (B)
-            if cleaned_route and cleaned_route[-1] == route_nodes[i]:
-                # Avoid duplicate consecutive nodes
-                cleaned_route.append(route_nodes[i+2])
+    prev_len = len(route_nodes) + 1  # sentinel to enter loop
+    while len(route_nodes) < prev_len:
+        prev_len = len(route_nodes)
+
+        if len(route_nodes) < 3:
+            return route_nodes
+
+        cleaned_route: list[str] = []
+        i = 0
+
+        while i < len(route_nodes):
+            # Check if current position forms an immediate reversal (A->B->A)
+            if (i + 2 < len(route_nodes) and
+                route_nodes[i] == route_nodes[i+2] and
+                route_nodes[i] != route_nodes[i+1]):
+                # Found A->B->A pattern, skip the middle node (B)
+                if cleaned_route and cleaned_route[-1] == route_nodes[i]:
+                    # Avoid duplicate consecutive nodes
+                    cleaned_route.append(route_nodes[i+2])
+                else:
+                    cleaned_route.extend([route_nodes[i], route_nodes[i+2]])
+                i += 3
             else:
-                cleaned_route.extend([route_nodes[i], route_nodes[i+2]])
-            i += 3
-        else:
-            cleaned_route.append(route_nodes[i])
-            i += 1
-    
-    # Remove consecutive duplicates that might have been created
-    final_route = []
-    for node in cleaned_route:
-        if not final_route or node != final_route[-1]:
-            final_route.append(node)
-    
-    return final_route
+                cleaned_route.append(route_nodes[i])
+                i += 1
+
+        # Remove consecutive duplicates that might have been created
+        final_route: list[str] = []
+        for node in cleaned_route:
+            if not final_route or node != final_route[-1]:
+                final_route.append(node)
+
+        route_nodes = final_route
+
+    return route_nodes
 
 
 def cpp_solution_to_gpx_segments(
