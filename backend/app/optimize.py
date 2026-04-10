@@ -255,14 +255,17 @@ def _clip_line_to_bbox(
     if outcode0 & outcode1 != 0:
         return []
     
-    # Clip the line segment
-    while True:
+    # Clip the line segment.
+    # A 2D rectangle has 4 edges, so at most 4 clipping operations are needed.
+    # A hard limit prevents floating-point ping-pong near bbox corners.
+    max_clip_iterations = 4
+    for _ in range(max_clip_iterations):
         if outcode0 == 0 and outcode1 == 0:
             break
-        
+
         # Pick an endpoint that's outside
         outcode_out = outcode0 if outcode0 != 0 else outcode1
-        
+
         # Find intersection with bbox edge
         if outcode_out & 1:  # below
             x = x0 + (x1 - x0) * (min_lat - y0) / (y1 - y0) if y1 != y0 else x0
@@ -278,7 +281,7 @@ def _clip_line_to_bbox(
             x = max_lon
         else:
             break
-        
+
         # Update the outside point
         if outcode_out == outcode0:
             x0, y0 = x, y
@@ -286,7 +289,12 @@ def _clip_line_to_bbox(
         else:
             x1, y1 = x, y
             outcode1 = compute_outcode(x1, y1)
-    
+    else:
+        # Failed to converge — floating-point ping-pong near a corner.
+        # Reject the line rather than loop forever.
+        if outcode0 != 0 or outcode1 != 0:
+            return []
+
     return [[x0, y0], [x1, y1]]
 
 
@@ -686,9 +694,13 @@ def _dijkstra_with_transition_costs(
     State is (current_node, previous_node); when previous is None (start), transition mult = 1.0.
     Returns (lengths, paths) where lengths[v] = cost to v, paths[v] = node list from source to v.
     """
+    # Best cost to reach node v regardless of incoming direction (return value).
     lengths: dict[str, float] = {source: 0.0}
     paths: dict[str, list[str]] = {source: [source]}
-    # state = (node, prev_node); prev_node None only at start
+    # Best cost to reach state (node, prev_node).  Relaxation must operate on
+    # the full state so that an approach via a different predecessor — which may
+    # yield cheaper *subsequent* transitions — is not prematurely discarded.
+    state_dist: dict[tuple[str, str | None], float] = {(source, None): 0.0}
     path_to_state: dict[tuple[str, str | None], list[str]] = {(source, None): [source]}
     # (distance, (node, prev_node))
     heap: list[tuple[float, tuple[str, str | None]]] = [(0.0, (source, None))]
@@ -761,11 +773,16 @@ def _dijkstra_with_transition_costs(
                     cost += DUAL_CARRIAGEWAY_UTURN_KM
 
             new_d = d + cost
-            if new_d < lengths.get(v, float("inf")):
-                lengths[v] = new_d
+            # Relax per-state: a different predecessor may yield cheaper
+            # future transitions even if its raw distance to v is higher.
+            if new_d < state_dist.get((v, u), float("inf")):
+                state_dist[(v, u)] = new_d
                 path_to_state[(v, u)] = path_to_state[(u, t)] + [v]
-                paths[v] = path_to_state[(v, u)]
                 heapq.heappush(heap, (new_d, (v, u)))
+                # Also track the globally best cost/path per node for callers.
+                if new_d < lengths.get(v, float("inf")):
+                    lengths[v] = new_d
+                    paths[v] = path_to_state[(v, u)]
 
     return lengths, paths
 

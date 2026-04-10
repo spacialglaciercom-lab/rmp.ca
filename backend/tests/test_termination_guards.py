@@ -11,6 +11,7 @@ import pytest
 from app.hierholzer import eulerian_circuit_nx
 from app.optimize import (
     _build_graph,
+    _clip_line_to_bbox,
     _detect_loop_pattern,
     _dijkstra_with_transition_costs,
     _remove_immediate_reversals,
@@ -242,3 +243,86 @@ class TestGreedyFallbackTermination:
         G = nx.MultiGraph()
         route = _solve_cpp(G)
         assert route == []
+
+
+# ---------------------------------------------------------------------------
+# Cohen-Sutherland clip termination
+# ---------------------------------------------------------------------------
+
+class TestClipLineToBbox:
+    def test_fully_inside(self):
+        coords = [[1.0, 1.0], [2.0, 2.0]]
+        bbox = (0.0, 0.0, 3.0, 3.0)
+        result = _clip_line_to_bbox(coords, bbox)
+        assert result == coords
+
+    def test_fully_outside(self):
+        coords = [[10.0, 10.0], [11.0, 11.0]]
+        bbox = (0.0, 0.0, 3.0, 3.0)
+        result = _clip_line_to_bbox(coords, bbox)
+        assert result == []
+
+    def test_crossing_clip(self):
+        """Line from outside to inside should be clipped."""
+        coords = [[-1.0, 1.5], [1.5, 1.5]]
+        bbox = (0.0, 0.0, 3.0, 3.0)
+        result = _clip_line_to_bbox(coords, bbox)
+        assert len(result) == 2
+        # Clipped x0 should be at min_lon=0.0
+        assert abs(result[0][0] - 0.0) < 1e-9
+
+    def test_corner_grazing_terminates(self):
+        """Line passing infinitesimally close to a corner should not hang."""
+        # Deliberately crafted to provoke float truncation near (0,0) corner
+        eps = 1e-15
+        coords = [[-eps, -eps], [eps, eps]]
+        bbox = (0.0, 0.0, 1.0, 1.0)
+        result = _clip_line_to_bbox(coords, bbox)
+        # Should terminate — either clipped or rejected
+        assert isinstance(result, list)
+
+    def test_diagonal_through_corner_terminates(self):
+        """Diagonal line through exact corner — classic ping-pong trigger."""
+        coords = [[-1.0, -1.0], [1.0, 1.0]]
+        bbox = (0.0, 0.0, 2.0, 2.0)
+        result = _clip_line_to_bbox(coords, bbox)
+        assert isinstance(result, list)
+        if result:
+            assert len(result) == 2
+
+    def test_single_point(self):
+        result = _clip_line_to_bbox([[1.0, 1.0]], (0.0, 0.0, 2.0, 2.0))
+        assert result == [[1.0, 1.0]]
+
+
+# ---------------------------------------------------------------------------
+# Dijkstra state-based relaxation
+# ---------------------------------------------------------------------------
+
+class TestDijkstraStateRelaxation:
+    def test_different_predecessors_explored(self):
+        """Paths via different predecessors should be explored even if
+        one is slightly longer, because transitions may differ."""
+        G = nx.MultiGraph()
+        # Diamond: S -> A -> D (direct, short)
+        #          S -> B -> D (longer, but may have better transitions)
+        for n in ("S", "A", "B", "D"):
+            G.add_node(n, lon=0.0, lat=0.0)
+        G.add_edge("S", "A", key=0, length_km=1.0)
+        G.add_edge("S", "B", key=1, length_km=1.5)
+        G.add_edge("A", "D", key=2, length_km=1.0)
+        G.add_edge("B", "D", key=3, length_km=0.5)
+
+        lengths, paths = _dijkstra_with_transition_costs(G, "S", [])
+        assert "D" in lengths
+        # Without plugins, shortest path is S->A->D (2.0) vs S->B->D (2.0)
+        assert lengths["D"] == pytest.approx(2.0)
+
+    def test_unreachable_node_not_in_lengths(self):
+        G = nx.MultiGraph()
+        G.add_node("A", lon=0.0, lat=0.0)
+        G.add_node("B", lon=1.0, lat=0.0)
+        G.add_node("Z", lon=99.0, lat=99.0)  # isolated
+        G.add_edge("A", "B", key=0, length_km=1.0)
+        lengths, paths = _dijkstra_with_transition_costs(G, "A", [])
+        assert "Z" not in lengths
