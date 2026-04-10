@@ -48,20 +48,21 @@ def eulerian_circuit_nx(
     stack: list[Any] = [start]
     circuit_nodes: list[Any] = []
 
-    # Track visited states to prevent infinite loops
-    # State = (current_node, frozenset_of_used_edges)
-    visited_states: set[tuple[Any, frozenset[tuple[Any, Any, int]]]] = set()
+    # Safety bound: each edge is used at most once and each stack pop
+    # produces one circuit node, so total iterations <= 2 * (V + E).
+    total_adj = sum(len(dq) for dq in adj.values())
+    max_iterations = 2 * (G.number_of_nodes() + total_adj) + 1
+    iteration = 0
 
     while stack:
+        iteration += 1
+        if iteration > max_iterations:
+            raise nx.NetworkXError(
+                f"Hierholzer exceeded {max_iterations} iterations — "
+                "graph may not be Eulerian or contains malformed edges."
+            )
+
         u = stack[-1]
-        
-        # Create state key for cycle detection
-        state_key = (u, frozenset(used))
-        if state_key in visited_states:
-            # We've been in this exact state before - break potential infinite loop
-            circuit_nodes.append(stack.pop())
-            continue
-        visited_states.add(state_key)
 
         advanced = False
         while adj[u]:

@@ -494,7 +494,9 @@ def _build_graph(
                     node_id_to_coord[v] = (_round_coord(end[0]), _round_coord(end[1]))
                     node_order.append(v)
 
-                segments_raw.append((u, v, segment, length_km, feat_idx, feat))
+                # Skip self-loops (u == v) — they cause infinite traversal
+                if u != v:
+                    segments_raw.append((u, v, segment, length_km, feat_idx, feat))
                 run_start = i
 
         coords_list = [node_id_to_coord[nid] for nid in node_order]
@@ -581,6 +583,11 @@ def _build_graph(
                 u = _node_id(start[0], start[1])
                 v = _node_id(end[0], end[1])
 
+                # Skip self-loops (u == v) — they cause infinite traversal
+                if u == v:
+                    run_start = i
+                    continue
+
                 if u not in G:
                     G.add_node(u, lon=_round_coord(start[0]), lat=_round_coord(start[1]))
                 if v not in G:
@@ -629,6 +636,11 @@ def _build_graph(
             end = segment[-1]
             u = _node_id(start[0], start[1])
             v = _node_id(end[0], end[1])
+
+            # Skip self-loops (u == v) — they cause infinite traversal
+            if u == v:
+                run_start = i
+                continue
 
             if u not in G:
                 G.add_node(u, lon=_round_coord(start[0]), lat=_round_coord(start[1]))
@@ -701,11 +713,27 @@ def _dijkstra_with_transition_costs(
             return G.successors(u)
         return G.neighbors(u)
 
+    # Safety bound: state space is (node, prev_node), at most V*(V+1) states.
+    # Each expansion is unique, so iterations are bounded by V².
+    num_nodes = G.number_of_nodes()
+    max_expansions = num_nodes * (num_nodes + 1) + 1
+    expansions = 0
+
     while heap:
         d, (u, t) = heapq.heappop(heap)
         if (u, t) in expanded:
             continue
         expanded.add((u, t))
+
+        expansions += 1
+        if expansions > max_expansions:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Dijkstra with transition costs exceeded %d expansions; "
+                "returning partial results.", max_expansions
+            )
+            break
+
         coords_u = _get_node_coord(G, u)
         for v in neighbors(u):
             w = edge_weight(u, v)
@@ -1053,16 +1081,29 @@ def _solve_cpp(
     
     # Greedy edge coverage fallback
     uncovered_edges = set(G.edges(keys=True))
-    route = []
-    
+    route: list[str] = []
+    total_edges = len(uncovered_edges)
+    # Strict iteration limit: each iteration should cover one edge, so
+    # we allow at most 3x edges for navigation hops between components.
+    max_iterations = total_edges * 3 + 1
+
     if G.number_of_nodes() > 0:
         current_node = start_node if start_node else next(iter(G.nodes()))
         route.append(current_node)
-        
-        # Cover all edges greedily
+        iterations = 0
+
         while uncovered_edges:
+            iterations += 1
+            if iterations > max_iterations:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Greedy fallback exceeded %d iterations with %d edges remaining; "
+                    "returning partial route.", max_iterations, len(uncovered_edges),
+                )
+                break
+
             found_edge = False
-            # Try to find an outgoing edge from current node
+            # Try to find an uncovered edge from current node
             for u, v, k in list(uncovered_edges):
                 if u == current_node:
                     route.append(v)
@@ -1070,25 +1111,36 @@ def _solve_cpp(
                     current_node = v
                     found_edge = True
                     break
-            
+                # For undirected graphs, also check reverse direction
+                if not is_directed and v == current_node:
+                    route.append(u)
+                    uncovered_edges.remove((u, v, k))
+                    current_node = u
+                    found_edge = True
+                    break
+
             if not found_edge:
-                # No outgoing edges, jump to any uncovered edge
+                # No adjacent uncovered edges — jump to nearest uncovered edge
                 if uncovered_edges:
                     u, v, k = next(iter(uncovered_edges))
-                    route.append(u)  # Add start node
-                    route.append(v)  # Add end node
+                    # Try to find a path to the next uncovered edge
+                    try:
+                        bridge = nx.shortest_path(G, current_node, u, weight="length_km")
+                        route.extend(bridge[1:])  # skip current_node (already in route)
+                    except (nx.NetworkXNoPath, nx.NodeNotFound):
+                        route.append(u)
+                    route.append(v)
                     uncovered_edges.remove((u, v, k))
                     current_node = v
-                break
-        
+
         # Try to return to start to form a circuit
         if start_node and route and len(route) > 1 and route[0] != route[-1]:
             try:
                 path_back = nx.shortest_path(G_aug, route[-1], route[0], weight="length_km")
                 route.extend(path_back[1:])  # Skip first node to avoid duplication
-            except nx.NetworkXNoPath:
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
                 pass
-        
+
         return route if len(route) > 1 else []
     
     # If all else fails, raise a clear error
@@ -1275,14 +1327,16 @@ def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
             if reversal_count >= 2:  # More than 1 reversal indicates looping pattern
                 return True
     
-    # Check for repeated sequences that indicate looping
-    for i in range(len(route_nodes) - window_size):
-        sequence1 = tuple(route_nodes[i:i+window_size])
-        # Look ahead for the same sequence
-        for j in range(i+1, len(route_nodes) - window_size):
-            sequence2 = tuple(route_nodes[j:j+window_size])
-            if sequence1 == sequence2:
-                return True
+    # Check for repeated sequences that indicate looping.
+    # Use a set for O(n) lookup instead of O(n²) nested loop, and cap
+    # the scan length to avoid hanging on very large routes.
+    scan_limit = min(len(route_nodes), 10_000)
+    seen_sequences: set[tuple] = set()
+    for i in range(scan_limit - window_size + 1):
+        seq = tuple(route_nodes[i:i + window_size])
+        if seq in seen_sequences:
+            return True
+        seen_sequences.add(seq)
     return False
 
 
@@ -1300,9 +1354,24 @@ def _remove_immediate_reversals(route_nodes: list[str]) -> list[str]:
     Returns:
         Route with all immediate reversals removed
     """
+    # Each pass that finds reversals removes at least one node, so
+    # the fixpoint is reached in at most len(route_nodes) passes.
+    # Cap at a generous limit as a safety guard against pathological input.
+    max_passes = min(len(route_nodes), 500)
+    passes = 0
+
     prev_len = len(route_nodes) + 1  # sentinel to enter loop
     while len(route_nodes) < prev_len:
         prev_len = len(route_nodes)
+
+        passes += 1
+        if passes > max_passes:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Reversal removal exceeded %d passes; returning current route.",
+                max_passes,
+            )
+            break
 
         if len(route_nodes) < 3:
             return route_nodes

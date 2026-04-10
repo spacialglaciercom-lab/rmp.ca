@@ -460,8 +460,8 @@ def test_optimize_zero_length_segment() -> None:
         _seg(*C, *A),
     )
     resp = _optimize(fc, clean_before_optimize=False)
-    # Even with clean_before_optimize=False, it should handle the 0-length segment safely.
-    assert resp["stats"]["edges_in_graph"] == 4
+    # Self-loop (A->A) is filtered during graph construction, leaving 3 valid edges.
+    assert resp["stats"]["edges_in_graph"] == 3
     assert resp["stats"]["total_distance_km"] > 0
 
 
