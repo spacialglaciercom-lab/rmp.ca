@@ -1,0 +1,7 @@
+{
+  "coverage": 1.0,
+  "edge_repeat_ratio": 1.1667,
+  "edges_in_graph": 24,
+  "immediate_reversals": 2,
+  "null_deadhead_cycles": 0
+}
