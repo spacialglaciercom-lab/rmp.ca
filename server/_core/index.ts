@@ -1,5 +1,10 @@
 // Load .env.server first (server secrets; doesn't override vars already set by Docker/Railway).
 // Then load .env (shared/public vars). dotenv never overrides already-set env vars by default.
+//
+// NOTE: for local dev, env loading is done via --require ./scripts/load-server-env.js (see
+// package.json dev:server) so that dotenv runs before any module reads process.env at import
+// time. The calls below are a fallback for production/non-dev contexts; they are no-ops if
+// env vars are already set (dotenv never overrides existing env vars).
 import { config as dotenvConfig } from "dotenv";
 dotenvConfig({ path: ".env.server" });
 dotenvConfig({ path: ".env" });
@@ -27,7 +32,8 @@ import {
   registerExtractHttpProxyRoutes,
 } from "../wsExtractProxy";
 import { registerOptimizerProxyRoutes } from "../optimizerProxy";
-import { registerRateLimits } from "./rateLimits";
+import { registerOverpassProxyRoutes } from "../overpassProxy";
+
 import { createLogger } from "../logger";
 import { ENV } from "./env";
 import { transcribeBase64WithFallback } from "./moonshineTranscription";
@@ -124,10 +130,6 @@ async function startServer() {
     (req, res) => handleEasBuildWebhook(req, res),
   );
 
-  // Rate limiting — applied before route registration so every path is covered.
-  // Per-route tighter limits are also registered here (see rateLimits.ts).
-  registerRateLimits(app);
-
   // Large-payload body parsers MUST run before the global 1mb parser so GeoJSON
   // imports (e.g. Planner) don't hit "request entity too large". Register them first.
   const optimizerJsonParser = express.json({ limit: "22mb" });
@@ -163,6 +165,7 @@ async function startServer() {
   registerAiProxyRoutes(app);
   registerElevenLabsProxyRoutes(app);
   registerOptimizerProxyRoutes(app);
+  registerOverpassProxyRoutes(app);
   registerExtractHttpProxyRoutes(app);
 
   // PMTiles: serve files from data/pmtiles so style editors can use e.g. /tiles/planet_....pmtiles
@@ -205,6 +208,7 @@ async function startServer() {
         vroomOptimize:
           "POST /api/vroom/optimize (proxy to VROOM VRP solver)",
         osmTokenExchange: "POST /api/osm/token-exchange (OSM OAuth2 code→token)",
+        overpassQuery: "POST /api/overpass/query (proxy to Overpass API)",
       },
       timestamp: Date.now(),
     });

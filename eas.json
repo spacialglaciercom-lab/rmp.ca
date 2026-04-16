@@ -26,8 +26,8 @@
       "distribution": "store",
       "env": {
         "EAS_USE_CACHE": "0",
-        "EXPO_PUBLIC_API_BASE_URL": "https://zooming-insight-backend.up.railway.app",
-        "EXPO_PUBLIC_OPTIMIZER_URL": "https://modern-ideas-stare.loca.lt",
+        "EXPO_PUBLIC_API_BASE_URL": "https://rmpca-production.up.railway.app",
+        "EXPO_PUBLIC_OPTIMIZER_URL": "https://divine-harmony-optimizer.up.railway.app",
         "EXPO_PUBLIC_OVERTURE_EXTRACT_URL": "https://proud-magic-overtureextract.up.railway.app"
       },
       "ios": { "buildConfiguration": "Release", "image": "latest" }

@@ -49,7 +49,7 @@ export const ENV = {
     const raw =
       process.env.OPTIMIZER_BACKEND_URL ||
       process.env.EXPO_PUBLIC_OPTIMIZER_URL ||
-      "divine-harmony-optimizer-b5af.up.railway.app";
+      "https://divine-harmony-optimizer.up.railway.app";
     return raw.startsWith("http://") || raw.startsWith("https://")
       ? raw.replace(/\/$/, "")
       : `https://${raw.replace(/\/$/, "")}`;

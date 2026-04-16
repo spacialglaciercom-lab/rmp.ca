@@ -38,9 +38,9 @@ DUAL_CARRIAGEWAY_UTURN_KM = 500.0
 # Loop prevention configuration
 LOOP_PREVENTION_CONFIG = {
     'max_allowed_reversals': 3,  # Maximum reversals before warning
-    'geometric_penalty_factor': 0.01,  # Penalty for distant node pairings
+    'geometric_penalty_factor': 0.1,  # Penalty for distant node pairings (increased from 0.01)
     'loop_detection_sensitivity': 'high',  # low/medium/high
-    'enable_post_processing': True  # Enable reversal removal
+    'enable_post_processing': True  # Enabled: reduce excessive looping while preserving dead-end traversals
 }
 
 from .geojson_ops import (
@@ -408,6 +408,100 @@ def _oneway_allowed_directions(props: dict[str, Any]) -> tuple[bool, bool]:
     if ow == -1:
         return (False, True)
     return (True, True)
+
+
+def _augment_features_for_connectivity(
+    allowed_features: list[GeoJSONFeature],
+    all_features: list[GeoJSONFeature],
+) -> tuple[list[GeoJSONFeature], int]:
+    """Selectively add non-allowed-class road segments only where they bridge
+    disconnected components of the allowed-class graph.
+
+    Dead-end service roads (those that don't connect two different components)
+    are excluded — they would add odd-degree nodes and degrade route quality.
+
+    Returns:
+        (augmented_features, n_bridge_features_added)
+    """
+    # Build a lightweight undirected graph to find connected components.
+    G_pre = nx.Graph()
+    for feat in allowed_features:
+        geom = feat.geometry
+        gtype = geom.get("type", "")
+        lines: list[list[list[float]]] = []
+        if gtype == "LineString":
+            lines = [geom.get("coordinates", [])]
+        elif gtype == "MultiLineString":
+            lines = geom.get("coordinates", [])
+        for line in lines:
+            if len(line) < 2:
+                continue
+            for i in range(len(line) - 1):
+                u = _node_id(line[i][0], line[i][1])
+                v = _node_id(line[i + 1][0], line[i + 1][1])
+                if u != v:
+                    G_pre.add_edge(u, v)
+
+    if G_pre.number_of_nodes() == 0:
+        return allowed_features, 0
+
+    # Map each node to its component index.
+    components = list(nx.connected_components(G_pre))
+    if len(components) <= 1:
+        return allowed_features, 0
+
+    node_to_comp: dict[str, int] = {}
+    for idx, comp in enumerate(components):
+        for n in comp:
+            node_to_comp[n] = idx
+
+    # Union-Find helpers for greedy bridge selection.
+    parent = list(range(len(components)))
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(x: int, y: int) -> None:
+        parent[_find(x)] = _find(y)
+
+    # Collect candidate bridge features: vehicle-class roads not in allowed set.
+    allowed_set = {id(f) for f in allowed_features}
+    bridge_features: list[GeoJSONFeature] = []
+
+    for feat in all_features:
+        if id(feat) in allowed_set:
+            continue
+        rc = _get_road_class(feat)
+        if rc in NON_VEHICLE_CLASSES:
+            continue
+        geom = feat.geometry
+        gtype = geom.get("type", "")
+        lines: list[list[list[float]]] = []
+        if gtype == "LineString":
+            lines = [geom.get("coordinates", [])]
+        elif gtype == "MultiLineString":
+            lines = geom.get("coordinates", [])
+        for line in lines:
+            if len(line) < 2:
+                continue
+            start_nid = _node_id(line[0][0], line[0][1])
+            end_nid = _node_id(line[-1][0], line[-1][1])
+            comp_start = node_to_comp.get(start_nid)
+            comp_end = node_to_comp.get(end_nid)
+            if comp_start is None or comp_end is None:
+                continue
+            if _find(comp_start) != _find(comp_end):
+                _union(comp_start, comp_end)
+                bridge_features.append(feat)
+                break  # one match per feature is enough
+
+    if not bridge_features:
+        return allowed_features, 0
+
+    return allowed_features + bridge_features, len(bridge_features)
 
 
 def _build_graph(
@@ -806,7 +900,17 @@ def _solve_cpp(
             sub_route = _solve_cpp(sub, turn_penalties=turn_penalties, start_node=sub_start)
             if sub_route:
                 if full_route:
-                    full_route.extend(sub_route)
+                    # Try to find shortest path bridge between components
+                    last_node = full_route[-1]
+                    first_node = sub_route[0]
+                    try:
+                        bridge_path = nx.shortest_path(G, last_node, first_node, weight="length_km")
+                        # Add bridge path without duplicating endpoints
+                        full_route.extend(bridge_path[1:-1])
+                        full_route.extend(sub_route)
+                    except nx.NetworkXNoPath:
+                        # No path exists, simple concatenation (components are truly disconnected)
+                        full_route.extend(sub_route)
                 else:
                     full_route = sub_route
         return full_route
@@ -822,7 +926,9 @@ def _solve_cpp(
         try:
             circuit = eulerian_circuit_nx(G, start=start_node)
             if circuit:
-                return [circuit[0][0]] + [e[1] for e in circuit]
+                route = [circuit[0][0]] + [e[1] for e in circuit]
+                # Validate and clean route
+                return _validate_and_clean_route(route, G)
         except nx.NetworkXError:
             pass
 
@@ -918,44 +1024,60 @@ def _solve_cpp(
                         matched.add(v)
                         augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
         else:
-            # Directed: use minimum-cost flow for proper balancing
+            # Directed: use improved minimum-cost flow for proper balancing
             # This is the correct approach for directed Chinese Postman Problem
-            
-            # Create a flow network for minimum-cost flow
-            flow_network = nx.DiGraph()
-            
-            # Add all nodes from the original graph
-            for node in G.nodes():
-                flow_network.add_node(node)
-                # Set demand based on degree imbalance
-                in_deg = G.in_degree(node)
-                out_deg = G.out_degree(node)
-                flow_network.nodes[node]['demand'] = out_deg - in_deg
-            
-            # Add edges with their original weights (distances)
-            for u, v, data in G.edges(data=True):
-                weight = data.get('length_km', 1.0)
-                flow_network.add_edge(u, v, capacity=1, weight=weight)
-            
-            # Use a simplified approach that's more reliable
-            # The full minimum-cost flow can be computationally expensive
-            surplus_nodes = [n for n in odd_nodes if G.in_degree(n) > G.out_degree(n)]
-            deficit_nodes = [n for n in odd_nodes if G.out_degree(n) > G.in_degree(n)]
-            
-            # Sort pairs by distance to minimize deadhead
-            sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
-            matched: set[str] = set()
-            
-            # Pair surplus nodes with deficit nodes
-            for (u, v), _ in sorted_pairs:
-                u_surplus = G.in_degree(u) > G.out_degree(u)
-                v_surplus = G.in_degree(v) > G.out_degree(v)
-                
-                if (u_surplus and not v_surplus) or (v_surplus and not u_surplus):
-                    if u not in matched and v not in matched:
-                        matched.add(u)
-                        matched.add(v)
-                        augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
+
+            # Try min-cost flow first (more reliable)
+            try:
+                flow_network = nx.DiGraph()
+
+                # Add all nodes from the original graph
+                for node in G.nodes():
+                    flow_network.add_node(node)
+                    # Set demand based on degree imbalance
+                    in_deg = G.in_degree(node)
+                    out_deg = G.out_degree(node)
+                    flow_network.nodes[node]['demand'] = out_deg - in_deg
+
+                # Add edges with their original weights (distances)
+                for u, v, data in G.edges(data=True):
+                    weight = data.get('length_km', 1.0)
+                    flow_network.add_edge(u, v, capacity=float('inf'), weight=weight)
+
+                # Solve min-cost flow
+                flow_dict = nx.min_cost_flow(flow_network)
+
+                # Add flow edges to augment the graph
+                for u in flow_dict:
+                    for v, flow in flow_dict[u].items():
+                        if flow > 0 and not G.has_edge(u, v):
+                            # Add deadhead edge
+                            edge_data = G.get_edge_data(v, u) or {}
+                            if edge_data:
+                                min_key = min(edge_data.keys(), key=lambda k: edge_data[k].get("length_km", float("inf")))
+                                data = edge_data[min_key].copy()
+                                data["deadhead"] = True
+                                G_aug.add_edge(u, v, **data)
+
+            except (nx.NetworkXError, nx.NetworkXUnfeasible):
+                # Fallback to greedy pairing if min-cost flow fails
+                surplus_nodes = [n for n in odd_nodes if G.in_degree(n) > G.out_degree(n)]
+                deficit_nodes = [n for n in odd_nodes if G.out_degree(n) > G.in_degree(n)]
+
+                # Sort pairs by distance to minimize deadhead
+                sorted_pairs = sorted(odd_pairs_dist.items(), key=lambda x: x[1])
+                matched: set[str] = set()
+
+                # Pair surplus nodes with deficit nodes
+                for (u, v), _ in sorted_pairs:
+                    u_surplus = G.in_degree(u) > G.out_degree(u)
+                    v_surplus = G.in_degree(v) > G.out_degree(v)
+
+                    if (u_surplus and not v_surplus) or (v_surplus and not u_surplus):
+                        if u not in matched and v not in matched:
+                            matched.add(u)
+                            matched.add(v)
+                            augment_paths.append(odd_pairs_path.get((u, v), [u, v]))
 
         # Augment graph with matching edges
         G_aug = G.copy()
@@ -994,7 +1116,9 @@ def _solve_cpp(
         try:
             circuit = eulerian_circuit_nx(G_aug)
             if circuit:
-                return [circuit[0][0]] + [e[1] for e in circuit]
+                route = [circuit[0][0]] + [e[1] for e in circuit]
+                # Validate and clean route
+                return _validate_and_clean_route(route, G)
         except nx.NetworkXError:
             # If Hierholzer fails, try a fallback approach for directed graphs
             if G_aug.is_directed():
@@ -1028,7 +1152,9 @@ def _solve_cpp(
                     try:
                         circuit = eulerian_circuit_nx(G_aug, start=start_node)
                         if circuit:
-                            return [circuit[0][0]] + [e[1] for e in circuit]
+                            route = [circuit[0][0]] + [e[1] for e in circuit]
+                            # Validate and clean route
+                            return _validate_and_clean_route(route, G)
                     except nx.NetworkXError:
                         pass
 
@@ -1037,7 +1163,9 @@ def _solve_cpp(
         try:
             path_edges = list(nx.eulerian_path(G))
             if path_edges:
-                return [path_edges[0][0]] + [e[1] for e in path_edges]
+                route = [path_edges[0][0]] + [e[1] for e in path_edges]
+                # Validate and clean route
+                return _validate_and_clean_route(route, G)
         except nx.NetworkXError:
             pass
 
@@ -1047,7 +1175,9 @@ def _solve_cpp(
         # Use NetworkX's built-in Eulerian circuit if possible
         if nx.is_eulerian(G_aug):
             circuit = list(nx.eulerian_circuit(G_aug))
-            return [circuit[0][0]] + [e[1] for e in circuit]
+            route = [circuit[0][0]] + [e[1] for e in circuit]
+            # Validate and clean route
+            return _validate_and_clean_route(route, G)
     except nx.NetworkXError:
         pass
     
@@ -1088,8 +1218,9 @@ def _solve_cpp(
                 route.extend(path_back[1:])  # Skip first node to avoid duplication
             except nx.NetworkXNoPath:
                 pass
-        
-        return route if len(route) > 1 else []
+
+        # Validate and clean the greedy route
+        return _validate_and_clean_route(route if len(route) > 1 else [], G)
     
     # If all else fails, raise a clear error
     raise nx.NetworkXError(
@@ -1289,22 +1420,22 @@ def _detect_loop_pattern(route_nodes: list, window_size: int = 3) -> bool:
 def _remove_immediate_reversals(route_nodes: list[str]) -> list[str]:
     """
     Remove immediate reversal patterns (A->B->A) from route to reduce unnecessary looping.
-    
+
     Args:
         route_nodes: List of nodes in the route
-        
+
     Returns:
         Route with immediate reversals removed
     """
     if len(route_nodes) < 3:
         return route_nodes
-    
+
     cleaned_route = []
     i = 0
-    
+
     while i < len(route_nodes):
         # Check if current position forms an immediate reversal (A->B->A)
-        if (i + 2 < len(route_nodes) and 
+        if (i + 2 < len(route_nodes) and
             route_nodes[i] == route_nodes[i+2] and
             route_nodes[i] != route_nodes[i+1]):
             # Found A->B->A pattern, skip the middle node (B)
@@ -1317,14 +1448,86 @@ def _remove_immediate_reversals(route_nodes: list[str]) -> list[str]:
         else:
             cleaned_route.append(route_nodes[i])
             i += 1
-    
+
     # Remove consecutive duplicates that might have been created
     final_route = []
     for node in cleaned_route:
         if not final_route or node != final_route[-1]:
             final_route.append(node)
-    
+
     return final_route
+
+
+def _validate_and_clean_route(route_nodes: list[str], G: nx.MultiGraph | nx.MultiDiGraph) -> list[str]:
+    """
+    Validate route for excessive loops and apply cleanup if needed.
+
+    Args:
+        route_nodes: List of nodes in the route
+        G: The original graph
+
+    Returns:
+        Cleaned route if excessive looping detected, otherwise original route
+    """
+    if len(route_nodes) < 3:
+        return route_nodes
+
+    # Count reversals
+    reversals = sum(1 for i in range(1, len(route_nodes)-1)
+                   if route_nodes[i-1] == route_nodes[i+1]
+                   and route_nodes[i-1] != route_nodes[i])
+
+    # Count dead ends and all odd-degree nodes for a realistic bound.
+    # Each odd-degree pair in the matching contributes at least 1 reversal, so
+    # base the limit on the number of pairings (odd_degree / 2), not just degree-1 nodes.
+    dead_ends = sum(1 for n in G.nodes() if G.degree(n) == 1)
+    odd_degree_count = sum(1 for n in G.nodes() if G.degree(n) % 2 != 0)
+    # Allow up to 3× per pair, with a floor of dead_ends * 3 for backward compat
+    reversal_limit = max(odd_degree_count // 2 * 3, dead_ends * 3, 10)
+
+    if reversals > reversal_limit:
+        # Apply aggressive cleanup
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Route validation: {reversals} reversals > limit {reversal_limit}, applying cleanup")
+
+        # Remove immediate reversals
+        cleaned = _remove_immediate_reversals(route_nodes)
+
+        # Check for repeated sequences (A->B->C->A->B->C patterns)
+        if len(cleaned) >= 6:
+            # Remove short cycles (length 3-5) that repeat
+            final_cleaned = [cleaned[0]]
+            for i in range(1, len(cleaned)):
+                # Check if we're starting a repeated pattern
+                if i >= 3:
+                    # Look back for the same sequence
+                    for seq_len in range(3, min(6, len(cleaned) // 2)):
+                        if i + seq_len <= len(cleaned):
+                            current_seq = cleaned[i:i+seq_len]
+                            # Check if this sequence appeared before
+                            for j in range(max(0, i - seq_len * 2), i - seq_len + 1):
+                                if j + seq_len <= i:
+                                    if cleaned[j:j+seq_len] == current_seq:
+                                        # Found repeated sequence, skip it
+                                        break
+                            else:
+                                # No repeat found, add node
+                                final_cleaned.append(cleaned[i])
+                                break
+                        else:
+                            final_cleaned.append(cleaned[i])
+                            break
+                    else:
+                        final_cleaned.append(cleaned[i])
+                else:
+                    final_cleaned.append(cleaned[i])
+
+            return final_cleaned if len(final_cleaned) > 2 else cleaned
+        else:
+            return cleaned
+
+    return route_nodes
 
 
 def cpp_solution_to_gpx_segments(
@@ -1416,6 +1619,13 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
         features = cleaned_fc.features
     _t_after_clean = time.perf_counter()
 
+    # Preserve the full linestring feature list before road-class filtering so
+    # non-allowed classes can later be used as bridge candidates.
+    all_linestring_features = [
+        f for f in features
+        if f.geometry.get("type") in ("LineString", "MultiLineString")
+    ]
+
     allowed: set[str] = set(body.road_classes) if body.road_classes else set(DEFAULT_ROAD_CLASSES)
     features = [
         f for f in features
@@ -1428,6 +1638,12 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
 
     if not features:
         raise ValueError("No LineString/MultiLineString features found in the GeoJSON")
+
+    # Augment allowed features with bridge connectors: non-allowed vehicle-class
+    # segments added only where they stitch together disconnected components.
+    _t_before_bridge = time.perf_counter()
+    features, n_bridge_added = _augment_features_for_connectivity(features, all_linestring_features)
+    _t_after_bridge = time.perf_counter()
 
     # Compute input bbox for clipping component bridges
     input_bbox = _coordinate_bbox_from_geojson_features(features)
@@ -1743,8 +1959,9 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
     route_metrics, msg = _merge_extractor_bbox_verification(
         features, route_coords, route_metrics, msg
     )
-    # Add loop metrics to route metrics
+    # Add loop metrics and bridge connectivity metrics to route metrics
     route_metrics.update(loop_metrics)
+    route_metrics["service_bridge_features_added"] = n_bridge_added
     _t_after_analytics = time.perf_counter()
 
     route_geojson = GeoJSONFeatureCollection(
@@ -1792,7 +2009,8 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
         metrics=route_metrics,
         timing_ms={
             "clean_ms": _ms(_t_start, _t_after_clean),
-            "graph_build_ms": _ms(_t_after_clean, _t_after_graph),
+            "bridge_connectivity_ms": _ms(_t_before_bridge, _t_after_bridge),
+            "graph_build_ms": _ms(_t_after_bridge, _t_after_graph),
             "cpp_solve_ms": _ms(_t_before_cpp, _t_after_cpp),
             "route_build_ms": _ms(_t_after_cpp, _t_after_route_build),
             "analytics_ms": _ms(_t_after_route_build, _t_after_analytics),
@@ -1920,6 +2138,13 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     # 1. If caller supplies road_classes, use that allowlist exactly.
     # 2. Otherwise apply DEFAULT_ROAD_CLASSES (residential / secondary / tertiary / unclassified).
     # 3. Always strip NON_VEHICLE_CLASSES (footway, railway, etc.) regardless of (1) or (2).
+
+    # Preserve pre-filter list for bridge candidate lookup.
+    all_linestring_features = [
+        f for f in features
+        if f.geometry.get("type") in ("LineString", "MultiLineString")
+    ]
+
     allowed: set[str] = set(body.road_classes) if body.road_classes else set(DEFAULT_ROAD_CLASSES)
     features = [f for f in features if _get_road_class(f) in allowed and _get_road_class(f) not in NON_VEHICLE_CLASSES]
 
@@ -1934,6 +2159,11 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
             status_code=400,
             detail="No LineString/MultiLineString features found in the GeoJSON",
         )
+
+    # Augment with bridge connectors before graph build.
+    _t_before_bridge = time.perf_counter()
+    features, n_bridge_added = _augment_features_for_connectivity(features, all_linestring_features)
+    _t_after_bridge = time.perf_counter()
 
     # Build graph (directed with plugin costs when dem_path or turn penalty plugin set, else undirected / oneway-aware)
     oneway_mode = _normalize_oneway_mode(body.oneway_mode)
@@ -2026,37 +2256,19 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     if not route_nodes:
         raise HTTPException(status_code=400, detail="Could not compute route — graph may be empty or disconnected")
 
-    # Enhanced loop detection: check for repeated node sequences (sync version)
+    # Detect loop patterns for metrics (sync version).
+    # NOTE: _solve_cpp already applies _validate_and_clean_route internally;
+    # do NOT call _remove_immediate_reversals here — it would strip legitimate
+    # CPP deadhead traversals and cause total_traversals < edges_in_graph.
     is_loop_pattern = _detect_loop_pattern(route_nodes)
-    
-    # Real-time monitoring: track loop metrics (sync version)
-    if is_loop_pattern:
-        # Count reversals for monitoring
-        reversal_count = sum(1 for i in range(1, len(route_nodes)-1) 
-                            if route_nodes[i-1] == route_nodes[i+1] 
-                            and route_nodes[i-1] != route_nodes[i])
-        
-        # Log warning if excessive looping detected (configurable threshold)
-        if reversal_count > LOOP_PREVENTION_CONFIG['max_allowed_reversals']:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"High looping detected in route optimization (sync): {reversal_count} reversals")
-        
-        # Post-processing: remove immediate reversal patterns to reduce looping (configurable)
-        if LOOP_PREVENTION_CONFIG['enable_post_processing']:
-            route_nodes = _remove_immediate_reversals(route_nodes)
-        
-        # Store loop information for metrics (sync version)
-        loop_metrics_sync = {
-            'looping_detected': True,
-            'reversal_count_before_cleanup': reversal_count
-        }
-    else:
-        # No looping detected, initialize empty loop metrics (sync version)
-        loop_metrics_sync = {
-            'looping_detected': False,
-            'reversal_count_before_cleanup': 0
-        }
+    reversal_count = sum(
+        1 for i in range(1, len(route_nodes) - 1)
+        if route_nodes[i - 1] == route_nodes[i + 1] and route_nodes[i - 1] != route_nodes[i]
+    )
+    loop_metrics_sync = {
+        'looping_detected': is_loop_pattern,
+        'reversal_count_before_cleanup': reversal_count,
+    }
 
     # If start node specified, rotate circuit to start there.
     # Only apply rotation when the route is circular (first == last), i.e. a single Eulerian circuit.
@@ -2112,17 +2324,35 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
                     edge_name = edata.get("name")
                     edge_osm_id = edata.get("osm_id")
                     edge_dist_km = edata.get("length_km", 0)
-                    
+
                     if raw_coords:
                         start_nid = _node_id(raw_coords[0][0], raw_coords[0][1])
                         # If the edge in G is stored u->v (or v->u), check if we traverse it backwards relative to geometry
                         # The node IDs are rounded coordinates.
-                        # raw_coords[0] is start. 
+                        # raw_coords[0] is start.
                         # If 'u' (current start) matches raw_coords[0], we are forward.
                         reversed_coords = (start_nid != u)
                         edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
                     break
-        
+                # If this key is consumed, continue to the next key
+            else:
+                # All keys consumed — this hop represents a CPP deadhead traversal that was added
+                # to G_aug but does not exist as a separate key in G. Mark it as deadhead so
+                # deadhead_distance_km is populated correctly, and populate edge_coords so that
+                # total_traversals is incremented (is_component_bridge stays False).
+                ek, edata = next(iter(edge_data.items()))
+                canon = (u, v, ek) if G.is_directed() else (min(u, v), max(u, v), ek)
+                edge_traversal_count[canon] += 1
+                is_deadhead = True  # CPP deadhead — traversal beyond original edge count
+                raw_coords = edata.get("coords") or []
+                edge_name = edata.get("name")
+                edge_osm_id = edata.get("osm_id")
+                edge_dist_km = edata.get("length_km", 0)
+                if raw_coords:
+                    start_nid = _node_id(raw_coords[0][0], raw_coords[0][1])
+                    reversed_coords = (start_nid != u)
+                    edge_coords = list(reversed(raw_coords)) if reversed_coords else raw_coords
+
         # -----------------------------------------------------------
         # Instruction Generation (Simple)
         # -----------------------------------------------------------
@@ -2272,8 +2502,9 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
     route_metrics, msg = _merge_extractor_bbox_verification(
         features, route_coords, route_metrics, msg
     )
-    # Add loop metrics to route metrics (sync version)
+    # Add loop metrics and bridge connectivity metrics to route metrics (sync version)
     route_metrics.update(loop_metrics_sync)
+    route_metrics["service_bridge_features_added"] = n_bridge_added
     _t_after_analytics = time.perf_counter()
 
     # Build route GeoJSON
@@ -2314,7 +2545,8 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
 
     timing_ms = {
         "clean_ms": _ms(_t_start, _t_after_clean),
-        "graph_build_ms": _ms(_t_after_clean, _t_after_graph),
+        "bridge_connectivity_ms": _ms(_t_before_bridge, _t_after_bridge),
+        "graph_build_ms": _ms(_t_after_bridge, _t_after_graph),
         "cpp_solve_ms": _ms(_t_before_cpp, _t_after_cpp),
         "route_build_ms": _ms(_t_after_cpp, _t_after_route_build),
         "analytics_ms": _ms(_t_after_route_build, _t_after_analytics),
