@@ -54,7 +54,7 @@ const config = {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
     /** CFBundleVersion; must increment for each App Store submission (EAS Submit). */
-    buildNumber: "16",
+    buildNumber: "17",
     /** Required for Sign in with Apple (expo-apple-authentication) — adds the Apple Sign In entitlement. */
     usesAppleSignIn: true,
     googleServicesFile: "./GoogleService-Info.plist",

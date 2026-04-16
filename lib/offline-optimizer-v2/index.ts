@@ -13,10 +13,12 @@
 export { RouteOptimizerSimpleV2 } from "./routeOptimizerSimple";
 export {
   optimizeFromGeoJSON,
+  type OptimizeFromGeoJSONResult,
   type GeoJSONFeatureCollection,
   type GeoJSONConvertOptions,
   type OptimizeFromGeoJSONOptions,
 } from "./optimizeFromGeoJSON";
+export { optimizationResultToGeoJSON } from "./resultToGeoJSON";
 export {
   FuelAwarePlugin,
   TurnPenaltyPlugin,

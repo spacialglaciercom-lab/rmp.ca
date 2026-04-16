@@ -22,15 +22,17 @@ import { saveOSMFile } from "@/lib/osm-file-library";
 import { parseGeoJSON, importGeoJSONRoute } from "@/lib/geojson-import";
 import {
   optimizeFromGeoJSON,
+  optimizationResultToGeoJSON,
   RouteOptimizerSimpleV2,
 } from "@/lib/offline-optimizer-v2";
 import { pruneRouteLoops } from "@/lib/route-loop-pruner";
+import type { GeoJSONFeatureCollection } from "@/lib/geojson-utils";
 
 interface OSMImportProps {
   onImportComplete: (
     points: CollectionPoint[],
     osmData?: StoredOSMData,
-    options?: { totalDistanceKm?: number },
+    options?: { totalDistanceKm?: number; routeGeoJSON?: GeoJSONFeatureCollection },
   ) => void;
   /** When true, GeoJSON imports use the offline v2 optimizer instead of the backend. */
   useOfflineOptimizerV2?: boolean;
@@ -131,6 +133,14 @@ export function OSMImport({
               customLat: startCoords?.latitude,
               customLon: startCoords?.longitude,
             });
+
+            // Create GeoJSON with proper road geometry
+            const routeGeoJSON = optimizationResultToGeoJSON(
+              opt,
+              opt.nodes ?? new Map(),
+              opt.ways ?? []
+            );
+
             return {
               collectionPoints: opt.route.map((p, i) => ({
                 id: (p as { nodeId?: string }).nodeId ?? `route-${i}`,
@@ -141,7 +151,8 @@ export function OSMImport({
                 status: "pending" as const,
               })),
               totalDistanceKm: opt.totalDistance,
-              stats: { nodesInGraph: 0, edgesInGraph: 0 },
+              stats: { nodesInGraph: opt.nodes?.size ?? 0, edgesInGraph: opt.ways?.length ?? 0 },
+              routeGeoJSON: routeGeoJSON, // Include road geometry
             };
           })()
         : await importGeoJSONRoute(geojson, {
@@ -188,6 +199,7 @@ export function OSMImport({
         hapticNotification(NotificationFeedbackType.Success);
         onImportComplete(geoJSONResult.collectionPoints, undefined, {
           totalDistanceKm: geoJSONResult.totalDistanceKm,
+          routeGeoJSON: (geoJSONResult as any).routeGeoJSON,
         });
       }
     },

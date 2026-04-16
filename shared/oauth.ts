@@ -8,7 +8,7 @@ const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
 /** Fallback for native only; web uses same-origin in getApiBaseUrl(). */
-const DEFAULT_API_BASE_URL = "https://zooming-insight-backend.up.railway.app";
+const DEFAULT_API_BASE_URL = "https://rmpca-production.up.railway.app";
 
 const rawApiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
 const env = {

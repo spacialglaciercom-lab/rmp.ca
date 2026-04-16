@@ -24,6 +24,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 
 class _SuppressHealthLogs(logging.Filter):
@@ -44,6 +45,20 @@ from scipy.sparse.linalg import eigsh
 from sklearn.cluster import KMeans
 
 app = FastAPI(title="RouteMasterPro Optimizer API", version="1.1.0")
+
+# Add CORS middleware to allow cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Development server
+        "http://localhost:19007",  # Expo development
+        "http://localhost:8081",  # Vite dev server
+        "*",  # Allow all origins for development (restrict in production)
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 
 def _sanitize_for_json(obj: object) -> object:
