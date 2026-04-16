@@ -29,6 +29,11 @@ import {
   detectSimpleOscillation,
   type CycleDetectorConfig,
 } from "../cycleDetector";
+import {
+  hierholzer,
+  type HierholzerGraph,
+  type EdgeSelector,
+} from "../_core/hierholzer";
 
 interface EdgeData {
   length: number;
@@ -862,20 +867,15 @@ export class RouteOptimizer {
   private hierholzerWithTurnOptimization(startNode: string): string[] {
     const graphCopy = copyGraph(this.doubledGraph);
 
-    const circuit: string[] = [];
-    const stack: string[] = [startNode];
-
-    // Incremental counter — O(1) per edge removal instead of O(V) per iteration
-    let remainingEdgeCount = totalEdges(graphCopy);
-
-    // Reset U-turn tracking for this traversal
+    // Reset per-traversal state
     this.recentUturnCount = 0;
     this.uturnLocations.clear();
+    this.edgeTraversalCounts.clear();
+    this.localTabuNodes.clear();
 
-    // Initialize cycle detector for this traversal (skip when antiLoopMode is "off")
     const strict = this.options.antiLoopMode === "strict";
     const antiLoopOff = this.options.antiLoopMode === "off";
-    this.cycleDetector = antiLoopOff
+    const cycleDetector = antiLoopOff
       ? null
       : new CycleDetector({
           maxSccRevisits: strict ? 1 : 2,
@@ -883,135 +883,111 @@ export class RouteOptimizer {
           recentWindowSize: strict ? 14 : 30,
           debug: false,
         });
+    this.cycleDetector = cycleDetector;
     this.cycleDiagnostics = { loopsDetected: 0, escapeAttempts: 0 };
-    // Reset traversal quotas and local tabu state
-    this.edgeTraversalCounts.clear();
-    this.localTabuNodes.clear();
 
-    // Safety cap based on graph size
-    const maxIterations = totalEdges(this.doubledGraph) * 3;
-    let iterations = 0;
+    // ── Graph adapter ──────────────────────────────────────────
+    let remainingCount = totalEdges(graphCopy);
+    const graph: HierholzerGraph<AdjEntry> = {
+      getCandidates: (node) => graphCopy.get(node) ?? [],
+      getTarget: (entry) => entry.target,
+      consumeEdge: (node, entry) => {
+        removeEdge(graphCopy, node, entry.edgeId);
+        remainingCount--;
+      },
+      remainingEdgeCount: () => remainingCount,
+    };
 
-    while (stack.length > 0 && iterations < maxIterations) {
-      iterations++;
-      const current = stack[stack.length - 1]!;
-      const edges = graphCopy.get(current);
-
-      // Check for infinite loop patterns using cycle detector (counter maintained incrementally)
-      let loopEscapeMode = false;
-      if (this.cycleDetector) {
-        const detection = this.cycleDetector.enterNode(
-          current,
-          remainingEdgeCount,
+    // ── Edge selector ──────────────────────────────────────────
+    // Wraps chooseBestEdge, adds oscillation detection and state tracking
+    // that previously lived in the Hierholzer loop body.
+    const self = this;
+    const edgeSelector: EdgeSelector<AdjEntry> = {
+      select(
+        current: string,
+        candidates: AdjEntry[],
+        stack: ReadonlyArray<string>,
+        loopEscapeMode: boolean,
+      ): AdjEntry {
+        // Detect simple oscillation and mark culprit as locally tabu
+        const osc = detectSimpleOscillation(
+          stack as string[],
+          strict ? 6 : 12,
+          strict ? 2 : 3,
         );
-        if (detection.isLooping) {
-          this.cycleDiagnostics.loopsDetected++;
-          // Only log every 10th loop to reduce spam
-          const logEvery = this.options.logLoopEvery ?? 10;
-          if (
-            logEvery > 0 &&
-            this.cycleDiagnostics.loopsDetected % logEvery === 1
-          ) {
-            warn(
-              "hierholzer",
-              `Loop detected (${detection.loopType}) at ${current}`,
-              {
-                stagnantIterations: detection.stagnantIterations,
-                tabuNodes: detection.tabuNodes.size,
-              },
-            );
-          }
-          this.cycleDiagnostics.escapeAttempts++;
+        if (osc.isOscillating && osc.culprit) {
+          self.localTabuNodes.add(osc.culprit);
           loopEscapeMode = true;
-
-          // If severely stuck, force backtrack to break circular patterns earlier
-          const backtrackThreshold = strict ? 12 : 35;
-          if (
-            detection.stagnantIterations > backtrackThreshold &&
-            stack.length > 3
-          ) {
-            // Force backtrack by treating current as having no edges
-            if (this.cycleDetector) {
-              this.cycleDetector.leaveNode(current);
-            }
-            circuit.push(stack.pop()!);
-            continue;
-          }
         }
-      }
 
-      // Detect simple oscillation in the recent stack and mark culprit tabu
-      const osc = detectSimpleOscillation(
-        stack,
-        strict ? 6 : 12,
-        strict ? 2 : 3,
-      );
-      if (osc.isOscillating && osc.culprit) {
-        this.localTabuNodes.add(osc.culprit);
-        loopEscapeMode = true;
-      }
-
-      if (edges && edges.length > 0) {
         let chosen: AdjEntry;
-
-        if (edges.length > 1 && stack.length > 1) {
+        if (candidates.length > 1 && stack.length > 1) {
           const prevNode = stack[stack.length - 2]!;
-          chosen = this.chooseBestEdge(
+          chosen = self.chooseBestEdge(
             graphCopy,
             prevNode,
             current,
-            edges,
-            stack,
+            candidates,
+            stack as string[],
             loopEscapeMode,
           );
         } else {
-          chosen = edges[0]!;
+          chosen = candidates[0]!;
         }
 
-        // Track U-turns for cumulative penalty
+        // Track U-turns for cumulative penalty used by chooseBestEdge scoring
         if (stack.length > 1) {
           const prevNode = stack[stack.length - 2]!;
           if (chosen.target === prevNode) {
-            this.recentUturnCount++;
-            this.uturnLocations.add(current);
+            self.recentUturnCount++;
+            self.uturnLocations.add(current);
           } else {
-            // Decay U-turn count when making non-U-turn moves
-            this.recentUturnCount = Math.max(0, this.recentUturnCount - 0.5);
+            self.recentUturnCount = Math.max(0, self.recentUturnCount - 0.5);
           }
         }
 
-        // Update cycle detector with edge traversal
-        if (this.cycleDetector) {
-          this.cycleDetector.updateLowlink(current, chosen.target);
-        }
+        // Track per-edge traversal count for quota enforcement
+        self.edgeTraversalCounts.set(
+          chosen.edgeId,
+          (self.edgeTraversalCounts.get(chosen.edgeId) ?? 0) + 1,
+        );
 
-        stack.push(chosen.target);
-        // Increment traversal counter for this logical edge (edgeId is stable)
-        const prevCount = this.edgeTraversalCounts.get(chosen.edgeId) ?? 0;
-        this.edgeTraversalCounts.set(chosen.edgeId, prevCount + 1);
+        return chosen;
+      },
+    };
 
-        removeEdge(graphCopy, current, chosen.edgeId);
-        remainingEdgeCount--;
-      } else {
-        // Backtracking - notify cycle detector
-        if (this.cycleDetector) {
-          this.cycleDetector.leaveNode(current);
-        }
-        circuit.push(stack.pop()!);
-      }
+    // ── Run core Hierholzer ────────────────────────────────────
+    const result = hierholzer(graph, startNode, {
+      edgeSelector,
+      cycleDetector,
+      maxIterationsMultiplier: 3,
+      stagnantBacktrackThreshold: strict ? 12 : 35,
+    });
+
+    // Propagate diagnostics back to instance (used by callers via getStats)
+    if (result.cycleDiagnostics) {
+      this.cycleDiagnostics = {
+        loopsDetected: result.cycleDiagnostics.loopsDetected,
+        escapeAttempts: result.cycleDiagnostics.escapeAttempts,
+      };
     }
 
-    if (iterations >= maxIterations) {
+    if (result.hitIterationCap) {
+      const maxIterations = totalEdges(this.doubledGraph) * 3;
       warn("hierholzer", `Hit iteration cap (${maxIterations})`, {
-        circuitLength: circuit.length,
-        stackLength: stack.length,
-        remainingEdges: remainingEdgeCount,
+        circuitLength: result.nodeCircuit.length,
+        remainingEdges: result.unconsumedEdges,
       });
-      if (this.cycleDetector) {
-        const diag = this.cycleDetector.getDiagnostics();
-        warn("hierholzer", "Cycle detector diagnostics", diag);
+      if (cycleDetector) {
+        warn(
+          "hierholzer",
+          "Cycle detector diagnostics",
+          cycleDetector.getDiagnostics(),
+        );
       }
     }
+
+    const circuit = result.nodeCircuit;
 
     // Check final circuit for repeating patterns
     const cycleCheck = detectRouteCycle(circuit, 5, 30);
@@ -1022,7 +998,6 @@ export class RouteOptimizer {
       });
     }
 
-    circuit.reverse();
     return circuit;
   }
 

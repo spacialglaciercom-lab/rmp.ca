@@ -22,6 +22,11 @@ import type {
 } from "@/lib/route-optimizer-v2/types";
 import type { RoutingCostPlugin, Coord } from "@/lib/routing_plugins";
 import { haversineMeters } from "@/lib/routing_plugins";
+import {
+  hierholzer as coreHierholzer,
+  type HierholzerGraph,
+  type EdgeSelector,
+} from "@/lib/_core/hierholzer";
 
 interface EdgeData {
   length: number;
@@ -391,37 +396,61 @@ export class RouteOptimizerSimpleV2 {
   }
 
   private hierholzer(start: string): string[] {
+    // Build a working copy of the graph for destructive traversal
     const g = new Map<string, Map<string, EdgeData>>();
-    let totalEdges = 0;
+    let edgeCount = 0;
     for (const [node, edges] of this.graph) {
       const copy = new Map(edges);
       g.set(node, copy);
-      totalEdges += copy.size;
+      edgeCount += copy.size;
     }
-    const maxIterations = Math.max(3 * totalEdges, 500_000);
 
-    const circuit: string[] = [];
-    const stack: string[] = [start];
-    let iterations = 0;
+    // ── Graph adapter ──────────────────────────────────────────
+    // TEdgeId = string (target node id); valid because the nested Map
+    // allows at most one edge to each target per source.
+    let remaining = edgeCount;
+    const graph: HierholzerGraph<string> = {
+      getCandidates: (node) => {
+        const edges = g.get(node);
+        return edges && edges.size > 0 ? Array.from(edges.keys()) : [];
+      },
+      getTarget: (target) => target,
+      consumeEdge: (node, target) => {
+        g.get(node)?.delete(target);
+        remaining--;
+      },
+      remainingEdgeCount: () => remaining,
+    };
 
-    while (stack.length > 0 && iterations < maxIterations) {
-      iterations++;
-      const current = stack[stack.length - 1]!;
-      const edges = g.get(current);
-
-      if (edges && edges.size > 0) {
+    // ── Edge selector ──────────────────────────────────────────
+    // Delegates to chooseBest, which looks up EdgeData from `g` and
+    // applies TURN_COSTS / plugin transition costs.
+    const self = this;
+    const edgeSelector: EdgeSelector<string> = {
+      select(
+        current: string,
+        candidates: string[],
+        stack: ReadonlyArray<string>,
+        _loopEscapeMode: boolean,
+      ): string {
+        if (candidates.length === 1) return candidates[0]!;
         const prev = stack.length > 1 ? stack[stack.length - 2]! : null;
-        const next = this.chooseBest(prev, current, edges);
+        if (!prev) return candidates[0]!;
+        const edges = g.get(current);
+        if (!edges) return candidates[0]!;
+        return self.chooseBest(prev, current, edges);
+      },
+    };
 
-        stack.push(next);
-        edges.delete(next);
-      } else {
-        circuit.push(stack.pop()!);
-      }
-    }
+    // ── Run core Hierholzer ────────────────────────────────────
+    // maxIterationsMultiplier 3 keeps the same cap as the original
+    // Math.max(3 * totalEdges, 500_000); for typical graphs this matches.
+    const result = coreHierholzer(graph, start, {
+      edgeSelector,
+      maxIterationsMultiplier: 3,
+    });
 
-    circuit.reverse();
-    return circuit;
+    return result.nodeCircuit;
   }
 
   private chooseBest(
