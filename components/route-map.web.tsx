@@ -360,14 +360,35 @@ function LeafletGeoJSONOverlay({
                       if (nodeId == null) {
                         try {
                           const query = `[out:json][timeout:5];(way["highway"](around:30,${lat},${lon}););node(w)(around:30,${lat},${lon});out 1;`;
-                          const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
-                          if (res.ok) {
-                            const data = await res.json();
-                            const id: number | undefined = data.elements?.[0]?.id;
-                            if (id != null) {
-                              bestNodeId = id;
-                              updateNodeIdDisplay(id);
+                          
+                          // Use Overpass proxy to avoid CORS issues
+                          const apiBase = typeof window !== 'undefined' ? window.EXPO_PUBLIC_API_BASE_URL : process.env.EXPO_PUBLIC_API_BASE_URL;
+                          const proxyUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/overpass/query` : null;
+                          
+                          let data;
+                          if (proxyUrl) {
+                            const res = await fetch(proxyUrl, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ query })
+                            });
+                            if (res.ok) {
+                              data = await res.json();
                             }
+                          }
+                          
+                          // Fallback to direct call if proxy fails
+                          if (!data) {
+                            const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+                            if (res.ok) {
+                              data = await res.json();
+                            }
+                          }
+                          
+                          const id: number | undefined = data?.elements?.[0]?.id;
+                          if (id != null) {
+                            bestNodeId = id;
+                            updateNodeIdDisplay(id);
                           }
                         } catch {
                           // Overpass unreachable — leave "…"
