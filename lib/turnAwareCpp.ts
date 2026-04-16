@@ -4,6 +4,11 @@ import {
   type CycleDetectorConfig,
   DEFAULT_CYCLE_CONFIG,
 } from "./cycleDetector";
+import {
+  hierholzer,
+  type HierholzerGraph,
+  type EdgeSelector,
+} from "./_core/hierholzer";
 
 export interface TurnAwareCppResult {
   circuit: TurnEdge[];
@@ -57,213 +62,156 @@ export function solveTurnAwareCPP(
   const cycleDetector = enableCycleDetection
     ? new CycleDetector({ ...DEFAULT_CYCLE_CONFIG, ...cycleConfig })
     : null;
-  let loopsDetected = 0;
-  let escapeAttempts = 0;
-  let tabuNodesUsed = 0;
 
-  // Sort adjacency lists to control Hierholzer traversal order.
-  // Priority: non-deadhead first, then U-turns last (with extra penalty for
-  // dead-end U-turns that would cause re-traversal), then prefer destinations
-  // with higher out-degree (more unvisited territory), then by cost.
-  const sortAdjacency = (indices: number[], currentKey?: string) => {
-    indices.sort((a, b) => {
-      const ea = turnEdges[a]!;
-      const eb = turnEdges[b]!;
+  // ── Graph adapter ────────────────────────────────────────────
+  // Track consumed edges via a Set so each consumeEdge is O(1) and
+  // getCandidates filters the original adj list in O(k) where k is small.
+  const consumed = new Set<number>();
+  let remaining = turnEdges.length;
 
-      // If cycle detection is active, apply tabu penalties
-      if (cycleDetector) {
-        const aTabu = cycleDetector.isTabu(toKeyArr[a]!) ? 1000 : 0;
-        const bTabu = cycleDetector.isTabu(toKeyArr[b]!) ? 1000 : 0;
-        if (aTabu !== bTabu) return aTabu - bTabu;
-
-        const aPenalty = cycleDetector.getPenalty(toKeyArr[a]!);
-        const bPenalty = cycleDetector.getPenalty(toKeyArr[b]!);
-        if (Math.abs(aPenalty - bPenalty) > 50) return aPenalty - bPenalty;
-      }
-
-      const aDeadhead = ea.deadhead ? 1 : 0;
-      const bDeadhead = eb.deadhead ? 1 : 0;
-      if (aDeadhead !== bDeadhead) return aDeadhead - bDeadhead;
-
-      // U-turn handling with dead-end awareness
-      const aUturn = ea.turnType === "u-turn" ? 1 : 0;
-      const bUturn = eb.turnType === "u-turn" ? 1 : 0;
-      if (aUturn !== bUturn) return aUturn - bUturn;
-
-      // For U-turns, prefer those that don't lead to dead-ends (degree 1)
-      if (aUturn && bUturn) {
-        const aDeg = adj.get(toKeyArr[a]!)?.length ?? 0;
-        const bDeg = adj.get(toKeyArr[b]!)?.length ?? 0;
-        if (aDeg <= 1 && bDeg > 1) return 1;
-        if (bDeg <= 1 && aDeg > 1) return -1;
-      }
-
-      const aDeg = adj.get(toKeyArr[a]!)?.length ?? 0;
-      const bDeg = adj.get(toKeyArr[b]!)?.length ?? 0;
-      if (aDeg !== bDeg) return bDeg - aDeg;
-      return ea.totalCost - eb.totalCost;
-    });
+  const graph: HierholzerGraph<number> = {
+    getCandidates(node: string): number[] {
+      const indices = adj.get(node);
+      if (!indices) return [];
+      return indices.filter((i) => !consumed.has(i));
+    },
+    getTarget(edgeIdx: number): string {
+      return toKeyArr[edgeIdx]!;
+    },
+    consumeEdge(_node: string, edgeIdx: number): void {
+      consumed.add(edgeIdx);
+      remaining--;
+    },
+    remainingEdgeCount(): number {
+      return remaining;
+    },
   };
 
-  // Initial sort
-  adj.forEach((indices) => sortAdjacency(indices));
+  // ── Edge selector ────────────────────────────────────────────
+  // Scoring mirrors the original sortAdjacency comparator, converted to an
+  // additive score with weights that preserve the same priority ordering:
+  //   tabu > recent-stack (escape) > cycle-penalty > deadhead > u-turn > degree > cost
+  //
+  // The weights are chosen so each level dominates all lower levels combined.
+  const edgeSelector: EdgeSelector<number> = {
+    select(
+      current: string,
+      candidates: number[],
+      stack: ReadonlyArray<string>,
+      loopEscapeMode: boolean,
+    ): number {
+      if (candidates.length === 1) return candidates[0]!;
 
-  // Use index pointers instead of shift() (O(1) vs O(n) per dequeue)
-  const remainingIdx = new Map<string, number>();
-  adj.forEach((_, key) => {
-    remainingIdx.set(key, 0);
-  });
+      // Build recent-stack set once per escape-mode call
+      const recentStackNodes = new Set<string>();
+      if (loopEscapeMode && stack.length > 5) {
+        for (
+          let i = Math.max(0, stack.length - 20);
+          i < stack.length;
+          i++
+        ) {
+          recentStackNodes.add(stack[i]!);
+        }
+      }
 
-  // Incremental counter — O(1) per edge consumption instead of O(V) per iteration
-  let remainingEdgeCount = turnEdges.length;
+      let bestIdx = candidates[0]!;
+      let bestScore = Infinity;
+      let allTabu = true;
 
-  const stats = { right: 0, left: 0, uTurn: 0, straight: 0 };
+      for (const idx of candidates) {
+        const edge = turnEdges[idx]!;
+        const targetKey = toKeyArr[idx]!;
+        let score = 0;
+
+        // Tabu — absolute priority (1e8 isolates it from all other factors)
+        const isTabu = cycleDetector?.isTabu(targetKey) ?? false;
+        if (isTabu) {
+          score += 1e8;
+        } else {
+          allTabu = false;
+        }
+
+        // Escape mode: penalise recently-visited stack nodes (below tabu)
+        if (loopEscapeMode && recentStackNodes.has(targetKey)) {
+          score += 1e7;
+        }
+
+        // Cycle-detector frequency penalty
+        if (cycleDetector) {
+          // Multiplier 2000 means a penalty diff of 50 ≈ deadhead weight,
+          // preserving the original sort's ">50 diff" significance threshold.
+          score += cycleDetector.getPenalty(targetKey) * 2000;
+        }
+
+        // Deadhead edges: traverse last
+        if (edge.deadhead) score += 1e5;
+
+        // U-turn avoidance; extra penalty to dead-ends
+        if (edge.turnType === "u-turn") {
+          score += 1e4;
+          const deg = adj.get(targetKey)?.length ?? 0;
+          if (deg <= 1) score += 5e3;
+        }
+
+        // Prefer destinations with more outgoing edges (original degree)
+        const deg = adj.get(targetKey)?.length ?? 0;
+        score -= deg * 100;
+
+        // Cost as final tiebreaker
+        score += edge.totalCost * 0.01;
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = idx;
+        }
+      }
+
+      // If every candidate leads to a tabu node, clear tabu for the best
+      // and take it — same fallback as the original implementation.
+      if (allTabu && cycleDetector) {
+        cycleDetector.clearTabu(toKeyArr[bestIdx]!);
+      }
+
+      return bestIdx;
+    },
+  };
 
   const startKey: string = startNode
     ? `${startNode.edgeId}:${startNode.direction}`
     : (adj.keys().next().value ?? "");
 
-  // Hierholzer's: use edge stack, append on backtrack
-  const nodeStack: string[] = [startKey];
-  const edgeIdxStack: number[] = [-1]; // edge index that led to this node (-1 = none)
-  const circuit: TurnEdge[] = [];
+  // ── Run core Hierholzer ──────────────────────────────────────
+  const result = hierholzer(graph, startKey, {
+    edgeSelector,
+    cycleDetector,
+    maxIterationsMultiplier: 10,
+    stagnantBacktrackThreshold: 50,
+  });
 
-  // Safety cap to prevent true infinite loops
-  const maxIterations = turnEdges.length * 10;
-  let iterations = 0;
+  // Map edge-index circuit back to TurnEdge objects
+  const circuit = result.edgeCircuit.map((idx) => turnEdges[idx]!);
 
-  while (nodeStack.length > 0 && iterations < maxIterations) {
-    iterations++;
-    const key = nodeStack[nodeStack.length - 1]!;
-    const indices = adj.get(key);
-    const idx = remainingIdx.get(key) ?? 0;
-
-    let loopEscapeMode = false;
-    if (cycleDetector) {
-      // Check for infinite loop patterns (remainingEdgeCount maintained incrementally)
-      const detection = cycleDetector.enterNode(key, remainingEdgeCount);
-      if (detection.isLooping) {
-        loopsDetected++;
-        // Only log every 10th loop to reduce spam
-        if (loopsDetected % 10 === 1) {
-          console.warn(
-            `[TurnAwareCPP] Loop detected (${detection.loopType}) at ${key}, ` +
-              `attempting escape. Tabu nodes: ${detection.tabuNodes.size}`,
-          );
-        }
-        loopEscapeMode = true;
-        escapeAttempts++;
-        tabuNodesUsed += detection.tabuNodes.size;
-
-        // If severely stuck (50+ stagnant iterations), force backtrack
-        if (detection.stagnantIterations > 50 && nodeStack.length > 3) {
-          cycleDetector.leaveNode(key);
-          nodeStack.pop();
-          const edgeIdx = edgeIdxStack.pop()!;
-          if (edgeIdx >= 0) {
-            circuit.push(turnEdges[edgeIdx]!);
-          }
-          continue;
-        }
-
-        // Re-sort adjacency with stronger penalties in escape mode
-        if (indices && idx < indices.length) {
-          const remaining = indices.slice(idx);
-          sortAdjacency(remaining, key);
-          indices.splice(idx, indices.length - idx, ...remaining);
-        }
-      }
-    }
-
-    if (indices && idx < indices.length) {
-      // Find best non-tabu edge
-      let edgeIdx = indices[idx]!;
-      let searchIdx = idx;
-
-      // Build set of recent stack nodes to avoid in escape mode
-      const recentStackNodes = new Set<string>();
-      if (loopEscapeMode && nodeStack.length > 5) {
-        for (
-          let i = Math.max(0, nodeStack.length - 20);
-          i < nodeStack.length;
-          i++
-        ) {
-          recentStackNodes.add(nodeStack[i]!);
-        }
-      }
-
-      if (cycleDetector) {
-        while (searchIdx < indices.length) {
-          const candidateIdx = indices[searchIdx]!;
-          const targetKey = toKeyArr[candidateIdx]!;
-          const isTabu = cycleDetector.isTabu(targetKey);
-          const isRecentStack =
-            loopEscapeMode && recentStackNodes.has(targetKey);
-
-          // In escape mode, also avoid recent stack nodes
-          if (!isTabu && !isRecentStack) {
-            edgeIdx = candidateIdx;
-            break;
-          }
-          // If only avoiding recent stack (not tabu), still consider it
-          if (!isTabu && isRecentStack && searchIdx === indices.length - 1) {
-            edgeIdx = candidateIdx;
-            break;
-          }
-          searchIdx++;
-        }
-
-        // If all edges lead to tabu nodes, clear tabu and take first available
-        if (searchIdx >= indices.length && idx < indices.length) {
-          edgeIdx = indices[idx]!;
-          cycleDetector.clearTabu(toKeyArr[edgeIdx]!);
-        }
-
-        // Update lowlink for SCC tracking
-        cycleDetector.updateLowlink(key, toKeyArr[edgeIdx]!);
-      }
-
-      // Decrement for all edges skipped (tabu or otherwise) plus the one consumed
-      const edgesConsumed = searchIdx + 1 - (remainingIdx.get(key) ?? 0);
-      remainingEdgeCount -= edgesConsumed;
-      remainingIdx.set(key, searchIdx + 1);
-      nodeStack.push(toKeyArr[edgeIdx]!);
-      edgeIdxStack.push(edgeIdx);
-    } else {
-      // Backtrack
-      if (cycleDetector) {
-        cycleDetector.leaveNode(key);
-      }
-      nodeStack.pop();
-      const edgeIdx = edgeIdxStack.pop()!;
-      if (edgeIdx >= 0) {
-        circuit.push(turnEdges[edgeIdx]!);
-      }
-    }
-  }
-
-  if (iterations >= maxIterations) {
+  if (result.hitIterationCap) {
     console.error(
-      `[TurnAwareCPP] Hit iteration cap (${maxIterations}). ` +
+      `[TurnAwareCPP] Hit iteration cap (${result.iterations}). ` +
         `Circuit has ${circuit.length} edges, graph has ${turnEdges.length}.`,
     );
     if (cycleDetector) {
-      const diag = cycleDetector.getDiagnostics();
-      console.error(`[TurnAwareCPP] Diagnostics:`, diag);
+      console.error(
+        `[TurnAwareCPP] Diagnostics:`,
+        cycleDetector.getDiagnostics(),
+      );
     }
   }
 
-  // Reverse to get correct traversal order
-  circuit.reverse();
-
-  // Warn if edges remain unconsumed (graph wasn't fully Eulerian/connected)
-  if (remainingEdgeCount > 0) {
+  if (result.unconsumedEdges > 0) {
     console.warn(
-      `[TurnAwareCPP] Hierholzer left ${remainingEdgeCount} unconsumed edges — graph may not be Eulerian or fully connected`,
+      `[TurnAwareCPP] Hierholzer left ${result.unconsumedEdges} unconsumed edges — graph may not be Eulerian or fully connected`,
     );
   }
 
   // Tally turn stats
+  const stats = { right: 0, left: 0, uTurn: 0, straight: 0 };
   for (const edge of circuit) {
     if (edge.turnType === "u-turn") stats.uTurn++;
     else stats[edge.turnType]++;
@@ -271,15 +219,17 @@ export function solveTurnAwareCPP(
 
   const totalCost = circuit.reduce((sum, e) => sum + e.totalCost, 0);
 
-  const result: TurnAwareCppResult = { circuit, totalCost, stats };
-  if (enableCycleDetection) {
-    result.cycleDiagnostics = {
-      loopsDetected,
-      escapeAttempts,
-      tabuNodesUsed,
+  const cppResult: TurnAwareCppResult = { circuit, totalCost, stats };
+  if (enableCycleDetection && result.cycleDiagnostics) {
+    cppResult.cycleDiagnostics = {
+      loopsDetected: result.cycleDiagnostics.loopsDetected,
+      escapeAttempts: result.cycleDiagnostics.escapeAttempts,
+      tabuNodesUsed: cycleDetector
+        ? cycleDetector.getDiagnostics().tabuListSize
+        : 0,
     };
   }
-  return result;
+  return cppResult;
 }
 
 /** Convert turn circuit back to ordered street edge ids for display/routing. */
