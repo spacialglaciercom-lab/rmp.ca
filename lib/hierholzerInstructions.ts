@@ -8,6 +8,7 @@
  */
 
 import type { RoutePoint } from "./route-optimizer-v2/types";
+import { haversineMeters } from "./_core/geo";
 
 export interface NavigationInstruction {
   index: number;
@@ -36,8 +37,6 @@ export type TurnType =
   | "sharp_right"
   | "u_turn";
 
-const EARTH_RADIUS = 6371000;
-
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
@@ -50,12 +49,7 @@ function haversine(
   p1: { lat: number; lon: number },
   p2: { lat: number; lon: number },
 ): number {
-  const dLat = toRad(p2.lat - p1.lat);
-  const dLon = toRad(p2.lon - p1.lon);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon / 2) ** 2;
-  return EARTH_RADIUS * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return haversineMeters(p1.lat, p1.lon, p2.lat, p2.lon);
 }
 
 function bearing(

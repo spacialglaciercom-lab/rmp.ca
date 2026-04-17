@@ -8,6 +8,7 @@
  */
 
 import type { AvoidedNode } from "@/stores/mapStateStore";
+import { haversineMeters } from "@/lib/_core/geo";
 
 /** Earth radius in metres. */
 const R = 6_371_000;
@@ -93,12 +94,7 @@ function haversine(
   a: { lat: number; lon: number },
   b: { lat: number; lon: number },
 ): number {
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return haversineMeters(a.lat, a.lon, b.lat, b.lon);
 }
 
 /**
