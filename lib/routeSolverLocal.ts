@@ -33,7 +33,7 @@ export interface SolverResult {
 }
 
 export interface SolverOptions {
-  algorithm: "nearest-neighbor" | "2-opt" | "christofides" | "vroom" | "pgrouting";
+  algorithm: "nearest-neighbor" | "2-opt" | "vroom" | "pgrouting";
   depot?: SolverPoint;
   vehicleCapacity?: number;
   maxStops?: number;
@@ -194,7 +194,6 @@ export async function solveLocal(
       break;
 
     case "2-opt":
-    case "christofides":
       order = nearestNeighbor(allPoints, depotIndex);
       order = twoOptImprove(order, matrix);
       order = orOptImprove(order, matrix);
