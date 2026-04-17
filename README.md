@@ -150,9 +150,8 @@ The solve stage implements **local** heuristics for fast, offline-capable sequen
 |-----------|------------|----------|
 | **nearest-neighbor** | \(O(n^2)\) | Fast initial solution, offline-first |
 | **2-opt** | \(O(n^2)\) per iteration | Nearest-neighbor seed → 2-opt improvement → Or-opt cleanup pass |
-| **christofides** | \(O(n^2)\) per iteration | Alias for 2-opt path (nearest-neighbor → 2-opt → Or-opt); no MST/matching step |
 
-> **Note:** Or-opt (single-node relocation) runs automatically after 2-opt and christofides as a cleanup pass. It is not a selectable algorithm on its own.
+> **Note:** Or-opt (single-node relocation) runs automatically after 2-opt as a cleanup pass. It is not a selectable algorithm on its own.
 
 #### Server Solvers (`solveServer`)
 
