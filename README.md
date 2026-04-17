@@ -319,6 +319,43 @@ Combines **PostGIS-backed logistics reports** with **`chatWithAiGateway`** (see 
 
 ---
 
+### Natural Language Constraint Parsing (Firebase Gemini)
+
+**Module:** [`lib/firebase/ai.ts`](lib/firebase/ai.ts)
+
+Dispatchers type instructions in plain English; **Gemini 2.0 Flash** parses them into structured routing rules the optimization engine can consume directly.
+
+- Supports 13 constraint types: `skip`, `avoid`, `time_window`, `direction`, `priority`, `delay`, `frequency`, `vehicle`, `crew`, `seasonal`, `temporary`, `permanent`, `special_instruction`
+- Returns structured JSON with confidence scores and ambiguity flags
+- Native dev builds use `@react-native-firebase/ai`; web/Expo Go use the Firebase JS SDK
+- Shared factory `createLazyGeminiModel` makes it easy to add new Gemini-backed features
+
+---
+
+### Weather-Aware Route Recommendations (Gemini, Cross-Platform)
+
+**Module:** [`services/leapAIService.ts`](services/leapAIService.ts)  
+**Analysis:** [`services/weatherAnalysis.ts`](services/weatherAnalysis.ts)
+
+When the `weatherOptimizedRouting` beta flag is on, **Gemini 2.0 Flash** analyses real-time weather against the planned route and returns driver-facing recommendations (delay start, reorder stops, segment warnings). Works on iOS, Android, and web via the same Firebase AI setup as constraint parsing.
+
+Rule-based scoring (precipitation, visibility, wind) always runs first and serves as a fallback if the AI call fails.
+
+---
+
+### AI Co-Pilot (Genkit + Gemini 2.5 Flash)
+
+**Module:** [`server/genkit/coPilot.ts`](server/genkit/coPilot.ts)  
+**Router:** [`server/voiceRouter.ts`](server/voiceRouter.ts) (`voice.chat`)
+
+A route-aware voice companion powered by **Gemini 2.5 Flash** via Firebase Genkit. Receives the driver's live navigation state (current street, next maneuver, ETA, weather summary) as context and returns short TTS-friendly responses (≤256 tokens).
+
+- Moonshine on-device STT (native) → Whisper API fallback (all platforms) for transcription
+- Optional RAG context for domain-specific knowledge
+- Supports OpenRouter as an AI gateway alternative
+
+---
+
 ## API Surface
 
 All tRPC procedures are invoked over **`POST /api/trpc`** (and related batch/link conventions per `@trpc/client`). Dot notation below is the **router path** (e.g. `sync.push`).
@@ -361,6 +398,64 @@ All tRPC procedures are invoked over **`POST /api/trpc`** (and related batch/lin
 | `aiRouteAnalysis.getEfficiencyScore` | query | Lightweight efficiency widget |
 | `aiRouteAnalysis.getHotspots` | query | Density hotspots |
 | `aiRouteAnalysis.compareEfficiency` | mutation | Baseline comparison (auth) |
+
+### `org` — Organization Management (admin only)
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `org.create` | mutation | Create organization record |
+| `org.list` | query | List all organizations |
+| `org.get` | query | Get single organization by id |
+| `org.listUsers` | query | List all users belonging to an organization |
+| `org.assignUser` | mutation | Assign / remove user from an organization |
+
+### `navigation` — Turn-by-Turn Instructions
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `navigation.generateInstructions` | mutation | Turn-by-turn instructions from Hierholzer route output |
+| `navigation.buildMatchedRoute` | mutation | Full `MatchedRoute` (steps, geometry, instructions) for `NavigationEngine` |
+
+### `voice` — AI Co-Pilot
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `voice.transcribe` | mutation | Speech-to-text (Moonshine sidecar → Whisper fallback) |
+| `voice.chat` | mutation | Genkit co-pilot: text in, TTS-ready reply out |
+
+### `costHistory` — Route Cost Training Data (MongoDB)
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `costHistory.store` | mutation | Store actual vs predicted cost entry |
+| `costHistory.getTrainingData` | query | Retrieve entries for ML model training |
+| `costHistory.getAccuracyStats` | query | Prediction accuracy aggregated by day/week/vehicle/weather |
+| `costHistory.getCostFactorAnalysis` | query | Per-factor breakdown (weather, experience, time of day, season) |
+| `costHistory.exportCostTrainingData` | mutation | ML-ready export with encoded features and correction factor targets |
+
+### `gpxTraining` — GPX File Access
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `gpxTraining.list` | query | List `.gpx` files from configured training folder (org-scoped) |
+| `gpxTraining.getContent` | query | Read GPX XML by filename (path-traversal safe) |
+
+### `logisticsZones` — Zone + Waste Point Spatial Queries
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `logisticsZones.listZones` | query | Active zones for the user's org |
+| `logisticsZones.listWastePointsInZone` | query | Points inside a zone polygon (`ST_Contains`) |
+
+### `optimizer` — Python FastAPI Proxy
+
+| Procedure | Type | Purpose |
+|-----------|------|---------|
+| `optimizer.optimize` | mutation | CPP / VRP optimization via Python backend |
+| `optimizer.partition` | mutation | Spectral zone partitioning |
+| `optimizer.partitionFromGeoJSON` | mutation | Partition from GeoJSON input |
+| `optimizer.partitionFromPoints` | mutation | Partition from coordinate list |
+| `optimizer.health` | query | Python backend liveness check |
 
 ### REST Adjuncts (Same Node Process)
 
@@ -509,11 +604,12 @@ Use these fixtures in Vitest or SQL harnesses (see [`TESTS/database/postgis-spat
 
 ## Additional documentation
 
-- [server/README.md](server/README.md) — backend details
-- [backend/README.md](backend/README.md) — Python optimizer
-- [docs/DOCKER.md](docs/DOCKER.md) — Docker-based local stack
-- [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md) — plugin system
+- [docs/PLUGIN_ARCHITECTURE_CUSTOM_SOLVERS.md](docs/PLUGIN_ARCHITECTURE_CUSTOM_SOLVERS.md) — plugin system and custom solver API
+- [docs/CUSTOM_SOLVERS.md](docs/CUSTOM_SOLVERS.md) — custom solver integration guide
 - [docs/README_GPX_ANDROID.md](docs/README_GPX_ANDROID.md) — GPX on Android
+- [docs/OFFLINE_FIRST_PLAN.md](docs/OFFLINE_FIRST_PLAN.md) — offline-first architecture decisions
+- [docs/CLI.md](docs/CLI.md) — CLI tooling reference
+- [docs/DEM_SETUP.md](docs/DEM_SETUP.md) — elevation data setup
 
 ---
 
