@@ -4,6 +4,8 @@
  * Uses multiple public Overpass API endpoints with fallback on failure.
  */
 
+import { haversineKm as haversineKmCore } from "./_core/geo";
+
 /** Public Overpass API endpoints (tried round-robin until one succeeds). */
 export const OVERPASS_API_ENDPOINTS: readonly string[] = [
   "https://overpass-api.de/api/interpreter",                  // Main — official, high capacity (DE)
@@ -391,15 +393,7 @@ export function calculateArea(points: LatLonPoint[]): number {
  * Haversine distance between two points in km.
  */
 function haversineKm(a: LatLonPoint, b: LatLonPoint): number {
-  const R = 6371;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const lat1 = (a.latitude * Math.PI) / 180;
-  const lat2 = (b.latitude * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return haversineKmCore(a.latitude, a.longitude, b.latitude, b.longitude);
 }
 
 /**
