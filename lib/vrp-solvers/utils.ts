@@ -1,29 +1,13 @@
 /** Shared geometric / routing utilities used by multiple VRP solvers. */
 
 import type { VRPSolverStop, DistMatrix } from "./types";
+import { haversineKm } from "../_core/geo";
 
 const VALHALLA_MATRIX_URL =
   "https://valhalla1.openstreetmap.de/sources_to_targets";
 
 /** Haversine distance between two WGS-84 coordinates, in km. */
-export function haversineKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+export { haversineKm };
 
 /** Build a full O(n²) distance/time matrix using haversine. Time estimated at 40 km/h. */
 export function buildHaversineMatrix(locations: VRPSolverStop[]): DistMatrix {
