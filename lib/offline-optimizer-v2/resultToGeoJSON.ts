@@ -9,6 +9,7 @@ import type {
   OptimizationResult,
 } from "@/lib/route-optimizer-v2/types";
 import type { GeoJSONFeatureCollection } from "@/lib/geojson-utils";
+import { haversineMeters } from "@/lib/_core/geo";
 
 interface WaySegment {
   wayId: string;
@@ -213,30 +214,8 @@ function calculateSegmentDistance(coords: [number, number][]): number {
   for (let i = 0; i < coords.length - 1; i++) {
     const [lon1, lat1] = coords[i]!;
     const [lon2, lat2] = coords[i + 1]!;
-    total += haversineDistance(lon1, lat1, lon2, lat2);
+    total += haversineMeters(lat1, lon1, lat2, lon2);
   }
   return total;
 }
 
-/**
- * Calculate haversine distance between two points
- */
-function haversineDistance(
-  lon1: number,
-  lat1: number,
-  lon2: number,
-  lat2: number,
-): number {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}

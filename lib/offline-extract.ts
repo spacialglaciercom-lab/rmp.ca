@@ -18,6 +18,7 @@ import type {
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import type { Feature, Polygon } from "geojson";
 import { VectorTile } from "@mapbox/vector-tile";
+import { haversineKm as haversineKmCore } from "@/lib/_core/geo";
 import Pbf from "pbf";
 import { OSMParser } from "@/lib/route-optimizer-v2/osmParser";
 
@@ -222,15 +223,7 @@ function getRoadClass(props: Record<string, unknown> | undefined): string {
 
 /** Haversine distance in km between two [lon, lat] points. */
 function haversineKm(a: [number, number], b: [number, number]): number {
-  const R = 6371;
-  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
-  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
-  const lat1 = (a[1] * Math.PI) / 180;
-  const lat2 = (b[1] * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
+  return haversineKmCore(a[1], a[0], b[1], b[0]);
 }
 
 function coordLengthKm(coords: [number, number][]): number {
