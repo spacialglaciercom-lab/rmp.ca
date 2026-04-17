@@ -721,4 +721,4 @@ Use these fixtures in Vitest or SQL harnesses (see [`TESTS/database/postgis-spat
 
 ## License
 
-**Proprietary.** All rights reserved. No use, copy, modification, or distribution without prior approval from the copyright holder.
+MIT — see [LICENSE](LICENSE).

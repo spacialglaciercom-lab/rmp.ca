@@ -47,6 +47,14 @@ yarn.lock
 .env.r2
 .env.mapbox
 
+# Firebase credentials (contain live API keys — keep locally, never commit)
+google-services.json
+GoogleService-Info.plist
+
+# Real secrets / env files in subdirectories
+backend/.ENV
+config.toml
+
 # Python
 __pycache__/
 *.pyc
