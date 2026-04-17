@@ -8,10 +8,13 @@
 // Math helpers (mirror Python backend)
 // ---------------------------------------------------------------------------
 
-const EARTH_RADIUS_KM = 6371;
+import { haversineMeters as haversineMetersCore } from "./_core/geo";
 
 /**
  * Haversine distance in meters between two WGS84 points.
+ * Argument order is (lon, lat, lon, lat) to mirror the Python backend
+ * (backend/app/routing_plugins.py). Delegates to the canonical
+ * lat-first primitive in `_core/geo.ts`.
  */
 export function haversineMeters(
   lon1: number,
@@ -19,15 +22,7 @@ export function haversineMeters(
   lon2: number,
   lat2: number,
 ): number {
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const lat1Rad = (lat1 * Math.PI) / 180;
-  const lat2Rad = (lat2 * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) ** 2;
-  const distKm = EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-  return distKm * 1000;
+  return haversineMetersCore(lat1, lon1, lat2, lon2);
 }
 
 /**
