@@ -344,9 +344,15 @@ OSM / GeoJSON
       │
       ▼
 2. doubleEdges()
-   • Pass 1: every original edge → "forward" copy (bidirectional already has both directions)
-   • Pass 2: one-way edges → reverse copy (mode A) so both curbs are serviced
-   • Pass 3: serviceBothSides option → second copy of every bidirectional edge
+   • Pass 1: every original edge → "forward" copy. Bidirectional streets already
+     have both A→B and B→A in the original graph, so both sides are covered by
+     default. One-way streets have only the forward direction here.
+   • Pass 2: one-way edges → reverse copy added (mode A) so one-way streets are
+     also serviced in both directions (flagged as oneway_violation in stats).
+     Mode B skips this and records them as single_pass_segments instead.
+   • Pass 3 (serviceBothSides=true only): adds a second copy of every bidirectional
+     edge, producing four traversals per two-way street — for trucks that must
+     collect from each physical curb on a separate pass.
    • identifyDeadEnds() + applyUturnRestrictions()
    • repairBalance() — adds virtual dead-head edges between unbalanced nodes
      to guarantee an Eulerian graph for Hierholzer
