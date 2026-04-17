@@ -142,6 +142,8 @@ interface RoutePreviewMapProps {
 **Primary Module:** [`lib/routeSolver.ts`](lib/routeSolver.ts)  
 **Server Endpoint:** `spatial.solveTSP` in [`server/spatialRouter.ts`](server/spatialRouter.ts)
 
+> This stage sequences **discrete stops** (TSP/VRP). For full street-coverage routing (Chinese Postman), see [Route Optimizer v2](#chinese-postman--street-coverage-optimizer-route-optimizer-v2) in Technical Differentiators.
+
 The solve stage implements **local** heuristics for fast, offline-capable sequencing, with optional **server-side** road-network optimization:
 
 #### Local Solvers (`solveLocal`)
@@ -302,6 +304,104 @@ The **Kotlin Multiplatform** Gradle module contains **CVRP / CPP-style** math fo
 ./gradlew :shared-logic:assemble
 # or
 pnpm run build:shared-logic
+```
+
+---
+
+### Optimization Strategy Comparison
+
+The codebase contains three distinct route optimization paths that solve fundamentally different problems:
+
+| | Route Optimizer v2 (`lib/route-optimizer-v2`) | TSP Solver (`lib/routeSolver.ts`) | Python Backend (`backend/` + `optimizer` router) |
+|---|---|---|---|
+| **Problem** | Chinese Postman — cover every street at least once | TSP/VRP — visit a set of discrete stops in optimal order | TSP/VRP — larger fleets, zone partitioning |
+| **Input** | OSM XML or GeoJSON road network | Array of lat/lon stop coordinates | Array of stops + vehicle/capacity constraints |
+| **Algorithm** | Edge doubling → Hierholzer (Eulerian circuit) | nearest-neighbor + 2-opt + Or-opt | VROOM / spectral zone partitioning |
+| **Runs** | On-device, no network | On-device, no network | Server-side (Python FastAPI) |
+| **Use case** | Trash collection (cover all roads in a zone) | Delivery / pickup sequencing | Large fleet dispatch |
+
+---
+
+### Chinese Postman / Street-Coverage Optimizer (Route Optimizer v2)
+
+**Module:** [`lib/route-optimizer-v2/`](lib/route-optimizer-v2/)  
+**Class:** `RouteOptimizer`  
+**Inputs:** [`OSMParser`](lib/route-optimizer-v2/osmParser.ts) or [`GeoJSONParser`](lib/route-optimizer-v2/geojsonParser.ts)
+
+This is the most distinctive algorithm in the codebase. Rather than sequencing discrete stops (TSP), it solves the **Chinese Postman Problem** — producing a route that traverses every serviceable street in a zone at least once. This is the correct model for trash collection, where coverage is the objective, not minimizing inter-stop distance.
+
+#### Pipeline
+
+```
+OSM / GeoJSON
+      │
+      ▼
+1. buildOriginalGraph()
+   • Filter non-vehicle roads (footways, cycleways, steps, platforms …)
+   • Split ways at intersections → one edge per run with full geometry
+   • Deduplicate segments (5-decimal segmentKey, ~1.1m precision)
+   • Merge nearby nodes within threshold (Union-Find, grid spatial index)
+      │
+      ▼
+2. doubleEdges()
+   • Pass 1: every original edge → "forward" copy (bidirectional already has both directions)
+   • Pass 2: one-way edges → reverse copy (mode A) so both curbs are serviced
+   • Pass 3: serviceBothSides option → second copy of every bidirectional edge
+   • identifyDeadEnds() + applyUturnRestrictions()
+   • repairBalance() — adds virtual dead-head edges between unbalanced nodes
+     to guarantee an Eulerian graph for Hierholzer
+      │
+      ▼
+3. hierholzerWithTurnOptimization()
+   • Per connected component (handles disconnected sub-zones)
+   • Edge selector scores each candidate:
+       score = |outgoing_bearing − 90°|    ← prefers right turns
+             + U-turn penalty (1000 base + cumulative for repeated U-turns)
+             + left-turn penalty (configurable, default 50)
+             + recency penalty (12-node stack window)
+             + cycle-detector penalty (Tarjan-inspired SCC tabu list)
+             + edge traversal quota penalty (discourages re-traversal)
+             + dead-end avoidance heuristic
+   • Oscillation detection → local tabu node list
+   • Components concatenated → single route covering the whole zone
+      │
+      ▼
+4. buildRoutePointsFromCircuit()
+   • Expands node IDs back to lat/lon using stored edge geometry
+   • Road-following polyline (no straight-line jumps across curves)
+```
+
+#### Key design decisions
+
+- **Array-based adjacency list** — parallel edges between the same node pair (divided boulevards, parallel service roads) are preserved with unique `edgeId`s, not silently collapsed.
+- **U-turn restrictions** from OSM `restriction` relations and mid-block detection (degree-2 nodes on the same way) are enforced during edge selection.
+- **Virtual dead-head edges** (wayId `"__virtual__"`) balance the graph when degree counts don't match — they appear in the route but are excluded from turn stats and distance totals.
+- **Multi-component support** — Hierholzer runs independently on each weakly connected component so isolated sub-zones (e.g. a cul-de-sac cluster) are never silently skipped.
+
+#### Configuration (`RouteOptimizerOptions`)
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `mergeNearbyThresholdM` | `2` | Merge nodes within N metres (use ~15 for offset divided roads) |
+| `antiLoopMode` | `"standard"` | `"off"` / `"standard"` / `"strict"` — cycle detection aggressiveness |
+| `serviceBothSides` | `false` | Traverse each bidirectional street twice (left + right curb) |
+| `minEdgeMeters` | `0.05` | Drop micro-stub edges below this length |
+
+#### Output (`OptimizationResult`)
+
+```typescript
+{
+  route: RoutePoint[];          // Ordered lat/lon polyline
+  totalDistance: number;        // km
+  message: string;              // Human-readable summary
+  stats: {
+    right_turns, left_turns, u_turns, straight,
+    efficiency,                 // % of original edges covered once
+    dead_ends_identified,
+    oneway_violations,          // Segments driven against traffic (mode A)
+    single_pass_segments,       // One-way segments driven once only (mode B)
+  }
+}
 ```
 
 ---
