@@ -3,6 +3,8 @@
  * Fallback when OSRM/Valhalla map matching is not available.
  */
 
+import { haversineMeters } from "./_core/geo";
+
 export interface TurnInstruction {
   index: number;
   point: { lat: number; lon: number };
@@ -11,8 +13,6 @@ export interface TurnInstruction {
   distanceFromPrevious: number;
   text: string;
 }
-
-const R = 6371000; // Earth radius in meters
 
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
@@ -25,12 +25,7 @@ export function haversineDistance(
   p1: { lat: number; lon: number },
   p2: { lat: number; lon: number },
 ): number {
-  const dLat = toRad(p2.lat - p1.lat);
-  const dLon = toRad(p2.lon - p1.lon);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return haversineMeters(p1.lat, p1.lon, p2.lat, p2.lon);
 }
 
 function calculateBearing(

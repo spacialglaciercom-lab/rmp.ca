@@ -9,6 +9,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { SolverResult } from './routeSolver';
 import type { ImportPoint } from '@/hooks/useRouteImport';
+import { haversineMeters } from './_core/geo';
 
 // Types for route persistence
 export interface RoutePoint extends ImportPoint {
@@ -368,27 +369,13 @@ class RoutePersistenceService {
    * Calculate total distance using haversine formula
    */
   private calculateTotalDistance(points: ImportPoint[], depot?: ImportPoint): number {
-    const haversine = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-      const R = 6371000;
-      const φ1 = (lat1 * Math.PI) / 180;
-      const φ2 = (lat2 * Math.PI) / 180;
-      const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-      const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-      return R * c;
-    };
-
     if (points.length < 2) return 0;
 
     let total = 0;
     const allPoints = depot ? [depot, ...points] : points;
 
     for (let i = 0; i < allPoints.length - 1; i++) {
-      total += haversine(
+      total += haversineMeters(
         allPoints[i].lat,
         allPoints[i].lon,
         allPoints[i + 1].lat,
