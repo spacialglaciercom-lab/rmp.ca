@@ -317,7 +317,7 @@ const config = {
   ],
   experiments: {
     typedRoutes: true,
-    reactCompiler: true,
+    reactCompiler: false,
   },
   // Android: exclude moonshine-voice native module so the build does not resolve ai.moonshine:moonshine-voice
   // from JitPack (avoids timeouts). On Android we use server Whisper for STT; Moonshine remains available on iOS.
