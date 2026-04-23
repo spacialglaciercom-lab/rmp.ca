@@ -221,6 +221,17 @@ After sync, the run phase emphasizes:
 
 ## Technical Differentiators
 
+### External Tool Research Notes
+
+> **Note:** Web search results did not provide specific information about the rmp.ca backend architecture, the `/solve` endpoint, RouteFinder, or OR-Tools integration. The insights below are drawn from general context and codebase analysis.
+
+The system does not currently integrate:
+- **Google OR-Tools** — The Python optimizer uses VROOM and custom spectral partitioning, not OR-Tools
+- **RouteFinder** — No external service by this name; routing is handled by pgRouting/VROOM or local heuristics
+- **`/solve` endpoint** — The TSP solve path is `spatial.solveTSP` (tRPC), not a REST `/solve` route
+
+---
+
 ### Verified Scan (QR + PostGIS Geofence)
 
 **Endpoint:** `spatial.verifyAndCollect` in [`server/spatialRouter.ts`](server/spatialRouter.ts)

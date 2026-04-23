@@ -1,0 +1,39 @@
+# cbsd/env.sample — copy to cbsd/env and edit, then `. cbsd/env` before setup.sh
+#
+# Tunables read by setup.sh / bootstrap.sh / initenv.conf. Everything has a
+# sensible default, so most operators only need to set EXT_IF.
+
+# ── Host networking ──────────────────────────────────────────────────────────
+
+# External/public NIC on the FreeBSD host (used in pf rdr rules).
+# Find yours with: ifconfig -l
+EXT_IF="wlan0"
+
+# Bridge CBSD will create for jail VNET traffic.
+BRIDGE_NAME="cbsd0"
+
+# Jail subnet and gateway (host side of the bridge).
+JAIL_NETWORK="10.10.0.0/24"
+JAIL_GATEWAY="10.10.0.1"
+
+# ── CBSD layout ──────────────────────────────────────────────────────────────
+
+# Where CBSD stores jail data. Must be a ZFS dataset for snapshots.
+CBSD_WORKDIR="/usr/jails"
+
+# FreeBSD release to base jails on.
+FREEBSD_VER="14.2"
+
+# Upstream DNS for jails.
+JAIL_NAMESERVER="1.1.1.1"
+
+# ── Deploy flags ─────────────────────────────────────────────────────────────
+
+# Which optional stacks to deploy alongside the core (extract+backend) jails.
+# Set to 1 to enable.
+DEPLOY_OPTIMIZER="0"
+DEPLOY_MOONSHINE="0"
+
+# Path to host-mounted DEM (digital elevation model), passed into celery jail.
+# Leave empty if unused.
+DEM_PATH=""

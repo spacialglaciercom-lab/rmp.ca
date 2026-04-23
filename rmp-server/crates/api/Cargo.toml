@@ -1,0 +1,27 @@
+[package]
+name = "rmp-api"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rmp-server"
+path = "src/main.rs"
+
+[dependencies]
+rmp-auth = { path = "../auth" }
+rmp-db = { path = "../db" }
+rmp-handlers = { path = "../handlers" }
+rmp-shared = { path = "../shared" }
+
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+dotenvy = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
