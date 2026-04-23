@@ -1,0 +1,18 @@
+[package]
+name = "rmp-handlers"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rmp-auth = { path = "../auth" }
+rmp-db = { path = "../db" }
+rmp-shared = { path = "../shared" }
+
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+validator = { workspace = true }
+thiserror = { workspace = true }
