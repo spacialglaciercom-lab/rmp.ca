@@ -1,50 +1,53 @@
-import { requireNativeModule } from "expo-modules-core";
+import { NativeModule, requireNativeModule } from "expo-modules-core";
 
-export interface SolverPoint {
+/** A stop the solver visits. */
+export type SolverPoint = {
   id: string;
   lat: number;
   lon: number;
   demand?: number;
   serviceTime?: number;
-}
+};
 
 export type SolverAlgorithm = "nearest-neighbor" | "2-opt";
 
-export interface SolverOptions {
+export type SolverOptions = {
   algorithm: SolverAlgorithm;
   returnToDepot?: boolean;
   maxIterations?: number;
-}
+};
 
-export interface RouteSegment {
+export type RouteSegment = {
   fromId: string;
   toId: string;
   distanceM: number;
   durationS: number;
-}
+};
 
-export interface SolverResult {
+export type SolverResult = {
   orderedIds: string[];
   totalDistanceM: number;
   totalDurationS: number;
   segments: RouteSegment[];
   algorithm: string;
   solveTimeMs: number;
-}
+};
 
-export interface NativeRouteOptimizerModule {
+declare class RouteOptimizerNativeModule extends NativeModule {
+  /** Solve a TSP-style route with on-device Rust. */
   solveRoute(
     points: SolverPoint[],
     depotIndex: number | null,
-    options: SolverOptions
+    options: SolverOptions,
   ): Promise<SolverResult>;
 
+  /** Great-circle distance in metres (sync, cheap). */
   haversineMeters(
     lat1: number,
     lon1: number,
     lat2: number,
-    lon2: number
+    lon2: number,
   ): number;
 }
 
-export default requireNativeModule<NativeRouteOptimizerModule>("RouteOptimizer");
+export default requireNativeModule<RouteOptimizerNativeModule>("RouteOptimizer");
