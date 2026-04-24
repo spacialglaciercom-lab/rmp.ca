@@ -1,0 +1,22 @@
+#!/bin/sh
+# PROVIDE: optimizer
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="optimizer"
+rcvar="${name}_enable"
+desc="TrashRoute Python FastAPI optimizer"
+
+load_rc_config "${name}"
+
+: ${optimizer_enable:="NO"}
+: ${optimizer_user:="www"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -u ${optimizer_user} -o /var/log/${name}.log \
+    /usr/local/libexec/rmpca-optimizer"
+
+run_rc_command "$1"

@@ -1,0 +1,22 @@
+#!/bin/sh
+# PROVIDE: backend
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="backend"
+rcvar="${name}_enable"
+desc="TrashRoute Node.js API server"
+
+load_rc_config "${name}"
+
+: ${backend_enable:="NO"}
+: ${backend_user:="www"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -u ${backend_user} -o /var/log/${name}.log \
+    /usr/local/libexec/rmpca-backend"
+
+run_rc_command "$1"
