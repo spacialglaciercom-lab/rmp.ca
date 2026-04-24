@@ -87,7 +87,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
   {
     id: "atlas",
     name: "Atlas",
-    url: "https://api.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=REDACTED_THUNDERFOREST_KEY",
+    url: `https://api.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=${process.env.EXPO_PUBLIC_THUNDERFOREST_API_KEY ?? ""}`,
     attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
     type: "base",
     category: "standard",
@@ -95,7 +95,7 @@ const DEFAULT_LAYERS: MapLayer[] = [
   {
     id: "mobile-atlas",
     name: "Mobile Atlas",
-    url: "https://api.thunderforest.com/mobile-atlas/{z}/{x}/{y}.png?apikey=REDACTED_THUNDERFOREST_KEY",
+    url: `https://api.thunderforest.com/mobile-atlas/{z}/{x}/{y}.png?apikey=${process.env.EXPO_PUBLIC_THUNDERFOREST_API_KEY ?? ""}`,
     attribution: "&copy; OpenStreetMap contributors &copy; Thunderforest",
     type: "base",
     category: "standard",

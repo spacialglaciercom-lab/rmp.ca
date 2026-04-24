@@ -47,6 +47,10 @@ yarn.lock
 .env.r2
 .env.mapbox
 
+# Local SSH helper scripts (local dev tools; credentials via env vars, not committed)
+ssh_run.py
+ssh_pexpect.py
+
 # Python
 __pycache__/
 *.pyc
