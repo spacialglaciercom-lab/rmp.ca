@@ -1,22 +1,10 @@
-/**
- * Unit tests for syncStatusStore.
- *
- * Covers: initial state, all setters, clearError, updateStatus,
- * persistence partializer (only specific fields are persisted).
- */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// In-memory AsyncStorage mock (required by zustand/persist)
-// ---------------------------------------------------------------------------
-const storage = new Map<string, string>();
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: (k: string) => Promise.resolve(storage.get(k) ?? null),
-    setItem: (k: string, v: string) => { storage.set(k, v); return Promise.resolve(); },
-    removeItem: (k: string) => { storage.delete(k); return Promise.resolve(); },
-    clear: () => { storage.clear(); return Promise.resolve(); },
-    getAllKeys: () => Promise.resolve([...storage.keys()]),
+    getItem: vi.fn().mockResolvedValue(null),
+    setItem: vi.fn().mockResolvedValue(undefined),
+    removeItem: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -26,178 +14,144 @@ import {
   usePendingCount,
   useLastSyncAt,
   useBackgroundSyncEnabled,
-} from "../syncStatusStore";
+} from '../syncStatusStore';
 
-const INITIAL = {
-  isSyncing: false,
-  pendingCount: 0,
-  lastSyncAt: null,
-  lastError: null,
-  backgroundSyncEnabled: true,
-  syncIntervalMinutes: 15,
-  wifiOnly: false,
-};
-
-function reset() {
-  syncStatusStore.setState(INITIAL);
-}
-
-describe("syncStatusStore — initial state", () => {
-  beforeEach(reset);
-
-  it("has correct defaults", () => {
-    const s = syncStatusStore.getState();
-    expect(s.isSyncing).toBe(false);
-    expect(s.pendingCount).toBe(0);
-    expect(s.lastSyncAt).toBeNull();
-    expect(s.lastError).toBeNull();
-    expect(s.backgroundSyncEnabled).toBe(true);
-    expect(s.syncIntervalMinutes).toBe(15);
-    expect(s.wifiOnly).toBe(false);
+beforeEach(() => {
+  syncStatusStore.setState({
+    isSyncing: false,
+    pendingCount: 0,
+    lastSyncAt: null,
+    lastError: null,
+    backgroundSyncEnabled: true,
+    syncIntervalMinutes: 15,
+    wifiOnly: false,
   });
 });
 
-describe("syncStatusStore — setters", () => {
-  beforeEach(reset);
-
-  it("setIsSyncing updates isSyncing", () => {
-    syncStatusStore.getState().setIsSyncing(true);
-    expect(syncStatusStore.getState().isSyncing).toBe(true);
-    syncStatusStore.getState().setIsSyncing(false);
+describe('initial state', () => {
+  it('isSyncing is false', () => {
     expect(syncStatusStore.getState().isSyncing).toBe(false);
   });
-
-  it("setPendingCount updates pendingCount", () => {
-    syncStatusStore.getState().setPendingCount(42);
-    expect(syncStatusStore.getState().pendingCount).toBe(42);
+  it('pendingCount is 0', () => {
+    expect(syncStatusStore.getState().pendingCount).toBe(0);
   });
+  it('lastSyncAt is null', () => {
+    expect(syncStatusStore.getState().lastSyncAt).toBeNull();
+  });
+  it('lastError is null', () => {
+    expect(syncStatusStore.getState().lastError).toBeNull();
+  });
+  it('backgroundSyncEnabled is true', () => {
+    expect(syncStatusStore.getState().backgroundSyncEnabled).toBe(true);
+  });
+  it('syncIntervalMinutes is 15', () => {
+    expect(syncStatusStore.getState().syncIntervalMinutes).toBe(15);
+  });
+  it('wifiOnly is false', () => {
+    expect(syncStatusStore.getState().wifiOnly).toBe(false);
+  });
+});
 
-  it("setLastSyncAt updates lastSyncAt", () => {
+describe('setters', () => {
+  it('setIsSyncing updates isSyncing', () => {
+    syncStatusStore.getState().setIsSyncing(true);
+    expect(syncStatusStore.getState().isSyncing).toBe(true);
+  });
+  it('setPendingCount updates pendingCount', () => {
+    syncStatusStore.getState().setPendingCount(7);
+    expect(syncStatusStore.getState().pendingCount).toBe(7);
+  });
+  it('setLastSyncAt updates lastSyncAt', () => {
     const now = new Date();
     syncStatusStore.getState().setLastSyncAt(now);
-    expect(syncStatusStore.getState().lastSyncAt).toBe(now);
+    expect(syncStatusStore.getState().lastSyncAt).toEqual(now);
+  });
+  it('setLastSyncAt accepts null', () => {
     syncStatusStore.getState().setLastSyncAt(null);
     expect(syncStatusStore.getState().lastSyncAt).toBeNull();
   });
-
-  it("setLastError updates lastError", () => {
-    syncStatusStore.getState().setLastError("Connection failed");
-    expect(syncStatusStore.getState().lastError).toBe("Connection failed");
+  it('setLastError updates lastError', () => {
+    syncStatusStore.getState().setLastError('network timeout');
+    expect(syncStatusStore.getState().lastError).toBe('network timeout');
   });
-
-  it("setBackgroundSyncEnabled updates backgroundSyncEnabled", () => {
+  it('setBackgroundSyncEnabled updates backgroundSyncEnabled', () => {
     syncStatusStore.getState().setBackgroundSyncEnabled(false);
     expect(syncStatusStore.getState().backgroundSyncEnabled).toBe(false);
   });
-
-  it("setSyncIntervalMinutes updates syncIntervalMinutes", () => {
+  it('setSyncIntervalMinutes updates syncIntervalMinutes', () => {
     syncStatusStore.getState().setSyncIntervalMinutes(30);
     expect(syncStatusStore.getState().syncIntervalMinutes).toBe(30);
   });
-
-  it("setWifiOnly updates wifiOnly", () => {
+  it('setWifiOnly updates wifiOnly', () => {
     syncStatusStore.getState().setWifiOnly(true);
     expect(syncStatusStore.getState().wifiOnly).toBe(true);
   });
 });
 
-describe("syncStatusStore — clearError", () => {
-  beforeEach(reset);
-
-  it("clears a set error back to null", () => {
-    syncStatusStore.getState().setLastError("Timeout");
-    expect(syncStatusStore.getState().lastError).toBe("Timeout");
+describe('clearError', () => {
+  it('resets lastError to null', () => {
+    syncStatusStore.getState().setLastError('something broke');
     syncStatusStore.getState().clearError();
     expect(syncStatusStore.getState().lastError).toBeNull();
   });
 
-  it("is safe to call when error is already null", () => {
-    expect(() => syncStatusStore.getState().clearError()).not.toThrow();
-    expect(syncStatusStore.getState().lastError).toBeNull();
+  it('does not affect other fields', () => {
+    syncStatusStore.getState().setPendingCount(3);
+    syncStatusStore.getState().setLastError('oops');
+    syncStatusStore.getState().clearError();
+    expect(syncStatusStore.getState().pendingCount).toBe(3);
   });
 });
 
-describe("syncStatusStore — updateStatus", () => {
-  beforeEach(reset);
-
-  it("merges partial state", () => {
+describe('updateStatus', () => {
+  it('merges a partial state update', () => {
     syncStatusStore.getState().updateStatus({ isSyncing: true, pendingCount: 5 });
-    const s = syncStatusStore.getState();
-    expect(s.isSyncing).toBe(true);
-    expect(s.pendingCount).toBe(5);
-    // Other fields unchanged
-    expect(s.wifiOnly).toBe(false);
+    expect(syncStatusStore.getState().isSyncing).toBe(true);
+    expect(syncStatusStore.getState().pendingCount).toBe(5);
   });
 
-  it("can update all sync-status fields at once", () => {
-    const date = new Date();
-    syncStatusStore.getState().updateStatus({
-      isSyncing: false,
-      pendingCount: 0,
-      lastSyncAt: date,
-      lastError: null,
-    });
-    const s = syncStatusStore.getState();
-    expect(s.lastSyncAt).toBe(date);
-    expect(s.pendingCount).toBe(0);
+  it('leaves untouched fields unchanged', () => {
+    syncStatusStore.getState().setSyncIntervalMinutes(60);
+    syncStatusStore.getState().updateStatus({ pendingCount: 1 });
+    expect(syncStatusStore.getState().syncIntervalMinutes).toBe(60);
   });
 });
 
-describe("syncStatusStore — simulated sync lifecycle", () => {
-  beforeEach(reset);
+describe('sync lifecycle', () => {
+  it('transitions idle → syncing → success', () => {
+    expect(syncStatusStore.getState().isSyncing).toBe(false);
 
-  it("transitions correctly: idle → syncing → success → idle", () => {
-    const store = syncStatusStore.getState();
-
-    // Start sync
-    store.setIsSyncing(true);
-    store.setLastError(null);
+    syncStatusStore.getState().setIsSyncing(true);
     expect(syncStatusStore.getState().isSyncing).toBe(true);
 
-    // Sync complete
     const now = new Date();
-    syncStatusStore.getState().updateStatus({
-      isSyncing: false,
-      lastSyncAt: now,
-      pendingCount: 0,
-    });
+    syncStatusStore.getState().updateStatus({ isSyncing: false, lastSyncAt: now, pendingCount: 0 });
     const s = syncStatusStore.getState();
     expect(s.isSyncing).toBe(false);
-    expect(s.lastSyncAt).toBe(now);
-    expect(s.pendingCount).toBe(0);
+    expect(s.lastSyncAt).toEqual(now);
+    expect(s.lastError).toBeNull();
   });
 
-  it("transitions correctly: idle → syncing → error → clearError → idle", () => {
-    const store = syncStatusStore.getState();
-
-    store.setIsSyncing(true);
-    syncStatusStore.getState().updateStatus({
-      isSyncing: false,
-      lastError: "Server unreachable",
-    });
-    expect(syncStatusStore.getState().lastError).toBe("Server unreachable");
-
-    syncStatusStore.getState().clearError();
-    expect(syncStatusStore.getState().lastError).toBeNull();
+  it('transitions idle → syncing → error', () => {
+    syncStatusStore.getState().setIsSyncing(true);
+    syncStatusStore.getState().updateStatus({ isSyncing: false, lastError: 'request timed out' });
+    const s = syncStatusStore.getState();
+    expect(s.isSyncing).toBe(false);
+    expect(s.lastError).toBe('request timed out');
   });
 });
 
-describe("syncStatusStore — selector exports are functions", () => {
-  // These are React hooks (require useCallback context) so we only verify
-  // they're exported as callable functions, not invoke them outside a component.
-  it("useIsSyncing is a function", () => {
-    expect(typeof useIsSyncing).toBe("function");
+describe('selector hooks', () => {
+  it('useIsSyncing is callable', () => {
+    expect(typeof useIsSyncing).toBe('function');
   });
-
-  it("usePendingCount is a function", () => {
-    expect(typeof usePendingCount).toBe("function");
+  it('usePendingCount is callable', () => {
+    expect(typeof usePendingCount).toBe('function');
   });
-
-  it("useLastSyncAt is a function", () => {
-    expect(typeof useLastSyncAt).toBe("function");
+  it('useLastSyncAt is callable', () => {
+    expect(typeof useLastSyncAt).toBe('function');
   });
-
-  it("useBackgroundSyncEnabled is a function", () => {
-    expect(typeof useBackgroundSyncEnabled).toBe("function");
+  it('useBackgroundSyncEnabled is callable', () => {
+    expect(typeof useBackgroundSyncEnabled).toBe('function');
   });
 });

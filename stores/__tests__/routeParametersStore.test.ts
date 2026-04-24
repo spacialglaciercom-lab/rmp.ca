@@ -1,29 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const storage = new Map<string, string>();
-
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: (k: string) => Promise.resolve(storage.get(k) ?? null),
-    setItem: (k: string, v: string) => {
-      storage.set(k, v);
-      return Promise.resolve();
-    },
-    removeItem: (k: string) => {
-      storage.delete(k);
-      return Promise.resolve();
-    },
-    clear: () => {
-      storage.clear();
-      return Promise.resolve();
-    },
-    getAllKeys: () => Promise.resolve([...storage.keys()]),
-    multiGet: (keys: string[]) =>
-      Promise.resolve(keys.map((k) => [k, storage.get(k) ?? null] as const)),
-    multiSet: (pairs: [string, string][]) => {
-      for (const [k, v] of pairs) storage.set(k, v);
-      return Promise.resolve();
-    },
+    getItem: vi.fn().mockResolvedValue(null),
+    setItem: vi.fn().mockResolvedValue(undefined),
+    removeItem: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -31,9 +12,22 @@ import {
   useRouteParametersStore,
   getDeliveryParamsForRouting,
   getRouteOptionsForRouting,
-} from "../routeParametersStore";
+} from '../routeParametersStore';
 
-function resetToDefaults() {
+const defaultAvoidRoads = {
+  noTollRoads: false,
+  avoidLowEmissionZones: false,
+  noShuttleTrain: false,
+  noBorderCrossings: false,
+  noIceRoadsOrFords: false,
+  noMotorways: false,
+  avoid4WDRoads: false,
+  noFerries: false,
+  avoidTunnels: false,
+  noUnpavedRoads: false,
+};
+
+beforeEach(() => {
   useRouteParametersStore.setState({
     allowPrivateAccess: false,
     goodsDelivery: false,
@@ -44,77 +38,143 @@ function resetToDefaults() {
     offRouteAlertEnabled: false,
     recalcDistanceMeters: 120,
     recalcOnReverseDirection: true,
-    avoidRoads: {
-      noTollRoads: false,
-      avoidLowEmissionZones: false,
-      noShuttleTrain: false,
-      noBorderCrossings: false,
-      noIceRoadsOrFords: false,
-      noMotorways: false,
-      avoid4WDRoads: false,
-      noFerries: false,
-      avoidTunnels: false,
-      noUnpavedRoads: false,
-    },
+    avoidRoads: { ...defaultAvoidRoads },
   });
-}
+});
 
-describe("routeParametersStore", () => {
-  beforeEach(() => {
-    storage.clear();
-    resetToDefaults();
-  });
-
-  it("defaults recalcDistanceMeters to 120", () => {
+describe('defaults', () => {
+  it('recalcDistanceMeters is 120', () => {
     expect(useRouteParametersStore.getState().recalcDistanceMeters).toBe(120);
   });
+  it('voiceAssistanceEnabled is true', () => {
+    expect(useRouteParametersStore.getState().voiceAssistanceEnabled).toBe(true);
+  });
+  it('goodsDelivery is false', () => {
+    expect(useRouteParametersStore.getState().goodsDelivery).toBe(false);
+  });
+  it('offRouteAlertEnabled is false', () => {
+    expect(useRouteParametersStore.getState().offRouteAlertEnabled).toBe(false);
+  });
+  it('all avoidRoads flags are false', () => {
+    const { avoidRoads } = useRouteParametersStore.getState();
+    expect(Object.values(avoidRoads).every((v) => v === false)).toBe(true);
+  });
+});
 
-  it("setRecalcDistanceMeters updates value", () => {
+describe('setters', () => {
+  it('setRecalcDistanceMeters updates value', () => {
     useRouteParametersStore.getState().setRecalcDistanceMeters(200);
     expect(useRouteParametersStore.getState().recalcDistanceMeters).toBe(200);
   });
-
-  it("setAvoidRoads updates a single key immutably", () => {
-    useRouteParametersStore.getState().setAvoidRoads("noTollRoads", true);
-    const a = useRouteParametersStore.getState().avoidRoads;
-    expect(a.noTollRoads).toBe(true);
-    expect(a.noMotorways).toBe(false);
+  it('setVoiceAssistanceEnabled updates value', () => {
+    useRouteParametersStore.getState().setVoiceAssistanceEnabled(false);
+    expect(useRouteParametersStore.getState().voiceAssistanceEnabled).toBe(false);
   });
-
-  it("setExpoVoiceIndex clamps to non-negative", () => {
+  it('setGoodsDelivery updates value', () => {
+    useRouteParametersStore.getState().setGoodsDelivery(true);
+    expect(useRouteParametersStore.getState().goodsDelivery).toBe(true);
+  });
+  it('setAllowPrivateAccess updates value', () => {
+    useRouteParametersStore.getState().setAllowPrivateAccess(true);
+    expect(useRouteParametersStore.getState().allowPrivateAccess).toBe(true);
+  });
+  it('setFuelEfficientWay updates value', () => {
+    useRouteParametersStore.getState().setFuelEfficientWay(true);
+    expect(useRouteParametersStore.getState().fuelEfficientWay).toBe(true);
+  });
+  it('setOffRouteAlertEnabled updates value', () => {
+    useRouteParametersStore.getState().setOffRouteAlertEnabled(true);
+    expect(useRouteParametersStore.getState().offRouteAlertEnabled).toBe(true);
+  });
+  it('setRecalcOnReverseDirection updates value', () => {
+    useRouteParametersStore.getState().setRecalcOnReverseDirection(false);
+    expect(useRouteParametersStore.getState().recalcOnReverseDirection).toBe(false);
+  });
+  it('setExpoVoiceIndex clamps negative input to 0', () => {
     useRouteParametersStore.getState().setExpoVoiceIndex(-5);
     expect(useRouteParametersStore.getState().expoVoiceIndex).toBe(0);
+  });
+  it('setExpoVoiceIndex accepts positive values', () => {
     useRouteParametersStore.getState().setExpoVoiceIndex(3);
     expect(useRouteParametersStore.getState().expoVoiceIndex).toBe(3);
   });
+});
 
-  it("getDeliveryParamsForRouting uses default when goodsDelivery off", () => {
-    useRouteParametersStore.setState({ goodsDelivery: false });
-    const p = getDeliveryParamsForRouting();
-    expect(p).toBeDefined();
-    expect(typeof p).toBe("object");
+describe('setAvoidRoads', () => {
+  it('patches a single avoidRoads flag', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noTollRoads', true);
+    expect(useRouteParametersStore.getState().avoidRoads.noTollRoads).toBe(true);
   });
 
-  it("getDeliveryParamsForRouting switches when goodsDelivery on", () => {
-    useRouteParametersStore.setState({ goodsDelivery: false });
-    const off = getDeliveryParamsForRouting();
+  it('leaves other avoidRoads flags unchanged', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noTollRoads', true);
+    expect(useRouteParametersStore.getState().avoidRoads.noFerries).toBe(false);
+  });
+
+  it('can update multiple flags independently', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noTollRoads', true);
+    useRouteParametersStore.getState().setAvoidRoads('noMotorways', true);
+    const { avoidRoads } = useRouteParametersStore.getState();
+    expect(avoidRoads.noTollRoads).toBe(true);
+    expect(avoidRoads.noMotorways).toBe(true);
+    expect(avoidRoads.noFerries).toBe(false);
+  });
+});
+
+describe('hydrate', () => {
+  it('is a no-op and does not throw', () => {
+    expect(() => useRouteParametersStore.getState().hydrate()).not.toThrow();
+  });
+});
+
+describe('getDeliveryParamsForRouting', () => {
+  it('returns an object when goodsDelivery is false', () => {
+    expect(getDeliveryParamsForRouting()).toBeTypeOf('object');
+  });
+
+  it('returns an object when goodsDelivery is true', () => {
     useRouteParametersStore.setState({ goodsDelivery: true });
-    const on = getDeliveryParamsForRouting();
-    expect(on).not.toEqual(off);
+    expect(getDeliveryParamsForRouting()).toBeTypeOf('object');
   });
 
-  it("getRouteOptionsForRouting maps avoid flags to Google avoid array", () => {
-    resetToDefaults();
-    useRouteParametersStore.getState().setAvoidRoads("noTollRoads", true);
-    useRouteParametersStore.getState().setAvoidRoads("noMotorways", true);
-    useRouteParametersStore.getState().setAvoidRoads("noFerries", true);
-    const { avoid } = getRouteOptionsForRouting();
-    expect(avoid?.sort()).toEqual(["ferries", "highways", "tolls"].sort());
+  it('returns different params depending on goodsDelivery', () => {
+    useRouteParametersStore.setState({ goodsDelivery: false });
+    const normal = getDeliveryParamsForRouting();
+    useRouteParametersStore.setState({ goodsDelivery: true });
+    const delivery = getDeliveryParamsForRouting();
+    expect(normal).not.toEqual(delivery);
+  });
+});
+
+describe('getRouteOptionsForRouting', () => {
+  it('returns undefined avoid when no road restrictions are active', () => {
+    expect(getRouteOptionsForRouting().avoid).toBeUndefined();
   });
 
-  it("getRouteOptionsForRouting returns undefined avoid when none set", () => {
-    resetToDefaults();
+  it('includes "tolls" when noTollRoads is true', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noTollRoads', true);
+    expect(getRouteOptionsForRouting().avoid).toContain('tolls');
+  });
+
+  it('includes "highways" when noMotorways is true', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noMotorways', true);
+    expect(getRouteOptionsForRouting().avoid).toContain('highways');
+  });
+
+  it('includes "ferries" when noFerries is true', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noFerries', true);
+    expect(getRouteOptionsForRouting().avoid).toContain('ferries');
+  });
+
+  it('can combine multiple avoid types', () => {
+    useRouteParametersStore.getState().setAvoidRoads('noTollRoads', true);
+    useRouteParametersStore.getState().setAvoidRoads('noFerries', true);
     const { avoid } = getRouteOptionsForRouting();
-    expect(avoid).toBeUndefined();
+    expect(avoid).toContain('tolls');
+    expect(avoid).toContain('ferries');
+  });
+
+  it('always includes deliveryParams', () => {
+    expect(getRouteOptionsForRouting().deliveryParams).toBeDefined();
   });
 });
