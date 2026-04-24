@@ -7,6 +7,7 @@
 import { database } from '../index';
 import { Q } from '@nozbe/watermelondb';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { trpc } from '../../trpc';
 
 // Sync configuration
 interface SyncConfig {
@@ -213,19 +214,24 @@ export class SyncEngine {
             data: record._raw,
           }));
 
-          // TODO: Replace with actual tRPC call
-          // const result = await trpc.sync.push.mutate({ changes });
-          // if (!result.success) {
-          //   errors.push(new Error(`Push ${tableName} batch failed: ${result.message}`));
-          //   continue; // Don't mark as synced — retry next time
-          // }
+          const result = await trpc.sync.push.mutate({ changes });
 
-          // Only mark as synced AFTER successful server response
-          // Until the TODO above is implemented, skip marking to prevent data loss
-          console.warn(
-            `[SyncEngine] pushChanges: ${batch.length} ${tableName} record(s) pending. ` +
-            `Server push not yet implemented — records remain pending.`
-          );
+          if (result.failed > 0) {
+            errors.push(new Error(`Push ${tableName} batch: ${result.failed}/${batch.length} failed — ${result.errors.join('; ')}`));
+            continue; // Don't mark as synced — retry next time
+          }
+
+          // Mark records as synced after successful server response
+          await database.write(async () => {
+            for (const record of batch) {
+              const mapped = result.mappedIds.find((m: any) => m.localId === (record as any).id);
+              await (record as any).update((r: any) => {
+                r.isPendingSync = false;
+                if (mapped) r.externalId = mapped.serverId;
+              });
+            }
+          });
+          count += result.processed;
         }
       } catch (error: any) {
         errors.push(new Error(`Push ${tableName} failed: ${error.message}`));
@@ -251,15 +257,11 @@ export class SyncEngine {
           .fetch();
         const lastToken = (syncStatusRecords[0] as any)?.lastSyncToken || null;
 
-        // TODO: Replace with actual tRPC call
-        // const response = await trpc.sync.pull.query({
-        //   table: tableName,
-        //   since: lastToken,
-        //   limit: this.config.batchSize,
-        // });
-
-        // For now, simulate empty response
-        const response: { changes: Array<{ id: string; data: Record<string, unknown> }>; nextToken: string | null } = { changes: [], nextToken: lastToken };
+        const response = await trpc.sync.pull.query({
+          tables: [tableName],
+          since: lastToken ? parseInt(lastToken, 10) : undefined,
+          limit: this.config.batchSize,
+        });
 
         if (response.changes.length === 0) continue;
 
@@ -270,14 +272,16 @@ export class SyncEngine {
               .query(Q.where('external_id', change.id))
               .fetch();
 
-            if (existing.length > 0) {
-              // Update existing record
+            if ((change as any).deleted) {
+              if (existing.length > 0) {
+                await (existing[0] as any).markAsDeleted();
+              }
+            } else if (existing.length > 0) {
               await existing[0].update((record: any) => {
                 Object.assign(record, change.data);
                 record.syncedAt = Date.now();
               });
             } else {
-              // Create new record
               await database.get(tableName).create((record: any) => {
                 record.externalId = change.id;
                 Object.assign(record, change.data);
