@@ -12,7 +12,6 @@ package sharedlogic
  * 3. Balanced distribution: Spread stops evenly across vehicles
  */
 
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -68,11 +67,11 @@ private fun formatKm(meters: Double): String {
 
 private fun haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val R = 6371000.0 // Earth radius in meters
-    val dLat = (lat2 - lat1) * (PI / 180.0)
-    val dLon = (lon2 - lon1) * (PI / 180.0)
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
     val a = kotlin.math.sin(dLat / 2).let { it * it } +
-            kotlin.math.cos(lat1 * (PI / 180.0)) *
-            kotlin.math.cos(lat2 * (PI / 180.0)) *
+            kotlin.math.cos(Math.toRadians(lat1)) * 
+            kotlin.math.cos(Math.toRadians(lat2)) * 
             kotlin.math.sin(dLon / 2).let { it * it }
     val c = 2 * kotlin.math.atan2(sqrt(a), sqrt(1 - a))
     return R * c
@@ -192,7 +191,7 @@ fun solveCvrp(
         
         if (merged != null && intermediateCount(merged) <= cap) {
             // Remove old routes and add merged
-            val toRemove = listOf(ri, rj).sortedDescending()
+            val toRemove = sortedSetOf(ri, rj).sortedDescending()
             for (idx in toRemove) {
                 routes.removeAt(idx)
             }
@@ -237,7 +236,7 @@ fun solveCvrp(
         
         if (bestMerged == null) break
         
-        val toRemove = listOf(bestI, bestJ).sortedDescending()
+        val toRemove = sortedSetOf(bestI, bestJ).sortedDescending()
         for (idx in toRemove) {
             routes.removeAt(idx)
         }
