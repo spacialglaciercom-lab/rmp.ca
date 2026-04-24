@@ -1,0 +1,136 @@
+#!/bin/sh
+# rmpca-clean — Clean/repair a GeoJSON file via the backend API.
+#
+# Removes self-loops, duplicate edges, short segments, and isolated
+# components. Uses the /api/geojson/clean endpoint on the optimizer jail.
+#
+# Usage:
+#   rmpca clean roads.geojson -o cleaned.geojson
+#   rmpca clean roads.geojson --min-length 2.0 --keep-components 1
+#
+# Options:
+#   INPUT                         Input GeoJSON file
+#   -o, --output FILE             Output cleaned GeoJSON (default: <input>-cleaned.geojson)
+#   --min-length METERS           Remove segments shorter than this (default: 1.0)
+#   --keep-components N           Keep N largest connected components (0=all, default: 0)
+#   --no-dedupe                   Skip duplicate edge removal
+#   --no-selfloop                 Skip self-loop removal
+#   --host HOST                   Backend/optimizer host (default: $RMPCA_OPTIMIZER_HOST or 10.10.0.7)
+#   --port PORT                   Port (default: 8000)
+#   --stats                       Print cleaning stats to stderr
+#   -q, --quiet                   Suppress progress output
+
+set -e
+
+HOST="${RMPCA_OPTIMIZER_HOST:-10.10.0.7}"
+PORT="8000"
+OUTPUT=""
+INPUT=""
+MIN_LENGTH="1.0"
+KEEP_COMPONENTS="0"
+DEDUPE=1
+SELFLOOP=1
+STATS=0
+QUIET=0
+
+info()  { [ "$QUIET" -eq 1 ] || printf '\033[1;34m==> %s\033[0m\n' "$*" >&2; }
+die()   { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+usage() {
+    sed -n '2,/^$/s/^# \?//p' "$0"
+    exit "${1:-0}"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o|--output)          OUTPUT="$2"; shift 2 ;;
+        --min-length)         MIN_LENGTH="$2"; shift 2 ;;
+        --keep-components)    KEEP_COMPONENTS="$2"; shift 2 ;;
+        --no-dedupe)          DEDUPE=0; shift ;;
+        --no-selfloop)        SELFLOOP=0; shift ;;
+        --host)               HOST="$2"; shift 2 ;;
+        --port)               PORT="$2"; shift 2 ;;
+        --stats)              STATS=1; shift ;;
+        -q|--quiet)           QUIET=1; shift ;;
+        -h|--help)            usage 0 ;;
+        -*)                   die "Unknown option: $1" ;;
+        *)
+            [ -z "$INPUT" ] && INPUT="$1" || die "Unexpected argument: $1"
+            shift ;;
+    esac
+done
+
+[ -z "$INPUT" ] && die "Input GeoJSON file required"
+[ -f "$INPUT" ] || die "File not found: $INPUT"
+
+if [ -z "$OUTPUT" ]; then
+    BASE=$(echo "$INPUT" | sed 's/\.\(geo\)\?json$//')
+    OUTPUT="${BASE}-cleaned.geojson"
+fi
+
+info "Cleaning: ${INPUT}"
+
+python3 -c "
+import json, sys
+try:
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError, URLError
+except ImportError:
+    print('ERROR: Python urllib required', file=sys.stderr)
+    sys.exit(1)
+
+quiet = $QUIET == 1
+
+def log(s):
+    if not quiet:
+        print(f'\033[1;34m==> {s}\033[0m', file=sys.stderr)
+
+with open('$INPUT') as f:
+    geojson = json.load(f)
+
+n_in = len(geojson.get('features', []))
+log(f'Input: {n_in} features')
+
+payload = {
+    'geojson': geojson,
+    'options': {
+        'remove_selfloops': bool($SELFLOOP),
+        'dedupe_edges': bool($DEDUPE),
+        'min_length_m': float($MIN_LENGTH),
+        'max_components': int($KEEP_COMPONENTS),
+    }
+}
+
+url = 'http://${HOST}:${PORT}/api/geojson/clean'
+data = json.dumps(payload).encode('utf-8')
+log(f'Sending {len(data)} bytes to {url}...')
+
+try:
+    req = Request(url, data=data, headers={'Content-Type': 'application/json'})
+    resp = urlopen(req, timeout=120)
+    result = json.loads(resp.read().decode('utf-8'))
+except HTTPError as e:
+    body = e.read().decode('utf-8', errors='replace')
+    print(f'ERROR: HTTP {e.code}: {body}', file=sys.stderr)
+    sys.exit(1)
+except URLError as e:
+    print(f'ERROR: Cannot connect to backend: {e.reason}', file=sys.stderr)
+    sys.exit(1)
+
+# Extract cleaned GeoJSON
+cleaned = result.get('geojson', result.get('cleaned', result))
+stats = result.get('stats', {})
+
+with open('$OUTPUT', 'w') as f:
+    json.dump(cleaned, f, indent=2)
+
+n_out = len(cleaned.get('features', []))
+log(f'Output: {n_out} features -> $OUTPUT')
+
+if stats or $STATS == 1:
+    log(f'Stats:')
+    for k, v in stats.items():
+        log(f'  {k}: {v}')
+" || die "Clean request failed"
+
+info "Done: ${OUTPUT}"

@@ -1,0 +1,162 @@
+#!/bin/sh
+# rmpca-extract-osm — Download OSM data for a bounding box and convert to GeoJSON.
+#
+# Downloads .osm.pbf from Overpass API (or Geofabrik), then converts to
+# GeoJSON road segments using ogr2ogr inside the rmpca-backend jail.
+#
+# Usage:
+#   rmpca extract-osm --bbox MIN_LON,MIN_LAT,MAX_LON,MAX_LAT -o roads.geojson
+#   rmpca extract-osm --pbf existing.osm.pbf -o roads.geojson
+#
+# Options:
+#   --bbox LON1,LAT1,LON2,LAT2   Bounding box for Overpass download
+#   --pbf FILE                    Use existing .osm.pbf or .osm file (skip download)
+#   -o, --output FILE             Output GeoJSON file (default: osm-roads.geojson)
+#   --layer LAYER                 ogr2ogr layer (default: lines)
+#   --highway-filter CLASSES      Comma-separated highway classes to keep
+#                                 (default: residential,tertiary,secondary,primary,
+#                                  trunk,motorway,unclassified,living_street,service)
+#   --no-filter                   Skip highway class filtering (keep all lines)
+#   --keep-pbf                    Don't delete the downloaded .osm file
+#   -q, --quiet                   Suppress progress output
+
+set -e
+
+OUTPUT="osm-roads.geojson"
+BBOX=""
+PBF_FILE=""
+LAYER="lines"
+KEEP_PBF=0
+QUIET=0
+NO_FILTER=0
+HIGHWAY_FILTER="residential,tertiary,secondary,primary,trunk,motorway,unclassified,living_street,service"
+
+info()  { [ "$QUIET" -eq 1 ] || printf '\033[1;34m==> %s\033[0m\n' "$*"; }
+die()   { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+usage() {
+    sed -n '2,/^$/s/^# \?//p' "$0"
+    exit "${1:-0}"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --bbox)             BBOX="$2"; shift 2 ;;
+        --pbf)              PBF_FILE="$2"; shift 2 ;;
+        -o|--output)        OUTPUT="$2"; shift 2 ;;
+        --layer)            LAYER="$2"; shift 2 ;;
+        --highway-filter)   HIGHWAY_FILTER="$2"; shift 2 ;;
+        --no-filter)        NO_FILTER=1; shift ;;
+        --keep-pbf)         KEEP_PBF=1; shift ;;
+        -q|--quiet)         QUIET=1; shift ;;
+        -h|--help)          usage 0 ;;
+        *)                  die "Unknown option: $1" ;;
+    esac
+done
+
+[ -z "$BBOX" ] && [ -z "$PBF_FILE" ] && die "Provide --bbox or --pbf"
+
+# Download from Overpass if no local file
+if [ -z "$PBF_FILE" ]; then
+    IFS=',' read -r MINLON MINLAT MAXLON MAXLAT <<EOF
+$BBOX
+EOF
+    [ -z "$MINLON" ] || [ -z "$MINLAT" ] || [ -z "$MAXLON" ] || [ -z "$MAXLAT" ] && \
+        die "Invalid bbox format. Use: MIN_LON,MIN_LAT,MAX_LON,MAX_LAT"
+
+    PBF_FILE="/tmp/rmpca-osm-extract-$$.osm"
+    OVERPASS_BBOX="${MINLAT},${MINLON},${MAXLAT},${MAXLON}"
+
+    info "Downloading OSM data from Overpass API..."
+    info "Bbox (S,W,N,E): ${OVERPASS_BBOX}"
+
+    # Build Overpass query — fetch all highway ways in the bbox
+    OVERPASS_QUERY="[out:xml][timeout:120][bbox:${OVERPASS_BBOX}];way[\"highway\"];(._;>;);out body;"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -sS --max-time 180 \
+            -d "data=${OVERPASS_QUERY}" \
+            "https://overpass-api.de/api/interpreter" \
+            -o "$PBF_FILE" || die "Overpass download failed"
+    elif command -v fetch >/dev/null 2>&1; then
+        # FreeBSD fetch
+        fetch -q -o "$PBF_FILE" \
+            "https://overpass-api.de/api/interpreter?data=$(echo "$OVERPASS_QUERY" | sed 's/ /%20/g')" \
+            || die "Overpass download failed"
+    else
+        die "curl or fetch required for download"
+    fi
+
+    FILE_SIZE=$(stat -f%z "$PBF_FILE" 2>/dev/null || stat --printf="%s" "$PBF_FILE" 2>/dev/null || echo "?")
+    info "Downloaded: ${PBF_FILE} (${FILE_SIZE} bytes)"
+fi
+
+[ -f "$PBF_FILE" ] || die "Input file not found: $PBF_FILE"
+
+# Convert OSM to GeoJSON using ogr2ogr
+# Try host ogr2ogr first, then fall back to running inside a jail
+OGR2OGR=""
+if command -v ogr2ogr >/dev/null 2>&1; then
+    OGR2OGR="ogr2ogr"
+fi
+
+RAW_GEOJSON="/tmp/rmpca-osm-raw-$$.geojson"
+
+if [ -n "$OGR2OGR" ]; then
+    info "Converting OSM → GeoJSON (ogr2ogr on host)..."
+    ogr2ogr -makevalid -t_srs EPSG:4326 -f GeoJSON "$RAW_GEOJSON" "$PBF_FILE" "$LAYER" \
+        || die "ogr2ogr conversion failed"
+else
+    info "ogr2ogr not found on host, trying inside rmpca-backend jail..."
+    # Copy input into jail, run ogr2ogr there
+    bastille cmd rmpca-backend mkdir -p /tmp/osm-work
+    tar -cf - -C "$(dirname "$PBF_FILE")" "$(basename "$PBF_FILE")" | \
+        bastille cmd rmpca-backend sh -c "tar -xf - -C /tmp/osm-work"
+
+    JAIL_INPUT="/tmp/osm-work/$(basename "$PBF_FILE")"
+    JAIL_OUTPUT="/tmp/osm-work/raw.geojson"
+
+    bastille cmd rmpca-backend sh -c "
+        ogr2ogr -makevalid -t_srs EPSG:4326 -f GeoJSON '$JAIL_OUTPUT' '$JAIL_INPUT' '$LAYER'
+    " || die "ogr2ogr in jail failed"
+
+    # Copy result back
+    bastille cmd rmpca-backend cat "$JAIL_OUTPUT" > "$RAW_GEOJSON"
+    bastille cmd rmpca-backend rm -rf /tmp/osm-work
+fi
+
+# Filter to highway classes if requested
+if [ "$NO_FILTER" -eq 0 ]; then
+    info "Filtering to highway classes: ${HIGHWAY_FILTER}"
+    python3 -c "
+import json, sys
+
+with open('$RAW_GEOJSON') as f:
+    fc = json.load(f)
+
+classes = set('$HIGHWAY_FILTER'.split(','))
+filtered = []
+for feat in fc.get('features', []):
+    props = feat.get('properties', {})
+    hw = props.get('highway', props.get('class', ''))
+    if hw in classes:
+        filtered.append(feat)
+
+fc['features'] = filtered
+with open('$OUTPUT', 'w') as f:
+    json.dump(fc, f, indent=2)
+
+print(f'Filtered: {len(filtered)} road features (from {len(fc.get(\"features\", []))} total)', file=sys.stderr)
+" 2>&1 | while IFS= read -r line; do info "$line"; done
+    rm -f "$RAW_GEOJSON"
+else
+    mv "$RAW_GEOJSON" "$OUTPUT"
+fi
+
+# Cleanup
+if [ "$KEEP_PBF" -eq 0 ] && echo "$PBF_FILE" | grep -q "^/tmp/rmpca-osm-extract"; then
+    rm -f "$PBF_FILE"
+fi
+
+N_FEATURES=$(python3 -c "import json; print(len(json.load(open('$OUTPUT')).get('features',[])))" 2>/dev/null || echo "?")
+info "Output: ${OUTPUT} (${N_FEATURES} features)"

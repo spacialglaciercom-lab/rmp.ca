@@ -1,0 +1,38 @@
+# RouteFinder inference server Dockerfile
+# Builds a GPU-enabled image with torch, rl4co, and routefinder installed.
+#
+# Build: docker build -f Dockerfile.routefinder -t rmpca-routefinder .
+# Run:   docker run --gpus all -p 8321:8321 rmpca-routefinder
+
+FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
+
+WORKDIR /app
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install RouteFinder and dependencies
+RUN pip install --no-cache-dir \
+    "rl4co>=0.4.0" \
+    "routefinder>=0.4.0" \
+    "huggingface_hub>=0.20.0" \
+    "fastapi>=0.104.0" \
+    "uvicorn[standard]>=0.24.0" \
+    "httpx>=0.25.0"
+
+# Copy the inference server script
+COPY app/routefinder_server.py /app/routefinder_server.py
+
+# Pre-download model checkpoint (optional, ~1.5GB)
+# This runs at build time to avoid cold-start delay
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('ai4co/routefinder', allow_patterns=['checkpoints/*'], local_dir='.')" || echo "Checkpoint download failed; will download at runtime"
+
+EXPOSE 8321
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8321/health')" || exit 1
+
+ENTRYPOINT ["python", "/app/routefinder_server.py"]
+CMD ["--device", "cuda", "--port", "8321"]

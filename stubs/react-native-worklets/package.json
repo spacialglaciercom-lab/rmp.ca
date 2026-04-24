@@ -1,0 +1,6 @@
+{
+  "name": "react-native-worklets",
+  "version": "0.5.1-stub",
+  "main": "plugin.js",
+  "description": "Stub for react-native-worklets Babel plugin (Reanimated 3 compatibility)"
+}

@@ -1,0 +1,16 @@
+[package]
+name = "rmp-routing"
+version.workspace = true
+edition.workspace = true
+
+# cdylib for dynamic linking (iOS simulator / Android .so)
+# staticlib for static linking into XCFramework
+[lib]
+crate-type = ["cdylib", "staticlib"]
+name = "rmp_routing"
+
+[dependencies]
+uniffi = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+

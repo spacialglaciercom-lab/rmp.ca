@@ -1,0 +1,22 @@
+# Nginx reverse proxy — fronts the Python optimizer jail
+# Replaces: nginx-optimizer service in docker-compose.optimizer.yml
+# Port: 80 (mapped to host :8000 via pf)
+#
+# The "optimizer" hostname is resolved via /etc/hosts inside this jail.
+# deploy.sh writes the optimizer jail IP to /etc/hosts before starting nginx.
+
+# ── Packages ────────────────────────────────────────────────────────────────
+PKG nginx
+
+# ── Config ───────────────────────────────────────────────────────────────────
+# Remove default nginx config to avoid conflicts
+CMD rm -f /usr/local/etc/nginx/nginx.conf
+CMD mkdir -p /usr/local/etc/nginx/conf.d
+
+CP usr/local/etc/nginx/conf.d/optimizer.conf /usr/local/etc/nginx/conf.d/optimizer.conf
+
+# Minimal nginx.conf that loads conf.d/
+CMD printf 'worker_processes auto;\nevents { worker_connections 1024; }\nhttp {\n    include       mime.types;\n    default_type  application/octet-stream;\n    sendfile on;\n    include /usr/local/etc/nginx/conf.d/*.conf;\n}\n' > /usr/local/etc/nginx/nginx.conf
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC nginx_enable=YES

@@ -1,0 +1,20 @@
+# Demo setup for ngrok - serves web app + API on port 80
+# Usage:
+#   1. Build web app: pnpm run build:web
+#   2. Start services: docker compose -f docker-compose.yml -f docker-compose.optimizer.yml -f docker-compose.demo.yml --profile optimizer up -d
+#   3. Start ngrok: ngrok http --url=rmpdemo.ngrok.app 80
+# Demo URL: https://rmpdemo.ngrok.app
+
+services:
+  nginx-demo:
+    image: nginx:1.27-alpine
+    container_name: rmpca-nginx-demo
+    volumes:
+      - ./nginx/demo.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./dist:/app/dist:ro
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped

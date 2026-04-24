@@ -1,0 +1,2539 @@
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  FlatList,
+  Animated,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
+import { impactAsync as hapticImpact } from "@/lib/safe-haptics";
+
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useColors } from "@/hooks/use-colors";
+import type { CollectionPoint } from "@/types";
+import {
+  useRouting,
+  generateGPXString,
+  generateMultiTrackGPXString,
+} from "@/lib/routing-context";
+import { parseGPXForNavigation } from "@/lib/gpxNavParser";
+import { loadGpxAsRoute } from "@/lib/gpxLoader";
+
+import {
+  matchGPXToRoads,
+  routeBetweenPoints,
+  routeThroughWaypoints,
+} from "@/lib/mapMatching";
+import { countGaps, repairRouteGaps } from "@/lib/routeGapFilter";
+import { buildMatchedRouteFromHierholzer } from "@/lib/hierholzerInstructions";
+import { getRoutingConfigAsync, getRoutingConfig } from "@/lib/routing-config";
+import type { MatchedRoute } from "@/lib/mapMatching";
+import { insertAvoidDetours } from "@/lib/osrmAvoid";
+import type { AvoidedNode } from "@/stores/mapStateStore";
+
+import { RouteMap, type RouteMapRef } from "@/components/route-map";
+import { matchedRouteToGeoJSON } from "@/lib/geojson-utils";
+import type { GeoJSONFeatureCollection } from "@/lib/geojson-utils";
+import NavigationView, {
+  type OffRoutePayload,
+} from "@/components/NavigationView";
+import CollectionNavigator from "@/components/CollectionNavigator";
+import {
+  navigateExternally,
+  openGoogleMapsViewer,
+  openOsmAndViewer,
+} from "@/lib/externalNavigation";
+import type { NormalNavDestination } from "@/types/navigation";
+import { useCollectionNavigationStore } from "@/stores/collectionNavigationStore";
+import { MapFloatingControls } from "@/components/mapTab/controls/MapFloatingControls";
+import { MapSidebar } from "@/components/mapTab/sidebar/MapSidebar";
+import { AIChatBubble } from "@/components/AIChatBubble";
+import { AvoidedNodesPanel } from "@/components/AvoidedNodesPanel";
+import { DeletedSegmentsPanel } from "@/components/DeletedSegmentsPanel";
+import { HelpPrompt } from "@/components/help/HelpPrompt";
+import { NavigationPanel } from "@/components/mapTab/navigation/NavigationPanel";
+import { MyPlacesScreen } from "@/components/mapTab/places/MyPlacesScreen";
+import { RecordingScreen } from "@/components/mapTab/places/RecordingScreen";
+import { ZonesScreen } from "@/components/mapTab/places/ZonesScreen";
+import { MapsAndResourcesScreen } from "@/components/mapTab/resources/MapsAndResourcesScreen";
+import { ConfigureScreenSheet } from "@/components/mapTab/resources/ConfigureScreenSheet";
+import { RouteParametersSheet } from "@/components/mapTab/resources/RouteParametersSheet";
+import { MapMarkersScreen } from "@/components/mapTab/markers/MapMarkersScreen";
+import { GpxDropZone } from "@/components/mapTab/GpxDropZone";
+import { PlaceInfoSheet } from "@/components/mapTab/PlaceInfoSheet";
+import { MapillaryViewer } from "@/components/MapillaryViewer";
+import { StreetViewPreview } from "@/components/StreetViewPreview";
+import { openMapillaryCapture } from "@/lib/mapillary";
+import { useMapLayerStore } from "@/stores/mapLayerStore";
+import { useMapDisplayStore } from "../stores/mapDisplayStore";
+import { useMapSidebarStore } from "@/stores/mapSidebarStore";
+import { usePluginStore } from "@/stores/pluginStore";
+import { useZonesStore } from "@/stores/zonesStore";
+import { useDeviceType } from "@/hooks/useDeviceType";
+import { SIDEBAR_WIDTH_IPAD } from "@/constants/sidebarConfig";
+import { useFavoritesStore } from "@/stores/favoritesStore";
+import { useMarkersStore } from "@/stores/markersStore";
+import {
+  getRouteOptionsForRouting,
+  useRouteParametersStore,
+} from "@/stores/routeParametersStore";
+import { getDownloadedRegions } from "@/lib/offline-map-download";
+import { useMapOrientation } from "@/lib/map-orientation-preference";
+import { PowerSavingIndicator } from "@/components/PowerSavingIndicator/PowerSavingIndicator";
+import { useOSMMapPress } from "@/hooks/useOSMMapPress";
+import { useTrackRecorder } from "@/hooks/useTrackRecorder";
+import { trackStorage, type SavedTrack } from "@/lib/track-storage";
+import { useRecordingSettingsStore } from "@/stores/recordingSettingsStore";
+import { RecOptionsModal } from "@/components/RecOptionsModal";
+import { confirmDestructive } from "@/lib/confirmDestructive";
+import { Fonts, glassStyle } from "@/lib/_core/theme";
+
+// --- Optimized store selectors ---
+import { useMapStateStore, useMapActions } from "@/stores/mapStateStore";
+import {
+  sanitizeLatLonArray,
+  sanitizeByVehicle,
+  splitRouteAtTeleportGaps,
+} from "@/lib/coord-utils";
+import { stitchRouteSegmentsWithRouting } from "@/lib/stitchRouteSegments";
+import { projectOntoLine } from "@/lib/turfProjection";
+
+/** Max pins to show for a route; avoids treating every track node as a marker. */
+const MAX_ROUTE_MARKERS = 50;
+
+/** Downsample to at most maxPoints: first, last, and evenly spaced in between. */
+function downsampleForMarkers<T>(arr: T[], maxPoints: number): T[] {
+  if (arr.length <= maxPoints) return arr;
+  const indices: number[] = [0];
+  for (let i = 1; i < maxPoints - 1; i++) {
+    indices.push(Math.floor((i / (maxPoints - 1)) * (arr.length - 1)));
+  }
+  if (arr.length > 1) indices.push(arr.length - 1);
+  return indices.map((i) => arr[i]);
+}
+
+export default function MapContent() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { state, dispatch } = useRouting();
+
+  // ---------------------------------------------------------------------------
+  // Zustand store subscriptions (replaces 20+ useState calls)
+  // Each selector subscribes to only the specific field(s) it needs,
+  // preventing unnecessary re-renders when unrelated state changes.
+  // ---------------------------------------------------------------------------
+  const collectionPoints = useMapStateStore((s) => s.collectionPoints);
+  const routePoints = useMapStateStore((s) => s.routePoints);
+  const navigationMode = useMapStateStore((s) => s.navigationMode);
+  const matchedRoute = useMapStateStore((s) => s.matchedRoute);
+  const cachedMatchedRoute = useMapStateStore((s) => s.cachedMatchedRoute);
+  const navLoading = useMapStateStore((s) => s.navLoading);
+  const fixToRoadsLoading = useMapStateStore((s) => s.fixToRoadsLoading);
+  const directionsLoading = useMapStateStore((s) => s.directionsLoading);
+  const tapDestination = useMapStateStore((s) => s.tapDestination);
+  const roadClosureHandlingOn = useMapStateStore(
+    (s) => s.roadClosureHandlingOn,
+  );
+  const mapLoading = useMapStateStore((s) => s.mapLoading);
+  const mapError = useMapStateStore((s) => s.mapError);
+  const dimensions = useMapStateStore((s) => s.dimensions);
+  const userBearing = useMapStateStore((s) => s.userBearing);
+  const mapillaryViewerVisible = useMapStateStore(
+    (s) => s.mapillaryViewerVisible,
+  );
+  const mapillaryCoords = useMapStateStore((s) => s.mapillaryCoords);
+  const showAerial = useMapStateStore((s) => s.showAerial);
+  const osmExtractionPoints = useMapStateStore((s) => s.osmExtractionPoints);
+  const osmExtractedData = useMapStateStore((s) => s.osmExtractedData);
+  const selectedPoint = useMapStateStore((s) => s.selectedPoint);
+  const avoidedNodes = useMapStateStore((s) => s.avoidedNodes);
+
+  // Stable action references (never trigger re-renders)
+  const actions = useMapActions();
+
+  // OSRM base URL for snap-to-road in node popups (read once; stable across renders)
+  const osrmBaseUrl = useMemo(() => getRoutingConfig().baseUrl, []);
+
+  // Local state that truly belongs to this component only (not shared)
+  const [hasOfflineRegions, setHasOfflineRegions] = useState(false);
+  const [drivePreviewVisible, setDrivePreviewVisible] = useState(false);
+  const [collectionNavMode, setCollectionNavMode] = useState(false);
+  const fixToRoadsJustRan = useRef(false);
+  const mapRef = useRef<RouteMapRef>(null);
+  const myPlacesWasVisibleRef = useRef(false);
+  const [mapOrientation] = useMapOrientation();
+  const collectionNavReset = useCollectionNavigationStore(
+    (s) => s.resetNavigation,
+  );
+
+  // ---------------------------------------------------------------------------
+  // GPS Recording (moved from Record tab)
+  // ---------------------------------------------------------------------------
+  const {
+    state: recorder,
+    start: recStart,
+    pause: recPause,
+    resume: recResume,
+    stop: recStop,
+    discard: recDiscard,
+  } = useTrackRecorder();
+  const showRecOnMapWhenRecording = useRecordingSettingsStore(
+    (s) => s.showRecOnMapWhenRecording,
+  );
+  const [savedTracks, setSavedTracks] = useState<SavedTrack[]>([]);
+  const [savingTrack, setSavingTrack] = useState(false);
+  const [recOptionsVisible, setRecOptionsVisible] = useState(false);
+  const [savedTracksExpanded, setSavedTracksExpanded] = useState(false);
+  const recFlashAnim = useRef(new Animated.Value(1)).current;
+
+  const isRecording = recorder.status === "recording";
+  const isPaused = recorder.status === "paused";
+  const isRecActive = isRecording || isPaused;
+
+  // Load saved tracks on mount
+  useEffect(() => {
+    trackStorage.loadTracks().then(setSavedTracks);
+  }, []);
+
+  // Flashing animation for REC badge
+  useEffect(() => {
+    if (isRecording) {
+      const flash = Animated.loop(
+        Animated.sequence([
+          Animated.timing(recFlashAnim, {
+            toValue: 0.3,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(recFlashAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      flash.start();
+      return () => flash.stop();
+    } else {
+      recFlashAnim.setValue(1);
+    }
+  }, [isRecording, recFlashAnim]);
+
+  const handleRecStart = useCallback(async () => {
+    try {
+      await recStart();
+    } catch (err: any) {
+      Alert.alert("Location Required", err?.message || "Could not access GPS.");
+    }
+  }, [recStart]);
+
+  const handleRecStop = useCallback(async () => {
+    const finalState = await recStop();
+    if (finalState.points.length < 2) {
+      Alert.alert(
+        "Too Few Points",
+        "Need at least 2 GPS points to save a track.",
+      );
+      return;
+    }
+    const defaultName = `Track ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    if (Platform.OS === "web") {
+      const name = window.prompt("Track name:", defaultName);
+      if (!name) return;
+      setSavingTrack(true);
+      await trackStorage.saveTrack(
+        name,
+        finalState.points,
+        finalState.totalDistanceMeters,
+        finalState.elapsedMs,
+      );
+      setSavedTracks(await trackStorage.loadTracks());
+      setSavingTrack(false);
+    } else {
+      Alert.prompt(
+        "Save Track",
+        "Enter a name for this track:",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Save",
+            onPress: async (name?: string) => {
+              setSavingTrack(true);
+              await trackStorage.saveTrack(
+                name || defaultName,
+                finalState.points,
+                finalState.totalDistanceMeters,
+                finalState.elapsedMs,
+              );
+              setSavedTracks(await trackStorage.loadTracks());
+              setSavingTrack(false);
+            },
+          },
+        ],
+        "plain-text",
+        defaultName,
+      );
+    }
+  }, [recStop]);
+
+  const handleRecDiscard = useCallback(() => {
+    confirmDestructive(
+      "Discard Track?",
+      "The recorded track will be lost.",
+      () => recDiscard(),
+      "Discard",
+    );
+  }, [recDiscard]);
+
+  const handleTrackExport = useCallback(async (track: SavedTrack) => {
+    if (Platform.OS === "web") {
+      const blob = new Blob([track.gpxData], { type: "application/gpx+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${track.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.gpx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      try {
+        const FileSystem = await import("expo-file-system/legacy");
+        const Sharing = await import("expo-sharing");
+        const filename = `${track.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.gpx`;
+        const path = `${FileSystem.documentDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(path, track.gpxData);
+        await Sharing.shareAsync(path, {
+          mimeType: "application/gpx+xml",
+          dialogTitle: "Export GPX Track",
+        });
+      } catch (err) {
+        console.error("Export failed:", err);
+        Alert.alert("Export Failed", "Could not export the track.");
+      }
+    }
+  }, []);
+
+  const handleTrackDelete = useCallback((track: SavedTrack) => {
+    confirmDestructive("Delete Track?", `Delete "${track.name}"?`, async () => {
+      await trackStorage.deleteTrack(track.id);
+      setSavedTracks(await trackStorage.loadTracks());
+    });
+  }, []);
+
+  const handleTrackPreview = useCallback(
+    (track: SavedTrack) => {
+      dispatch({
+        type: "SET_PREVIEW_ROUTE",
+        payload: track.points.map((p) => ({ lat: p.lat, lon: p.lon })),
+      });
+    },
+    [dispatch],
+  );
+
+  const handleGpxDropped = useCallback(
+    async (gpxText: string) => {
+      try {
+        const positions = await loadGpxAsRoute(gpxText);
+        if (positions.length < 2) return;
+        const points = positions.map(([lon, lat]) => ({ lat, lon }));
+        actions.setRoutePoints(points);
+        useFavoritesStore.getState().importFromGPX(gpxText);
+        if (Platform.OS === "web") {
+          setTimeout(() => mapRef.current?.fitToRoute(), 100);
+        }
+      } catch (e) {
+        if (Platform.OS === "web") {
+          window.alert("Could not load GPX. Check that the file is valid.");
+        } else {
+          Alert.alert("GPX Error", "Could not load GPX. Check that the file is valid.");
+        }
+      }
+    },
+    [actions],
+  );
+
+  const showTraffic = useMapDisplayStore((s) => s.showTraffic);
+  const toggleTraffic = useMapDisplayStore((s) => s.toggleTraffic);
+  const showOverture = useMapDisplayStore((s) => s.showOverture);
+
+  const addFavorite = useFavoritesStore((s) => s.addFavorite);
+  const addMarker = useMarkersStore((s) => s.addMarker);
+  const [placeInfoSheetVisible, setPlaceInfoSheetVisible] = useState(false);
+
+  // Sidebar and device hooks must be at top level (before any early return) to satisfy Rules of Hooks
+  const navigationPanelVisible = useMapSidebarStore(
+    (s) => s.navigationPanelVisible,
+  );
+  const openNavigationPanel = useMapSidebarStore((s) => s.openNavigationPanel);
+  const closeNavigationPanel = useMapSidebarStore(
+    (s) => s.closeNavigationPanel,
+  );
+  const myPlacesPanelVisible = useMapSidebarStore(
+    (s) => s.myPlacesPanelVisible,
+  );
+  const closeMyPlacesPanel = useMapSidebarStore((s) => s.closeMyPlacesPanel);
+  const zonesPanelVisible = useMapSidebarStore((s) => s.zonesPanelVisible);
+  const closeZonesPanel = useMapSidebarStore((s) => s.closeZonesPanel);
+  const recordingPanelVisible = useMapSidebarStore(
+    (s) => s.recordingPanelVisible,
+  );
+  const closeRecordingPanel = useMapSidebarStore((s) => s.closeRecordingPanel);
+  const displayedZoneId = useZonesStore((s) => s.displayedZoneId);
+  const savedZones = useZonesStore((s) => s.savedZones);
+  const mapsResourcesVisible = useMapSidebarStore(
+    (s) => s.mapsResourcesVisible,
+  );
+  const closeMapsResources = useMapSidebarStore((s) => s.closeMapsResources);
+  const configureScreenVisible = useMapSidebarStore(
+    (s) => s.configureScreenVisible,
+  );
+  const closeConfigureScreen = useMapSidebarStore(
+    (s) => s.closeConfigureScreen,
+  );
+  const routeParametersPanelVisible = useMapSidebarStore(
+    (s) => s.routeParametersPanelVisible,
+  );
+  const closeRouteParametersPanel = useMapSidebarStore(
+    (s) => s.closeRouteParametersPanel,
+  );
+  const mapStylePickerVisible = useMapSidebarStore(
+    (s) => s.mapStylePickerVisible,
+  );
+  const closeMapStylePicker = useMapSidebarStore((s) => s.closeMapStylePicker);
+  const mapMarkersPanelVisible = useMapSidebarStore(
+    (s) => s.mapMarkersPanelVisible,
+  );
+  const closeMapMarkersPanel = useMapSidebarStore(
+    (s) => s.closeMapMarkersPanel,
+  );
+  const osmExtractorVisible = useMapSidebarStore((s) => s.osmExtractorVisible);
+  const closeOSMExtractor = useMapSidebarStore((s) => s.closeOSMExtractor);
+  const isPinned = useMapSidebarStore((s) => s.isPinned);
+  const deviceType = useDeviceType();
+  const aiChatEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("ai-chat", true),
+  );
+  const drivePreviewEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("drive-preview", true),
+  );
+  const collectionRouteEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("collection-route", true),
+  );
+  const navigationEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("navigation", true),
+  );
+  const routePostProcessingEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("route-post-processing", true),
+  );
+  const overturePluginEnabled = usePluginStore((s) =>
+    s.isPluginEnabled("overture", true),
+  );
+
+  const previewPoints = state?.previewRoutePoints ?? null;
+  const previewRoutePointsByVehicle =
+    state?.previewRoutePointsByVehicle ?? null;
+
+  useEffect(() => {
+    useRouteParametersStore.getState().hydrate();
+  }, []);
+  const recalcDistanceMeters = useRouteParametersStore(
+    (s) => s.recalcDistanceMeters,
+  );
+
+  // Initialize store data on mount
+  useEffect(() => {
+    actions.loadRoute();
+    actions.loadImportedPoints();
+  }, [actions]);
+
+  // Exit collection navigator when Collection Route plugin is disabled
+  useEffect(() => {
+    if (!collectionRouteEnabled) {
+      setCollectionNavMode(false);
+      collectionNavReset();
+    }
+  }, [collectionRouteEnabled, collectionNavReset]);
+
+  // Close Navigation panel and Route parameters when Navigation plugin is disabled
+  useEffect(() => {
+    if (!navigationEnabled) {
+      closeNavigationPanel();
+      closeRouteParametersPanel();
+    }
+  }, [navigationEnabled, closeNavigationPanel, closeRouteParametersPanel]);
+
+  const displayRoutePoints = useMemo(() => {
+    if (previewRoutePointsByVehicle?.length === 1) {
+      const pts = previewRoutePointsByVehicle[0];
+      return pts?.length
+        ? pts.map((p, i) =>
+            i === 0 && !(p as { label?: string }).label
+              ? { ...p, label: "S" }
+              : p,
+          )
+        : routePoints;
+    }
+    if (previewRoutePointsByVehicle && previewRoutePointsByVehicle.length > 1) {
+      return previewRoutePointsByVehicle[0] ?? routePoints;
+    }
+    if (previewPoints?.length) {
+      return previewPoints.map((p, i) =>
+        i === 0 && !(p as { label?: string }).label ? { ...p, label: "S" } : p,
+      );
+    }
+    return routePoints;
+  }, [previewRoutePointsByVehicle, previewPoints, routePoints]);
+
+  /**
+   * When post-processing is ON: split long gaps into separate polylines so chords
+   * are not drawn as one misleading line (and auto-stitch can merge them).
+   * When OFF: show one raw polyline so optimizer/matcher output is visible for A/B.
+   */
+  const routeMapPolylines = useMemo(() => {
+    if (
+      previewRoutePointsByVehicle &&
+      previewRoutePointsByVehicle.some((r) => (r?.length ?? 0) > 0)
+    ) {
+      return { kind: "preview" as const, preview: previewRoutePointsByVehicle };
+    }
+    const base = sanitizeLatLonArray(displayRoutePoints);
+    const isPreview =
+      (previewPoints && previewPoints.length > 0);
+    if (!routePostProcessingEnabled || isPreview) {
+      return { kind: "single" as const, points: base };
+    }
+    const parts = splitRouteAtTeleportGaps(base, 650);
+    if (parts.length > 1) return { kind: "split" as const, parts };
+    return { kind: "single" as const, points: base };
+  }, [
+    previewRoutePointsByVehicle,
+    previewPoints,
+    displayRoutePoints,
+    routePostProcessingEnabled,
+  ]);
+
+  const isPreviewMode =
+    (!!previewPoints && previewPoints.length > 0) ||
+    (!!previewRoutePointsByVehicle &&
+      previewRoutePointsByVehicle.some((r) => r.length > 0));
+
+  // Planner may save a flat list with large gaps between disconnected subgraphs.
+  // Stitch those gaps here (same as planner v2) so Map shows one road-following line.
+  useEffect(() => {
+    if (!routePostProcessingEnabled) return;
+    if (isRecActive) return;
+    if (isPreviewMode) return;
+    if (navigationMode) return;
+    if (matchedRoute) return;
+
+    let cancelled = false;
+    (async () => {
+      const sanitized = sanitizeLatLonArray(routePoints);
+      if (sanitized.length < 2) return;
+      const parts = splitRouteAtTeleportGaps(sanitized, 650);
+      if (parts.length <= 1) return;
+
+      const cfg = await getRoutingConfigAsync();
+      if (!cfg.baseUrl || cancelled) return;
+
+      const res = await stitchRouteSegmentsWithRouting(
+        parts,
+        cfg,
+        getRouteOptionsForRouting(),
+      );
+      if (cancelled || !res || res.points.length < 2) return;
+
+      actions.setRoutePoints(res.points);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    routePoints,
+    isRecActive,
+    isPreviewMode,
+    navigationMode,
+    matchedRoute,
+    routePostProcessingEnabled,
+    actions,
+  ]);
+
+  const geojsonOverlay: GeoJSONFeatureCollection | null = useMemo(() => {
+    const source = cachedMatchedRoute ?? matchedRoute;
+    if (!source || source.matchedGeometry.length < 2) return null;
+    return matchedRouteToGeoJSON(source);
+  }, [cachedMatchedRoute, matchedRoute]);
+
+  const { zonesPreviewPolygon, zonesPreviewPolygons } = useMemo(() => {
+    if (!displayedZoneId || !savedZones.length)
+      return {
+        zonesPreviewPolygon: undefined,
+        zonesPreviewPolygons: undefined,
+      };
+    const result = savedZones.find((z) => z.id === displayedZoneId);
+    if (!result)
+      return {
+        zonesPreviewPolygon: undefined,
+        zonesPreviewPolygons: undefined,
+      };
+    const hasZonePolygons = result.zones?.some(
+      (z) => z.zone_polygon?.length >= 3,
+    );
+    if (hasZonePolygons && result.zones) {
+      const polygons = result.zones
+        .filter((z) => z.zone_polygon && z.zone_polygon.length >= 3)
+        .map((z) =>
+          z.zone_polygon!.map(([lon, lat]) => ({
+            latitude: lat,
+            longitude: lon,
+          })),
+        );
+      return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: polygons };
+    }
+    if (result.polygon?.length >= 3)
+      return {
+        zonesPreviewPolygon: result.polygon.map((p) => ({
+          latitude: p.lat,
+          longitude: p.lon,
+        })),
+        zonesPreviewPolygons: undefined,
+      };
+    return { zonesPreviewPolygon: undefined, zonesPreviewPolygons: undefined };
+  }, [displayedZoneId, savedZones]);
+
+  const gpsAndMatch = useMemo(() => {
+    const userPosition =
+      isRecActive && recorder.currentPosition
+        ? {
+            latitude: recorder.currentPosition.lat,
+            longitude: recorder.currentPosition.lon,
+          }
+        : null;
+    const routePointsForMap = isRecActive
+      ? recorder.points.map((p) => ({ lat: p.lat, lon: p.lon }))
+      : sanitizeLatLonArray(
+          previewRoutePointsByVehicle &&
+            previewRoutePointsByVehicle.length === 1
+            ? previewRoutePointsByVehicle[0]
+            : previewRoutePointsByVehicle &&
+                previewRoutePointsByVehicle.length > 1
+              ? undefined
+              : displayRoutePoints,
+        );
+    let matchedSegmentIndex: number | undefined;
+    if (userPosition && routePointsForMap && routePointsForMap.length >= 2) {
+      try {
+        const proj = projectOntoLine(
+          { lat: userPosition.latitude, lon: userPosition.longitude },
+          routePointsForMap,
+        );
+        if (proj != null) matchedSegmentIndex = proj.segmentIndex;
+      } catch {
+        // ignore projection errors
+      }
+    }
+    return { userPosition, matchedSegmentIndex };
+  }, [
+    isRecActive,
+    recorder.currentPosition,
+    recorder.points,
+    previewRoutePointsByVehicle,
+    displayRoutePoints,
+  ]);
+
+  // When My Places panel closes after opening a preview, bring map to the track/point
+  useEffect(() => {
+    if (myPlacesPanelVisible) {
+      myPlacesWasVisibleRef.current = true;
+      return;
+    }
+    if (!myPlacesWasVisibleRef.current) return;
+    myPlacesWasVisibleRef.current = false;
+    const pointCount = previewPoints?.length ?? 0;
+    const hasMultiVehicleTrack =
+      previewRoutePointsByVehicle?.some((r) => (r?.length ?? 0) >= 2) ?? false;
+    const t = setTimeout(
+      () => {
+        if (pointCount >= 2 || hasMultiVehicleTrack) {
+          mapRef.current?.fitToRoute?.();
+        } else if (pointCount === 1 && previewPoints?.[0]) {
+          mapRef.current?.centerOnPoint?.(
+            previewPoints[0].lat,
+            previewPoints[0].lon,
+          );
+        }
+      },
+      Platform.OS === "web" ? 200 : 150,
+    );
+    return () => clearTimeout(t);
+  }, [myPlacesPanelVisible, previewPoints, previewRoutePointsByVehicle]);
+
+  // Refresh route from storage when tab gains focus so optimized route from Planner is visible
+  useFocusEffect(
+    useCallback(() => {
+      actions.loadRoute();
+      actions.loadImportedPoints();
+      if (Platform.OS !== "web") {
+        getDownloadedRegions().then((r) => setHasOfflineRegions(r.length > 0));
+      }
+      return () => {
+        dispatch({ type: "SET_PREVIEW_ROUTE", payload: null });
+        dispatch({ type: "SET_PREVIEW_ROUTES", payload: null });
+        actions.setCachedMatchedRoute(null);
+        actions.setTapDestination(null);
+      };
+    }, [dispatch, actions]),
+  );
+
+  // When map has no route but routing context has GPX, hydrate so user can navigate
+  useEffect(() => {
+    if (routePoints.length > 0 || !state?.gpxData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const parsed = await parseGPXForNavigation(state.gpxData as string);
+        if (cancelled || parsed.points.length < 2) return;
+        const points = parsed.points.map((p) => ({ lat: p.lat, lon: p.lon }));
+        actions.setRoutePoints(points);
+        const forMarkers = downsampleForMarkers(
+          parsed.points,
+          MAX_ROUTE_MARKERS,
+        );
+        const asCollection: CollectionPoint[] = forMarkers.map((p, i) => ({
+          id: `gpx-${i}`,
+          address: `Stop ${i + 1}`,
+          latitude: p.lat,
+          longitude: p.lon,
+          collectionType: "residential",
+          status: "pending",
+        }));
+        actions.setCollectionPoints(asCollection);
+        const avgLat = points.reduce((s, p) => s + p.lat, 0) / points.length;
+        const avgLon = points.reduce((s, p) => s + p.lon, 0) / points.length;
+        actions.setMapCenter({ lat: avgLat, lon: avgLon });
+      } catch (_) {
+        // ignore parse errors
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state?.gpxData, routePoints.length, actions]);
+
+  // Course mode: watch location heading so map rotates to direction of movement
+  useEffect(() => {
+    if (
+      Platform.OS === "web" ||
+      mapOrientation !== "course" ||
+      navigationMode
+    ) {
+      actions.setUserBearing(null);
+      return;
+    }
+    let sub: { remove: () => void } | null = null;
+    (async () => {
+      try {
+        const Location = await import("expo-location");
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        sub = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.BestForNavigation,
+            distanceInterval: 5,
+            timeInterval: 1000,
+          },
+          (loc) => {
+            const h = loc.coords?.heading;
+            if (h != null && !Number.isNaN(h) && h >= 0 && h < 360)
+              actions.setUserBearing(h);
+          },
+        );
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      sub?.remove?.();
+      actions.setUserBearing(null);
+    };
+  }, [mapOrientation, navigationMode, actions]);
+
+  // Invalidate cached match when route changes
+  useEffect(() => {
+    if (fixToRoadsJustRan.current) {
+      fixToRoadsJustRan.current = false;
+      return;
+    }
+    actions.setCachedMatchedRoute(null);
+  }, [
+    previewPoints?.length,
+    previewRoutePointsByVehicle?.length,
+    routePoints.length,
+    actions,
+  ]);
+
+  const handlePointPress = useCallback(
+    (point: CollectionPoint) => {
+      hapticImpact();
+      actions.setSelectedPoint(point);
+      actions.setMapCenter({ lat: point.latitude, lon: point.longitude });
+    },
+    [actions],
+  );
+
+  const setTapDestinationFallback = useCallback(
+    (lat: number, lon: number) => {
+      actions.setTapDestination({ lat, lon });
+      setPlaceInfoSheetVisible(true);
+    },
+    [actions],
+  );
+  const handleMapPress = useOSMMapPress(setTapDestinationFallback);
+
+  const startNavigation = useCallback(async () => {
+    if (cachedMatchedRoute) {
+      actions.setMatchedRoute(cachedMatchedRoute);
+      actions.setCachedMatchedRoute(null);
+      actions.setNavigationMode(true);
+      return;
+    }
+    let points: { lat: number; lon: number }[] = [];
+    if ((previewPoints?.length ?? 0) >= 2) {
+      points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
+    } else if (state?.gpxData) {
+      const parsed = await parseGPXForNavigation(state.gpxData as string);
+      points = parsed.points;
+    } else if ((displayRoutePoints?.length ?? 0) >= 2) {
+      points = displayRoutePoints!;
+    }
+    if (points.length < 2) {
+      Alert.alert(
+        "No route to navigate",
+        "Import or preview a GPX route with at least 2 points first.",
+      );
+      return;
+    }
+    actions.setNavLoading(true);
+    try {
+      let matched: MatchedRoute | null = null;
+      const routingConfig = await getRoutingConfigAsync();
+      if (routingConfig.baseUrl) {
+        matched = await matchGPXToRoads(
+          points,
+          routingConfig,
+          getRouteOptionsForRouting(),
+        );
+      }
+      if (!matched) {
+        const asRoutePoints = points.map((p) => ({
+          latitude: p.lat,
+          longitude: p.lon,
+        }));
+        const hierholzerResult = buildMatchedRouteFromHierholzer(asRoutePoints);
+        matched = hierholzerResult;
+      }
+      actions.setMatchedRoute(matched);
+      actions.setNavigationMode(true);
+    } catch (e) {
+      console.warn("Navigation setup failed:", e);
+      Alert.alert("Navigation", "Could not start navigation. Try again.");
+    } finally {
+      actions.setNavLoading(false);
+    }
+  }, [
+    cachedMatchedRoute,
+    previewPoints,
+    displayRoutePoints,
+    state?.gpxData,
+    actions,
+  ]);
+
+  const handleContainerLayout = useCallback(
+    (e: { nativeEvent: { layout: { width: number; height: number } } }) => {
+      const { width: w, height: h } = e.nativeEvent.layout;
+      if (w > 0 && h > 0) actions.setDimensions({ width: w, height: h });
+    },
+    [actions],
+  );
+
+  useEffect(() => {
+    const t = setTimeout(
+      () => {
+        const current = useMapStateStore.getState().dimensions;
+        if (current != null && current.width > 0 && current.height > 0) return;
+        const { width: w, height: h } = Dimensions.get("window");
+        actions.setDimensions({
+          width: Math.max(w, 320),
+          height: Math.max(h, 400),
+        });
+      },
+      Platform.OS === "web" ? 100 : 400,
+    );
+    return () => clearTimeout(t);
+  }, [actions]);
+
+  useEffect(() => {
+    if (!mapLoading) return;
+    const t = setTimeout(() => actions.setMapLoading(false), 10000);
+    return () => clearTimeout(t);
+  }, [mapLoading, actions]);
+
+  const rawWidth = dimensions?.width ?? Dimensions.get("window").width;
+  const rawHeight = dimensions?.height ?? 400;
+  const width = Math.max(1, rawWidth);
+  const height = Math.max(1, rawHeight);
+
+  const canStartNavigation =
+    (previewPoints?.length ?? 0) >= 2 ||
+    (displayRoutePoints?.length ?? 0) >= 2 ||
+    (previewRoutePointsByVehicle?.some((r) => r.length >= 2) ?? false) ||
+    !!state?.gpxData;
+
+  const handleFixToRoads = useCallback(async () => {
+    // Multi-vehicle: snap each vehicle's route separately
+    if (
+      previewRoutePointsByVehicle &&
+      previewRoutePointsByVehicle.some((r) => r.length >= 2)
+    ) {
+      actions.setFixToRoadsLoading(true);
+      try {
+        const routingConfig = await getRoutingConfigAsync();
+        const routeOptions = getRouteOptionsForRouting();
+        const snapped: { lat: number; lon: number }[][] = [];
+        for (const vehicleRoute of previewRoutePointsByVehicle) {
+          const pts = vehicleRoute.map((p) => ({ lat: p.lat, lon: p.lon }));
+          if (pts.length < 2) {
+            snapped.push(pts);
+            continue;
+          }
+          const matched = routingConfig.baseUrl
+            ? await routeThroughWaypoints(pts, routingConfig, routeOptions)
+            : null;
+          if (matched && matched.matchedGeometry.length >= 2) {
+            snapped.push(
+              matched.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon })),
+            );
+          } else {
+            snapped.push(pts);
+          }
+        }
+        dispatch({ type: "SET_PREVIEW_ROUTES", payload: snapped });
+        Alert.alert(
+          "Fix to roads",
+          `${snapped.length} vehicle route(s) snapped to roads.`,
+        );
+      } catch (e) {
+        console.warn("Fix to roads (multi-vehicle) failed:", e);
+        Alert.alert("Fix to roads", "Could not snap routes to roads. Try again.");
+      } finally {
+        actions.setFixToRoadsLoading(false);
+      }
+      return;
+    }
+
+    // Single route
+    let points: { lat: number; lon: number }[] = [];
+    if ((previewPoints?.length ?? 0) >= 2) {
+      points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
+    } else if ((displayRoutePoints?.length ?? 0) >= 2) {
+      points = displayRoutePoints!;
+    } else if (state?.gpxData) {
+      const parsed = await parseGPXForNavigation(state.gpxData as string);
+      points = parsed.points;
+    }
+    if (points.length < 2) {
+      Alert.alert(
+        "Not enough points",
+        "Load a route or GPX preview with at least 2 points first.",
+      );
+      return;
+    }
+    actions.setFixToRoadsLoading(true);
+    try {
+      let matched: MatchedRoute | null = null;
+      const routingConfig = await getRoutingConfigAsync();
+      const routeOptions = getRouteOptionsForRouting();
+      if (routingConfig.baseUrl) {
+        matched = await routeThroughWaypoints(
+          points,
+          routingConfig,
+          routeOptions,
+        );
+
+        if (
+          !matched &&
+          routePostProcessingEnabled
+        ) {
+          matched = await matchGPXToRoads(
+            points,
+            routingConfig,
+            routeOptions,
+          );
+        }
+
+        if (
+          routePostProcessingEnabled &&
+          matched &&
+          matched.matchedGeometry.length >= 2
+        ) {
+          const gapsBefore = countGaps(matched.matchedGeometry);
+          if (gapsBefore > 0) {
+            const repaired = await repairRouteGaps(
+              matched.matchedGeometry,
+              routingConfig,
+              routeOptions,
+            );
+            const gapsAfter = countGaps(repaired);
+            if (gapsAfter === 0 && repaired.length >= 2) {
+              matched = {
+                ...matched,
+                matchedGeometry: repaired,
+              };
+            }
+          }
+        }
+      }
+      if (!matched && routingConfig.baseUrl && routePostProcessingEnabled) {
+        matched = await matchGPXToRoads(
+          points,
+          routingConfig,
+          routeOptions,
+        );
+      }
+      if (!matched) {
+        const asRoutePoints = points.map((p) => ({
+          latitude: p.lat,
+          longitude: p.lon,
+        }));
+        matched = buildMatchedRouteFromHierholzer(asRoutePoints);
+      }
+      actions.setCachedMatchedRoute(matched);
+      fixToRoadsJustRan.current = true;
+      dispatch({
+        type: "SET_PREVIEW_ROUTE",
+        payload: matched.matchedGeometry.map((p) => ({
+          lat: p.lat,
+          lon: p.lon,
+        })),
+      });
+      Alert.alert(
+        "Fix to roads",
+        "Route snapped to road geometry. You can start navigation when ready.",
+      );
+    } catch (e) {
+      console.warn("Fix to roads failed:", e);
+      Alert.alert("Fix to roads", "Could not snap route to roads. Try again.");
+    } finally {
+      actions.setFixToRoadsLoading(false);
+    }
+  }, [
+    previewRoutePointsByVehicle,
+    previewPoints,
+    displayRoutePoints,
+    state?.gpxData,
+    actions,
+    dispatch,
+    routePostProcessingEnabled,
+  ]);
+
+  const handleRecalculate = useCallback(
+    async (payload: OffRoutePayload) => {
+      if (!matchedRoute) {
+        console.log("[Recalculate] Skip: no matched route");
+        return;
+      }
+      const geom = matchedRoute.matchedGeometry;
+      const fromIdx =
+        typeof payload.segmentIndex === "number"
+          ? payload.segmentIndex
+          : payload.currentStepIndex;
+      const remaining = geom
+        .slice(fromIdx + 1)
+        .map((p) => ({ lat: p.lat, lon: p.lon }));
+      const points = [payload.location, ...remaining];
+      if (points.length < 2) {
+        console.log(
+          "[Recalculate] Skip: need at least 2 points, got",
+          points.length,
+        );
+        return;
+      }
+      console.log(
+        "[Recalculate] Starting: fromIdx=" +
+          fromIdx +
+          ", points=" +
+          points.length,
+      );
+      actions.setNavLoading(true);
+      try {
+        const routingConfig = await getRoutingConfigAsync();
+        console.log(
+          "[Recalculate] Config: provider=" +
+            routingConfig.provider +
+            ", baseUrl=" +
+            !!routingConfig.baseUrl +
+            ", hasKey=" +
+            !!routingConfig.googleApiKey,
+        );
+        // Recalculate = new driving route from current position through remaining path (follows roads, no straight line).
+        const maxWaypoints = 25;
+        const waypoints =
+          points.length <= maxWaypoints
+            ? points
+            : (() => {
+                const step = (points.length - 1) / (maxWaypoints - 1);
+                const out: { lat: number; lon: number }[] = [];
+                for (let i = 0; i < maxWaypoints; i++) {
+                  out.push(
+                    points[Math.min(Math.round(i * step), points.length - 1)],
+                  );
+                }
+                return out;
+              })();
+        let newMatch: MatchedRoute | null = null;
+        if (waypoints.length >= 2) {
+          newMatch = await routeThroughWaypoints(
+            waypoints,
+            routingConfig,
+            getRouteOptionsForRouting(),
+          );
+        }
+        if (newMatch) {
+          console.log(
+            "[Recalculate] OK: route pts=" +
+              newMatch.matchedGeometry.length +
+              ", dist=" +
+              (newMatch.totalDistance | 0) +
+              "m",
+          );
+        } else {
+          console.log(
+            "[Recalculate] Fallback: using Hierholzer-based offline route",
+          );
+          const asRoutePoints = points.map((p) => ({
+            latitude: p.lat,
+            longitude: p.lon,
+          }));
+          newMatch = buildMatchedRouteFromHierholzer(asRoutePoints);
+        }
+        actions.setMatchedRoute(newMatch);
+      } finally {
+        actions.setNavLoading(false);
+      }
+    },
+    [matchedRoute, actions],
+  );
+
+  /** Re-route the current matched route with all avoided nodes inserted as detour waypoints. */
+  const rerouteWithAvoids = useCallback(
+    async (newAvoidedNodes: AvoidedNode[]) => {
+      const source = matchedRoute ?? cachedMatchedRoute;
+      if (!source || source.matchedGeometry.length < 2) return;
+
+      const baseWaypoints = source.matchedGeometry.map((p) => ({
+        lat: p.lat,
+        lon: p.lon,
+      }));
+      const withDetours = insertAvoidDetours(
+        baseWaypoints,
+        newAvoidedNodes,
+        source.matchedGeometry,
+      );
+      if (withDetours.length < 2) return;
+
+      actions.setFixToRoadsLoading(true);
+      try {
+        const routingConfig = await getRoutingConfigAsync();
+        const newRoute = await routeThroughWaypoints(
+          withDetours,
+          routingConfig,
+          getRouteOptionsForRouting(),
+        );
+        if (newRoute) {
+          actions.setMatchedRoute(newRoute);
+          actions.setCachedMatchedRoute(newRoute);
+        }
+      } catch (e) {
+        console.warn("[AvoidNode] Reroute failed:", e);
+      } finally {
+        actions.setFixToRoadsLoading(false);
+      }
+    },
+    [matchedRoute, cachedMatchedRoute, actions],
+  );
+
+  /** Called when the user taps "Avoid this spot" in a route-node popup. */
+  const handleAvoidNode = useCallback(
+    (node: { lat: number; lon: number; nodeId?: number; name?: string }) => {
+      const label =
+        node.name
+          ? node.name
+          : `${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}`;
+      const newNode: AvoidedNode = { ...node, label };
+      actions.addAvoidedNode(newNode);
+      rerouteWithAvoids([...avoidedNodes, newNode]);
+    },
+    [actions, avoidedNodes, rerouteWithAvoids],
+  );
+
+  const getStartForDirections = useCallback((): Promise<{
+    lat: number;
+    lon: number;
+  } | null> => {
+    // Priority 1: Use loaded route's first point
+    if (displayRoutePoints?.length) {
+      const first = displayRoutePoints[0];
+      const lat =
+        "lat" in first ? first.lat : (first as { latitude: number }).latitude;
+      const lon =
+        "lon" in first ? first.lon : (first as { longitude: number }).longitude;
+      return Promise.resolve({ lat, lon });
+    }
+    // Priority 2: Use already-tracked recorder position (instant, no GPS call needed)
+    if (recorder.currentPosition) {
+      return Promise.resolve({
+        lat: recorder.currentPosition.lat,
+        lon: recorder.currentPosition.lon,
+      });
+    }
+    // Priority 3: Web geolocation API
+    if (
+      Platform.OS === "web" &&
+      typeof navigator !== "undefined" &&
+      navigator.geolocation
+    ) {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+        );
+      });
+    }
+    // Priority 4: Native expo-location
+    return (async () => {
+      try {
+        const Loc = await import("expo-location");
+        const { status } = await Loc.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.warn("Location permission not granted:", status);
+          return null;
+        }
+        // Try last known position first (instant if available)
+        const lastKnown = await Loc.getLastKnownPositionAsync?.();
+        if (lastKnown) {
+          return {
+            lat: lastKnown.coords.latitude,
+            lon: lastKnown.coords.longitude,
+          };
+        }
+        // Fall back to current position with timeout
+        const getPos = (
+          Loc as {
+            getCurrentPositionAsync?: (
+              opts: object,
+            ) => Promise<{ coords: { latitude: number; longitude: number } }>;
+          }
+        ).getCurrentPositionAsync;
+        if (!getPos) return null;
+        const pos = await getPos({
+          accuracy: Loc.Accuracy?.Balanced ?? 3,
+          timeInterval: 5000,
+          mayShowUserSettingsDialog: false,
+        });
+        return { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      } catch (e) {
+        console.warn("getStartForDirections location error:", e);
+        return null;
+      }
+    })();
+  }, [displayRoutePoints, recorder.currentPosition]);
+
+  const handleDirectionsHere = useCallback(async () => {
+    if (!tapDestination) return;
+    hapticImpact();
+    actions.setDirectionsLoading(true);
+    try {
+      const from = await getStartForDirections();
+      if (!from) {
+        Alert.alert(
+          "Directions",
+          "Allow location access or load a route so we can route from your position or the route start.",
+        );
+        return;
+      }
+      let matched: MatchedRoute | null = null;
+      const routingConfig = await getRoutingConfigAsync();
+      if (routingConfig.baseUrl) {
+        matched = await routeBetweenPoints(
+          from,
+          tapDestination,
+          routingConfig,
+          getRouteOptionsForRouting(),
+        );
+      }
+      if (!matched) {
+        matched = buildMatchedRouteFromHierholzer([
+          { latitude: from.lat, longitude: from.lon },
+          { latitude: tapDestination.lat, longitude: tapDestination.lon },
+        ]);
+      }
+      dispatch({
+        type: "SET_PREVIEW_ROUTE",
+        payload: matched.matchedGeometry.map((p) => ({
+          lat: p.lat,
+          lon: p.lon,
+        })),
+      });
+      actions.setCachedMatchedRoute(matched);
+      actions.setTapDestination(null);
+    } catch (e) {
+      console.warn("Directions here failed:", e);
+      Alert.alert("Directions", "Could not get route. Try again.");
+    } finally {
+      actions.setDirectionsLoading(false);
+    }
+  }, [tapDestination, getStartForDirections, dispatch, actions]);
+
+  // ---------------------------------------------------------------------------
+  // Collection Route Navigation — in-app navigator with segment tracking,
+  // right-arm awareness, colored polylines, GPS auto-advance.
+  // ---------------------------------------------------------------------------
+  const startCollectionNavigation = useCallback(() => {
+    let points: { lat: number; lon: number }[] = [];
+    if ((previewPoints?.length ?? 0) >= 2) {
+      points = previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }));
+    } else if ((displayRoutePoints?.length ?? 0) >= 2) {
+      points = displayRoutePoints!;
+    }
+    if (points.length < 2) {
+      Alert.alert(
+        "No collection route",
+        "Load or preview a route with at least 2 points first.",
+      );
+      return;
+    }
+    setCollectionNavMode(true);
+  }, [previewPoints, displayRoutePoints]);
+
+  // ---------------------------------------------------------------------------
+  // Normal Navigation — deep link to Google Maps / Apple Maps / Waze.
+  // For point-to-point trips: depot to route start, last stop to depot, etc.
+  // ---------------------------------------------------------------------------
+  const startExternalNavigation = useCallback(async () => {
+    const dest =
+      tapDestination ||
+      (selectedPoint
+        ? {
+            lat: selectedPoint.latitude,
+            lon: selectedPoint.longitude,
+          }
+        : null);
+
+    if (!dest) {
+      Alert.alert(
+        "No destination",
+        "Tap a location on the map or select a point first.",
+      );
+      return;
+    }
+
+    const destination: NormalNavDestination = {
+      lat: dest.lat,
+      lon: dest.lon,
+      label: selectedPoint?.address ?? undefined,
+      address: selectedPoint?.address ?? undefined,
+      purpose: "custom",
+    };
+
+    try {
+      await navigateExternally(destination);
+    } catch (err) {
+      console.warn("[MapContent] External navigation failed:", err);
+      Alert.alert(
+        "Navigation Error",
+        "Could not open external navigation app. Please try again.",
+      );
+    }
+  }, [tapDestination, selectedPoint]);
+
+  const handleMapLoad = useCallback(() => {
+    console.log("[MapContent] Map loaded successfully");
+    actions.setMapLoading(false);
+    actions.setMapError(null);
+  }, [actions]);
+
+  const handleMapError = useCallback(
+    (error: string) => {
+      console.error("[MapContent] Map error:", error);
+      actions.setMapLoading(false);
+      actions.setMapError(error);
+    },
+    [actions],
+  );
+
+  const handleDownloadGPX = useCallback(() => {
+    const byVehicle = state?.previewRoutePointsByVehicle;
+    if (byVehicle && byVehicle.length > 1) {
+      const routes = byVehicle
+        .filter((r) => r.length >= 2)
+        .map((r, i) => ({
+          name: `Vehicle ${i + 1}`,
+          points: r.map((p) => ({ lat: p.lat, lon: p.lon })),
+        }));
+      if (routes.length === 0) {
+        Alert.alert("No route", "No vehicle route with at least 2 points.");
+        return;
+      }
+      const gpxStr = generateMultiTrackGPXString(
+        "trashroute_vrp_export",
+        routes,
+      );
+      if (Platform.OS === "web") {
+        const blob = new Blob([gpxStr], { type: "application/gpx+xml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `trashroute_vrp_${new Date().toISOString().slice(0, 10)}.gpx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        (async () => {
+          try {
+            const FileSystem = await import("expo-file-system/legacy");
+            const Sharing = await import("expo-sharing");
+            const filename = `trashroute_vrp_${new Date().toISOString().slice(0, 10)}.gpx`;
+            const path = `${FileSystem.documentDirectory}${filename}`;
+            await FileSystem.writeAsStringAsync(path, gpxStr);
+            await Sharing.shareAsync(path, {
+              mimeType: "application/gpx+xml",
+              dialogTitle: "Export GPX",
+            });
+          } catch (err) {
+            console.error("GPX export failed:", err);
+            Alert.alert("Export Failed", "Could not export the GPX file.");
+          }
+        })();
+      }
+      return;
+    }
+    let points: { lat: number; lon: number }[] = [];
+    // Prefer matched-route geometry (reflects avoid-node detours); fall back to stop points.
+    const matchedSource = matchedRoute ?? cachedMatchedRoute;
+    if (matchedSource && matchedSource.matchedGeometry.length >= 2) {
+      points = matchedSource.matchedGeometry.map((p) => ({ lat: p.lat, lon: p.lon }));
+    } else if (displayRoutePoints?.length) {
+      points = displayRoutePoints.map((p) => ({
+        lat: "lat" in p ? p.lat : (p as { latitude: number }).latitude,
+        lon: "lon" in p ? p.lon : (p as { longitude: number }).longitude,
+      }));
+    }
+    if (points.length < 2) {
+      Alert.alert("No route", "Load a route with at least 2 points first.");
+      return;
+    }
+    const gpxStr = generateGPXString("trashroute_export", points);
+    if (Platform.OS === "web") {
+      const blob = new Blob([gpxStr], { type: "application/gpx+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `trashroute_${new Date().toISOString().slice(0, 10)}.gpx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      (async () => {
+        try {
+          const FileSystem = await import("expo-file-system/legacy");
+          const Sharing = await import("expo-sharing");
+          const filename = `trashroute_${new Date().toISOString().slice(0, 10)}.gpx`;
+          const path = `${FileSystem.documentDirectory}${filename}`;
+          await FileSystem.writeAsStringAsync(path, gpxStr);
+          await Sharing.shareAsync(path, {
+            mimeType: "application/gpx+xml",
+            dialogTitle: "Export GPX",
+          });
+        } catch (err) {
+          console.error("GPX export failed:", err);
+          Alert.alert("Export Failed", "Could not export the GPX file.");
+        }
+      })();
+    }
+  }, [displayRoutePoints, state?.previewRoutePointsByVehicle, matchedRoute, cachedMatchedRoute]);
+
+  const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), []);
+  const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), []);
+  const handleCompass = useCallback(() => mapRef.current?.resetNorth(), []);
+
+  const handleDrivePreview = useCallback(() => {
+    if ((displayRoutePoints?.length ?? 0) >= 2) {
+      mapRef.current?.fitToRoute?.();
+      setDrivePreviewVisible(true);
+    }
+  }, [displayRoutePoints]);
+
+  const handleOpenInGoogle = useCallback(async () => {
+    // Calculate center and waypoints from route data
+    let center: { lat: number; lon: number } | undefined;
+    let waypoints: { lat: number; lon: number }[] | undefined;
+
+    // Use displayRoutePoints which includes the actual route being shown
+    if (displayRoutePoints && displayRoutePoints.length > 0) {
+      // Center on route start, include route points as waypoints (sample them if too many)
+      center = {
+        lat: displayRoutePoints[0].lat,
+        lon: displayRoutePoints[0].lon,
+      };
+
+      // Sample waypoints if route is very long (Google Maps deep links have limits)
+      if (displayRoutePoints.length > 20) {
+        const step = Math.floor(displayRoutePoints.length / 15); // ~15 waypoints max
+        waypoints = displayRoutePoints
+          .filter(
+            (_, i) => i % step === 0 || i === displayRoutePoints.length - 1,
+          )
+          .map((p) => ({ lat: p.lat, lon: p.lon }));
+      } else {
+        waypoints = displayRoutePoints.map((p) => ({ lat: p.lat, lon: p.lon }));
+      }
+    } else if (collectionPoints && collectionPoints.length > 0) {
+      // Center on first collection point, use collection points as waypoints
+      center = {
+        lat: collectionPoints[0].latitude,
+        lon: collectionPoints[0].longitude,
+      };
+
+      if (collectionPoints.length > 15) {
+        const step = Math.floor(collectionPoints.length / 15);
+        waypoints = collectionPoints
+          .filter((_, i) => i % step === 0 || i === collectionPoints.length - 1)
+          .map((p) => ({ lat: p.latitude, lon: p.longitude }));
+      } else {
+        waypoints = collectionPoints.map((p) => ({
+          lat: p.latitude,
+          lon: p.longitude,
+        }));
+      }
+    } else if (tapDestination) {
+      // Use tapped location as center
+      center = { lat: tapDestination.lat, lon: tapDestination.lon };
+    }
+
+    console.log(
+      "[OpenInGoogle] Center:",
+      center,
+      "Waypoints count:",
+      waypoints?.length,
+    );
+    await openGoogleMapsViewer({ center, waypoints });
+  }, [displayRoutePoints, collectionPoints, tapDestination]);
+
+  const handleOpenInOsmAnd = useCallback(async () => {
+    let center: { lat: number; lon: number } | undefined;
+    let waypoints: { lat: number; lon: number }[] | undefined;
+    let gpxString: string | undefined;
+
+    const byVehicle = state?.previewRoutePointsByVehicle;
+    if (byVehicle && byVehicle.length >= 1) {
+      if (byVehicle.length > 1) {
+        const routes = byVehicle
+          .filter((r) => r.length >= 2)
+          .map((r, i) => ({
+            name: `Vehicle ${i + 1}`,
+            points: r.map((p) => ({ lat: p.lat, lon: p.lon })),
+          }));
+        if (routes.length > 0) {
+          gpxString = generateMultiTrackGPXString("trashroute_osmand", routes);
+          const first = routes[0].points;
+          center = first[0];
+          waypoints =
+            first.length > 20
+              ? first.filter(
+                  (_, i) =>
+                    i % Math.ceil(first.length / 15) === 0 ||
+                    i === first.length - 1,
+                )
+              : first;
+        }
+      } else if (byVehicle[0].length >= 2) {
+        const points = byVehicle[0].map((p) => ({ lat: p.lat, lon: p.lon }));
+        gpxString = generateGPXString("trashroute_osmand", points);
+        center = points[0];
+        waypoints =
+          points.length > 20
+            ? points.filter(
+                (_, i) =>
+                  i % Math.ceil(points.length / 15) === 0 ||
+                  i === points.length - 1,
+              )
+            : points;
+      }
+    } else if (displayRoutePoints && displayRoutePoints.length >= 2) {
+      const points = displayRoutePoints.map((p) => ({
+        lat: "lat" in p ? p.lat : (p as { latitude: number }).latitude,
+        lon: "lon" in p ? p.lon : (p as { longitude: number }).longitude,
+      }));
+      gpxString = generateGPXString("trashroute_osmand", points);
+      center = points[0];
+      waypoints =
+        points.length > 20
+          ? points.filter(
+              (_, i) =>
+                i % Math.ceil(points.length / 15) === 0 ||
+                i === points.length - 1,
+            )
+          : points;
+    } else if (collectionPoints && collectionPoints.length >= 2) {
+      const points = collectionPoints.map((p) => ({
+        lat: p.latitude,
+        lon: p.longitude,
+      }));
+      gpxString = generateGPXString("trashroute_osmand", points);
+      center = points[0];
+      waypoints =
+        points.length > 15
+          ? points.filter(
+              (_, i) =>
+                i % Math.ceil(points.length / 15) === 0 ||
+                i === points.length - 1,
+            )
+          : points;
+    } else if (tapDestination) {
+      center = { lat: tapDestination.lat, lon: tapDestination.lon };
+    }
+
+    await openOsmAndViewer({ center, waypoints, gpxString });
+  }, [
+    displayRoutePoints,
+    collectionPoints,
+    tapDestination,
+    state?.previewRoutePointsByVehicle,
+  ]);
+
+  const handleStreetView = useCallback(() => {
+    const coords = tapDestination
+      ? { lat: tapDestination.lat, lon: tapDestination.lon }
+      : selectedPoint
+        ? { lat: selectedPoint.latitude, lon: selectedPoint.longitude }
+        : null;
+    if (coords) {
+      actions.setMapillaryCoords(coords);
+      actions.setMapillaryViewerVisible(true);
+    }
+  }, [tapDestination, selectedPoint, actions]);
+
+  const handleContributeImages = useCallback(() => {
+    openMapillaryCapture();
+  }, []);
+
+  const handleMapLongPress = useCallback(
+    (lat: number, lon: number) => {
+      hapticImpact();
+      const name = `Saved (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+      const onSave = () => {
+        addFavorite({ name, lat, lon });
+        addMarker({ name, lat, lon });
+      };
+      if (Platform.OS === "web") {
+        if (
+          typeof window !== "undefined" &&
+          window.confirm("Save this location to Favorites?")
+        )
+          onSave();
+      } else {
+        Alert.alert(
+          "Save to Favorites",
+          "Add this location to your favorites and map markers?",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Save", onPress: onSave },
+          ],
+        );
+      }
+    },
+    [addFavorite, addMarker],
+  );
+
+  // key used to force a full remount of the RouteMap component.  This
+  // is defensive; the native map has historically crashed when its child
+  // subviews change very rapidly (see iOS stack trace involving
+  // -[AIRMap insertReactSubview:atIndex:]).  Incrementing the key ensures we
+  // completely wipe the old map before rendering with the cleared state.
+  const [mapKey, setMapKey] = useState(0);
+
+  const handleClearRouteMarkers = useCallback(async () => {
+    // Bump the key FIRST so the old native MapView unmounts before its
+    // children change.  Previously the key was bumped in `finally` (after
+    // clearRouteData), which caused an intermediate render where the
+    // existing MapView tried to reconcile removed children and crashed
+    // with NSInvalidArgumentException in -[AIRMap insertReactSubview:atIndex:].
+    setMapKey((k) => k + 1);
+    try {
+      dispatch({ type: "SET_PREVIEW_ROUTE", payload: null });
+      dispatch({ type: "SET_PREVIEW_ROUTES", payload: null });
+      dispatch({ type: "SET_GPX_DATA", payload: "" });
+      await actions.clearRouteData();
+    } catch (e) {
+      console.warn("Clear route markers failed:", e);
+    }
+  }, [dispatch, actions]);
+
+  const mapContent = (
+    <>
+      {mapLoading && (
+        <View style={[styles.mapPlaceholder, { width, height }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.mapPlaceholderText, { marginTop: 16 }]}>
+            Loading map...
+          </Text>
+        </View>
+      )}
+      {mapError && (
+        <View style={[styles.mapPlaceholder, { width, height }]}>
+          <Text style={styles.mapPlaceholderText}>
+            Map failed to load: {mapError}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              { backgroundColor: colors.primary, marginTop: 16 },
+            ]}
+            onPress={() => {
+              actions.setMapLoading(true);
+              actions.setMapError(null);
+            }}
+          >
+            <Text style={styles.actionButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      <RouteMap
+        key={mapKey}
+        ref={mapRef}
+        collectionPoints={isPreviewMode ? [] : collectionPoints}
+        routePoints={
+          isRecActive
+            ? recorder.points.map((p) => ({ lat: p.lat, lon: p.lon }))
+            : routeMapPolylines.kind === "preview" &&
+                routeMapPolylines.preview.length === 1
+              ? sanitizeLatLonArray(routeMapPolylines.preview[0])
+              : routeMapPolylines.kind === "preview" &&
+                  routeMapPolylines.preview.length > 1
+                ? undefined
+                : routeMapPolylines.kind === "split"
+                  ? undefined
+                  : routeMapPolylines.points
+        }
+        routePointsByVehicle={
+          routeMapPolylines.kind === "preview" &&
+          routeMapPolylines.preview.length > 1
+            ? sanitizeByVehicle(routeMapPolylines.preview)
+            : routeMapPolylines.kind === "split"
+              ? routeMapPolylines.parts
+              : undefined
+        }
+        unifyRouteVehicleStrokeColor={routeMapPolylines.kind === "split"}
+        segmentRisks={state.weatherAnalysis?.segmentRisks}
+        height={height}
+        width={width}
+        onPointClick={handlePointPress}
+        onMapPress={handleMapPress}
+        onMapLongPress={handleMapLongPress}
+        tapDestination={osmExtractorVisible ? null : tapDestination}
+        onLoad={handleMapLoad}
+        onError={handleMapError}
+        hasOfflineRegions={hasOfflineRegions}
+        userBearing={
+          isRecActive ? (recorder.currentHeading ?? userBearing) : userBearing
+        }
+        showAerial={showAerial}
+        showTraffic={showTraffic}
+        showOverture={showOverture && overturePluginEnabled}
+        osmExtractionPolygon={
+          osmExtractionPoints.length >= 3 ? osmExtractionPoints : undefined
+        }
+        osmExtractionPoints={osmExtractionPoints}
+        osmExtractedFeatures={osmExtractedData?.features}
+        osmExtractorVisible={osmExtractorVisible}
+        userPosition={gpsAndMatch.userPosition}
+        navigationSegmentIndex={gpsAndMatch.matchedSegmentIndex}
+        geojsonOverlay={geojsonOverlay}
+        zonesPreviewPolygon={zonesPreviewPolygon}
+        zonesPreviewPolygons={zonesPreviewPolygons}
+        onAvoidNode={handleAvoidNode}
+        osrmBaseUrl={osrmBaseUrl}
+      />
+    </>
+  );
+
+  if (!dimensions) {
+    return (
+      <View style={styles.container} onLayout={handleContainerLayout}>
+        <View style={[styles.mapPlaceholder, { flex: 1 }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </View>
+    );
+  }
+
+  if (navigationMode && matchedRoute) {
+    return (
+      <View style={styles.container}>
+        <NavigationView
+          matchedRoute={matchedRoute}
+          fullRoutePoints={
+            displayRoutePoints?.length ? displayRoutePoints : undefined
+          }
+          onClose={() => {
+            actions.setNavigationMode(false);
+            actions.setMatchedRoute(null);
+          }}
+          onRecalculate={handleRecalculate}
+          autoRecalculateOnOffRoute={!roadClosureHandlingOn}
+          offRouteThresholdMeters={recalcDistanceMeters}
+        />
+      </View>
+    );
+  }
+
+  if (collectionRouteEnabled && collectionNavMode) {
+    const collRoutePoints =
+      (previewPoints?.length ?? 0) >= 2
+        ? previewPoints!.map((p) => ({ lat: p.lat, lon: p.lon }))
+        : (displayRoutePoints?.length ?? 0) >= 2
+          ? displayRoutePoints!
+          : [];
+
+    return (
+      <View style={styles.container}>
+        <CollectionNavigator
+          routePoints={collRoutePoints}
+          collectionPoints={collectionPoints}
+          onClose={() => {
+            setCollectionNavMode(false);
+            collectionNavReset();
+          }}
+        />
+      </View>
+    );
+  }
+
+  const pinnedOffset =
+    isPinned && deviceType === "ipad" ? SIDEBAR_WIDTH_IPAD : 0;
+  const mapWrapperStyle =
+    Platform.OS === "ios" && dimensions
+      ? [
+          StyleSheet.absoluteFill,
+          styles.mapWrapper,
+          {
+            width: dimensions.width - pinnedOffset,
+            height: dimensions.height,
+            left: pinnedOffset,
+          },
+        ]
+      : [
+          StyleSheet.absoluteFill,
+          styles.mapWrapper,
+          ...(pinnedOffset > 0 ? [{ left: pinnedOffset, right: 0 }] : []),
+        ];
+
+  const hasActiveRoute =
+    canStartNavigation ||
+    (displayRoutePoints?.length ?? 0) > 0 ||
+    !!tapDestination;
+  const hasSelectedLocation = !!(tapDestination || selectedPoint);
+
+  return (
+    <View style={styles.container} onLayout={handleContainerLayout}>
+      <View style={mapWrapperStyle}>
+        <GpxDropZone onGpxLoaded={handleGpxDropped}>
+          {mapContent}
+        </GpxDropZone>
+      </View>
+
+      <HelpPrompt />
+      <View
+        style={{
+          position: "absolute",
+          top: insets.top + 8,
+          right: 12,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          zIndex: 5000,
+          pointerEvents: "none",
+        }}
+      >
+        <Text style={{ color: "#fff", fontSize: 11 }}>
+          Post-processing: {routePostProcessingEnabled ? "ON" : "OFF"}
+          {"\n"}
+          {routePostProcessingEnabled
+            ? "gap-split + auto-stitch + fix-to-roads repair"
+            : "raw polyline (no split / no auto-stitch / fix minimal)"}
+        </Text>
+      </View>
+
+      {/* GPS Recording controls — compact overlay */}
+      <RecordingOverlay
+        recorder={recorder}
+        isRecording={isRecording}
+        isPaused={isPaused}
+        isRecActive={isRecActive}
+        recFlashAnim={recFlashAnim}
+        colors={colors}
+        insets={insets}
+        savingTrack={savingTrack}
+        onStart={handleRecStart}
+        onPause={recPause}
+        onResume={recResume}
+        onStop={handleRecStop}
+        onDiscard={handleRecDiscard}
+        onOptions={() => setRecOptionsVisible(true)}
+        savedTracks={savedTracks}
+        savedTracksExpanded={savedTracksExpanded}
+        onToggleSavedTracks={() => setSavedTracksExpanded((e) => !e)}
+        onTrackPreview={handleTrackPreview}
+        onTrackExport={handleTrackExport}
+        onTrackDelete={handleTrackDelete}
+      />
+
+      <RecOptionsModal
+        visible={recOptionsVisible}
+        onClose={() => setRecOptionsVisible(false)}
+      />
+
+      {Platform.OS !== "web" && (
+        <View
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              top: insets.top + 8,
+              left: 12,
+              right: undefined,
+              bottom: undefined,
+              width: undefined,
+              alignSelf: "flex-start",
+              pointerEvents: "box-none",
+            },
+          ]}
+        >
+          <PowerSavingIndicator compact />
+        </View>
+      )}
+
+      <MapFloatingControls
+        hasActiveRoute={hasActiveRoute}
+        hasTapDestination={!osmExtractorVisible && !!tapDestination}
+        hasSelectedLocation={!osmExtractorVisible && hasSelectedLocation}
+        canStartNavigation={canStartNavigation}
+        onSearch={navigationEnabled ? openNavigationPanel : undefined}
+        onDirectionsHere={handleDirectionsHere}
+        onStreetView={handleStreetView}
+        onContributeImages={handleContributeImages}
+        onStartNavigation={navigationEnabled ? startNavigation : undefined}
+        onStartCollectionRoute={
+          collectionRouteEnabled && canStartNavigation
+            ? startCollectionNavigation
+            : undefined
+        }
+        onNavigateExternal={startExternalNavigation}
+        onFixToRoads={handleFixToRoads}
+        onClearRoute={canStartNavigation ? handleClearRouteMarkers : undefined}
+        onDownloadGPX={handleDownloadGPX}
+        onDrivePreview={drivePreviewEnabled ? handleDrivePreview : undefined}
+        onOpenInGoogle={handleOpenInGoogle}
+        onOpenInOsmAnd={handleOpenInOsmAnd}
+        directionsLoading={directionsLoading}
+        navLoading={navLoading}
+        fixToRoadsLoading={fixToRoadsLoading}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onCompass={handleCompass}
+        onStartRecording={handleRecStart}
+        isRecordingActive={isRecActive}
+      />
+
+      {aiChatEnabled && <AIChatBubble />}
+
+      <AvoidedNodesPanel />
+      <DeletedSegmentsPanel />
+
+      <MapSidebar />
+
+      {navigationEnabled && (
+        <NavigationPanel
+          visible={navigationPanelVisible}
+          onClose={closeNavigationPanel}
+          tapDestination={tapDestination}
+        />
+      )}
+      {tapDestination && (
+        <PlaceInfoSheet
+          visible={placeInfoSheetVisible}
+          onClose={() => setPlaceInfoSheetVisible(false)}
+          lat={tapDestination.lat}
+          lon={tapDestination.lon}
+          onDirectionsHere={handleDirectionsHere}
+          onSaveToFavorites={(name, lat, lon) =>
+            addFavorite({ name, lat, lon })
+          }
+          onClear={() => {
+            actions.setTapDestination(null);
+            setPlaceInfoSheetVisible(false);
+          }}
+        />
+      )}
+      <MyPlacesScreen
+        visible={myPlacesPanelVisible}
+        onClose={closeMyPlacesPanel}
+      />
+      <ZonesScreen visible={zonesPanelVisible} onClose={closeZonesPanel} />
+      <RecordingScreen
+        visible={recordingPanelVisible}
+        onClose={closeRecordingPanel}
+      />
+      <MapsAndResourcesScreen
+        visible={mapsResourcesVisible}
+        onClose={closeMapsResources}
+      />
+      <ConfigureScreenSheet
+        visible={configureScreenVisible}
+        onClose={closeConfigureScreen}
+      />
+      {navigationEnabled && (
+        <RouteParametersSheet
+          visible={routeParametersPanelVisible}
+          onClose={closeRouteParametersPanel}
+          onSelectOnMap={() => {
+            closeRouteParametersPanel();
+            Alert.alert(
+              "Select on map",
+              "Selecting specific roads on the map is not yet supported. Use \"Avoid by type\" in Route parameters to avoid tolls, motorways, ferries, and more.",
+            );
+          }}
+        />
+      )}
+      <MapMarkersScreen
+        visible={mapMarkersPanelVisible}
+        onClose={closeMapMarkersPanel}
+        collectionPoints={collectionPoints}
+        displayRoutePoints={displayRoutePoints}
+        onClearRouteMarkers={handleClearRouteMarkers}
+      />
+
+      <MapillaryViewer
+        latitude={mapillaryCoords?.lat ?? 0}
+        longitude={mapillaryCoords?.lon ?? 0}
+        isVisible={mapillaryViewerVisible}
+        onClose={() => {
+          actions.setMapillaryViewerVisible(false);
+          actions.setMapillaryCoords(null);
+        }}
+      />
+
+      {drivePreviewEnabled &&
+        Platform.OS !== "web" &&
+        displayRoutePoints &&
+        displayRoutePoints.length >= 2 && (
+          <StreetViewPreview
+            points={displayRoutePoints.map((p) => ({ lat: p.lat, lon: p.lon }))}
+            isVisible={drivePreviewVisible}
+            onClose={() => setDrivePreviewVisible(false)}
+            trackName="Route Preview"
+          />
+        )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recording overlay sub-component — shown on Map tab
+// ---------------------------------------------------------------------------
+function RecordingOverlay({
+  recorder,
+  isRecording,
+  isPaused,
+  isRecActive,
+  recFlashAnim,
+  colors,
+  insets,
+  savingTrack,
+  onStart,
+  onPause,
+  onResume,
+  onStop,
+  onDiscard,
+  onOptions,
+  savedTracks,
+  savedTracksExpanded,
+  onToggleSavedTracks,
+  onTrackPreview,
+  onTrackExport,
+  onTrackDelete,
+}: {
+  recorder: ReturnType<
+    typeof import("@/hooks/useTrackRecorder").useTrackRecorder
+  >["state"];
+  isRecording: boolean;
+  isPaused: boolean;
+  isRecActive: boolean;
+  recFlashAnim: Animated.Value;
+  colors: ReturnType<typeof import("@/hooks/use-colors").useColors>;
+  insets: { top: number; bottom: number };
+  savingTrack: boolean;
+  onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
+  onDiscard: () => void;
+  onOptions: () => void;
+  savedTracks: SavedTrack[];
+  savedTracksExpanded: boolean;
+  onToggleSavedTracks: () => void;
+  onTrackPreview: (t: SavedTrack) => void;
+  onTrackExport: (t: SavedTrack) => void;
+  onTrackDelete: (t: SavedTrack) => void;
+}) {
+  return (
+    <>
+      {/* REC badge — top-right, only visible when recording */}
+      {isRecActive && (
+        <TouchableOpacity
+          style={[
+            recStyles.recBadge,
+            {
+              backgroundColor: colors.surface + "ee",
+              borderColor: "#E53935",
+              top: insets.top + 8,
+              right: 12,
+            },
+          ]}
+          onPress={onOptions}
+          activeOpacity={0.8}
+        >
+          {isRecording ? (
+            <Animated.View
+              style={[recStyles.recDot, { opacity: recFlashAnim }]}
+            >
+              <View style={recStyles.recDotInner} />
+            </Animated.View>
+          ) : (
+            <View style={[recStyles.recDot, { backgroundColor: "#ff9800" }]}>
+              <MaterialCommunityIcons name="pause" size={10} color="#fff" />
+            </View>
+          )}
+          <Text style={[recStyles.recBadgeText, { color: colors.text }]}>
+            {isRecording ? "REC" : "PAUSED"}
+          </Text>
+          <Text
+            style={[
+              recStyles.recTime,
+              { color: colors.muted, fontFamily: Fonts?.mono },
+            ]}
+          >
+            {formatRecElapsed(recorder.elapsedMs)}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Active recording stats + controls bar — bottom of screen */}
+      {isRecActive && (
+        <View
+          style={[
+            recStyles.recBar,
+            glassStyle,
+            {
+              backgroundColor: colors.surface + "f0",
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          {/* Stats row */}
+          <View style={recStyles.recStatsRow}>
+            <RecStat
+              icon="clock-outline"
+              value={formatRecElapsed(recorder.elapsedMs)}
+              label="Time"
+              colors={colors}
+            />
+            <RecStat
+              icon="map-marker-distance"
+              value={formatRecDistance(recorder.totalDistanceMeters)}
+              label="Dist"
+              colors={colors}
+            />
+            <RecStat
+              icon="map-marker-multiple"
+              value={String(recorder.points.length)}
+              label="Pts"
+              colors={colors}
+            />
+            {recorder.currentPosition?.speed != null &&
+              recorder.currentPosition.speed > 0 && (
+                <RecStat
+                  icon="speedometer"
+                  value={`${(recorder.currentPosition.speed * 3.6).toFixed(0)}`}
+                  label="km/h"
+                  colors={colors}
+                />
+              )}
+          </View>
+
+          {/* Controls row */}
+          <View style={recStyles.recControlsRow}>
+            {isRecording && (
+              <>
+                <TouchableOpacity
+                  style={[recStyles.recBtn, { backgroundColor: "#ff9800" }]}
+                  onPress={onPause}
+                >
+                  <MaterialCommunityIcons name="pause" size={18} color="#fff" />
+                  <Text style={recStyles.recBtnText}>Pause</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    recStyles.recBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={onStop}
+                >
+                  <MaterialCommunityIcons name="stop" size={18} color="#fff" />
+                  <Text style={recStyles.recBtnText}>Stop</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {isPaused && (
+              <>
+                <TouchableOpacity
+                  style={[recStyles.recBtn, { backgroundColor: "#22c55e" }]}
+                  onPress={onResume}
+                >
+                  <MaterialCommunityIcons name="play" size={18} color="#fff" />
+                  <Text style={recStyles.recBtnText}>Resume</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    recStyles.recBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={onStop}
+                >
+                  <MaterialCommunityIcons name="stop" size={18} color="#fff" />
+                  <Text style={recStyles.recBtnText}>Stop</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    recStyles.recBtn,
+                    { backgroundColor: colors.muted + "88" },
+                  ]}
+                  onPress={onDiscard}
+                >
+                  <MaterialCommunityIcons
+                    name="delete-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={recStyles.recBtnText}>Discard</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+          {savingTrack && (
+            <View style={recStyles.savingRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text
+                style={{ color: colors.muted, marginLeft: 6, fontSize: 12 }}
+              >
+                Saving...
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Saved tracks expandable list (web only, when not recording) */}
+      {Platform.OS === "web" && !isRecActive && savedTracks.length > 0 && (
+        <View
+          style={[
+            recStyles.savedPanel,
+            {
+              backgroundColor: colors.surface + "f0",
+              borderColor: colors.border,
+              bottom: 16,
+              left: 12,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={recStyles.savedHeader}
+            onPress={onToggleSavedTracks}
+          >
+            <MaterialCommunityIcons
+              name="history"
+              size={16}
+              color={colors.muted}
+            />
+            <Text style={[recStyles.savedHeaderText, { color: colors.text }]}>
+              Saved Tracks ({savedTracks.length})
+            </Text>
+            <MaterialCommunityIcons
+              name={savedTracksExpanded ? "chevron-down" : "chevron-up"}
+              size={18}
+              color={colors.muted}
+            />
+          </TouchableOpacity>
+          {savedTracksExpanded && (
+            <FlatList
+              data={savedTracks}
+              keyExtractor={(item) => item.id}
+              style={{ maxHeight: 200 }}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    recStyles.savedItem,
+                    { borderBottomColor: colors.border },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[recStyles.savedName, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={[recStyles.savedMeta, { color: colors.muted }]}
+                    >
+                      {formatRecDistance(item.totalDistanceMeters)} ·{" "}
+                      {formatRecElapsed(item.elapsedMs)} · {item.pointCount} pts
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => onTrackPreview(item)}
+                    style={recStyles.savedAction}
+                  >
+                    <MaterialCommunityIcons
+                      name="eye-outline"
+                      size={16}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onTrackExport(item)}
+                    style={recStyles.savedAction}
+                  >
+                    <MaterialCommunityIcons
+                      name="export-variant"
+                      size={16}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onTrackDelete(item)}
+                    style={recStyles.savedAction}
+                  >
+                    <MaterialCommunityIcons
+                      name="delete-outline"
+                      size={16}
+                      color={colors.error ?? "#ef4444"}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          )}
+        </View>
+      )}
+    </>
+  );
+}
+
+function RecStat({
+  icon,
+  value,
+  label,
+  colors,
+}: {
+  icon: string;
+  value: string;
+  label: string;
+  colors: ReturnType<typeof import("@/hooks/use-colors").useColors>;
+}) {
+  return (
+    <View style={recStyles.recStatItem}>
+      <MaterialCommunityIcons
+        name={icon as any}
+        size={14}
+        color={colors.muted}
+      />
+      <Text
+        style={[
+          recStyles.recStatValue,
+          { color: colors.text, fontFamily: Fonts?.mono },
+        ]}
+      >
+        {value}
+      </Text>
+      <Text style={[recStyles.recStatLabel, { color: colors.muted }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function formatRecElapsed(ms: number): string {
+  const totalSecs = Math.floor(ms / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatRecDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(2)}km`;
+}
+
+const recStyles = StyleSheet.create({
+  recBadge: {
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    zIndex: 20,
+  },
+  recDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#E53935",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recDotInner: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "white",
+  },
+  recBadgeText: { fontSize: 12, fontWeight: "700" },
+  recTime: { fontSize: 11 },
+
+  recBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    zIndex: 20,
+  },
+  recStatsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 8,
+  },
+  recStatItem: { alignItems: "center" },
+  recStatValue: { fontSize: 14, fontWeight: "700", marginTop: 1 },
+  recStatLabel: { fontSize: 9, marginTop: 1 },
+
+  recControlsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  recBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  recBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  savingRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 6,
+  },
+
+  savedPanel: {
+    position: "absolute",
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+    maxWidth: 340,
+    minWidth: 260,
+    zIndex: 20,
+  },
+  savedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  savedHeaderText: { fontSize: 12, fontWeight: "600", flex: 1 },
+  savedItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  savedName: { fontSize: 12, fontWeight: "600" },
+  savedMeta: { fontSize: 10 },
+  savedAction: {
+    padding: 4,
+    marginLeft: 4,
+  },
+});
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    ...(Platform.OS === "web" && {
+      minHeight: typeof window !== "undefined" ? Math.max(400, window.innerHeight - 120) : 400,
+    }),
+  },
+  mapWrapper: { pointerEvents: "auto" },
+  mapPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
+  },
+  mapPlaceholderText: {
+    color: "#888",
+    fontSize: 16,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  actionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  actionButtonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+});
