@@ -44,6 +44,9 @@ export function WebPasswordGate({
   children: React.ReactNode;
   style?: ViewStyle;
 }) {
+  // Password protection disabled for public demo
+  return <>{children}</>;
+
   const [unlocked, setUnlocked] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");

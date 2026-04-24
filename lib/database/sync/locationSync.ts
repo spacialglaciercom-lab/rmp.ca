@@ -8,6 +8,7 @@ import { database } from '../index';
 import { Q } from '@nozbe/watermelondb';
 import * as Location from 'expo-location';
 import NetInfo from '@react-native-community/netinfo';
+import { trpc } from '../../trpc';
 
 // Location sync configuration
 interface LocationSyncConfig {
@@ -80,20 +81,16 @@ export class LocationSync {
         return { success: true, pointsSynced: 0 };
       }
 
-      // TODO: Replace with actual tRPC call
-      // const response = await trpc.spatial.nearbyWastePoints.query({
-      //   lat: latitude,
-      //   lon: longitude,
-      //   radiusKm: this.config.radiusKm,
-      //   limit: this.config.maxPoints,
-      // });
-
-      // For now, simulate response
-      const response: { points: Array<{ id: string; lat: number; lon: number; type: string; condition: string; address: string }> } = { points: [] };
+      const response = await trpc.sync.nearbyWastePoints.query({
+        lat: latitude,
+        lon: longitude,
+        radiusKm: this.config.radiusKm,
+        limit: this.config.maxPoints,
+      });
 
       // Update local database
       await database.write(async () => {
-        for (const point of response.points) {
+        for (const point of response.points as any[]) {
           const existing = await database.get('waste_points')
             .query(Q.where('external_id', point.id))
             .fetch();
@@ -101,22 +98,24 @@ export class LocationSync {
           if (existing.length > 0) {
             // Update existing
             await existing[0].update((record: any) => {
-              record.latitude = point.lat;
-              record.longitude = point.lon;
+              record.latitude = point.latitude;
+              record.longitude = point.longitude;
+              record.name = point.name;
               record.type = point.type;
-              record.condition = point.condition;
-              record.address = point.address;
+              record.fillLevel = point.fill_level;
+              record.status = point.status;
               record.syncedAt = Date.now();
             });
           } else {
             // Create new
             await database.get('waste_points').create((record: any) => {
               record.externalId = point.id;
-              record.latitude = point.lat;
-              record.longitude = point.lon;
+              record.latitude = point.latitude;
+              record.longitude = point.longitude;
+              record.name = point.name;
               record.type = point.type;
-              record.condition = point.condition;
-              record.address = point.address;
+              record.fillLevel = point.fill_level;
+              record.status = point.status;
               record.syncedAt = Date.now();
               record.isPendingSync = false;
             });

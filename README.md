@@ -1,5 +1,27 @@
 # RouteMaster Pro (Route OS)
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-rmpdemo.ngrok.app-blue?style=for-the-badge&logo=googlemaps)](https://rmpdemo.ngrok.app)
+[![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20Web-green?style=for-the-badge)](https://rmpdemo.ngrok.app)
+[![Built with Expo](https://img.shields.io/badge/Built%20with-Expo-000020?style=for-the-badge&logo=expo)](https://expo.dev)
+
+---
+
+## Live Demo
+
+**Try the app now:** [https://rmpdemo.ngrok.app](https://rmpdemo.ngrok.app)
+
+Experience RouteMaster Pro directly in your browser — no installation required. The demo includes:
+
+- **Interactive Map** — Pan, zoom, and explore route visualization
+- **Route Import** — Upload CSV, GPX, or GeoJSON files
+- **Route Optimization** — See the Chinese Postman and TSP solvers in action
+- **Zone Partitioning** — Spectral clustering for fleet dispatch
+- **AI Co-Pilot** — Voice-enabled route assistant
+
+> **Note:** The demo runs against a live backend with full optimization capabilities.
+
+---
+
 **RouteMaster Pro** — also known as **Route OS** and branded as **[rmp.ca](https://rmp.ca)** — is an enterprise-grade, cross-platform system for **high-performance collection route optimization** with an **offline-first** data architecture. Field crews can import stops, preview and solve routes, sync with a central spatial database, and run navigation-style workflows without losing work when connectivity drops.
 
 The mobile and web client is built on **React Native (Expo)** with **TypeScript**. The API layer is **Node.js** with **tRPC** for type-safe RPC. Authoritative spatial data and enterprise sync run against **PostgreSQL + PostGIS** (often referenced operationally as **db01**). Local persistence on device uses **WatermelonDB**; heavy routing may use **pgRouting** and **VROOM** alongside a **Python** optimizer service for advanced partitioning and VRP.

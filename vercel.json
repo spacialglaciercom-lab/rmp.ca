@@ -14,7 +14,6 @@
   ],
   "build": {
     "env": {
-      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "REDACTED_GOOGLE_MAPS_KEY",
       "EXPO_PUBLIC_OVERTURE_WS_BASE": "wss://api.routemasterpro.ca",
       "EXPO_PUBLIC_OVERTURE_HTTP_BASE": "https://api.routemasterpro.ca"
     }
