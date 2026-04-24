@@ -1,0 +1,40 @@
+# RouteFinder neural VRP inference server.
+# This runs alongside the main stack when you want neural VRP solving.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.routefinder.yml up
+#
+# The backend's vrp_routefinder.py module will call ROUTEFINDER_URL (default: http://routefinder:8321).
+# Set ROUTEFINDER_URL in the optimizer environment to override.
+
+services:
+  routefinder:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.routefinder
+    container_name: rmpca-routefinder
+    ports:
+      - "8321:8321"
+    environment:
+      - ROUTEFINDER_URL=http://routefinder:8321
+      - ROUTEFINDER_DEVICE=${ROUTFINDER_DEVICE:-cuda}
+      - ROUTEFINDER_NUM_AUGMENT=${ROUTFINDER_NUM_AUGMENT:-8}
+    volumes:
+      - routefinder-checkpoints:/app/checkpoints
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8321/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  routefinder-checkpoints:

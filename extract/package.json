@@ -1,0 +1,16 @@
+{
+  "name": "rmpca-overture-extract",
+  "version": "2.0.0",
+  "description": "Overture Maps road network extract service — queries real Overture Parquet data from S3 via DuckDB",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node --max-old-space-size=8192 server.js"
+  },
+  "dependencies": {
+    "cac": "^7.0.0",
+    "duckdb": "^1.3.0",
+    "picocolors": "^1.1.1",
+    "ws": "^8.18.0"
+  }
+}

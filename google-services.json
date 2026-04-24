@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "970176642480",
+    "firebase_url": "https://trashroutemobile-default-rtdb.firebaseio.com",
+    "project_id": "trashroutemobile",
+    "storage_bucket": "trashroutemobile.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:970176642480:android:9a10d70c7e954a9f8d2a75",
+        "android_client_info": {
+          "package_name": "com.routemasterpro.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REDACTED_FIREBASE_ANDROID_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

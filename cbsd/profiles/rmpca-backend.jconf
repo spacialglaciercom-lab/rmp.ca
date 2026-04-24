@@ -1,0 +1,22 @@
+# CBSD jail profile: rmpca-backend
+# tRPC/Express Node.js API server (BFF)
+# Port: 3000
+
+jname="rmpca-backend"
+host_hostname="rmpca-backend.rmpca.local"
+ver="14.2"
+baserw="0"
+
+# VNET networking
+vnet="1"
+ip4_addr="10.10.0.3/24"
+gw4="10.10.0.1"
+
+# Security
+allow_raw_sockets="1"
+mount_devfs="1"
+devfs_ruleset="5"
+
+# Lifecycle
+exec_start="/bin/sh /etc/rc"
+exec_stop="/bin/sh /etc/rc.shutdown"

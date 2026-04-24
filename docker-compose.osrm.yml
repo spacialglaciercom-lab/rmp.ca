@@ -1,0 +1,21 @@
+# OSRM self-hosted routing service for Canada.
+# Run alongside the default stack:
+#   docker compose -f docker-compose.yml -f docker-compose.osrm.yml --profile osrm up -d
+#
+# Prerequisites — run once to download + preprocess OSM data:
+#   ./scripts/setup-osrm.sh
+#
+# After startup set in your .env.local:
+#   EXPO_PUBLIC_OSRM_URL=http://localhost:5000
+
+services:
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: rmpca-osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./osrm-data:/data
+    command: osrm-routed --algorithm mld /data/region.osrm --max-table-size 10000
+    restart: unless-stopped
+    profiles: [osrm]

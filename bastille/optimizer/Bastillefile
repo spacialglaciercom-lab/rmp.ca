@@ -1,0 +1,26 @@
+# TrashRoute Python FastAPI optimizer (stateless task enqueueing)
+# Replaces: backend/Dockerfile (optimizer profile)
+# Port: 8000
+#
+# After applying, run deploy.sh to copy backend/ source, create venv,
+# and pip install requirements.txt.
+
+# ── Packages ────────────────────────────────────────────────────────────────
+PKG python312 py312-pip py312-virtualenv
+
+# ── App directory ────────────────────────────────────────────────────────────
+CMD mkdir -p /app/backend /usr/local/etc/rmpca
+
+# ── Virtualenv (populated by deploy.sh) ─────────────────────────────────────
+CMD python3.12 -m venv /app/backend/venv
+
+# ── Service files ────────────────────────────────────────────────────────────
+CP usr/local/libexec/rmpca-optimizer /usr/local/libexec/rmpca-optimizer
+CP usr/local/etc/rc.d/optimizer /usr/local/etc/rc.d/optimizer
+CP usr/local/etc/rmpca/optimizer.env /usr/local/etc/rmpca/optimizer.env
+
+CMD chmod 755 /usr/local/libexec/rmpca-optimizer
+CMD chmod 755 /usr/local/etc/rc.d/optimizer
+
+# ── Enable service ───────────────────────────────────────────────────────────
+SYSRC optimizer_enable=YES
