@@ -1,8 +1,17 @@
 /**
- * Local route heuristic solver (no tRPC / React Native). Used on-device and in Node/Vitest.
+ * Local route heuristic solver.
+ *
+ * Runs the Rust-backed native module (via UniFFI) on iOS/Android and the
+ * pure-TypeScript implementation in this file everywhere else (web, Node,
+ * Vitest, and when the native library has not yet been linked).
  */
 
+import { Platform } from "react-native";
 import { haversineMeters as haversineDistance } from "./_core/geo";
+import type {
+  SolverResult as NativeSolverResult,
+  SolverAlgorithm as NativeSolverAlgorithm,
+} from "@/modules/route-optimizer/src/RouteOptimizerModule";
 
 export interface SolverPoint {
   id: string;
@@ -161,6 +170,34 @@ function orOptImprove(order: number[], matrix: number[][], maxIterations: number
   return bestOrder;
 }
 
+/**
+ * Lazily resolve the Rust-backed native module.  Returns `null` off-device,
+ * in Vitest, and when Expo autolinking has not wired up the library yet —
+ * every caller can then fall through to the pure-TypeScript path below.
+ */
+function getNativeOptimizer(): {
+  solveRoute: (
+    points: SolverPoint[],
+    depotIndex: number | null,
+    options: { algorithm: NativeSolverAlgorithm; returnToDepot?: boolean; maxIterations?: number },
+  ) => Promise<NativeSolverResult>;
+} | null {
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return null;
+  try {
+    // Dynamic require so Vitest / web builds never try to resolve expo-modules-core.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("@/modules/route-optimizer") as {
+      default: unknown;
+      isNativeAvailable: () => boolean;
+    };
+    return mod.isNativeAvailable()
+      ? (mod.default as ReturnType<typeof getNativeOptimizer>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function solveLocal(
   points: SolverPoint[],
   options: SolverOptions = { algorithm: "2-opt" },
@@ -180,6 +217,15 @@ export async function solveLocal(
       algorithm: "trivial",
       solveTime: Date.now() - startTime,
     };
+  }
+
+  // Fast path: hand off to Rust via UniFFI on supported algorithms.
+  if (options.algorithm === "nearest-neighbor" || options.algorithm === "2-opt") {
+    const native = getNativeOptimizer();
+    if (native) {
+      const result = await solveWithNative(native, points, options, startTime);
+      if (result) return result;
+    }
   }
 
   const allPoints = options.depot ? [options.depot, ...points] : points;
@@ -242,6 +288,61 @@ export async function solveLocal(
     algorithm: options.algorithm,
     solveTime: Date.now() - startTime,
   };
+}
+
+/**
+ * Call the native Rust optimizer and reshape its output to the legacy
+ * SolverResult contract that existing call sites consume.
+ *
+ * Returns `null` (not throws) on native-side errors so callers fall back to
+ * the pure-TS implementation — a Rust panic or a missing symbol must never
+ * break the user's route planning flow.
+ */
+async function solveWithNative(
+  native: NonNullable<ReturnType<typeof getNativeOptimizer>>,
+  points: SolverPoint[],
+  options: SolverOptions,
+  startTime: number,
+): Promise<SolverResult | null> {
+  try {
+    const allPoints = options.depot ? [options.depot, ...points] : points;
+    const depotIndex = options.depot ? 0 : null;
+
+    const nativePoints = allPoints.map((p) => ({
+      id: p.id,
+      lat: p.lat,
+      lon: p.lon,
+      demand: p.demand,
+      serviceTime: p.serviceTime,
+    }));
+
+    const nativeResult = await native.solveRoute(nativePoints, depotIndex, {
+      algorithm: options.algorithm as NativeSolverAlgorithm,
+      returnToDepot: options.returnToDepot,
+    });
+
+    const byId = new Map(allPoints.map((p) => [p.id, p]));
+    const orderedPoints = nativeResult.orderedIds
+      .map((id) => byId.get(id))
+      .filter((p): p is SolverPoint => p !== undefined);
+
+    return {
+      orderedPoints,
+      totalDistance: nativeResult.totalDistanceM,
+      totalDuration: nativeResult.totalDurationS,
+      segments: nativeResult.segments.map((s) => ({
+        from: s.fromId,
+        to: s.toId,
+        distance: s.distanceM,
+        duration: s.durationS,
+      })),
+      algorithm: nativeResult.algorithm,
+      solveTime: Date.now() - startTime,
+    };
+  } catch (err) {
+    console.warn("[routeSolverLocal] native optimizer failed, falling back:", err);
+    return null;
+  }
 }
 
 export function estimateRouteStats(points: SolverPoint[]): {

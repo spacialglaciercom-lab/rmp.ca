@@ -236,7 +236,8 @@
     "autolinking": {
       "android": {
         "exclude": [
-          "moonshine-voice"
+          "moonshine-voice",
+          "route-optimizer"
         ]
       }
     }
