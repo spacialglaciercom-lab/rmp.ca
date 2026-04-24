@@ -1,63 +1,71 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { useCircuitStore } from "../circuitStore";
-import type { StreetEdge, TurnEdge } from "@/types/turnAware";
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useCircuitStore } from '../circuitStore';
 
-const sampleStreetEdge: StreetEdge = {
-  id: "e1",
-  from: "a",
-  to: "b",
-  coordinates: [
-    [-73.5, 45.5],
-    [-73.51, 45.51],
-  ],
-  length: 100,
+const mockStreetEdge = {
+  id: 'se1',
+  from: 'nodeA',
+  to: 'nodeB',
+  coordinates: [[-73.0, 45.0], [-73.01, 45.01]] as [number, number][],
+  length: 150,
   speed: 50,
   oneWay: false,
 };
 
-const sampleTurnEdge: TurnEdge = {
-  id: "t1",
-  from: {
-    edgeId: "e0",
-    direction: "forward",
-    intersectionId: "i0",
-  },
-  to: {
-    edgeId: "e1",
-    direction: "forward",
-    intersectionId: "i1",
-  },
-  turnType: "straight",
+const mockTurnEdge = {
+  id: 'te1',
+  from: { edgeId: 'se1', direction: 'forward' as const, intersectionId: 'i1' },
+  to: { edgeId: 'se1', direction: 'backward' as const, intersectionId: 'i2' },
+  turnType: 'straight' as const,
   staticPenalty: 2,
   baseTime: 10,
-  totalCost: 12,
 };
 
-describe("circuitStore", () => {
-  beforeEach(() => {
+beforeEach(() => {
+  useCircuitStore.getState().clearCircuit();
+});
+
+describe('initial state', () => {
+  it('circuit is an empty array', () => {
+    expect(useCircuitStore.getState().circuit).toEqual([]);
+  });
+
+  it('streetEdges is an empty array', () => {
+    expect(useCircuitStore.getState().streetEdges).toEqual([]);
+  });
+});
+
+describe('setCircuit', () => {
+  it('stores circuit and streetEdges', () => {
+    useCircuitStore.getState().setCircuit([mockTurnEdge], [mockStreetEdge]);
+    const { circuit, streetEdges } = useCircuitStore.getState();
+    expect(circuit).toEqual([mockTurnEdge]);
+    expect(streetEdges).toEqual([mockStreetEdge]);
+  });
+
+  it('replaces previously stored data', () => {
+    useCircuitStore.getState().setCircuit([mockTurnEdge], [mockStreetEdge]);
+    useCircuitStore.getState().setCircuit([], []);
+    expect(useCircuitStore.getState().circuit).toEqual([]);
+    expect(useCircuitStore.getState().streetEdges).toEqual([]);
+  });
+
+  it('stores multiple edges', () => {
+    const edges = [mockTurnEdge, { ...mockTurnEdge, id: 'te2' }];
+    useCircuitStore.getState().setCircuit(edges, [mockStreetEdge]);
+    expect(useCircuitStore.getState().circuit).toHaveLength(2);
+  });
+});
+
+describe('clearCircuit', () => {
+  it('resets circuit to empty', () => {
+    useCircuitStore.getState().setCircuit([mockTurnEdge], [mockStreetEdge]);
     useCircuitStore.getState().clearCircuit();
+    expect(useCircuitStore.getState().circuit).toEqual([]);
   });
 
-  it("starts with empty circuit and street edges", () => {
-    const s = useCircuitStore.getState();
-    expect(s.circuit).toEqual([]);
-    expect(s.streetEdges).toEqual([]);
-  });
-
-  it("setCircuit replaces circuit and street edges", () => {
-    useCircuitStore.getState().setCircuit([sampleTurnEdge], [sampleStreetEdge]);
-    const s = useCircuitStore.getState();
-    expect(s.circuit).toHaveLength(1);
-    expect(s.circuit[0]!.id).toBe("t1");
-    expect(s.streetEdges).toHaveLength(1);
-    expect(s.streetEdges[0]!.id).toBe("e1");
-  });
-
-  it("clearCircuit resets to empty arrays", () => {
-    useCircuitStore.getState().setCircuit([sampleTurnEdge], [sampleStreetEdge]);
+  it('resets streetEdges to empty', () => {
+    useCircuitStore.getState().setCircuit([mockTurnEdge], [mockStreetEdge]);
     useCircuitStore.getState().clearCircuit();
-    const s = useCircuitStore.getState();
-    expect(s.circuit).toEqual([]);
-    expect(s.streetEdges).toEqual([]);
+    expect(useCircuitStore.getState().streetEdges).toEqual([]);
   });
 });
