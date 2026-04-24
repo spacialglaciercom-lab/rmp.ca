@@ -25,6 +25,8 @@ export default defineConfig({
     alias: {
       // React Native uses Flow (import typeof) that Rollup cannot parse. Use a stub in tests.
       "react-native": path.resolve(__dirname, "lib/__tests__/stubs/react-native.ts"),
+      // Expo's native bridge needs a JSI host. Stub to a no-op so native modules fall back.
+      "expo-modules-core": path.resolve(__dirname, "lib/__tests__/stubs/expo-modules-core.ts"),
       "@": path.resolve(__dirname, "."),
       "@shared": path.resolve(__dirname, "shared"),
     },
