@@ -80,11 +80,11 @@ export async function getResumableDownloadInfo(): Promise<{
 
 /** Overture Maps S3 bucket base URL (public, no auth). */
 const S3_BUCKET = "https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com";
-const RELEASE = "2026-02-18.0";
+const RELEASE = "2026-04-15.0";
 
 /** R2 public bucket base and PMTiles version (must match build-pmtiles.sh). */
 const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
-const PMTILES_VERSION = "v2026-02";
+const PMTILES_VERSION = "v2026-04";
 
 /** Available Overture themes/types to download. */
 export const OVERTURE_LAYERS = {
@@ -145,7 +145,7 @@ export interface DownloadedRegion {
   source?: DownloadSource;
   /** For source "osm_pbf", the city id used for the directory (file is {cityId}.osm). */
   cityId?: string;
-  /** Data version (e.g., "2026-02-18.0" for Overture, "v2026-02" for R2 PMTiles). */
+  /** Data version (e.g., "2026-04-15.0" for Overture, "v2026-04" for R2 PMTiles). */
   dataVersion?: string;
 }
 

@@ -9,7 +9,7 @@
  */
 const duckdb = require('duckdb');
 
-const OVERTURE_RELEASE = process.argv[2] || process.env.OVERTURE_RELEASE || "2026-02-18.0";
+const OVERTURE_RELEASE = process.argv[2] || process.env.OVERTURE_RELEASE || "2026-04-15.0";
 const BBOX = { minX: -73.57, minY: 45.50, maxX: -73.56, maxY: 45.51 };
 
 async function run() {

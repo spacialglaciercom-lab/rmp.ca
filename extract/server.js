@@ -21,7 +21,7 @@ const PORT = Number(process.env.PORT) || 9000;
  * to ensure `road_flags` and `access_restrictions` columns still exist.
  * Broken schema = Broken routing (loops/wrong directions).
  */
-const OVERTURE_RELEASE = process.env.OVERTURE_RELEASE || "2026-02-18.0";
+const OVERTURE_RELEASE = process.env.OVERTURE_RELEASE || "2026-04-15.0";
 
 const ROAD_CLASSES = [
   "residential",
@@ -238,7 +238,7 @@ async function extractOverture(polygon, ws, theme) {
       }
     }
 
-    // --- ONEWAY & ROUNDABOUT LOGIC (Updated for Overture 2026-02-18) ---
+    // --- ONEWAY & ROUNDABOUT LOGIC (Updated for Overture 2026-04-15) ---
     
     let isRoundabout = false;
     // Check road_flags for 'is_roundabout'

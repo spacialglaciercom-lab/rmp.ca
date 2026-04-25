@@ -7,11 +7,11 @@
  * Broken schema = broken routing (loops/wrong directions).
  *
  * Usage: node check_schema.js [release]
- *   e.g. node check_schema.js 2026-02-18.0
+ *   e.g. node check_schema.js 2026-04-15.0
  */
 const duckdb = require('duckdb');
 
-const OVERTURE_RELEASE = process.argv[2] || process.env.OVERTURE_RELEASE || "2026-02-18.0";
+const OVERTURE_RELEASE = process.argv[2] || process.env.OVERTURE_RELEASE || "2026-04-15.0";
 const BBOX = { minX: -73.57, minY: 45.50, maxX: -73.56, maxY: 45.51 };
 
 const REQUIRED_COLUMNS = [

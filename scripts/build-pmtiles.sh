@@ -25,9 +25,9 @@ else
   exit 1
 fi
 
-OVERTURE_RELEASE="2026-02-18.0"
+OVERTURE_RELEASE="2026-04-15.0"
 # Version suffix for filenames (YYYY-MM). Must match PMTILES_VERSION in components/maplibre/overture-style.ts
-PMTILES_VERSION="v2026-02"
+PMTILES_VERSION="v2026-04"
 R2_ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 
 # Retry settings

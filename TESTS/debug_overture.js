@@ -1,7 +1,7 @@
 const duckdb = require('duckdb');
 
 const DB_PATH = ":memory:";
-const OVERTURE_RELEASE = "2024-04-16.0"; // Or newer
+const OVERTURE_RELEASE = "2026-04-15.0";
 const BBOX = { minX: -73.332, minY: 45.586, maxX: -73.330, maxY: 45.588 };
 
 async function run() {

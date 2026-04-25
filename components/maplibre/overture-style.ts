@@ -6,7 +6,7 @@
 const R2_PUBLIC_BASE = "https://pub-914a188759fd40078f51e48f31a76dba.r2.dev";
 
 /** Version suffix for PMTiles (YYYY-MM). Bump when deploying new Overture builds. */
-export const PMTILES_VERSION = "v2026-02";
+export const PMTILES_VERSION = "v2026-04";
 
 /** Get PMTiles URL for a city (versioned for safe updates and rollback). */
 export function getPMTilesUrl(city: string, version?: string): string {

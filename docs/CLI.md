@@ -72,7 +72,7 @@ This is equivalent to `pnpm dev:extract` from the project root. The server start
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Server listen port | `9000` |
-| `OVERTURE_RELEASE` | Overture Maps release version | `2026-02-18.0` |
+| `OVERTURE_RELEASE` | Overture Maps release version | `2026-04-15.0` |
 
 ---
 
