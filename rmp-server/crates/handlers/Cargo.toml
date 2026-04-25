@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 rmp-auth = { path = "../auth" }
 rmp-db = { path = "../db" }
+rmp-optimizer = { path = "../optimizer" }
 rmp-shared = { path = "../shared" }
 
 axum = { workspace = true }

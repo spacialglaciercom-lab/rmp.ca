@@ -2824,6 +2824,7 @@ dependencies = [
  "chrono",
  "rmp-auth",
  "rmp-db",
+ "rmp-optimizer",
  "rmp-shared",
  "serde",
  "serde_json",
@@ -2849,6 +2850,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 

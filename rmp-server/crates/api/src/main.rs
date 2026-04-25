@@ -1,6 +1,6 @@
 use axum::Router;
-use axum::routing::get;
-use rmp_handlers::system;
+use axum::routing::{get, post};
+use rmp_handlers::{optimize, system};
 use rmp_shared::config::Config;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::{CorsLayer, Any};
@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         // Health & config
         .route("/api/health", get(system::health))
         .route("/api/config", get(system::config))
+        .route("/api/optimize/eulerian", post(optimize::eulerian))
         .route("/", get(root_index))
         .route("/health", get(system::health))
         // OpenAPI / Swagger
@@ -81,6 +82,7 @@ async fn root_index() -> axum::Json<serde_json::Value> {
         "endpoints": {
             "health": "GET /api/health",
             "config": "GET /api/config",
+            "eulerian": "POST /api/optimize/eulerian",
             "docs": "GET /api/docs/swagger-ui",
         },
         "timestamp": chrono::Utc::now().timestamp_millis(),
