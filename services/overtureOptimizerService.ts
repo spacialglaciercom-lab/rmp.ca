@@ -474,7 +474,7 @@ export function buildOvertureOptimizeRequest(params: {
 export async function optimizeRoute(
   params: OptimizeRouteParams,
 ): Promise<OptimizeResponse> {
-  return request<OptimizeResponse>("/api/optimize", params);
+  return request<OptimizeResponse>("/api/optimize/sync", params);
 }
 
 export async function validateGeoJSON(
@@ -587,6 +587,58 @@ export async function partitionZonesFromPoints(
     params,
     ZONE_PARTITION_TIMEOUT_MS,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Async job submission + status polling (Celery path)
+// ---------------------------------------------------------------------------
+
+export interface SubmitJobResponse {
+  task_id: string;
+  status: "PENDING";
+}
+
+export interface TaskStatusResponse {
+  task_id: string;
+  status: "PENDING" | "PROCESSING" | "SUCCESS" | "FAILURE" | string;
+  result?: OptimizeResponse;
+  error?: string;
+}
+
+/** Submit to the async Celery endpoint. Returns task_id immediately (HTTP 202). */
+export async function submitOptimizeJob(
+  params: OptimizeRouteParams,
+): Promise<SubmitJobResponse> {
+  const base = getOptimizerBaseUrl();
+  const url = `${base.replace(/\/$/, "")}/api/optimize`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+    ...(Platform.OS === "web" && {
+      credentials: "include" as RequestCredentials,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to submit job (${res.status}): ${body}`);
+  }
+  return res.json() as Promise<SubmitJobResponse>;
+}
+
+/**
+ * Fetch one status snapshot for a running job.
+ * FAILURE returns 400/500 from the backend — we parse JSON regardless so the
+ * caller gets the structured `error` field rather than a raw HTTP exception.
+ */
+export async function pollOptimizeStatus(
+  taskId: string,
+  signal: AbortSignal,
+): Promise<TaskStatusResponse> {
+  const base = getOptimizerBaseUrl();
+  const url = `${base.replace(/\/$/, "")}/api/optimize/status/${taskId}`;
+  const res = await fetch(url, { signal });
+  return res.json() as Promise<TaskStatusResponse>;
 }
 
 export async function healthCheck(): Promise<boolean> {

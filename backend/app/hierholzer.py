@@ -15,6 +15,7 @@ import networkx as nx
 
 def eulerian_circuit_nx(
     G: nx.MultiGraph | nx.MultiDiGraph,
+    *,
     start: Any = None,
 ) -> list[tuple[Any, Any]]:
     """

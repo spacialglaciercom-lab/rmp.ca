@@ -70,7 +70,7 @@ def _build_test_graph(fc: dict, oneway_mode: str = "ignore"):
         if (f.properties or {}).get("class", "") in allowed
         and (f.properties or {}).get("class", "") not in NON_VEHICLE_CLASSES
     ]
-    return _build_graph(features, _normalize_oneway_mode(oneway_mode))
+    return _build_graph(features, oneway_mode=_normalize_oneway_mode(oneway_mode))
 
 
 def _route_covers_all_edges(route_nodes: list[str], G, is_directed: bool) -> tuple[bool, int, int]:

@@ -6,6 +6,37 @@ import { haversineKm } from "../_core/geo";
 const VALHALLA_MATRIX_URL =
   "https://valhalla1.openstreetmap.de/sources_to_targets";
 
+const VALHALLA_RETRY_DELAYS_MS = [500, 1_000];
+
+export class ValhallaFetchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValhallaFetchError";
+  }
+}
+
+async function fetchValhallaWithRetry(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= VALHALLA_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) =>
+        setTimeout(r, VALHALLA_RETRY_DELAYS_MS[attempt - 1]),
+      );
+    }
+    try {
+      const res = await fetch(url, init);
+      if (res.ok || res.status < 500) return res;
+      lastError = new ValhallaFetchError(`Valhalla HTTP ${res.status}`);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
+
 /** Haversine distance between two WGS-84 coordinates, in km. */
 export { haversineKm };
 
@@ -35,7 +66,7 @@ export async function getValhallaMatrix(
   locations: VRPSolverStop[],
 ): Promise<DistMatrix> {
   const locs = locations.map((l) => ({ lat: l.lat, lon: l.lon }));
-  const response = await fetch(VALHALLA_MATRIX_URL, {
+  const response = await fetchValhallaWithRetry(VALHALLA_MATRIX_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -45,7 +76,8 @@ export async function getValhallaMatrix(
       directions_options: { units: "kilometers" },
     }),
   });
-  if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
+  if (!response.ok)
+    throw new ValhallaFetchError(`Valhalla HTTP ${response.status}`);
   const data = (await response.json()) as {
     sources_to_targets?: { distance?: number; time?: number }[][];
   };

@@ -46,6 +46,7 @@ LOOP_PREVENTION_CONFIG = {
 from .geojson_ops import (
     GeoJSONFeature,
     GeoJSONFeatureCollection,
+    RoutableFeatureCollection,
     _haversine_km,
     _haversine_m,
     _get_road_class,
@@ -120,7 +121,7 @@ class TurnPenalties(BaseModel):
 
 
 class OptimizeRequest(BaseModel):
-    geojson: GeoJSONFeatureCollection
+    geojson: RoutableFeatureCollection
     start_lat: float | None = Field(None, ge=-90, le=90)
     start_lon: float | None = Field(None, ge=-180, le=180)
     oneway_mode: str | None = None  # "ignore", "respect", "reverse"
@@ -506,6 +507,7 @@ def _augment_features_for_connectivity(
 
 def _build_graph(
     features: list[GeoJSONFeature],
+    *,
     oneway_mode: str = "ignore",
     plugins: list[RoutingCostPlugin] | None = None,
 ) -> nx.MultiGraph | nx.MultiDiGraph:
@@ -843,6 +845,7 @@ def _dijkstra_with_transition_costs(
 
 def _solve_cpp(
     G: nx.MultiGraph | nx.MultiDiGraph,
+    *,
     turn_penalties: TurnPenalties | None = None,
     start_node: str | None = None,
     transition_plugins: list[RoutingCostPlugin] | None = None,
@@ -1665,7 +1668,7 @@ def _run_optimize(body: OptimizeRequest) -> OptimizeResponse:
         # We apply them as transition costs during shortest-path computations (CPP matching),
         # not by duplicating every segment into two directed arcs.
         transition_plugins.append(TurnPenaltyPlugin())
-    G = _build_graph(features, oneway_mode, plugins=edge_plugins)
+    G = _build_graph(features, oneway_mode=oneway_mode, plugins=edge_plugins)
     _t_after_graph = time.perf_counter()
 
     if body.service_both_sides and not G.is_directed():
@@ -2178,7 +2181,7 @@ def optimize_route_sync(request: Request, body: OptimizeRequest):
             edge_plugins = None
     if body.use_turn_penalty_plugin:
         transition_plugins.append(TurnPenaltyPlugin())
-    G = _build_graph(features, oneway_mode, plugins=edge_plugins)
+    G = _build_graph(features, oneway_mode=oneway_mode, plugins=edge_plugins)
     _t_after_graph = time.perf_counter()
 
     # When service_both_sides is True and graph is undirected, convert to directed so each

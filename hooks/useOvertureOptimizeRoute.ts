@@ -21,6 +21,42 @@ import {
   type OptimizeResponse,
 } from "@/services/overtureOptimizerService";
 
+type LatLon = { lat: number; lon: number };
+
+// Cartesian Douglas-Peucker in degree-space.
+// toleranceDeg ≈ 0.00005° ≈ 5 m — eliminates sub-pixel bridge jitter without
+// clipping intersection corners on a dense Eulerian circuit.
+function simplifyLatLon(points: LatLon[], toleranceDeg: number): LatLon[] {
+  if (points.length <= 2) return points;
+  const s = points[0];
+  const e = points[points.length - 1];
+  const dx = e.lon - s.lon;
+  const dy = e.lat - s.lat;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  let maxDist = 0;
+  let maxIdx = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const p = points[i];
+    const dist =
+      len === 0
+        ? Math.sqrt((p.lon - s.lon) ** 2 + (p.lat - s.lat) ** 2)
+        : Math.abs(dy * p.lon - dx * p.lat + e.lon * s.lat - e.lat * s.lon) /
+          len;
+    if (dist > maxDist) {
+      maxDist = dist;
+      maxIdx = i;
+    }
+  }
+  if (maxDist > toleranceDeg) {
+    const left = simplifyLatLon(points.slice(0, maxIdx + 1), toleranceDeg);
+    const right = simplifyLatLon(points.slice(maxIdx), toleranceDeg);
+    return [...left.slice(0, -1), ...right];
+  }
+  return [s, e];
+}
+
+const DISPLAY_TOLERANCE_DEG = 0.00005; // ~5 m
+
 export interface OvertureOptimizeOptions {
   startLat?: number;
   startLon?: number;
@@ -76,10 +112,11 @@ export function useOvertureOptimizeRoute() {
         setLastResult(result);
         setOptimizationStatus("Route optimized! Processing...");
 
-        const gpxPoints = result.route.map((p) => ({
+        const rawPoints = result.route.map((p) => ({
           lat: p.latitude,
           lon: p.longitude,
         }));
+        const gpxPoints = simplifyLatLon(rawPoints, DISPLAY_TOLERANCE_DEG);
 
         // Snap to roads is now optional - user can press "Fix to roads" button manually
         // This reduces API requests and gives user control
@@ -91,7 +128,7 @@ export function useOvertureOptimizeRoute() {
         actions.setRoutePoints(gpxPoints);
         const gpxString = generateGPXString(
           "overture-optimized-route",
-          gpxPoints,
+          rawPoints,
         );
         dispatch({ type: "SET_GPX_DATA", payload: gpxString });
 

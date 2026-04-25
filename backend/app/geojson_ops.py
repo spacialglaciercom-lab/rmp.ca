@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .routing_plugins import RoutingCostPlugin, grade_percent, fuel_multiplier
 
@@ -39,6 +39,64 @@ class GeoJSONFeatureCollection(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+# ---------------------------------------------------------------------------
+# Validated / snapped models for the optimize boundary
+# ---------------------------------------------------------------------------
+
+_ROUTABLE_TYPES = frozenset({"LineString", "MultiLineString"})
+_COORD_PRECISION = 5  # ~1.1 m at equator — welds epsilon tears, preserves lane separation
+
+
+def _snap_ring(ring: list[list[float]]) -> list[list[float]]:
+    return [[round(c[0], _COORD_PRECISION), round(c[1], _COORD_PRECISION)] for c in ring]
+
+
+class RoutableGeoJSONFeature(GeoJSONFeature):
+    """GeoJSONFeature that rejects non-routable geometry types and snaps
+    coordinates to ``_COORD_PRECISION`` decimal places on ingress."""
+
+    @field_validator("geometry")
+    @classmethod
+    def validate_and_snap(cls, geom: dict[str, Any]) -> dict[str, Any]:
+        gtype = geom.get("type")
+        if gtype not in _ROUTABLE_TYPES:
+            raise ValueError(
+                f"geometry type '{gtype}' is not routable; "
+                "expected LineString or MultiLineString"
+            )
+        coords = geom.get("coordinates")
+        if not coords:
+            raise ValueError("geometry has no coordinates")
+        if gtype == "LineString":
+            if len(coords) < 2:
+                raise ValueError("LineString must have at least 2 coordinate pairs")
+            return {**geom, "coordinates": _snap_ring(coords)}
+        # MultiLineString
+        snapped = []
+        for i, ring in enumerate(coords):
+            if len(ring) < 2:
+                raise ValueError(
+                    f"MultiLineString component {i} must have at least 2 coordinate pairs"
+                )
+            snapped.append(_snap_ring(ring))
+        return {**geom, "coordinates": snapped}
+
+
+class RoutableFeatureCollection(BaseModel):
+    type: str = "FeatureCollection"
+    features: list[RoutableGeoJSONFeature]
+
+    class Config:
+        extra = "allow"
+
+    @field_validator("features")
+    @classmethod
+    def require_features(cls, features: list[RoutableGeoJSONFeature]) -> list[RoutableGeoJSONFeature]:
+        if not features:
+            raise ValueError("FeatureCollection must contain at least one routable feature")
+        return features
 
 
 # ---------------------------------------------------------------------------

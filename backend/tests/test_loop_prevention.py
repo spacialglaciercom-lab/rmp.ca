@@ -43,7 +43,7 @@ def test_no_excessive_looping():
         GeoJSONFeature(**f) for f in geojson_data["features"]
         if f["geometry"]["type"] in ("LineString", "MultiLineString")
     ]
-    G = _build_graph(features, "ignore")
+    G = _build_graph(features, oneway_mode="ignore")
     dead_end_count = sum(1 for n in G.nodes() if G.degree(n) == 1)
     # Allow up to 3× dead-end count: CPP may pair distant odd nodes, each pair
     # potentially contributing >1 reversal; 3× is a generous but meaningful bound.

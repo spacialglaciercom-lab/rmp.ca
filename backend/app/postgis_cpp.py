@@ -405,6 +405,7 @@ def _get_node_coord(
 
 def _solve_cpp_with_turn_penalties(
     G: nx.MultiGraph | nx.MultiDiGraph,
+    *,
     left_penalty_km: float,
     right_penalty_km: float,
     uturn_penalty_km: float,
@@ -754,9 +755,9 @@ async def solve_postgis_cpp(request: PostGISCppRequest):
         # Solve CPP
         route_nodes = _solve_cpp_with_turn_penalties(
             G,
-            left_penalty_km,
-            right_penalty_km,
-            uturn_penalty_km,
+            left_penalty_km=left_penalty_km,
+            right_penalty_km=right_penalty_km,
+            uturn_penalty_km=uturn_penalty_km,
             start_node=start_node,
         )
         _t_after_cpp = time.perf_counter()
