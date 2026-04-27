@@ -8,6 +8,8 @@ import { database } from '../index';
 import { Q } from '@nozbe/watermelondb';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { trpc } from '../../trpc';
+import { detectConflicts } from './conflictResolver';
+import { syncConflictStore } from '@/stores/syncConflictStore';
 
 // Sync configuration
 interface SyncConfig {
@@ -266,6 +268,13 @@ export class SyncEngine {
         if (response.changes.length === 0) continue;
 
         // Apply changes locally
+        const conflictRecords: Array<{
+          localRecord: Record<string, unknown>;
+          serverRecord: Record<string, unknown>;
+          tableName: string;
+          conflictFields: string[];
+        }> = [];
+
         await database.write(async () => {
           for (const change of response.changes) {
             const existing = await database.get(tableName)
@@ -277,10 +286,25 @@ export class SyncEngine {
                 await (existing[0] as any).markAsDeleted();
               }
             } else if (existing.length > 0) {
-              await existing[0].update((record: any) => {
-                Object.assign(record, change.data);
-                record.syncedAt = Date.now();
-              });
+              const localRaw = (existing[0] as any)._raw;
+              const serverData = change.data;
+              const fields = Object.keys(serverData);
+              const conflicts = detectConflicts(localRaw, serverData, fields);
+
+              if (conflicts.length > 0) {
+                // Don't apply — report conflict for user resolution
+                conflictRecords.push({
+                  localRecord: localRaw,
+                  serverRecord: serverData,
+                  tableName,
+                  conflictFields: conflicts,
+                });
+              } else {
+                await existing[0].update((record: any) => {
+                  Object.assign(record, change.data);
+                  record.syncedAt = Date.now();
+                });
+              }
             } else {
               await database.get(tableName).create((record: any) => {
                 record.externalId = change.id;
@@ -290,6 +314,26 @@ export class SyncEngine {
             }
           }
         });
+
+        // Report conflicts to the conflict store (outside batch write)
+        for (const conflict of conflictRecords) {
+          const recordDisplayName =
+            conflict.localRecord.name ||
+            conflict.localRecord.display_name ||
+            conflict.localRecord.address ||
+            `${conflict.tableName} #${conflict.localRecord.id}`;
+          syncConflictStore.getState().addConflict({
+            id: `${conflict.tableName}_${conflict.localRecord.id}_${Date.now()}`,
+            tableName: conflict.tableName,
+            recordId: String(conflict.localRecord.id),
+            displayName: String(recordDisplayName),
+            conflictFields: conflict.conflictFields,
+            localRecord: conflict.localRecord as Record<string, unknown>,
+            serverRecord: conflict.serverRecord as Record<string, unknown>,
+            detectedAt: Date.now(),
+            resolved: false,
+          });
+        }
 
         // Update sync token
         await this.updateSyncToken(tableName, response.nextToken || '');

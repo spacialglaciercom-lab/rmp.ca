@@ -16,6 +16,8 @@ const APP_KEY_PREFIXES = [
   "trashroute_",
   "trashroute-",
   "weather_",
+  "geocode_",
+  "reverse_geocode_",
   "osm_import",
 ];
 const APP_KEY_EXACT = new Set([

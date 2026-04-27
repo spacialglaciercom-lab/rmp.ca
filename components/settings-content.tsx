@@ -20,6 +20,7 @@ import { useTheme } from "@/lib/theme-provider";
 import { Fonts } from "@/lib/_core/theme";
 import { clearAllAppCache } from "@/lib/clear-all-cache";
 import { clearMapCache } from "@/lib/map-cache";
+import { clearGeocodeCache } from "@/lib/geocode-cache";
 import { confirmDestructive } from "@/lib/confirmDestructive";
 import { ExportButton } from "@/components/export-button";
 import { BetaFeaturesSection } from "@/components/settings/BetaFeaturesSection";
@@ -32,6 +33,7 @@ import { MinimalCard, SectionLabel } from "@/components/minimal";
 import { MapOrientationSection } from "@/components/settings/MapOrientationSection";
 import { NavigationProviderSection } from "@/components/settings/NavigationProviderSection";
 import { PowerSavingSettingsSection } from "@/components/PowerSavingSettings/PowerSavingSettingsSection";
+import { useUnresolvedCount, syncConflictStore } from "@/stores/syncConflictStore";
 
 export default function SettingsContent() {
   const colors = useColors();
@@ -39,6 +41,7 @@ export default function SettingsContent() {
   const router = useRouter();
   const isDark = colorScheme === "dark";
   const [feedbackVisible, setFeedbackVisible] = useState(false);
+  const unresolvedCount = useUnresolvedCount();
   const handleClearCache = () => {
     hapticImpact();
 
@@ -82,6 +85,46 @@ export default function SettingsContent() {
         }
       },
       "Clear",
+    );
+  };
+
+  const handleClearGeocodeCache = () => {
+    hapticImpact();
+    confirmDestructive(
+      "Clear Geocode Cache",
+      "This will remove all cached address search results. Searches will need to re-fetch from the server.",
+      async () => {
+        await clearGeocodeCache();
+        if (Platform.OS === "web") {
+          window.alert("Geocode cache cleared.");
+        } else {
+          Alert.alert("Success", "Geocode cache cleared.");
+        }
+      },
+      "Clear",
+    );
+  };
+
+  const handleClearServiceWorkerCache = async () => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined") return;
+    hapticImpact();
+    confirmDestructive(
+      "Clear PWA Cache",
+      "This will clear the service worker cache and reload the page. Unsaved data will be lost.",
+      async () => {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const reg of registrations) {
+            await reg.unregister();
+          }
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((key) => caches.delete(key)));
+        }
+        window.location.reload();
+      },
+      "Clear & Reload",
     );
   };
 
@@ -245,6 +288,18 @@ export default function SettingsContent() {
           component: ExportButton,
           isComponent: true,
         },
+        ...(unresolvedCount > 0
+          ? [
+              {
+                label: `Sync Conflicts (${unresolvedCount})`,
+                value: "",
+                onPress: () => syncConflictStore.getState().setSheetVisible(true),
+                destructive: false,
+                highlight: true,
+                description: `${unresolvedCount} unresolved — tap to review`,
+              },
+            ]
+          : []),
         {
           label: "Clear Cache",
           value: "",
@@ -258,6 +313,24 @@ export default function SettingsContent() {
           destructive: true,
           description: "Remove cached map tiles",
         },
+        {
+          label: "Clear Geocode Cache",
+          value: "",
+          onPress: handleClearGeocodeCache,
+          destructive: true,
+          description: "Remove cached address searches",
+        },
+        ...(Platform.OS === "web"
+          ? [
+              {
+                label: "Clear PWA Cache",
+                value: "",
+                onPress: handleClearServiceWorkerCache,
+                destructive: true,
+                description: "Clear service worker & reload",
+              },
+            ]
+          : []),
       ],
     },
     {

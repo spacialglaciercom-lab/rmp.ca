@@ -9,6 +9,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { syncEngine, SyncStatusCallback } from '../lib/database/sync/syncEngine';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { useUnresolvedCount, syncConflictStore } from '@/stores/syncConflictStore';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'pending' | 'error';
 
@@ -28,6 +29,7 @@ export function SyncStatusIndicator({
   const [isOnline, setIsOnline] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [pulseAnim] = useState(new Animated.Value(1));
+  const unresolvedCount = useUnresolvedCount();
 
   // Subscribe to sync status changes
   useEffect(() => {
@@ -138,6 +140,10 @@ export function SyncStatusIndicator({
   };
 
   const handlePress = () => {
+    if (unresolvedCount > 0) {
+      syncConflictStore.getState().setSheetVisible(true);
+      return;
+    }
     if (onPress) {
       onPress();
     } else if (status === 'pending' || status === 'error') {
@@ -155,8 +161,13 @@ export function SyncStatusIndicator({
         <Animated.View style={{ opacity: pulseAnim }}>
           <Ionicons name={config.icon} size={16} color={config.color} />
         </Animated.View>
-        {pendingCount > 0 && (
-          <View style={styles.badge}>
+        {unresolvedCount > 0 && (
+          <View style={[styles.badge, { backgroundColor: '#f97316', position: 'absolute', top: -4, right: -4 }]}>
+            <Text style={styles.badgeText}>{unresolvedCount}</Text>
+          </View>
+        )}
+        {pendingCount > 0 && unresolvedCount === 0 && (
+          <View style={[styles.badge, { position: 'absolute', top: -4, right: -4 }]}>
             <Text style={styles.badgeText}>{pendingCount}</Text>
           </View>
         )}

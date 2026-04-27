@@ -13,6 +13,7 @@ import { LogBox, Platform, Text, View } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ThemedStatusBar } from "@/components/themed-status-bar";
+import { SyncConflictSheet } from "@/components/SyncConflictSheet";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -54,6 +55,9 @@ import { storage } from "@/lib/storage";
 import { isMockRoute, isMockCollectionPoints } from "@/lib/is-mock-route";
 import type { CollectionPoint } from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Register PWA service worker for offline web support
+import { useServiceWorker } from "@/lib/use-service-worker";
 
 // Import delivery instructions once at startup
 instructionManager.importFromJson(instructionsData);
@@ -98,6 +102,9 @@ export default function RootLayout() {
     initManusRuntime();
     return () => destroyManusRuntime();
   }, []);
+
+  // Register PWA service worker for offline web support
+  useServiceWorker();
 
   // Mapbox Maps SDK: set access token at startup (native only; token from EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN)
   useEffect(() => {
@@ -383,6 +390,7 @@ export default function RootLayout() {
             <SafeAreaFrameContext.Provider value={frame}>
               <SafeAreaInsetsContext.Provider value={insets}>
                 {content}
+                <SyncConflictSheet />
               </SafeAreaInsetsContext.Provider>
             </SafeAreaFrameContext.Provider>
           </SafeAreaProvider>
@@ -399,6 +407,7 @@ export default function RootLayout() {
       >
         <SafeAreaProvider initialMetrics={providerInitialMetrics}>
           {content}
+          <SyncConflictSheet />
         </SafeAreaProvider>
         {Platform.OS === "web" && <Analytics />}
       </DatabaseProvider>
