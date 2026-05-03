@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
+import { useCollectionPointsActions } from '@/lib/database';
 import { useColors } from "@/hooks/use-colors";
 import { getLeafletNavigationMapHTML } from "@/lib/leaflet-map-html";
 import { getLeafletNavigationMapHTMLLocal } from "@/lib/leaflet-map-html-local";
@@ -125,6 +126,7 @@ export default function NavigationView({
   offRouteThresholdMeters = 50,
 }: NavigationViewProps) {
   const colors = useColors();
+  const { updateCollectionPoint } = useCollectionPointsActions();
   const showSpeed = useMapDisplayStore((s) => s.showSpeed);
   const offRouteAlertEnabled = useRouteParametersStore(
     (s) => s.offRouteAlertEnabled,

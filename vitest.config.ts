@@ -5,6 +5,9 @@ import { defineConfig } from "vitest/config";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  define: {
+    __DEV__: "true",
+  },
   test: {
     exclude: [
       "**/node_modules/**",
@@ -15,6 +18,7 @@ export default defineConfig({
     // Stable V8 coverage merge (avoids missing coverage/.tmp races with default parallel pool)
     pool: "forks",
     poolOptions: { forks: { singleFork: true } },
+
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],

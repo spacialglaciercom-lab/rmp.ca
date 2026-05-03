@@ -39,6 +39,8 @@ import { PluginProvider } from "@/context/PluginProvider";
 
 import { FirebaseProvider } from "@/context/FirebaseContext";
 import { DatabaseProvider } from "@/lib/database/DatabaseProvider";
+import { runMigration } from '@/lib/database/migrations/asyncStorageMigration';
+import { registerBackgroundSync } from '@/lib/database/sync';
 import { Analytics } from "@vercel/analytics/react";
 import { MapTypeProvider } from "@/lib/map-type-preference";
 import { MapOrientationProvider } from "@/lib/map-orientation-preference";
@@ -114,6 +116,18 @@ export default function RootLayout() {
   // Register PMTiles protocol (remote + local) so Overture overlay works and R2 works offline when downloaded.
   useEffect(() => {
     registerPMTilesProtocol();
+  }, []);
+
+  // Run database migrations and register background sync
+  useEffect(() => {
+    (async () => {
+      try {
+        await runMigration();
+        await registerBackgroundSync();
+      } catch (e) {
+        console.error('Migration or Background Sync failed:', e);
+      }
+    })();
   }, []);
 
   // On first launch, clear only the ambient tile cache (not offline packs) to avoid
