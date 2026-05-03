@@ -3,7 +3,7 @@
  * Fallback when OSRM/Valhalla map matching is not available.
  */
 
-import { haversineMeters } from "./_core/geo";
+import { haversineMeters, calculateBearing } from "./_core/geo";
 
 export interface TurnInstruction {
   index: number;
@@ -14,32 +14,11 @@ export interface TurnInstruction {
   text: string;
 }
 
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-function toDeg(rad: number): number {
-  return (rad * 180) / Math.PI;
-}
-
 export function haversineDistance(
   p1: { lat: number; lon: number },
   p2: { lat: number; lon: number },
 ): number {
   return haversineMeters(p1.lat, p1.lon, p2.lat, p2.lon);
-}
-
-function calculateBearing(
-  from: { lat: number; lon: number },
-  to: { lat: number; lon: number },
-): number {
-  const dLon = toRad(to.lon - from.lon);
-  const lat1 = toRad(from.lat);
-  const lat2 = toRad(to.lat);
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x =
-    Math.cos(lat1) * Math.sin(lat2) -
-    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  return toDeg(Math.atan2(y, x));
 }
 
 function normalizeBearing(angle: number): number {
@@ -77,8 +56,8 @@ export function detectTurnsFromGPX(
   if (points.length < 3) return instructions;
 
   for (let i = 1; i < points.length - 1; i++) {
-    const bearing1 = calculateBearing(points[i - 1], points[i]);
-    const bearing2 = calculateBearing(points[i], points[i + 1]);
+    const bearing1 = calculateBearing(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
+    const bearing2 = calculateBearing(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon);
     const angleDelta = normalizeBearing(bearing2 - bearing1);
 
     if (Math.abs(angleDelta) > thresholdDegrees) {

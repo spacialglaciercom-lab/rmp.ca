@@ -8,37 +8,10 @@
  */
 
 import type { AvoidedNode } from "@/stores/mapStateStore";
-import { haversineMeters } from "@/lib/_core/geo";
+import { haversineMeters, calculateBearing, toRad, toDeg } from "@/lib/_core/geo";
 
 /** Earth radius in metres. */
 const R = 6_371_000;
-
-/** Convert degrees to radians. */
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-
-/** Convert radians to degrees. */
-function toDeg(rad: number): number {
-  return (rad * 180) / Math.PI;
-}
-
-/**
- * Compute the bearing (degrees, 0–360) from point A to point B.
- */
-function bearing(
-  aLat: number,
-  aLon: number,
-  bLat: number,
-  bLon: number,
-): number {
-  const dLon = toRad(bLon - aLon);
-  const y = Math.sin(dLon) * Math.cos(toRad(bLat));
-  const x =
-    Math.cos(toRad(aLat)) * Math.sin(toRad(bLat)) -
-    Math.sin(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.cos(dLon);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
 
 /**
  * Project a point (lat, lon) by `distanceM` metres in direction `bearingDeg`.
@@ -88,16 +61,6 @@ export function buildDetourWaypoint(
 }
 
 /**
- * Haversine distance in metres between two points.
- */
-function haversine(
-  a: { lat: number; lon: number },
-  b: { lat: number; lon: number },
-): number {
-  return haversineMeters(a.lat, a.lon, b.lat, b.lon);
-}
-
-/**
  * Find the index of the geometry point closest to a given lat/lon.
  */
 function nearestGeomIndex(
@@ -107,7 +70,7 @@ function nearestGeomIndex(
   let best = 0;
   let bestDist = Infinity;
   for (let i = 0; i < geometry.length; i++) {
-    const d = haversine(geometry[i], target);
+    const d = haversineMeters(geometry[i].lat, geometry[i].lon, target.lat, target.lon);
     if (d < bestDist) {
       bestDist = d;
       best = i;
@@ -147,7 +110,7 @@ export function insertAvoidDetours(
     const geomIdx = nearestGeomIndex(matchedGeometry, node);
     // Approach bearing: from the geometry point just before the avoid spot
     const prevIdx = Math.max(0, geomIdx - 1);
-    const approachBearing = bearing(
+    const approachBearing = calculateBearing(
       matchedGeometry[prevIdx].lat,
       matchedGeometry[prevIdx].lon,
       matchedGeometry[geomIdx].lat,

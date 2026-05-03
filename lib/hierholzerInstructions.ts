@@ -8,7 +8,7 @@
  */
 
 import type { RoutePoint } from "./route-optimizer-v2/types";
-import { haversineMeters } from "./_core/geo";
+import { haversineMeters, calculateBearing } from "./_core/geo";
 
 export interface NavigationInstruction {
   index: number;
@@ -37,14 +37,6 @@ export type TurnType =
   | "sharp_right"
   | "u_turn";
 
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-
-function toDeg(rad: number): number {
-  return (rad * 180) / Math.PI;
-}
-
 function haversine(
   p1: { lat: number; lon: number },
   p2: { lat: number; lon: number },
@@ -56,14 +48,7 @@ function bearing(
   from: { lat: number; lon: number },
   to: { lat: number; lon: number },
 ): number {
-  const dLon = toRad(to.lon - from.lon);
-  const lat1 = toRad(from.lat);
-  const lat2 = toRad(to.lat);
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x =
-    Math.cos(lat1) * Math.sin(lat2) -
-    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  return calculateBearing(from.lat, from.lon, to.lat, to.lon);
 }
 
 function normalizeDelta(angle: number): number {

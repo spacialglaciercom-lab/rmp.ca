@@ -2,7 +2,7 @@
  * Local route heuristic solver (no tRPC / React Native). Used on-device and in Node/Vitest.
  */
 
-import { haversineMeters as haversineDistance } from "./_core/geo";
+import { haversineMeters } from "./_core/geo";
 
 export interface SolverPoint {
   id: string;
@@ -41,32 +41,43 @@ export interface SolverOptions {
   returnToDepot?: boolean;
 }
 
+/**
+ * Builds a symmetric distance matrix using haversine distance.
+ * O(n^2) complexity.
+ */
 function buildDistanceMatrix(points: SolverPoint[]): number[][] {
   const n = points.length;
-  const matrix: number[][] = [];
+  const matrix: number[][] = new Array(n);
   for (let i = 0; i < n; i++) {
-    matrix[i] = [];
-    for (let j = 0; j < n; j++) {
-      if (i === j) {
-        matrix[i][j] = 0;
-      } else {
-        matrix[i][j] = haversineDistance(
-          points[i].lat,
-          points[i].lon,
-          points[j].lat,
-          points[j].lon,
-        );
-      }
+    matrix[i] = new Array(n);
+    matrix[i][i] = 0;
+    for (let j = 0; j < i; j++) {
+      const dist = haversineMeters(
+        points[i].lat,
+        points[i].lon,
+        points[j].lat,
+        points[j].lon,
+      );
+      matrix[i][j] = dist;
+      matrix[j][i] = dist;
     }
   }
   return matrix;
 }
 
-function nearestNeighbor(points: SolverPoint[], depotIndex: number = 0): number[] {
+/**
+ * Nearest Neighbor heuristic for TSP.
+ * O(n^2) complexity.
+ */
+function nearestNeighbor(
+  points: SolverPoint[],
+  depotIndex: number = 0,
+  matrix?: number[][],
+): number[] {
   const n = points.length;
   const visited = new Set<number>([depotIndex]);
   const order: number[] = [depotIndex];
-  const matrix = buildDistanceMatrix(points);
+  const distMatrix = matrix ?? buildDistanceMatrix(points);
 
   while (visited.size < n) {
     const last = order[order.length - 1];
@@ -74,45 +85,57 @@ function nearestNeighbor(points: SolverPoint[], depotIndex: number = 0): number[
     let nearestIdx = -1;
 
     for (let i = 0; i < n; i++) {
-      if (!visited.has(i) && matrix[last][i] < nearestDist) {
-        nearestDist = matrix[last][i];
-        nearestIdx = i;
+      if (!visited.has(i)) {
+        const d = distMatrix[last][i];
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearestIdx = i;
+        }
       }
     }
 
     if (nearestIdx >= 0) {
       order.push(nearestIdx);
       visited.add(nearestIdx);
+    } else {
+      break;
     }
   }
 
   return order;
 }
 
-function twoOptImprove(order: number[], matrix: number[][], maxIterations: number = 100): number[] {
+/**
+ * 2-opt improvement heuristic.
+ */
+function twoOptImprove(
+  order: number[],
+  matrix: number[][],
+  maxIterations: number = 100,
+): number[] {
   let improved = true;
   let iterations = 0;
   let bestOrder = [...order];
+  const n = bestOrder.length;
 
   while (improved && iterations < maxIterations) {
     improved = false;
     iterations++;
 
-    for (let i = 1; i < order.length - 2; i++) {
-      for (let j = i + 1; j < order.length; j++) {
-        const currentDist =
-          matrix[bestOrder[i - 1]][bestOrder[i]] + matrix[bestOrder[j]][bestOrder[(j + 1) % order.length]];
+    for (let i = 1; i < n - 1; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const nextJ = (j + 1) % n;
 
-        const newDist =
-          matrix[bestOrder[i - 1]][bestOrder[j]] + matrix[bestOrder[i]][bestOrder[(j + 1) % order.length]];
+        // current: (i-1 -> i) + (j -> nextJ)
+        const currentDist = matrix[bestOrder[i - 1]][bestOrder[i]] + matrix[bestOrder[j]][bestOrder[nextJ]];
 
-        if (newDist < currentDist) {
-          const newOrder = [
-            ...bestOrder.slice(0, i),
-            ...bestOrder.slice(i, j + 1).reverse(),
-            ...bestOrder.slice(j + 1),
-          ];
-          bestOrder = newOrder;
+        // swap: (i-1 -> j) + (i -> nextJ)
+        const newDist = matrix[bestOrder[i - 1]][bestOrder[j]] + matrix[bestOrder[i]][bestOrder[nextJ]];
+
+        if (newDist < currentDist - 0.01) { // 1cm epsilon
+          // Reverse sub-path from i to j
+          const sub = bestOrder.slice(i, j + 1).reverse();
+          bestOrder.splice(i, sub.length, ...sub);
           improved = true;
         }
       }
@@ -122,6 +145,9 @@ function twoOptImprove(order: number[], matrix: number[][], maxIterations: numbe
   return bestOrder;
 }
 
+/**
+ * Calculates total route distance.
+ */
 function calculateRouteDistance(order: number[], matrix: number[][]): number {
   let total = 0;
   for (let i = 0; i < order.length - 1; i++) {
@@ -130,7 +156,14 @@ function calculateRouteDistance(order: number[], matrix: number[][]): number {
   return total;
 }
 
-function orOptImprove(order: number[], matrix: number[][], maxIterations: number = 50): number[] {
+/**
+ * Or-opt improvement heuristic (node relocation).
+ */
+function orOptImprove(
+  order: number[],
+  matrix: number[][],
+  maxIterations: number = 50,
+): number[] {
   let improved = true;
   let iterations = 0;
   let bestOrder = [...order];
@@ -139,28 +172,35 @@ function orOptImprove(order: number[], matrix: number[][], maxIterations: number
     improved = false;
     iterations++;
 
-    for (let i = 1; i < order.length; i++) {
-      for (let j = 0; j < order.length; j++) {
+    for (let i = 1; i < bestOrder.length; i++) {
+      const node = bestOrder[i];
+      const prevDist = calculateRouteDistance(bestOrder, matrix);
+
+      for (let j = 0; j < bestOrder.length; j++) {
         if (j === i || j === i - 1) continue;
 
         const newOrder = [...bestOrder];
-        const [node] = newOrder.splice(i, 1);
+        newOrder.splice(i, 1);
         newOrder.splice(j > i ? j - 1 : j, 0, node);
 
-        const oldDist = calculateRouteDistance(bestOrder, matrix);
         const newDist = calculateRouteDistance(newOrder, matrix);
 
-        if (newDist < oldDist) {
+        if (newDist < prevDist - 0.01) {
           bestOrder = newOrder;
           improved = true;
+          break;
         }
       }
+      if (improved) break;
     }
   }
 
   return bestOrder;
 }
 
+/**
+ * Local solver entry point.
+ */
 export async function solveLocal(
   points: SolverPoint[],
   options: SolverOptions = { algorithm: "2-opt" },
@@ -184,24 +224,24 @@ export async function solveLocal(
 
   const allPoints = options.depot ? [options.depot, ...points] : points;
   const matrix = buildDistanceMatrix(allPoints);
-  const depotIndex = options.depot ? 0 : 0;
+  const depotIndex = 0; // Depot is always first if provided
 
   let order: number[];
 
   switch (options.algorithm) {
     case "nearest-neighbor":
-      order = nearestNeighbor(allPoints, depotIndex);
+      order = nearestNeighbor(allPoints, depotIndex, matrix);
       break;
 
     case "2-opt":
-      order = nearestNeighbor(allPoints, depotIndex);
-      order = twoOptImprove(order, matrix);
-      order = orOptImprove(order, matrix);
-      break;
-
     default:
-      order = nearestNeighbor(allPoints, depotIndex);
+      order = nearestNeighbor(allPoints, depotIndex, matrix);
       order = twoOptImprove(order, matrix);
+      // Or-opt is expensive (O(n^3)), gate it for small sets
+      if (allPoints.length < 50) {
+        order = orOptImprove(order, matrix);
+      }
+      break;
   }
 
   if (options.returnToDepot && options.depot) {
@@ -218,7 +258,8 @@ export async function solveLocal(
     const distance = matrix[from][to];
     totalDistance += distance;
 
-    const duration = distance / (30 * 1000 / 3600);
+    // Estimate duration: 30 km/h average speed + service time
+    const duration = distance / ((30 * 1000) / 3600);
     totalDuration += duration;
 
     const serviceTime = allPoints[to].serviceTime ?? 120;
@@ -244,6 +285,9 @@ export async function solveLocal(
   };
 }
 
+/**
+ * Estimates route stats for quick feedback.
+ */
 export function estimateRouteStats(points: SolverPoint[]): {
   totalDistance: number;
   estimatedDuration: number;
@@ -269,12 +313,13 @@ export function estimateRouteStats(points: SolverPoint[]): {
     maxLon = Math.max(maxLon, p.lon);
   }
 
-  const diagonal = haversineDistance(minLat, minLon, maxLat, maxLon);
+  const diagonal = haversineMeters(minLat, minLon, maxLat, maxLon);
   const estimatedDistance = diagonal * Math.sqrt(points.length) * 1.5;
 
   const avgServiceTime =
     points.reduce((sum, p) => sum + (p.serviceTime ?? 120), 0) / points.length;
-  const estimatedDuration = estimatedDistance / (30 * 1000 / 3600) + points.length * avgServiceTime;
+  const estimatedDuration =
+    estimatedDistance / ((30 * 1000) / 3600) + points.length * avgServiceTime;
 
   return {
     totalDistance: Math.round(estimatedDistance),
