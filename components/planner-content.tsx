@@ -80,6 +80,8 @@ export default function PlannerContent() {
   const colors = useColors();
   const router = useRouter();
   const { state, dispatch } = useRouting();
+  const { createRoute } = useRoutesActions();
+  const { bulkCreatePoints } = useCollectionPointsActions();
   const [outputFileName, setOutputFileName] = useState(
     state.configuration.outputFileName,
   );
@@ -730,6 +732,34 @@ export default function PlannerContent() {
           routeSource: "osm", // Navigation route only; Processing Queue (stops) is for VRP on Home
         };
         await storage.saveRoute(routeToSave);
+
+        // Also save to WatermelonDB for offline sync
+        try {
+          const createdRoute = await createRoute({
+            date: routeToSave.date,
+            driverId: "",
+            vehicleId: "",
+            totalPoints: routeToSave.totalPoints,
+            estimatedDurationMinutes: routeToSave.estimatedDuration || 0,
+            totalDistanceMeters: Math.round((sanitized?.totalDistance ?? 0) * 1000),
+            routeSource: "imported",
+          });
+
+          if (createdRoute && pointsForStorage.length > 0) {
+            await bulkCreatePoints(
+              createdRoute.id,
+              pointsForStorage.map((p, i) => ({
+                latitude: p.latitude,
+                longitude: p.longitude,
+                sequence: i,
+                address: p.address || "",
+                collectionType: (p.collectionType as any) || "residential",
+              }))
+            );
+          }
+        } catch (watermelonErr) {
+          console.warn("Planner: could not save to WatermelonDB", watermelonErr);
+        }
       } catch (saveErr) {
         console.warn("Planner: could not save route for Map tab", saveErr);
       }
