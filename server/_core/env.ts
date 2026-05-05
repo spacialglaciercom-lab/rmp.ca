@@ -57,4 +57,8 @@ export const ENV = {
   resendApiKey: (process.env.RESEND_API_KEY ?? "").trim(),
   emailFrom: (process.env.EMAIL_FROM ?? "RouteMaster Pro <contact@routemasterpro.ca>").trim(),
   appBaseUrl: (process.env.APP_BASE_URL ?? "https://rmpca-production.up.railway.app").trim().replace(/\/$/, ""),
+  /** Zilliz / Milvus Vector DB connection string */
+  milvusUri: (process.env.MILVUS_URI ?? "").trim(),
+  /** Zilliz / Milvus API token */
+  milvusToken: (process.env.MILVUS_TOKEN ?? "").trim(),
 };
