@@ -11,10 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from shapely.geometry import Polygon, LineString
-
 from app.vector_clean import (
-    _polygon_to_linestrings,
     CleanOptions,
     CleanStats,
     clean_geojson,
@@ -292,45 +289,3 @@ def test_post_geojson_clean_returns_geojson_and_stats(geojson_valid_single: dict
     assert "stats" in data
     assert "input_features" in data["stats"]
     assert "output_features" in data["stats"]
-
-# ---------------------------------------------------------------------------
-# _polygon_to_linestrings tests
-# ---------------------------------------------------------------------------
-
-def test_polygon_to_linestrings_empty() -> None:
-    empty_poly = Polygon()
-    assert _polygon_to_linestrings(empty_poly) == []
-
-
-def test_polygon_to_linestrings_simple() -> None:
-    # A simple square polygon
-    poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-    lines = _polygon_to_linestrings(poly)
-
-    assert len(lines) == 1
-    # The output LineString should not have the repeated closing point
-    assert list(lines[0].coords) == [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
-
-
-def test_polygon_to_linestrings_with_hole() -> None:
-    # A square with a smaller square hole
-    exterior = [(0, 0), (3, 0), (3, 3), (0, 3), (0, 0)]
-    interior = [(1, 1), (2, 1), (2, 2), (1, 2), (1, 1)]
-    poly = Polygon(exterior, [interior])
-    lines = _polygon_to_linestrings(poly)
-
-    assert len(lines) == 2
-    # Exterior ring without closing point
-    assert list(lines[0].coords) == [(0.0, 0.0), (3.0, 0.0), (3.0, 3.0), (0.0, 3.0)]
-    # Interior ring without closing point
-    assert list(lines[1].coords) == [(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)]
-
-
-def test_polygon_to_linestrings_degenerate_ring() -> None:
-    # Technically Shapely polygons should be valid rings (>= 4 coords),
-    # but we test the function's resilience if it somehow gets a non-closed or short sequence.
-    # We can mock the geometry or just rely on the implementation taking the coords.
-    poly = Polygon([(0, 0), (1, 1), (2, 2), (0, 0)]) # Triangle
-    lines = _polygon_to_linestrings(poly)
-    assert len(lines) == 1
-    assert list(lines[0].coords) == [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]
