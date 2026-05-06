@@ -13,7 +13,6 @@ const OVERTURE_RELEASE = process.argv[2] || process.env.OVERTURE_RELEASE || "202
 const BBOX = { minX: -73.57, minY: 45.50, maxX: -73.56, maxY: 45.51 };
 
 async function run() {
-  console.log(`Checking Overture sources for release: ${OVERTURE_RELEASE}`);
   const db = new duckdb.Database(':memory:');
   const con = db.connect();
 
