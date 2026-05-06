@@ -360,8 +360,8 @@ def _solve_ortools(req: VrpRequest) -> VrpResponse:
                 route_dist += dist_leg
             else:
                 # Last leg to end
-                 dist_leg = routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
-                 route_dist += dist_leg
+                dist_leg = routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
+                route_dist += dist_leg
 
         # End Step
         node_index = manager.IndexToNode(index)
