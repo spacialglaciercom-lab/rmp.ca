@@ -130,7 +130,7 @@ export async function getRouteElevationProfile(
     )
   `));
 
-  const rows = result.rows as Array<{
+  const rows = result.rows as {
     segment_id: number;
     distance_from_start_m: number;
     distance_segment_m: number;
@@ -139,7 +139,7 @@ export async function getRouteElevationProfile(
     grade_percent: number;
     cumulative_ascent_m: number;
     cumulative_descent_m: number;
-  }>;
+  }[];
 
   if (rows.length === 0) {
     return {
@@ -507,19 +507,9 @@ export async function exampleRouteAnalysis() {
   // Get elevation profile
   const profile = await getRouteElevationProfileCached(route, 50); // 50m intervals
 
-  console.log("Route Elevation Profile:");
-  console.log(`  Distance: ${profile.distanceKm.toFixed(2)} km`);
-  console.log(`  Elevation Range: ${profile.minElevation.toFixed(1)}m - ${profile.maxElevation.toFixed(1)}m`);
-  console.log(`  Total Ascent: ${profile.totalAscent.toFixed(1)}m`);
-  console.log(`  Total Descent: ${profile.totalDescent.toFixed(1)}m`);
 
   // Calculate fuel consumption
   const fuel = calculateFuelConsumptionFactor(profile);
-  console.log("\nFuel Consumption Analysis:");
-  console.log(`  Total Fuel: ${fuel.totalFuelL.toFixed(2)} L`);
-  console.log(`  Avg Consumption: ${fuel.avgConsumptionLPerKm.toFixed(3)} L/km`);
-  console.log(`  Elevation Penalty: ${fuel.elevationPenaltyL.toFixed(2)} L`);
-  console.log(`  Elevation Benefit: ${fuel.elevationBenefitL.toFixed(2)} L`);
 
   return { profile, fuel };
 }
@@ -536,11 +526,6 @@ export async function exampleCoverageCheck() {
     maxLat: 45.7,
   });
 
-  console.log("DEM Coverage:");
-  console.log(`  Has Coverage: ${coverage.hasCoverage}`);
-  console.log(`  Coverage: ${coverage.coveragePercent.toFixed(1)}%`);
-  console.log(`  Tiles: ${coverage.tileCount}`);
-  console.log(`  Granules: ${coverage.granuleIds.join(", ")}`);
 
   return coverage;
 }
@@ -555,11 +540,6 @@ export async function exampleGeofenceElevation() {
     10 // 10 meter radius
   );
 
-  console.log("Elevation in 10m Geofence:");
-  console.log(`  Min: ${stats.minElevation.toFixed(1)}m`);
-  console.log(`  Max: ${stats.maxElevation.toFixed(1)}m`);
-  console.log(`  Avg: ${stats.avgElevation.toFixed(1)}m`);
-  console.log(`  Coverage: ${stats.coveragePercent.toFixed(1)}%`);
 
   return stats;
 }
