@@ -1,15 +1,19 @@
 /**
  * Spatial Query Examples for DEM Elevation Data
- * 
+ *
  * This module provides production-ready query functions for extracting
  * elevation data from the PostGIS database for route optimization and
  * fuel calculation.
- * 
+ *
  * @module elevationQueries
  */
 
-import { db } from "../server/db";
-import { demGranules, demElevation, elevationCache } from "../drizzle/schema/dem";
+import { getDb } from "../server/db";
+import {
+  demGranules,
+  demElevation,
+  elevationCache,
+} from "../drizzle/schema/dem";
 import { sql, eq, and, inArray } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -64,12 +68,16 @@ export interface CoverageCheck {
 
 /**
  * Get elevation at a single point
- * 
+ *
  * @param point WGS84 coordinate
  * @returns Elevation in meters or null if no coverage
  */
-export async function getElevationAtPoint(point: Point): Promise<ElevationResult> {
-  const result = await db.execute(sql`
+export async function getElevationAtPoint(
+  point: Point,
+): Promise<ElevationResult> {
+  const result = await (
+    await getDb()!
+  ).execute(sql`
     SELECT get_elevation(${point.lon}, ${point.lat}) AS elevation
   `);
 
@@ -83,11 +91,13 @@ export async function getElevationAtPoint(point: Point): Promise<ElevationResult
 
 /**
  * Get elevations at multiple points efficiently
- * 
+ *
  * @param points Array of WGS84 coordinates
  * @returns Array of elevations (null where no coverage)
  */
-export async function getElevationsAtPoints(points: Point[]): Promise<(number | null)[]> {
+export async function getElevationsAtPoints(
+  points: Point[],
+): Promise<(number | null)[]> {
   if (points.length === 0) return [];
 
   // Build PostGIS point array
@@ -95,9 +105,13 @@ export async function getElevationsAtPoints(points: Point[]): Promise<(number | 
     .map((p) => `ST_SetSRID(ST_MakePoint(${p.lon}, ${p.lat}), 4326)`)
     .join(", ");
 
-  const result = await db.execute(sql.raw(`
+  const result = await (
+    await getDb()!
+  ).execute(
+    sql.raw(`
     SELECT get_elevations(ARRAY[${pointsArray}]) AS elevations
-  `));
+  `),
+  );
 
   const elevations = result.rows[0]?.elevations as (number | null)[];
 
@@ -110,25 +124,29 @@ export async function getElevationsAtPoints(points: Point[]): Promise<(number | 
 
 /**
  * Get elevation profile along a route
- * 
+ *
  * @param routeLineString GeoJSON LineString coordinates
  * @param sampleIntervalM Distance between samples in meters (default: 10m)
  * @returns Detailed elevation profile
  */
 export async function getRouteElevationProfile(
   routeLineString: number[][],
-  sampleIntervalM: number = 10.0
+  sampleIntervalM: number = 10.0,
 ): Promise<ElevationProfile> {
   // Convert coordinates to PostGIS LineString
   const coords = routeLineString.map((c) => `${c[0]} ${c[1]}`).join(", ");
   const lineStringWKT = `LINESTRING(${coords})`;
 
-  const result = await db.execute(sql.raw(`
+  const result = await (
+    await getDb()!
+  ).execute(
+    sql.raw(`
     SELECT * FROM get_elevation_profile(
       ST_SetSRID(ST_GeomFromText('${lineStringWKT}'), 4326),
       ${sampleIntervalM}
     )
-  `));
+  `),
+  );
 
   const rows = result.rows as Array<{
     segment_id: number;
@@ -168,7 +186,7 @@ export async function getRouteElevationProfile(
     const progress = idx / (rows.length - 1);
     const pointIdx = Math.min(
       Math.floor(progress * (routeLineString.length - 1)),
-      routeLineString.length - 2
+      routeLineString.length - 2,
     );
     const point: Point = {
       lon: routeLineString[pointIdx][0],
@@ -195,14 +213,14 @@ export async function getRouteElevationProfile(
 
 /**
  * Get elevation profile with caching
- * 
+ *
  * @param routeLineString GeoJSON LineString coordinates
  * @param sampleIntervalM Distance between samples in meters
  * @returns Elevation profile (from cache if available)
  */
 export async function getRouteElevationProfileCached(
   routeLineString: number[][],
-  sampleIntervalM: number = 10.0
+  sampleIntervalM: number = 10.0,
 ): Promise<ElevationProfile> {
   // Generate cache key
   const cacheKey = JSON.stringify({ routeLineString, sampleIntervalM });
@@ -221,10 +239,13 @@ export async function getRouteElevationProfileCached(
   }
 
   // Compute profile
-  const profile = await getRouteElevationProfile(routeLineString, sampleIntervalM);
+  const profile = await getRouteElevationProfile(
+    routeLineString,
+    sampleIntervalM,
+  );
 
   // Store in cache (expires in 7 days)
-  await db.insert(elevationCache).values({
+  await (await getDb()!).insert(elevationCache).values({
     queryHash,
     queryType: "linestring",
     inputGeom: JSON.stringify(routeLineString),
@@ -241,12 +262,12 @@ export async function getRouteElevationProfileCached(
 
 /**
  * Get elevation statistics within a geofence (polygon)
- * 
+ *
  * @param polygon GeoJSON Polygon coordinates
  * @returns Elevation statistics for the geofence
  */
 export async function getGeofenceElevationStats(
-  polygon: number[][][]
+  polygon: number[][][],
 ): Promise<GeofenceStats> {
   // Convert GeoJSON polygon to WKT
   const rings = polygon
@@ -257,11 +278,15 @@ export async function getGeofenceElevationStats(
     .join(", ");
   const polygonWKT = `POLYGON(${rings})`;
 
-  const result = await db.execute(sql.raw(`
+  const result = await (
+    await getDb()!
+  ).execute(
+    sql.raw(`
     SELECT * FROM get_geofence_elevation_stats(
       ST_SetSRID(ST_GeomFromText('${polygonWKT}'), 4326)
     )
-  `));
+  `),
+  );
 
   const row = result.rows[0];
 
@@ -276,24 +301,28 @@ export async function getGeofenceElevationStats(
 
 /**
  * Check elevation within a 10-meter geofence around a point
- * 
+ *
  * @param center Center point of the geofence
  * @param radiusM Radius in meters (default: 10m)
  * @returns Elevation statistics for the circular geofence
  */
 export async function getElevationInGeofence(
   center: Point,
-  radiusM: number = 10
+  radiusM: number = 10,
 ): Promise<GeofenceStats> {
   // Create a circular geofence using ST_Buffer
-  const result = await db.execute(sql.raw(`
+  const result = await (
+    await getDb()!
+  ).execute(
+    sql.raw(`
     SELECT * FROM get_geofence_elevation_stats(
       ST_Buffer(
         ST_SetSRID(ST_MakePoint(${center.lon}, ${center.lat}), 4326)::geography,
         ${radiusM}
       )::geometry
     )
-  `));
+  `),
+  );
 
   const row = result.rows[0];
 
@@ -312,7 +341,7 @@ export async function getElevationInGeofence(
 
 /**
  * Check if DEM data covers a bounding box
- * 
+ *
  * @param bbox Bounding box coordinates
  * @returns Coverage information
  */
@@ -322,7 +351,9 @@ export async function checkDemCoverage(bbox: {
   maxLon: number;
   maxLat: number;
 }): Promise<CoverageCheck> {
-  const result = await db.execute(sql`
+  const result = await (
+    await getDb()!
+  ).execute(sql`
     SELECT * FROM check_dem_coverage(
       ${bbox.minLon},
       ${bbox.minLat},
@@ -367,10 +398,7 @@ export async function getGranulesForArea(bbox: {
 }) {
   const polygonWKT = `POLYGON((${bbox.minLon} ${bbox.minLat}, ${bbox.maxLon} ${bbox.minLat}, ${bbox.maxLon} ${bbox.maxLat}, ${bbox.minLon} ${bbox.maxLat}, ${bbox.minLon} ${bbox.minLat}))`;
 
-  return db
-    .select()
-    .from(demGranules)
-    .where(sql`
+  return (await getDb()!).select().from(demGranules).where(sql`
       ST_Intersects(
         coverage_geom,
         ST_SetSRID(ST_GeomFromText(${polygonWKT}), 4326)
@@ -406,7 +434,9 @@ export async function getGranuleStats(granuleId: string) {
  * Clear expired cache entries
  */
 export async function clearExpiredCache(): Promise<number> {
-  const result = await db.execute(sql`
+  const result = await (
+    await getDb()!
+  ).execute(sql`
     SELECT cleanup_old_cache_entries(30) AS deleted_count
   `);
 
@@ -417,7 +447,7 @@ export async function clearExpiredCache(): Promise<number> {
  * Clear all cache entries
  */
 export async function clearAllCache(): Promise<void> {
-  await db.delete(elevationCache);
+  await (await getDb()!).delete(elevationCache);
 }
 
 // ============================================================================
@@ -426,19 +456,19 @@ export async function clearAllCache(): Promise<void> {
 
 /**
  * Calculate fuel consumption factor based on elevation profile
- * 
+ *
  * This is a simplified model that accounts for:
  * - Base fuel consumption (flat terrain)
  * - Additional consumption for uphill grades
  * - Reduced consumption for downhill grades
- * 
+ *
  * @param profile Elevation profile from getRouteElevationProfile
  * @param baseConsumption Base fuel consumption in L/km
  * @returns Adjusted fuel consumption factor
  */
 export function calculateFuelConsumptionFactor(
   profile: ElevationProfile,
-  baseConsumption: number = 0.35 // L/km for typical vehicle
+  baseConsumption: number = 0.35, // L/km for typical vehicle
 ): {
   totalFuelL: number;
   avgConsumptionLPerKm: number;
@@ -456,7 +486,7 @@ export function calculateFuelConsumptionFactor(
     if (prev.elevationM === null || curr.elevationM === null) continue;
 
     const distanceKm = (curr.distanceM - prev.distanceM) / 1000;
-    const elevationChange = (curr.elevationM - prev.elevationM);
+    const elevationChange = curr.elevationM - prev.elevationM;
     const grade = distanceKm > 0 ? elevationChange / (distanceKm * 1000) : 0;
 
     // Base fuel for this segment
@@ -470,7 +500,7 @@ export function calculateFuelConsumptionFactor(
       elevationFactor = 0.15 * grade * 100; // Uphill penalty
       elevationPenalty += baseFuel * elevationFactor;
     } else {
-      elevationFactor = Math.max(-0.20, 0.05 * grade * 100); // Downhill benefit (capped)
+      elevationFactor = Math.max(-0.2, 0.05 * grade * 100); // Downhill benefit (capped)
       elevationBenefit += Math.abs(baseFuel * elevationFactor);
     }
 
@@ -479,7 +509,8 @@ export function calculateFuelConsumptionFactor(
 
   return {
     totalFuelL: totalFuel,
-    avgConsumptionLPerKm: profile.distanceKm > 0 ? totalFuel / profile.distanceKm : baseConsumption,
+    avgConsumptionLPerKm:
+      profile.distanceKm > 0 ? totalFuel / profile.distanceKm : baseConsumption,
     elevationPenaltyL: elevationPenalty,
     elevationBenefitL: elevationBenefit,
   };
@@ -507,19 +538,8 @@ export async function exampleRouteAnalysis() {
   // Get elevation profile
   const profile = await getRouteElevationProfileCached(route, 50); // 50m intervals
 
-  console.log("Route Elevation Profile:");
-  console.log(`  Distance: ${profile.distanceKm.toFixed(2)} km`);
-  console.log(`  Elevation Range: ${profile.minElevation.toFixed(1)}m - ${profile.maxElevation.toFixed(1)}m`);
-  console.log(`  Total Ascent: ${profile.totalAscent.toFixed(1)}m`);
-  console.log(`  Total Descent: ${profile.totalDescent.toFixed(1)}m`);
-
   // Calculate fuel consumption
   const fuel = calculateFuelConsumptionFactor(profile);
-  console.log("\nFuel Consumption Analysis:");
-  console.log(`  Total Fuel: ${fuel.totalFuelL.toFixed(2)} L`);
-  console.log(`  Avg Consumption: ${fuel.avgConsumptionLPerKm.toFixed(3)} L/km`);
-  console.log(`  Elevation Penalty: ${fuel.elevationPenaltyL.toFixed(2)} L`);
-  console.log(`  Elevation Benefit: ${fuel.elevationBenefitL.toFixed(2)} L`);
 
   return { profile, fuel };
 }
@@ -536,12 +556,6 @@ export async function exampleCoverageCheck() {
     maxLat: 45.7,
   });
 
-  console.log("DEM Coverage:");
-  console.log(`  Has Coverage: ${coverage.hasCoverage}`);
-  console.log(`  Coverage: ${coverage.coveragePercent.toFixed(1)}%`);
-  console.log(`  Tiles: ${coverage.tileCount}`);
-  console.log(`  Granules: ${coverage.granuleIds.join(", ")}`);
-
   return coverage;
 }
 
@@ -552,14 +566,8 @@ export async function exampleGeofenceElevation() {
   // Check elevation at a specific location with 10m radius
   const stats = await getElevationInGeofence(
     { lon: -73.5875, lat: 45.5041 }, // Montreal downtown
-    10 // 10 meter radius
+    10, // 10 meter radius
   );
-
-  console.log("Elevation in 10m Geofence:");
-  console.log(`  Min: ${stats.minElevation.toFixed(1)}m`);
-  console.log(`  Max: ${stats.maxElevation.toFixed(1)}m`);
-  console.log(`  Avg: ${stats.avgElevation.toFixed(1)}m`);
-  console.log(`  Coverage: ${stats.coveragePercent.toFixed(1)}%`);
 
   return stats;
 }
