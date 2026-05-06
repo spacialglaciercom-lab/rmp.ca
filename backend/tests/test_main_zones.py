@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import (
@@ -159,6 +160,11 @@ class TestConvexHullRing:
         # Collinear points produce a LineString, not Polygon → None
         assert result is None
 
+    @patch("app.main.MultiPoint")
+    def test_exception_handling(self, mock_multipoint):
+        mock_multipoint.side_effect = Exception("Test exception")
+        coords = [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)]
+        assert _zone_convex_hull_ring(coords, [0, 1, 2]) is None
 
 # ===========================================================================
 # Unit tests: spectral partition
