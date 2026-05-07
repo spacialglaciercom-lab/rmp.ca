@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,227 @@ import {
   validateCoordinates,
   generateLogEntry,
 } from "@/lib/routing-context";
+import type { RouteConfiguration } from "@/types/routing";
+
+// --- Presenter (Pure UI) ---
+
+export interface StartPointConfigUIProps {
+  // State
+  latInput: string;
+  lonInput: string;
+  nameInput: string;
+  error: string | null;
+  latError: string | null;
+  lonError: string | null;
+  locationLoading: boolean;
+  locationError: string | null;
+  hasInputErrors: boolean;
+  isValid: boolean | undefined;
+  startPointConfig: RouteConfiguration['startPoint'];
+  colors: ReturnType<typeof useColors>;
+
+  // Handlers
+  onLatChange: (value: string) => void;
+  onLonChange: (value: string) => void;
+  onNameChange: (value: string) => void;
+  onValidate: () => void;
+  onClear: () => void;
+  onUseCurrentLocation: () => void;
+}
+
+export function StartPointConfigUI({
+  latInput,
+  lonInput,
+  nameInput,
+  error,
+  latError,
+  lonError,
+  locationLoading,
+  locationError,
+  hasInputErrors,
+  isValid,
+  startPointConfig,
+  colors,
+  onLatChange,
+  onLonChange,
+  onNameChange,
+  onValidate,
+  onClear,
+  onUseCurrentLocation
+}: StartPointConfigUIProps) {
+  return (
+    <View
+      className="bg-surface rounded-2xl p-5 mb-4"
+      style={{ backgroundColor: colors.surface }}
+    >
+      <Text className="text-lg font-semibold text-foreground mb-2">
+        Start Point Configuration
+      </Text>
+
+      <Text className="text-sm text-muted mb-3">
+        Optional: Set a custom starting point for the route. Leave empty to use
+        the graph centroid.
+      </Text>
+      <Text
+        className="text-xs font-medium mb-3"
+        style={{ color: colors.primary }}
+      >
+        ⚠️ Important: Click &quot;Validate & Set&quot; after entering
+        coordinates — your start point is only used when this step is done.
+      </Text>
+
+      <TouchableOpacity
+        onPress={onUseCurrentLocation}
+        disabled={locationLoading}
+        className="mb-3 py-2 px-3 rounded-lg self-start flex-row items-center"
+        style={{
+          backgroundColor:
+            (locationLoading ? colors.muted : colors.primary) + "20",
+        }}
+      >
+        {locationLoading ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
+            style={{ marginRight: 8 }}
+          />
+        ) : null}
+        <Text style={{ color: colors.primary }} className="text-sm font-medium">
+          📍 Use current location
+        </Text>
+      </TouchableOpacity>
+      {locationError && (
+        <Text style={{ color: colors.error }} className="text-xs mb-3">
+          {locationError}
+        </Text>
+      )}
+
+      <View className="mb-3">
+        <Text className="text-sm text-muted mb-1">
+          Location Name (Optional)
+        </Text>
+        <TextInput
+          value={nameInput}
+          onChangeText={onNameChange}
+          placeholder="e.g., Depot, Starting Location"
+          placeholderTextColor={colors.muted}
+          className="bg-background rounded-lg p-3 text-foreground"
+          style={{
+            backgroundColor: colors.background,
+            color: colors.foreground,
+          }}
+        />
+      </View>
+
+      <View className="flex-row gap-3 mb-1">
+        <View className="flex-1">
+          <Text className="text-sm text-muted mb-1">Latitude</Text>
+          <TextInput
+            value={latInput}
+            onChangeText={onLatChange}
+            placeholder="e.g., 40.7128"
+            placeholderTextColor={colors.muted}
+            keyboardType="numbers-and-punctuation"
+            returnKeyType="done"
+            className="bg-background rounded-lg p-3 text-foreground"
+            style={{
+              backgroundColor: colors.background,
+              color: colors.foreground,
+              borderWidth: latError ? 1 : 0,
+              borderColor: colors.error,
+            }}
+          />
+          {latError && (
+            <Text style={{ color: colors.error }} className="text-xs mt-1">
+              {latError}
+            </Text>
+          )}
+        </View>
+        <View className="flex-1">
+          <Text className="text-sm text-muted mb-1">Longitude</Text>
+          <TextInput
+            value={lonInput}
+            onChangeText={onLonChange}
+            placeholder="e.g., -74.0060"
+            placeholderTextColor={colors.muted}
+            keyboardType="numbers-and-punctuation"
+            returnKeyType="done"
+            className="bg-background rounded-lg p-3 text-foreground"
+            style={{
+              backgroundColor: colors.background,
+              color: colors.foreground,
+              borderWidth: lonError ? 1 : 0,
+              borderColor: colors.error,
+            }}
+          />
+          {lonError && (
+            <Text style={{ color: colors.error }} className="text-xs mt-1">
+              {lonError}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      <Text className="text-xs text-muted mb-3">
+        Format: Decimal degrees (e.g., 40.7128, -74.0060)
+      </Text>
+
+      {error && (
+        <View
+          className="p-3 rounded-lg mb-3"
+          style={{ backgroundColor: colors.error + "20" }}
+        >
+          <Text style={{ color: colors.error }} className="text-sm">
+            ⚠️ {error}
+          </Text>
+        </View>
+      )}
+
+      {isValid && startPointConfig && (
+        <View
+          className="p-3 rounded-lg mb-3"
+          style={{ backgroundColor: colors.success + "20" }}
+        >
+          <Text
+            style={{ color: colors.success }}
+            className="text-sm font-medium"
+          >
+            ✓ Valid coordinates set
+          </Text>
+          <Text style={{ color: colors.success }} className="text-xs mt-1">
+            Lat:{" "}
+            {startPointConfig.coordinates.latitude.toFixed(6)},
+            Lon:{" "}
+            {startPointConfig.coordinates.longitude.toFixed(6)}
+          </Text>
+        </View>
+      )}
+
+      <View className="flex-row gap-3">
+        <TouchableOpacity
+          onPress={onValidate}
+          disabled={hasInputErrors}
+          style={{
+            backgroundColor: hasInputErrors ? colors.muted : colors.primary,
+            opacity: hasInputErrors ? 0.5 : 1,
+          }}
+          className="flex-1 py-3 rounded-lg items-center active:opacity-70"
+        >
+          <Text className="text-white font-semibold">Validate & Set</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onClear}
+          style={{ backgroundColor: colors.muted + "30" }}
+          className="flex-1 py-3 rounded-lg items-center active:opacity-70"
+        >
+          <Text className="text-foreground font-semibold">Clear</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// --- Container (Logic & State) ---
 
 export function StartPointConfig() {
   const colors = useColors();
@@ -38,14 +259,12 @@ export function StartPointConfig() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Real-time validation for latitude
   const validateLatitude = (value: string): boolean => {
     if (!value.trim()) {
       setLatError(null);
       return true;
     }
 
-    // Allow partial input like "-" or "40." while typing
     if (value === "-" || value === "." || value === "-.") {
       setLatError(null);
       return true;
@@ -64,14 +283,12 @@ export function StartPointConfig() {
     return true;
   };
 
-  // Real-time validation for longitude
   const validateLongitude = (value: string): boolean => {
     if (!value.trim()) {
       setLonError(null);
       return true;
     }
 
-    // Allow partial input like "-" or "-74." while typing
     if (value === "-" || value === "." || value === "-.") {
       setLonError(null);
       return true;
@@ -90,20 +307,16 @@ export function StartPointConfig() {
     return true;
   };
 
-  const handleLatChange = (text: string) => {
-    // Allow numbers, decimal point, and negative sign
-    const cleaned = text.replace(/[^0-9.\-]/g, "");
+  const handleLatChange = (value: string) => {
+    const cleaned = value.replace(/[^0-9.-]/g, "");
     setLatInput(cleaned);
     validateLatitude(cleaned);
-    setError(null);
   };
 
-  const handleLonChange = (text: string) => {
-    // Allow numbers, decimal point, and negative sign
-    const cleaned = text.replace(/[^0-9.\-]/g, "");
+  const handleLonChange = (value: string) => {
+    const cleaned = value.replace(/[^0-9.-]/g, "");
     setLonInput(cleaned);
     validateLongitude(cleaned);
-    setError(null);
   };
 
   const handleValidate = () => {
@@ -111,18 +324,6 @@ export function StartPointConfig() {
       hapticImpact();
     }
     setError(null);
-
-    // Check if both fields are empty
-    if (!latInput.trim() && !lonInput.trim()) {
-      setError("Please enter coordinates");
-      return;
-    }
-
-    // Check if only one field is filled
-    if (!latInput.trim() || !lonInput.trim()) {
-      setError("Both latitude and longitude are required");
-      return;
-    }
 
     const lat = parseFloat(latInput);
     const lon = parseFloat(lonInput);
@@ -233,12 +434,14 @@ export function StartPointConfig() {
         });
       } else {
         const Location = await import("expo-location");
+        const getCurrentPositionAsync = (Location as any).getCurrentPositionAsync || (Location.default && (Location.default as any).getCurrentPositionAsync);
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           setLocationError("Location permission is required");
           return;
         }
-        const location = await Location.getCurrentPositionAsync({
+        if (!getCurrentPositionAsync) throw new Error("Could not load location module");
+        const location = await getCurrentPositionAsync({
           accuracy: Location.Accuracy.BestForNavigation,
         });
         const lat = location.coords.latitude;
@@ -278,175 +481,25 @@ export function StartPointConfig() {
   const hasInputErrors = !!latError || !!lonError;
 
   return (
-    <View
-      className="bg-surface rounded-2xl p-5 mb-4"
-      style={{ backgroundColor: colors.surface }}
-    >
-      <Text className="text-lg font-semibold text-foreground mb-2">
-        Start Point Configuration
-      </Text>
-
-      <Text className="text-sm text-muted mb-3">
-        Optional: Set a custom starting point for the route. Leave empty to use
-        the graph centroid.
-      </Text>
-      <Text
-        className="text-xs font-medium mb-3"
-        style={{ color: colors.primary }}
-      >
-        ⚠️ Important: Click &quot;Validate & Set&quot; after entering
-        coordinates — your start point is only used when this step is done.
-      </Text>
-
-      {/* Use current location — fills fields and sets start point in one step */}
-      <TouchableOpacity
-        onPress={handleUseCurrentLocation}
-        disabled={locationLoading}
-        className="mb-3 py-2 px-3 rounded-lg self-start flex-row items-center"
-        style={{
-          backgroundColor:
-            (locationLoading ? colors.muted : colors.primary) + "20",
-        }}
-      >
-        {locationLoading ? (
-          <ActivityIndicator
-            size="small"
-            color={colors.primary}
-            style={{ marginRight: 8 }}
-          />
-        ) : null}
-        <Text style={{ color: colors.primary }} className="text-sm font-medium">
-          📍 Use current location
-        </Text>
-      </TouchableOpacity>
-      {locationError && (
-        <Text style={{ color: colors.error }} className="text-xs mb-3">
-          {locationError}
-        </Text>
-      )}
-
-      <View className="mb-3">
-        <Text className="text-sm text-muted mb-1">
-          Location Name (Optional)
-        </Text>
-        <TextInput
-          value={nameInput}
-          onChangeText={setNameInput}
-          placeholder="e.g., Depot, Starting Location"
-          placeholderTextColor={colors.muted}
-          className="bg-background rounded-lg p-3 text-foreground"
-          style={{
-            backgroundColor: colors.background,
-            color: colors.foreground,
-          }}
-        />
-      </View>
-
-      <View className="flex-row gap-3 mb-1">
-        <View className="flex-1">
-          <Text className="text-sm text-muted mb-1">Latitude</Text>
-          <TextInput
-            value={latInput}
-            onChangeText={handleLatChange}
-            placeholder="e.g., 40.7128"
-            placeholderTextColor={colors.muted}
-            keyboardType="numbers-and-punctuation"
-            returnKeyType="done"
-            className="bg-background rounded-lg p-3 text-foreground"
-            style={{
-              backgroundColor: colors.background,
-              color: colors.foreground,
-              borderWidth: latError ? 1 : 0,
-              borderColor: colors.error,
-            }}
-          />
-          {latError && (
-            <Text style={{ color: colors.error }} className="text-xs mt-1">
-              {latError}
-            </Text>
-          )}
-        </View>
-        <View className="flex-1">
-          <Text className="text-sm text-muted mb-1">Longitude</Text>
-          <TextInput
-            value={lonInput}
-            onChangeText={handleLonChange}
-            placeholder="e.g., -74.0060"
-            placeholderTextColor={colors.muted}
-            keyboardType="numbers-and-punctuation"
-            returnKeyType="done"
-            className="bg-background rounded-lg p-3 text-foreground"
-            style={{
-              backgroundColor: colors.background,
-              color: colors.foreground,
-              borderWidth: lonError ? 1 : 0,
-              borderColor: colors.error,
-            }}
-          />
-          {lonError && (
-            <Text style={{ color: colors.error }} className="text-xs mt-1">
-              {lonError}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {/* Coordinate format hint */}
-      <Text className="text-xs text-muted mb-3">
-        Format: Decimal degrees (e.g., 40.7128, -74.0060)
-      </Text>
-
-      {error && (
-        <View
-          className="p-3 rounded-lg mb-3"
-          style={{ backgroundColor: colors.error + "20" }}
-        >
-          <Text style={{ color: colors.error }} className="text-sm">
-            ⚠️ {error}
-          </Text>
-        </View>
-      )}
-
-      {isValid && (
-        <View
-          className="p-3 rounded-lg mb-3"
-          style={{ backgroundColor: colors.success + "20" }}
-        >
-          <Text
-            style={{ color: colors.success }}
-            className="text-sm font-medium"
-          >
-            ✓ Valid coordinates set
-          </Text>
-          <Text style={{ color: colors.success }} className="text-xs mt-1">
-            Lat:{" "}
-            {state.configuration.startPoint?.coordinates.latitude.toFixed(6)},
-            Lon:{" "}
-            {state.configuration.startPoint?.coordinates.longitude.toFixed(6)}
-          </Text>
-        </View>
-      )}
-
-      <View className="flex-row gap-3">
-        <TouchableOpacity
-          onPress={handleValidate}
-          disabled={hasInputErrors}
-          style={{
-            backgroundColor: hasInputErrors ? colors.muted : colors.primary,
-            opacity: hasInputErrors ? 0.5 : 1,
-          }}
-          className="flex-1 py-3 rounded-lg items-center active:opacity-70"
-        >
-          <Text className="text-white font-semibold">Validate & Set</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleClear}
-          style={{ backgroundColor: colors.muted + "30" }}
-          className="flex-1 py-3 rounded-lg items-center active:opacity-70"
-        >
-          <Text className="text-foreground font-semibold">Clear</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    <StartPointConfigUI
+      latInput={latInput}
+      lonInput={lonInput}
+      nameInput={nameInput}
+      error={error}
+      latError={latError}
+      lonError={lonError}
+      locationLoading={locationLoading}
+      locationError={locationError}
+      hasInputErrors={hasInputErrors}
+      isValid={isValid}
+      startPointConfig={state.configuration.startPoint}
+      colors={colors}
+      onLatChange={handleLatChange}
+      onLonChange={handleLonChange}
+      onNameChange={setNameInput}
+      onValidate={handleValidate}
+      onClear={handleClear}
+      onUseCurrentLocation={handleUseCurrentLocation}
+    />
   );
 }
