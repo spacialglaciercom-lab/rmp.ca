@@ -58,8 +58,6 @@ async function run() {
 
       console.log(`\nSegments sampled: ${rows.length}`);
       console.log(`Unique source datasets: ${[...datasets].join(', ') || '(none found)'}`);
-      console.log('\nRaw sources:');
-      console.log(JSON.stringify(rows, null, 2));
 
       if (datasets.has('OpenStreetMap')) {
         console.log('\nOpenStreetMap data detected — ODbL attribution required.');
