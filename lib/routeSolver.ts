@@ -14,6 +14,7 @@ import {
   type SolverPoint,
   type SolverResult,
 } from "./routeSolverLocal";
+import { RouteOptimizerModule, type CppSolverOptions } from "@/modules/route-optimizer";
 
 export type { SolverOptions, SolverPoint, SolverResult };
 export { estimateRouteStats, solveLocal };
@@ -64,6 +65,42 @@ export async function solveServer(
   } catch (error) {
     console.error("Server solver failed, falling back to local:", error);
     return solveLocal(points, { ...options, algorithm: "2-opt" });
+  }
+}
+
+/**
+ * Chinese Postman Problem (CPP) native solver using Rust UniFFI.
+ * Requires the raw GeoJSON string of the route network.
+ */
+export async function solveCppRoute(
+  geojsonStr: string,
+  options?: CppSolverOptions
+): Promise<Omit<SolverResult, "orderedPoints"> & { orderedIds: string[] }> {
+  try {
+    if (!RouteOptimizerModule) {
+      throw new Error("Native RouteOptimizerModule is not available");
+    }
+
+    const start = Date.now();
+    const result = await RouteOptimizerModule.solveCppFromGeojson(geojsonStr, options || { startNode: undefined });
+
+    // Convert Rust keys (orderedIds, totalDistanceM, etc.) to JS keys
+    return {
+      orderedIds: result.orderedIds,
+      totalDistance: result.totalDistanceM,
+      totalDuration: result.totalDurationS,
+      segments: result.segments.map((s: any) => ({
+        from: s.fromId,
+        to: s.toId,
+        distance: s.distanceM,
+        duration: s.durationS,
+      })),
+      algorithm: result.algorithm,
+      solveTime: Date.now() - start,
+    };
+  } catch (error) {
+    console.error("Failed to solve CPP via native module:", error);
+    throw error;
   }
 }
 

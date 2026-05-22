@@ -16,6 +16,10 @@ export interface SolverOptions {
   maxIterations?: number;
 }
 
+export interface CppSolverOptions {
+  startNode?: string;
+}
+
 export interface RouteSegment {
   fromId: string;
   toId: string;
@@ -37,6 +41,11 @@ export interface NativeRouteOptimizerModule {
     points: SolverPoint[],
     depotIndex: number | null,
     options: SolverOptions
+  ): Promise<SolverResult>;
+
+  solveCppFromGeojson(
+    geojsonStr: string,
+    options: CppSolverOptions
   ): Promise<SolverResult>;
 
   haversineMeters(
