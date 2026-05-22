@@ -131,8 +131,7 @@ pub fn solve_route(
         order.push(depot_idx);
     }
 
-    let (segments, total_distance_m, total_duration_s) =
-        build_segments(&order, &points, &matrix);
+    let (segments, total_distance_m, total_duration_s) = build_segments(&order, &points, &matrix);
 
     Ok(SolverResult {
         ordered_ids: order.iter().map(|&i| points[i].id.clone()).collect(),
@@ -159,8 +158,8 @@ fn haversine(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let d_lon = (lon2 - lon1).to_radians();
     let sin_lat = (d_lat / 2.0).sin();
     let sin_lon = (d_lon / 2.0).sin();
-    let a = sin_lat * sin_lat
-        + lat1.to_radians().cos() * lat2.to_radians().cos() * sin_lon * sin_lon;
+    let a =
+        sin_lat * sin_lat + lat1.to_radians().cos() * lat2.to_radians().cos() * sin_lon * sin_lon;
     R * 2.0 * a.sqrt().atan2((1.0 - a).sqrt())
 }
 
@@ -210,10 +209,9 @@ fn two_opt_improve(mut order: Vec<usize>, matrix: &[Vec<f64>], max_iter: usize) 
         let mut improved = false;
         for i in 1..n.saturating_sub(1) {
             for j in (i + 1)..n {
-                let cur = matrix[order[i - 1]][order[i]]
-                    + matrix[order[j]][order[(j + 1) % n]];
-                let candidate = matrix[order[i - 1]][order[j]]
-                    + matrix[order[i]][order[(j + 1) % n]];
+                let cur = matrix[order[i - 1]][order[i]] + matrix[order[j]][order[(j + 1) % n]];
+                let candidate =
+                    matrix[order[i - 1]][order[j]] + matrix[order[i]][order[(j + 1) % n]];
                 if candidate < cur {
                     order[i..=j].reverse();
                     improved = true;
@@ -315,10 +313,34 @@ mod tests {
     fn make_square() -> Vec<SolverPoint> {
         // Four corners of a ~1 km square near Ottawa
         vec![
-            SolverPoint { id: "A".into(), lat: 45.4215, lon: -75.6972, demand: None, service_time: None },
-            SolverPoint { id: "B".into(), lat: 45.4215, lon: -75.6872, demand: None, service_time: None },
-            SolverPoint { id: "C".into(), lat: 45.4115, lon: -75.6872, demand: None, service_time: None },
-            SolverPoint { id: "D".into(), lat: 45.4115, lon: -75.6972, demand: None, service_time: None },
+            SolverPoint {
+                id: "A".into(),
+                lat: 45.4215,
+                lon: -75.6972,
+                demand: None,
+                service_time: None,
+            },
+            SolverPoint {
+                id: "B".into(),
+                lat: 45.4215,
+                lon: -75.6872,
+                demand: None,
+                service_time: None,
+            },
+            SolverPoint {
+                id: "C".into(),
+                lat: 45.4115,
+                lon: -75.6872,
+                demand: None,
+                service_time: None,
+            },
+            SolverPoint {
+                id: "D".into(),
+                lat: 45.4115,
+                lon: -75.6972,
+                demand: None,
+                service_time: None,
+            },
         ]
     }
 
@@ -392,4 +414,55 @@ mod tests {
             Err(RoutingError::EmptyInput)
         ));
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct TraceNode {
+    pub id: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct TraceEdge {
+    pub u: String,
+    pub v: String,
+    pub id: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct TraceGraph {
+    pub nodes: Vec<TraceNode>,
+    pub edges: Vec<TraceEdge>,
+}
+
+#[derive(serde::Serialize)]
+pub struct Trace {
+    pub original_graph: TraceGraph,
+    pub circuit: Vec<String>,
+}
+
+#[uniffi::export]
+pub fn export_trace_to_json(result: SolverResult, points: Vec<SolverPoint>) -> String {
+    let nodes: Vec<TraceNode> = points
+        .iter()
+        .map(|p| TraceNode { id: p.id.clone() })
+        .collect();
+    let mut edges = Vec::new();
+    let mut circuit = Vec::new();
+
+    for (i, segment) in result.segments.iter().enumerate() {
+        let edge_id = format!("e{}", i);
+        edges.push(TraceEdge {
+            u: segment.from_id.clone(),
+            v: segment.to_id.clone(),
+            id: edge_id.clone(),
+        });
+        circuit.push(edge_id);
+    }
+
+    let trace = Trace {
+        original_graph: TraceGraph { nodes, edges },
+        circuit,
+    };
+
+    serde_json::to_string(&trace).unwrap_or_default()
 }
