@@ -109,6 +109,21 @@ function patchRNFBFirestore() {
 
     let content = fs.readFileSync(fullPath, "utf8");
 
+    // Add missing imports to fix "cannot find in scope" errors on EAS
+    const missingImports = [
+      '#import "RNFBFirestoreQuery.h"',
+      '#import "RNFBFirestoreSerialize.h"',
+    ];
+
+    for (const header of missingImports) {
+      if (!content.includes(header)) {
+        const anchor = '#import "RNFBFirestoreCommon.h"';
+        if (content.includes(anchor)) {
+          content = content.replace(anchor, anchor + "\n" + header);
+        }
+      }
+    }
+
     // Add pragmas to suppress warnings
     if (!content.includes("#pragma clang diagnostic push")) {
       const pragmas = `#pragma clang diagnostic push

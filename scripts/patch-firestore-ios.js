@@ -134,11 +134,28 @@ const firestoreIosDir = path.join(
 );
 const firebaseImport = "#import <Firebase/Firebase.h>";
 const commonImport = '#import "RNFBFirestoreCommon.h"';
+const queryImport = '#import "RNFBFirestoreQuery.h"';
+const serializeImport = '#import "RNFBFirestoreSerialize.h"';
+const firstImportAnchor = "#import <RNFBApp/RNFBRCTEventEmitter.h>";
 const moduleFiles = [
   "RNFBFirestoreDocumentModule.m",
   "RNFBFirestoreCollectionModule.m",
 ];
-const firstImportAnchor = "#import <RNFBApp/RNFBRCTEventEmitter.h>";
+
+// Fix RNFBFirestoreCommon.m: ensure all headers are present
+const commonMPath = path.join(firestoreIosDir, "RNFBFirestoreCommon.m");
+if (fs.existsSync(commonMPath)) {
+  let content = fs.readFileSync(commonMPath, "utf8");
+  if (!content.includes(queryImport) || !content.includes(serializeImport)) {
+    const anchor = '#import "RNFBFirestoreCommon.h"';
+    if (content.includes(anchor)) {
+      content = content.replace(anchor, `${anchor}\n${queryImport}\n${serializeImport}`);
+      fs.writeFileSync(commonMPath, content);
+      console.log("patch-firestore-ios: applied Query/Serialize imports to RNFBFirestoreCommon.m");
+    }
+  }
+}
+
 for (const name of moduleFiles) {
   const filePath = path.join(firestoreIosDir, name);
   if (!fs.existsSync(filePath)) continue;
