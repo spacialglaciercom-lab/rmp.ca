@@ -71,6 +71,15 @@ const RNFB_SNIPPET = [
   "        end",
   "      end",
   "    end",
+  "",
+  "    # Force modular headers for Firebase Swift pods to fix scope/visibility issues",
+  "    firebase_swift_pods = ['Firebase', 'FirebaseCore', 'FirebaseCoreInternal', 'FirebaseInstallations', 'FirebaseRemoteConfig', 'FirebaseABTesting', 'GoogleUtilities', 'GoogleDataTransport', 'nanopb']",
+  "    installer.pod_targets.each do |pod|",
+  "      if firebase_swift_pods.include?(pod.name)",
+  "        def pod.defines_module?; true; end",
+  "        def pod.modular_headers?; true; end",
+  "      end",
+  "    end",
 ].join("\n");
 
 function applyPodfilePatches(contents) {
