@@ -72,15 +72,21 @@ const RNFB_SNIPPET = [
   "      end",
   "    end",
   "",
-  "    # Force modular headers for Firebase Swift pods to fix scope/visibility issues",
-  "    firebase_swift_pods = ['Firebase', 'FirebaseCore', 'FirebaseCoreInternal', 'FirebaseInstallations', 'FirebaseRemoteConfig', 'FirebaseABTesting', 'GoogleUtilities', 'GoogleDataTransport', 'nanopb']",
-  "    installer.pod_targets.each do |pod|",
-  "      if firebase_swift_pods.include?(pod.name)",
-  "        def pod.defines_module?; true; end",
-  "        def pod.modular_headers?; true; end",
-  "      end",
-  "    end",
-].join("\n");
+  # Force modular headers for Firebase Swift pods to fix scope/visibility issues
+  # and EXPLICITLY disable them for RNFBFirestore/RNFBApp to fix Swift scope issues.
+  firebase_swift_pods = ['Firebase', 'FirebaseCore', 'FirebaseCoreInternal', 'FirebaseInstallations', 'FirebaseRemoteConfig', 'FirebaseABTesting', 'GoogleUtilities', 'GoogleDataTransport', 'nanopb']
+  rnfb_objc_pods = ['RNFBApp', 'RNFBFirestore', 'RNFBAuth', 'RNFBAnalytics', 'RNFBCrashlytics', 'RNFBDatabase', 'RNFBFunctions', 'RNFBMessaging', 'RNFBStorage']
+
+  installer.pod_targets.each do |pod|
+    if firebase_swift_pods.include?(pod.name)
+      def pod.defines_module?; true; end
+      def pod.modular_headers?; true; end
+    elsif rnfb_objc_pods.include?(pod.name)
+      def pod.defines_module?; false; end
+      def pod.modular_headers?; false; end
+    end
+  end
+  ].join("\n");
 
 function applyPodfilePatches(contents) {
   if (typeof contents !== "string") return contents;
