@@ -18,8 +18,6 @@ module.exports = function (api) {
     ],
     plugins: [
       ...plugins,
-      ["@babel/plugin-proposal-decorators", { legacy: true }],
-      ["@babel/plugin-transform-class-properties", { loose: true }],
     ],
   };
 };
