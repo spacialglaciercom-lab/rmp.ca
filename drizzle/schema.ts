@@ -10,6 +10,7 @@ import {
   serial,
   text,
   timestamp,
+  index,
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -320,7 +321,9 @@ export const collectionPoints = pgTable("collection_points", {
   isCollected: boolean("is_collected").default(false),
   qrCodeToken: text("qr_code_token"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("collection_points_location_idx").using("gist", table.location),
+]);
 
 export type CollectionPoint = typeof collectionPoints.$inferSelect;
 export type InsertCollectionPoint = typeof collectionPoints.$inferInsert;
@@ -332,7 +335,9 @@ export const optimizedRoutes = pgTable("optimized_routes", {
   path: geography("path", { type: "LineString", srid: 4326 }),
   totalDistanceMeters: doublePrecision("total_distance_meters"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("optimized_routes_path_idx").using("gist", table.path),
+]);
 
 export type OptimizedRoute = typeof optimizedRoutes.$inferSelect;
 export type InsertOptimizedRoute = typeof optimizedRoutes.$inferInsert;
@@ -439,7 +444,9 @@ export const zones = pgTable("zones", {
   syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("zones_boundary_idx").using("gist", table.boundary),
+]);
 
 export type Zone = typeof zones.$inferSelect;
 export type InsertZone = typeof zones.$inferInsert;
