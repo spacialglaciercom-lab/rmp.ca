@@ -17,7 +17,6 @@ export default defineConfig({
     globals: true,
     // Stable V8 coverage merge (avoids missing coverage/.tmp races with default parallel pool)
     pool: "forks",
-    poolOptions: { forks: { singleFork: true } },
 
     coverage: {
       provider: "v8",

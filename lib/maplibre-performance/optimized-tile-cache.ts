@@ -13,12 +13,18 @@ export interface CachedTile<T = ArrayBuffer> {
 export class OptimizedTileCache<T = ArrayBuffer> {
   private cache: Map<string, CachedTile<T>> = new Map();
   private readonly maxSize: number;
+  private readonly maxMemory: number;
   private currentSize = 0;
   private _hits = 0;
   private _misses = 0;
 
-  constructor(maxSize: number = 500) {
+  /**
+   * @param maxSize   Maximum number of tiles to keep in cache (default 500)
+   * @param maxMemory Maximum memory in bytes to use (default Infinity)
+   */
+  constructor(maxSize: number = 500, maxMemory: number = Infinity) {
     this.maxSize = Math.max(1, maxSize);
+    this.maxMemory = Math.max(1, maxMemory);
   }
 
   get(id: string): T | undefined {
@@ -37,14 +43,17 @@ export class OptimizedTileCache<T = ArrayBuffer> {
 
   add(id: string, data: T, size?: number): void {
     const byteSize =
-      size ?? (data instanceof ArrayBuffer ? data.byteLength : 1);
-    while (this.cache.size >= this.maxSize && this.cache.size > 0) {
+      size ?? (data instanceof ArrayBuffer ? (data as ArrayBuffer).byteLength : 1);
+
+    // Evict based on count or memory limit
+    while (this.cache.size > 0 && (this.cache.size >= this.maxSize || this.currentSize + byteSize > this.maxMemory)) {
       const firstKey = this.cache.keys().next().value as string;
       if (firstKey === undefined) break;
       const old = this.cache.get(firstKey);
       this.cache.delete(firstKey);
       if (old?.size) this.currentSize -= old.size;
     }
+
     const entry: CachedTile<T> = {
       data,
       lastAccessed: Date.now(),
@@ -73,13 +82,14 @@ export class OptimizedTileCache<T = ArrayBuffer> {
     this._misses = 0;
   }
 
-  getStats(): { size: number; hits: number; misses: number; hitRate: number } {
+  getStats(): { size: number; hits: number; misses: number; hitRate: number; currentSize: number } {
     const total = this._hits + this._misses;
     return {
       size: this.cache.size,
       hits: this._hits,
       misses: this._misses,
       hitRate: total > 0 ? this._hits / total : 0,
+      currentSize: this.currentSize,
     };
   }
 }

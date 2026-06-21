@@ -8,7 +8,7 @@
 // Math helpers (mirror Python backend)
 // ---------------------------------------------------------------------------
 
-import { haversineMeters as haversineMetersCore } from "./_core/geo";
+import { haversineMeters as haversineMetersCore, calculateBearing as calculateBearingCore } from "./_core/geo";
 
 /**
  * Haversine distance in meters between two WGS84 points.
@@ -35,14 +35,7 @@ export function calculateBearing(
   lon2: number,
   lat2: number,
 ): number {
-  const dlon = ((lon2 - lon1) * Math.PI) / 180;
-  const lat1R = (lat1 * Math.PI) / 180;
-  const lat2R = (lat2 * Math.PI) / 180;
-  const x = Math.sin(dlon) * Math.cos(lat2R);
-  const y =
-    Math.cos(lat1R) * Math.sin(lat2R) -
-    Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dlon);
-  return ((Math.atan2(x, y) * 180) / Math.PI + 360) % 360;
+  return calculateBearingCore(lat1, lon1, lat2, lon2);
 }
 
 /**
