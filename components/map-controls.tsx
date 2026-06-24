@@ -48,6 +48,9 @@ export function MapControls({
       >
         <TouchableOpacity
           onPress={onZoomIn}
+          accessibilityLabel="Zoom In"
+          accessibilityRole="button"
+          accessibilityHint="Zooms the map in"
           style={{
             padding: 8,
             borderBottomWidth: 1,
@@ -64,7 +67,13 @@ export function MapControls({
             +
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={onZoomOut} style={{ padding: 8 }}>
+        <TouchableOpacity
+          onPress={onZoomOut}
+          accessibilityLabel="Zoom Out"
+          accessibilityRole="button"
+          accessibilityHint="Zooms the map out"
+          style={{ padding: 8 }}
+        >
           <Text
             style={{
               color: colors.foreground,
@@ -81,6 +90,9 @@ export function MapControls({
       {onFitBounds && (
         <TouchableOpacity
           onPress={onFitBounds}
+          accessibilityLabel="Fit to Route"
+          accessibilityRole="button"
+          accessibilityHint="Adjusts the map view to show the entire route"
           style={{
             backgroundColor: colors.primary,
             borderRadius: 8,
@@ -104,6 +116,9 @@ export function MapControls({
       {onToggleRoute && (
         <TouchableOpacity
           onPress={onToggleRoute}
+          accessibilityLabel={showRoute ? "Hide Route" : "Show Route"}
+          accessibilityRole="button"
+          accessibilityHint="Toggles the visibility of the route on the map"
           style={{
             backgroundColor: showRoute ? colors.primary : colors.surface,
             borderRadius: 8,
@@ -129,6 +144,9 @@ export function MapControls({
       {onToggleMarkers && (
         <TouchableOpacity
           onPress={onToggleMarkers}
+          accessibilityLabel={showMarkers ? "Hide Collection Points" : "Show Collection Points"}
+          accessibilityRole="button"
+          accessibilityHint="Toggles the visibility of collection points on the map"
           style={{
             backgroundColor: showMarkers ? colors.primary : colors.surface,
             borderRadius: 8,
